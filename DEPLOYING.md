@@ -7,55 +7,43 @@ build failure here can never block `hirshguha.com`.
 ```
   hirshguha.com/workout-tracker/*
             │
-            │  rewrite (prefix stripped)
+            │  rewrite, prefix preserved
             ▼
-  workout-tracker-<hash>.vercel.app/*
+  workout-tracker-khaki-five.vercel.app/workout-tracker/*
 ```
 
-## One-time setup
+Both are live. The rewrite lives in `HirshGuhaNewWebsite/next.config.mjs`.
 
-### 1. Push this repo to GitHub
+## Setup — already done
 
-```bash
-git remote add origin git@github.com:hguha/workoutTracker.git
-git push -u origin main
-```
+For reference, since this is the kind of thing you only touch once:
 
-### 2. Create the Vercel project
+1. **This repo** is on GitHub at `hguha/workoutTracker`.
+2. **Its Vercel project** builds from `vercel.json` — framework, build command,
+   and output directory all come from there, so don't override them in the
+   dashboard.
+3. **The rewrite** is in `HirshGuhaNewWebsite/next.config.mjs`, pointing at
+   `workout-tracker-khaki-five.vercel.app`.
 
-On [vercel.com/new](https://vercel.com/new), import the repo. Vercel reads
-`vercel.json`, so the framework, build command, and output directory are already
-correct — don't override them.
-
-Deploy, then copy the production URL (`workout-tracker-….vercel.app`).
-
-**Optional but recommended:** give it a stable alias under Project → Settings →
-Domains, e.g. `workout-tracker-hg.vercel.app`. The rewrite below points at a
-hostname, and an alias means a future project rename doesn't silently break it.
-
-### 3. Add the rewrite to the website repo
-
-In `HirshGuhaNewWebsite`, add to `next.config.js`:
+The rewrite needs **two** entries, because `:path*` does not match the bare
+parent path — without the first, `/workout-tracker` itself would 404:
 
 ```js
-async rewrites() {
-  return [
-    {
-      source: '/workout-tracker',
-      destination: 'https://workout-tracker-hg.vercel.app',
-    },
-    {
-      source: '/workout-tracker/:path*',
-      destination: 'https://workout-tracker-hg.vercel.app/:path*',
-    },
-  ]
-}
+{ source: '/workout-tracker',         destination: `${ORIGIN}/workout-tracker` },
+{ source: '/workout-tracker/:path*',  destination: `${ORIGIN}/workout-tracker/:path*` },
 ```
 
-Both entries are needed: the first matches the bare path, the second everything
-under it. `:path*` alone does not match the parent.
+Note the prefix is **preserved**, not stripped. The app's own `vercel.json` also
+rewrites `/workout-tracker/*` onto its files, so both the proxied URL and the
+bare `*.vercel.app` URL work — the latter is handy for checking a deploy before
+it's live on the domain.
 
-Push. That's the only change the website ever needs.
+### Worth doing at some point
+
+Give the Vercel project a stable alias (Project → Settings → Domains), e.g.
+`workout-tracker-hg.vercel.app`, and point the rewrite at that instead. The
+generated `khaki-five` hostname is tied to the current project name; renaming the
+project would silently break the rewrite.
 
 ## After that
 
@@ -72,6 +60,16 @@ curl -sI https://hirshguha.com/workout-tracker | head -3
 Expect `200`. Then load it in a browser and confirm the sign-in screen renders
 with its blue button — a blank or unstyled page almost always means an asset path
 problem (see below).
+
+To test the website's rewrite locally before pushing it:
+
+```bash
+cd ~/HirshGuhaNewWebsite && npx next build && npx next start -p 4200
+curl -s http://127.0.0.1:4200/workout-tracker | grep '<title>'   # → Workout Tracker
+```
+
+This proxies to the *live* app deployment, so it verifies the rewrite itself
+rather than a local build.
 
 ## The base path
 
