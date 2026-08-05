@@ -1,0 +1,92 @@
+@import 'tailwindcss';
+@import './tokens.css';
+@import './themes.css';
+
+/* Expose the tokens to Tailwind so `bg-surface`, `text-muted` etc. work. */
+@theme inline {
+  --color-surface: var(--surface-1);
+  --color-page: var(--surface-page);
+  --color-sunken: var(--surface-sunken);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-gridline: var(--gridline);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-wash: var(--accent-wash);
+
+  --color-region-chest: var(--region-chest);
+  --color-region-back: var(--region-back);
+  --color-region-legs: var(--region-legs);
+  --color-region-shoulders: var(--region-shoulders);
+  --color-region-arms: var(--region-arms);
+  --color-region-core: var(--region-core);
+  --color-region-cardio: var(--region-cardio);
+
+  --color-good: var(--status-good);
+  --color-warning: var(--status-warning);
+  --color-serious: var(--status-serious);
+  --color-critical: var(--status-critical);
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Stop the whole page bouncing when a set list is scrolled to its end. */
+  overscroll-behavior-y: none;
+}
+
+/* Native-feeling taps: no 300ms highlight flash on iOS. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Numeric inputs on set rows. Spinners waste horizontal space the value needs,
+ * and nobody taps a 12px arrow mid-set.
+ */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* Table rows and axis ticks align; hero numbers use proportional figures. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Safe-area helpers for the notch and the home indicator. */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}

@@ -1,0 +1,67 @@
+/**
+ * The non-themeable design tokens.
+ *
+ * Everything here is deliberately outside the theme system (§10.8):
+ *
+ *   - The 7 **region colors** are the validated categorical palette. Their
+ *     specific ordering is what passes the colorblind-separation gates — almost
+ *     any hand-picked 7-color set fails them — and "back is orange" has to keep
+ *     being true across themes and after any filter.
+ *   - The **sequential** ramp and **diverging** pair encode magnitude and
+ *     polarity, which are properties of the data, not of taste.
+ *   - **Status** colors are reserved. A status color must never impersonate a
+ *     series, so it can't shift with the accent.
+ *
+ * Surfaces, ink, gridlines, and the accent all live in `themes.css` instead.
+ */
+
+:root {
+  /* region palette — fixed slot assignment, never reordered */
+  --region-chest: #2a78d6;
+  --region-back: #eb6834;
+  --region-legs: #1baf7a;
+  --region-shoulders: #eda100;
+  --region-arms: #e87ba4;
+  --region-core: #008300;
+  --region-cardio: #4a3aa7;
+
+  /* sequential ramp — magnitude, one hue, light → dark */
+  --seq-100: #cde2fb;
+  --seq-200: #9ec5f4;
+  --seq-300: #6da7ec;
+  --seq-400: #3987e5;
+  --seq-500: #256abf;
+  --seq-600: #184f95;
+  --seq-700: #0d366b;
+
+  /* diverging — polarity, two hues with a neutral (never a third hue) midpoint */
+  --div-neutral: #f0efec;
+  --div-pos: #2a78d6;
+  --div-neg: #d03b3b;
+
+  /* status — reserved, always paired with an icon or label, never color alone */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --delta-good: #006300;
+
+  /* Contrast ink for the accent. Overridden inline when a custom accent needs
+     dark text instead of white. */
+  --accent-contrast: #ffffff;
+}
+
+/* Dark-surface steps for the region palette — a selected set, not an inversion.
+   Each was chosen for the dark band and validated as a group. */
+[data-scheme='dark'] {
+  --region-chest: #3987e5;
+  --region-back: #d95926;
+  --region-legs: #199e70;
+  --region-shoulders: #c98500;
+  --region-arms: #d55181;
+  --region-core: #008300;
+  --region-cardio: #9085e9;
+
+  --div-neutral: #383835;
+  --delta-good: #0ca30c;
+}

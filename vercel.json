@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+
+  "rewrites": [
+    {
+      "//": "The website proxies /workout-tracker/* here with the prefix stripped, so paths normally arrive bare. This maps the prefixed form back onto real files so the *.vercel.app URL also works standalone — useful for previews, where there is no proxy in front.",
+      "source": "/workout-tracker/:path*",
+      "destination": "/:path*"
+    },
+    {
+      "//": "SPA fallback. Vercel checks the filesystem before applying rewrites, so this only catches routes with no matching file — never an asset.",
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ],
+
+  "headers": [
+    {
+      "//": "Content-hashed filenames, so they can never go stale.",
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "//": "The shell must revalidate, or a deploy ships new assets that nothing references.",
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
+  ]
+}

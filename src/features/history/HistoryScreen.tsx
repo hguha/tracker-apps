@@ -1,0 +1,298 @@
+/**
+ * History (§5.2). Every entry is editable, copyable, and saveable as a template
+ * (§7.1, §7.2) — the moment someone decides a session is worth repeating is not
+ * predictable, so those actions have to be reachable from the list itself rather
+ * than only from the finish sheet.
+ */
+
+import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { ChevronRight, Copy, FileText, MoreHorizontal, Trash2, X } from 'lucide-react'
+import * as repo from '@/data/repository'
+import { Button } from '@/components/Button'
+import { Card } from '@/components/Card'
+import { useToast } from '@/components/Toast'
+import { formatDayHeading, formatTimeOfDay } from '@/lib/dates'
+import { formatDuration, weightFromKg } from '@/lib/units'
+import { regionVar } from '@/lib/palette'
+import { playCue } from '@/features/timer/sounds'
+import { REGION_LABELS } from '@/domain/types'
+
+export function HistoryScreen({
+  onOpenWorkout,
+  onStartedCopy,
+}: {
+  onOpenWorkout: (workoutId: string) => void
+  onStartedCopy: (workoutId: string) => void
+}) {
+  const toast = useToast()
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [templateFor, setTemplateFor] = useState<{ id: string; name: string } | null>(
+    null,
+  )
+
+  // One shared summary builder, so History, Home, and the start screen can never
+  // disagree about what a session contained (§5.2.1).
+  const data = useLiveQuery(async () => ({
+    profile: await repo.getProfile(),
+    summaries: await repo.listWorkoutSummaries(100),
+  }), [])
+
+  if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
+
+  if (data.summaries.length === 0) {
+    return (
+      <div className="mt-24 px-6 text-center">
+        <p className="text-[16px] font-semibold">No workouts yet</p>
+        <p className="mt-1 text-[14px] text-ink-muted">
+          Tap the + button to log your first one.
+        </p>
+      </div>
+    )
+  }
+
+  async function repeat(workoutId: string) {
+    const result = await repo.repeatWorkout(workoutId)
+    setMenuFor(null)
+    if (result) {
+      playCue('set-logged')
+      onStartedCopy(result.workoutId)
+    }
+  }
+
+  async function discard(workoutId: string) {
+    await repo.deleteWorkout(workoutId)
+    setMenuFor(null)
+    toast.show('Workout deleted', () => void repo.restoreWorkout(workoutId))
+  }
+
+  return (
+    <div className="space-y-2.5 px-3 py-3">
+      {data.summaries.map((summary) => (
+        <Card key={summary.workout.id} className="relative overflow-visible">
+          <div className="flex items-start">
+            <button
+              onClick={() => onOpenWorkout(summary.workout.id)}
+              className="min-w-0 flex-1 px-4 py-3.5 text-left active:bg-accent-wash"
+            >
+              <p className="truncate text-[15.5px] font-semibold">{summary.title}</p>
+              <p className="text-[12.5px] text-ink-muted">
+                {formatDayHeading(summary.workout.startedAt)} ·{' '}
+                {formatTimeOfDay(summary.workout.startedAt)}
+                {summary.workout.endedAt === null && ' · in progress'}
+              </p>
+
+              {/* Region dots give the session a shape at a glance. */}
+              {summary.regions.length > 0 && (
+                <div className="mt-2 flex items-center gap-1">
+                  {summary.regions.map((region) => (
+                    <span
+                      key={region}
+                      className="size-2 rounded-full"
+                      style={{ background: regionVar(region) }}
+                      aria-label={REGION_LABELS[region]}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <p className="mt-2 truncate text-[12.5px] text-ink-secondary">
+                {summary.exerciseNames.join(' · ') || 'No exercises'}
+              </p>
+
+              <div className="mt-2.5 flex gap-4 text-[12.5px] text-ink-muted">
+                <span className="tabular">{summary.setCount} sets</span>
+                {summary.volumeKg > 0 && (
+                  <span className="tabular">
+                    {Math.round(
+                      weightFromKg(summary.volumeKg, data.profile.unitWeight),
+                    ).toLocaleString()}{' '}
+                    {data.profile.unitWeight}
+                  </span>
+                )}
+                {summary.durationSeconds !== null && (
+                  <span className="tabular">
+                    {formatDuration(summary.durationSeconds)}
+                  </span>
+                )}
+              </div>
+            </button>
+
+            <div className="flex shrink-0 flex-col items-center gap-1 py-3 pr-2">
+              <button
+                onClick={() => setMenuFor(summary.workout.id)}
+                aria-label={`Options for ${summary.title}`}
+                className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+              <ChevronRight size={16} className="text-ink-muted" />
+            </div>
+          </div>
+
+          {menuFor === summary.workout.id && (
+            <RowMenu
+              onRepeat={() => void repeat(summary.workout.id)}
+              onSaveTemplate={() => {
+                setTemplateFor({ id: summary.workout.id, name: summary.title })
+                setMenuFor(null)
+              }}
+              onEdit={() => {
+                setMenuFor(null)
+                onOpenWorkout(summary.workout.id)
+              }}
+              onDiscard={() => void discard(summary.workout.id)}
+              onDismiss={() => setMenuFor(null)}
+            />
+          )}
+        </Card>
+      ))}
+
+      {templateFor && (
+        <SaveTemplateSheet
+          workoutId={templateFor.id}
+          suggestedName={templateFor.name}
+          onDone={(message) => {
+            setTemplateFor(null)
+            toast.show(message)
+          }}
+          onDismiss={() => setTemplateFor(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function RowMenu({
+  onRepeat,
+  onSaveTemplate,
+  onEdit,
+  onDiscard,
+  onDismiss,
+}: {
+  onRepeat: () => void
+  onSaveTemplate: () => void
+  onEdit: () => void
+  onDiscard: () => void
+  onDismiss: () => void
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onDismiss} />
+      <div className="absolute right-2 top-12 z-50 w-56 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-xl">
+        <MenuItem icon={<Copy size={16} />} label="Do this workout again" onClick={onRepeat} />
+        <MenuItem
+          icon={<FileText size={16} />}
+          label="Save as template"
+          onClick={onSaveTemplate}
+        />
+        <MenuItem icon={<ChevronRight size={16} />} label="Open and edit" onClick={onEdit} />
+        <MenuItem
+          icon={<Trash2 size={16} />}
+          label="Delete workout"
+          onClick={onDiscard}
+          destructive
+        />
+      </div>
+    </>
+  )
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  destructive = false,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  destructive?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        'flex w-full items-center gap-2.5 border-b border-line px-3.5 py-3 text-left text-[14px] font-medium last:border-0 active:bg-accent-wash',
+        destructive ? 'text-critical' : '',
+      ].join(' ')}
+    >
+      <span className="shrink-0 text-ink-muted">{icon}</span>
+      {label}
+    </button>
+  )
+}
+
+function SaveTemplateSheet({
+  workoutId,
+  suggestedName,
+  onDone,
+  onDismiss,
+}: {
+  workoutId: string
+  suggestedName: string
+  onDone: (message: string) => void
+  onDismiss: () => void
+}) {
+  const [name, setName] = useState(suggestedName)
+  const [isBusy, setIsBusy] = useState(false)
+
+  async function save() {
+    if (!name.trim()) return
+    setIsBusy(true)
+    try {
+      await repo.saveWorkoutAsTemplate(workoutId, name.trim())
+      onDone(`Saved "${name.trim()}" as a template`)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
+      <div className="rounded-t-3xl bg-surface pb-safe">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="text-[17px] font-bold tracking-tight">Save as template</h2>
+          <button
+            onClick={onDismiss}
+            aria-label="Close"
+            className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+          >
+            <X size={19} />
+          </button>
+        </div>
+        <div className="p-5">
+          <input
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. Pull A"
+            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          />
+          <p className="mt-2 text-[12.5px] text-ink-muted">
+            Saves the exercises and set counts. Weights come from your history each
+            time you run it.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={onDismiss}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="lg"
+              className="flex-1"
+              disabled={isBusy || !name.trim()}
+              onClick={() => void save()}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

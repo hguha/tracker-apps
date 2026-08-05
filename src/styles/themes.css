@@ -1,0 +1,244 @@
+/**
+ * Theme presets (§10.8).
+ *
+ * Two independent axes:
+ *   - `data-theme` on <html> picks the preset (surfaces, ink, accent)
+ *   - `data-scheme` picks light or dark within it
+ *
+ * The 7 chart region colors live in `tokens.css` and are deliberately NOT
+ * themeable. Their specific ordering is what passes the colorblind-separation
+ * gates, and "back is orange" has to keep being true across themes.
+ *
+ * Every preset defines the same variable set. Nothing else in the app may
+ * contain a hex literal — the audit is a grep for `#` outside this file and
+ * tokens.css.
+ */
+
+/* ─────────────────────────────────────────── default: warm gray, blue */
+
+[data-theme='default'][data-scheme='light'] {
+  --surface-1: #fcfcfb;
+  --surface-page: #f9f9f7;
+  --surface-sunken: #f2f2ef;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --border-strong: rgba(11, 11, 11, 0.18);
+  --accent: #2a78d6;
+  --accent-wash: rgba(42, 120, 214, 0.1);
+}
+
+[data-theme='default'][data-scheme='dark'] {
+  --surface-1: #1a1a19;
+  --surface-page: #0d0d0d;
+  --surface-sunken: #242422;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #3987e5;
+  --accent-wash: rgba(57, 135, 229, 0.16);
+}
+
+/* ───────────────────────────────────────────── slate: cool gray, indigo */
+
+[data-theme='slate'][data-scheme='light'] {
+  --surface-1: #fdfdfe;
+  --surface-page: #f7f8fa;
+  --surface-sunken: #eef0f4;
+  --text-primary: #0b0d12;
+  --text-secondary: #4b5163;
+  --text-muted: #838a9c;
+  --gridline: #dfe2ea;
+  --axis: #bfc4d1;
+  --border: rgba(11, 13, 18, 0.1);
+  --border-strong: rgba(11, 13, 18, 0.18);
+  --accent: #4f46c9;
+  --accent-wash: rgba(79, 70, 201, 0.1);
+}
+
+[data-theme='slate'][data-scheme='dark'] {
+  --surface-1: #16181f;
+  --surface-page: #0b0d12;
+  --surface-sunken: #202430;
+  --text-primary: #ffffff;
+  --text-secondary: #c0c5d4;
+  --text-muted: #838a9c;
+  --gridline: #272b36;
+  --axis: #343945;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #7d74ef;
+  --accent-wash: rgba(125, 116, 239, 0.18);
+}
+
+/* ─────────────────────────────────────────── forest: warm sand, green */
+
+[data-theme='forest'][data-scheme='light'] {
+  --surface-1: #fdfcf8;
+  --surface-page: #f7f5ed;
+  --surface-sunken: #efece0;
+  --text-primary: #12100a;
+  --text-secondary: #56513f;
+  --text-muted: #8d8770;
+  --gridline: #e2ddcc;
+  --axis: #c6c0a9;
+  --border: rgba(18, 16, 10, 0.1);
+  --border-strong: rgba(18, 16, 10, 0.18);
+  --accent: #1f7a47;
+  --accent-wash: rgba(31, 122, 71, 0.1);
+}
+
+[data-theme='forest'][data-scheme='dark'] {
+  --surface-1: #191a15;
+  --surface-page: #0e0f0b;
+  --surface-sunken: #23251d;
+  --text-primary: #ffffff;
+  --text-secondary: #c5c2ae;
+  --text-muted: #8d8770;
+  --gridline: #2b2d24;
+  --axis: #383a2f;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #35a865;
+  --accent-wash: rgba(53, 168, 101, 0.16);
+}
+
+/* ───────────────────────────────────────────── ocean: cool, teal */
+
+[data-theme='ocean'][data-scheme='light'] {
+  --surface-1: #fbfdfd;
+  --surface-page: #f4f8f9;
+  --surface-sunken: #e9f0f2;
+  --text-primary: #08110f;
+  --text-secondary: #45575a;
+  --text-muted: #7d9296;
+  --gridline: #d9e4e7;
+  --axis: #b8c9cd;
+  --border: rgba(8, 17, 15, 0.1);
+  --border-strong: rgba(8, 17, 15, 0.18);
+  --accent: #0f7a86;
+  --accent-wash: rgba(15, 122, 134, 0.1);
+}
+
+[data-theme='ocean'][data-scheme='dark'] {
+  --surface-1: #131a1c;
+  --surface-page: #080f11;
+  --surface-sunken: #1c2528;
+  --text-primary: #ffffff;
+  --text-secondary: #b6c7ca;
+  --text-muted: #7d9296;
+  --gridline: #232e31;
+  --axis: #2f3b3e;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #2eaab8;
+  --accent-wash: rgba(46, 170, 184, 0.16);
+}
+
+/* ───────────────────────────────────────── sunset: warm, burnt orange */
+
+[data-theme='sunset'][data-scheme='light'] {
+  --surface-1: #fffcfa;
+  --surface-page: #fdf6f1;
+  --surface-sunken: #f7ece4;
+  --text-primary: #150e09;
+  --text-secondary: #5c4c40;
+  --text-muted: #96826f;
+  --gridline: #ecdccf;
+  --axis: #d4bfae;
+  --border: rgba(21, 14, 9, 0.1);
+  --border-strong: rgba(21, 14, 9, 0.18);
+  --accent: #c1521b;
+  --accent-wash: rgba(193, 82, 27, 0.1);
+}
+
+[data-theme='sunset'][data-scheme='dark'] {
+  --surface-1: #1c1714;
+  --surface-page: #100c09;
+  --surface-sunken: #27201b;
+  --text-primary: #ffffff;
+  --text-secondary: #cdbcb0;
+  --text-muted: #96826f;
+  --gridline: #2f2721;
+  --axis: #3d332c;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #ef7940;
+  --accent-wash: rgba(239, 121, 64, 0.16);
+}
+
+/* ───────────────────────────────────────── crimson: neutral, deep red */
+
+[data-theme='crimson'][data-scheme='light'] {
+  --surface-1: #fefcfc;
+  --surface-page: #faf6f6;
+  --surface-sunken: #f2eaea;
+  --text-primary: #0f0a0a;
+  --text-secondary: #544747;
+  --text-muted: #8b7c7c;
+  --gridline: #e5d9d9;
+  --axis: #c9baba;
+  --border: rgba(15, 10, 10, 0.1);
+  --border-strong: rgba(15, 10, 10, 0.18);
+  --accent: #b0243c;
+  --accent-wash: rgba(176, 36, 60, 0.1);
+}
+
+[data-theme='crimson'][data-scheme='dark'] {
+  --surface-1: #1b1717;
+  --surface-page: #0e0b0b;
+  --surface-sunken: #262020;
+  --text-primary: #ffffff;
+  --text-secondary: #c9baba;
+  --text-muted: #8b7c7c;
+  --gridline: #2d2626;
+  --axis: #3a3131;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #e35670;
+  --accent-wash: rgba(227, 86, 112, 0.16);
+}
+
+/* ─────────────────────────────────────────────── mono: pure grayscale */
+
+[data-theme='mono'][data-scheme='light'] {
+  --surface-1: #ffffff;
+  --surface-page: #f6f6f6;
+  --surface-sunken: #ededed;
+  --text-primary: #000000;
+  --text-secondary: #4d4d4d;
+  --text-muted: #858585;
+  --gridline: #e0e0e0;
+  --axis: #c2c2c2;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --accent: #1a1a1a;
+  --accent-wash: rgba(26, 26, 26, 0.08);
+}
+
+[data-theme='mono'][data-scheme='dark'] {
+  --surface-1: #191919;
+  --surface-page: #0a0a0a;
+  --surface-sunken: #242424;
+  --text-primary: #ffffff;
+  --text-secondary: #c4c4c4;
+  --text-muted: #858585;
+  --gridline: #2b2b2b;
+  --axis: #383838;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --accent: #f0f0f0;
+  --accent-wash: rgba(240, 240, 240, 0.12);
+}
+
+/*
+ * A custom accent from the picker lands here, overriding whichever preset is
+ * active. Set as an inline style on <html> so it wins on specificity.
+ */
