@@ -127,6 +127,12 @@ and because a color has to keep meaning the same body part. Charts draw marks in
 categorical slot 1, never the accent — every theme accent but Mono measures
 inside the ΔE≥15 series floor of some body-part color.
 
+## Deploying
+
+Lives at `hirshguha.com/workout-tracker`, from its own Vercel project that the
+website proxies to. See **DEPLOYING.md** — including the service-worker scope
+trap to avoid before Phase 4.
+
 ## Where the design decisions live
 
 `../workout-app-spec.md` is the reference. Section numbers appear in comments
