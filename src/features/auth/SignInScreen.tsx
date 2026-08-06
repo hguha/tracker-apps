@@ -16,12 +16,17 @@ import { Button } from '@/components/Button'
 import { useAuth } from '@/auth/AuthContext'
 import { isValidEmail } from '@/auth/types'
 import { LOCAL_DEV_CODE } from '@/auth/localAuthProvider'
+import { isBackendConfigured } from '@/sync/supabaseClient'
 import { cn } from '@/lib/cn'
 
 const RESEND_SECONDS = 30
 
+// With a real backend attached, a magic link is genuinely sent and there is no
+// on-device-only account — so the dev-code note and the offline path are hidden.
+const HAS_BACKEND = isBackendConfigured()
+
 export function SignInScreen() {
-  const { signInWithEmail, verifyCode, signInWithGoogle, continueOffline } = useAuth()
+  const { signInWithEmail, verifyCode, continueOffline } = useAuth()
 
   const [panel, setPanel] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
@@ -61,12 +66,6 @@ export function SignInScreen() {
     } finally {
       setIsBusy(false)
     }
-  }
-
-  async function useGoogle() {
-    setError(null)
-    const result = await signInWithGoogle()
-    if (result.kind === 'error') setError(result.message)
   }
 
   async function useOffline() {
@@ -134,27 +133,19 @@ export function SignInScreen() {
 
             <Divider />
 
-            <Button
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              onClick={() => void useGoogle()}
-            >
-              Continue with Google
-            </Button>
-
             <button
               onClick={() => void useOffline()}
               disabled={isBusy}
-              className="mt-3 flex w-full items-center justify-center gap-2 py-2 text-[14px] font-semibold text-ink-secondary active:opacity-60"
+              className="flex w-full items-center justify-center gap-2 py-2 text-[14px] font-semibold text-ink-secondary active:opacity-60"
             >
               <WifiOff size={15} />
               Use this device only
             </button>
 
             <p className="mt-6 text-center text-[12.5px] leading-relaxed text-ink-muted">
-              Sign-up is invite only. Choosing “this device only” keeps everything
-              in this browser — nothing is uploaded and nothing syncs.
+              {HAS_BACKEND
+                ? 'Email sign-in is invite only and syncs across your devices. “This device only” keeps everything in this browser — nothing is uploaded.'
+                : 'Sign-up is invite only. “This device only” keeps everything in this browser — nothing is uploaded and nothing syncs.'}
             </p>
           </>
         ) : (
@@ -224,12 +215,14 @@ export function SignInScreen() {
 
             {/*
               The local provider has no mail server, so the accepted code is
-              stated plainly. This block disappears with the real provider.
+              stated plainly. Hidden once a real backend actually sends mail.
             */}
-            <p className="mt-6 rounded-xl border border-dashed border-line-strong px-3.5 py-2.5 text-center text-[12.5px] text-ink-muted">
-              No server is connected yet, so no email was actually sent. Use code{' '}
-              <span className="tabular font-bold text-ink">{LOCAL_DEV_CODE}</span>.
-            </p>
+            {!HAS_BACKEND && (
+              <p className="mt-6 rounded-xl border border-dashed border-line-strong px-3.5 py-2.5 text-center text-[12.5px] text-ink-muted">
+                No server is connected yet, so no email was actually sent. Use code{' '}
+                <span className="tabular font-bold text-ink">{LOCAL_DEV_CODE}</span>.
+              </p>
+            )}
           </>
         )}
       </div>

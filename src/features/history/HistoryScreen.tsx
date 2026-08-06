@@ -15,7 +15,7 @@ import { useToast } from '@/components/Toast'
 import { formatDayHeading, formatTimeOfDay } from '@/lib/dates'
 import { formatDuration, weightFromKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
-import { playCue } from '@/features/timer/sounds'
+import { WorkoutPreviewSheet } from '@/features/workout/WorkoutPreviewSheet'
 import { REGION_LABELS } from '@/domain/types'
 
 export function HistoryScreen({
@@ -27,6 +27,7 @@ export function HistoryScreen({
 }) {
   const toast = useToast()
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [previewFor, setPreviewFor] = useState<string | null>(null)
   const [templateFor, setTemplateFor] = useState<{ id: string; name: string } | null>(
     null,
   )
@@ -49,15 +50,6 @@ export function HistoryScreen({
         </p>
       </div>
     )
-  }
-
-  async function repeat(workoutId: string) {
-    const result = await repo.repeatWorkout(workoutId)
-    setMenuFor(null)
-    if (result) {
-      playCue('set-logged')
-      onStartedCopy(result.workoutId)
-    }
   }
 
   async function discard(workoutId: string) {
@@ -132,7 +124,10 @@ export function HistoryScreen({
 
           {menuFor === summary.workout.id && (
             <RowMenu
-              onRepeat={() => void repeat(summary.workout.id)}
+              onRepeat={() => {
+                setPreviewFor(summary.workout.id)
+                setMenuFor(null)
+              }}
               onSaveTemplate={() => {
                 setTemplateFor({ id: summary.workout.id, name: summary.title })
                 setMenuFor(null)
@@ -147,6 +142,17 @@ export function HistoryScreen({
           )}
         </Card>
       ))}
+
+      {previewFor && (
+        <WorkoutPreviewSheet
+          workoutId={previewFor}
+          onStart={(newId) => {
+            setPreviewFor(null)
+            onStartedCopy(newId)
+          }}
+          onDismiss={() => setPreviewFor(null)}
+        />
+      )}
 
       {templateFor && (
         <SaveTemplateSheet

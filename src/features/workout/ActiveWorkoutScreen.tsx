@@ -174,15 +174,12 @@ export function ActiveWorkoutScreen({
   const handleAddExercise = useCallback(
     async (exerciseId: string) => {
       const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, exerciseId)
-      const exercise = await db.exercises.get(exerciseId)
 
-      // Cardio is one continuous effort, so it gets a single entry block rather
-      // than a set list (§6.5.1). Lifting gets three empty rows, since numbers
-      // arrive as placeholders from history and cost nothing to offer.
-      const rowCount = exercise?.movementPattern === 'cardio' ? 1 : 3
-      for (let index = 0; index < rowCount; index += 1) {
-        await repo.addSet({ workoutExerciseId })
-      }
+      // Start with a single row (cardio and lifting alike). Its placeholder is
+      // drawn from history, and "Add set" carries the ghost forward (§6.2), so
+      // one row is enough to log from — extra empty rows were just noise the
+      // user had to delete when they did fewer sets than the seed assumed.
+      await repo.addSetWithPlaceholder(workoutExerciseId, exerciseId)
       setIsPickerOpen(false)
     },
     [workoutId],

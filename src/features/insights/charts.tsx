@@ -14,14 +14,16 @@
 import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
 import { format } from 'date-fns'
+import { TrendingUp } from 'lucide-react'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
 import { baseOption, categoryAxis, chrome, valueAxis } from './chartTheme'
 import { REP_BUCKETS, type InsightsData } from './useInsightsData'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { regionVar, resolveRegionColor, resolveToken } from '@/lib/palette'
-import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
+import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 import { formatDuration, weightFromKg } from '@/lib/units'
+import { weekKey } from '@/lib/dates'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -290,26 +292,28 @@ export function SetsByRegionChart({ data }: { data: InsightsData }) {
 // ───────────────────────────────────────────────── B-8 e1RM progression
 
 /**
- * Estimated 1RM over time for one lift, as **emphasis**: the selected lift in
- * the accent hue, nothing else competing. Eight categorical colors here would
- * bury the one line the reader came for.
+ * Estimated 1RM over time for one lift, as **emphasis**: one lift in the accent
+ * hue, nothing else competing.
+ *
+ * This chart is inherently about a *single* lift — there's no "all exercises"
+ * version of one progression line. So when the shared Exercise filter names
+ * exactly one lift, that's the subject; otherwise it shows a prompt card asking
+ * for one, rather than silently guessing (which read as confusing).
  */
 export function StrengthProgressionChart({
   data,
-  selectedExerciseId,
-  onSelectExercise,
+  activeExerciseId,
 }: {
   data: InsightsData
-  selectedExerciseId: string | null
-  onSelectExercise: (exerciseId: string) => void
+  /** The single lift to chart, or null when the filter isn't narrowed to one. */
+  activeExerciseId: string | null
 }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
 
-  const candidates = data.exerciseSeries.filter((series) => series.points.length >= 2)
-  const active =
-    candidates.find((series) => series.exerciseId === selectedExerciseId) ??
-    candidates[0]
+  const active = activeExerciseId
+    ? data.exerciseSeries.find((series) => series.exerciseId === activeExerciseId)
+    : undefined
 
   const option = useMemo<EChartsOption>(() => {
     const c = chrome()
@@ -332,17 +336,24 @@ export function StrengthProgressionChart({
     }
   }, [active, unit, appearance])
 
+  if (!active) {
+    return (
+      <PickExerciseCard
+        title="Strength progression"
+        subtitle="Estimated 1RM over time for one lift"
+      />
+    )
+  }
+
   return (
     <ChartCard
       title="Strength progression"
-      subtitle={
-        active ? `${active.name} — estimated 1RM in ${unit}` : `Estimated 1RM in ${unit}`
-      }
-      isEmpty={candidates.length === 0}
-      emptyMessage="Log the same lift on two different days to see progression."
+      subtitle={`${active.name} — estimated 1RM in ${unit}`}
+      isEmpty={active.points.filter((p) => p.e1rmKg !== null).length < 2}
+      emptyMessage="Log this lift on two different days to see progression."
       table={{
         columns: ['Date', `e1RM (${unit})`],
-        rows: [...(active?.points ?? [])]
+        rows: [...active.points]
           .filter((p) => p.e1rmKg !== null)
           .reverse()
           .map((p) => [
@@ -351,25 +362,31 @@ export function StrengthProgressionChart({
           ]),
       }}
     >
-      {/* An exercise switcher, not a filter — it selects which series is shown. */}
-      <div className="mb-1 flex gap-1.5 overflow-x-auto px-2 pb-1">
-        {candidates.slice(0, 10).map((series) => (
-          <button
-            key={series.exerciseId}
-            onClick={() => onSelectExercise(series.exerciseId)}
-            className={[
-              'shrink-0 rounded-full border px-2.5 py-1 text-[12px] font-medium',
-              active?.exerciseId === series.exerciseId
-                ? 'border-accent bg-accent-wash text-accent'
-                : 'border-line text-ink-secondary',
-            ].join(' ')}
-          >
-            {series.name}
-          </button>
-        ))}
-      </div>
       <Chart option={option} ariaLabel="Line chart of estimated one-rep max over time" />
     </ChartCard>
+  )
+}
+
+/**
+ * Shown in place of a per-exercise chart when the Exercise filter hasn't been
+ * narrowed to a single lift. Explains what to do rather than guessing at one.
+ */
+function PickExerciseCard({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+      <div className="px-4 pt-3.5">
+        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+        <p className="text-[12.5px] text-ink-muted">{subtitle}</p>
+      </div>
+      <div className="flex items-center gap-3 px-4 py-6">
+        <TrendingUp size={22} className="shrink-0 text-ink-muted" />
+        <p className="text-[13.5px] text-ink-secondary">
+          Pick one exercise in the{' '}
+          <span className="font-semibold text-ink">Exercise</span> filter above to
+          see this chart.
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -378,17 +395,17 @@ export function StrengthProgressionChart({
 /** The heaviest working set per session for one lift. */
 export function TopSetChart({
   data,
-  selectedExerciseId,
+  activeExerciseId,
 }: {
   data: InsightsData
-  selectedExerciseId: string | null
+  activeExerciseId: string | null
 }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
 
-  const active =
-    data.exerciseSeries.find((s) => s.exerciseId === selectedExerciseId) ??
-    data.exerciseSeries[0]
+  const active = activeExerciseId
+    ? data.exerciseSeries.find((s) => s.exerciseId === activeExerciseId)
+    : undefined
   const points = (active?.points ?? []).filter((p) => p.topSetKg !== null)
 
   const option = useMemo<EChartsOption>(() => {
@@ -412,12 +429,18 @@ export function TopSetChart({
     }
   }, [points, unit, appearance])
 
+  if (!active) {
+    return (
+      <PickExerciseCard title="Top set" subtitle="Heaviest set per session for one lift" />
+    )
+  }
+
   return (
     <ChartCard
       title="Top set"
-      subtitle={active ? `${active.name} — heaviest set per session` : 'Heaviest set'}
+      subtitle={`${active.name} — heaviest set per session`}
       isEmpty={points.length < 2}
-      emptyMessage="Log a weighted lift twice to see how the top set moves."
+      emptyMessage="Log this lift twice to see how the top set moves."
       table={{
         columns: ['Date', `Top set (${unit})`],
         rows: [...points]
@@ -760,6 +783,488 @@ export function CardioChart({ data }: { data: InsightsData }) {
       </div>
     </ChartCard>
   )
+}
+
+// ───────────────────────────────────────────────────── D-37 time of day
+/** When sessions start, over 24 hours. */
+export function TimeOfDayChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const labels = data.hourCounts.map((_, h) => (h % 3 === 0 ? formatHour(h) : ''))
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
+      xAxis: categoryAxis(c, labels),
+      yAxis: valueAxis(c, { name: 'workouts' }),
+      series: [
+        {
+          type: 'bar',
+          data: data.hourCounts,
+          barMaxWidth: 14,
+          itemStyle: { color: c.plot, borderRadius: [3, 3, 0, 0] },
+        },
+      ],
+    }
+  }, [data.hourCounts, labels, appearance])
+
+  return (
+    <ChartCard
+      title="Time of day"
+      subtitle="When your sessions start"
+      isEmpty={data.workoutCount === 0}
+      emptyMessage="Log a few workouts to see when you train."
+      table={{
+        columns: ['Hour', 'Workouts'],
+        rows: data.hourCounts
+          .map((count, hour) => [formatHour(hour), count] as [string, number])
+          .filter(([, count]) => count > 0),
+      }}
+    >
+      <Chart option={option} ariaLabel="Histogram of session start times over 24 hours" />
+    </ChartCard>
+  )
+}
+
+// ──────────────────────────────────────────────────── D-40 duration trend
+/** Session length over time, with a moving average. */
+export function DurationTrendChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const withDuration = data.sessions.filter((s) => s.durationSeconds !== null)
+  const labels = withDuration.map((s) => format(s.at, 'MMM d'))
+  const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
+  const average = minutes.map((_, index) => {
+    const window = minutes.slice(Math.max(0, index - 3), index + 1)
+    return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
+  })
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      legend: {
+        show: true,
+        bottom: 0,
+        itemWidth: 12,
+        itemHeight: 2,
+        textStyle: { color: c.muted, fontSize: 11 },
+      },
+      grid: { left: 8, right: 12, top: 12, bottom: 28, containLabel: true },
+      xAxis: categoryAxis(c, labels),
+      yAxis: valueAxis(c, { name: 'min' }),
+      series: [
+        {
+          name: 'Duration',
+          type: 'line',
+          data: minutes,
+          symbol: 'circle',
+          symbolSize: 5,
+          lineStyle: { width: 2, color: c.plot },
+          itemStyle: { color: c.plot },
+        },
+        {
+          name: '4-session average',
+          type: 'line',
+          data: average,
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 2, color: c.muted },
+        },
+      ],
+    }
+  }, [labels, minutes, average, appearance])
+
+  return (
+    <ChartCard
+      title="Workout duration"
+      subtitle="Are sessions getting longer?"
+      isEmpty={withDuration.length < 2}
+      emptyMessage="Finish two workouts to see how long they run."
+      table={{
+        columns: ['Date', 'Minutes', '4-session avg'],
+        rows: labels
+          .map((label, i) => [label, minutes[i]!, average[i]!] as [string, number, number])
+          .reverse(),
+      }}
+    >
+      <Chart option={option} ariaLabel="Line chart of workout duration over time" />
+    </ChartCard>
+  )
+}
+
+// ───────────────────────────────────────────────── C-30 sets per session
+/** Distribution of working-set counts per session. */
+export function SetsPerSessionChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const counts = data.sessions.map((s) => s.setCount).filter((n) => n > 0)
+  // Bucket into ranges of 5 so the histogram stays readable.
+  const buckets = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
+  const tally = new Array<number>(buckets.length).fill(0)
+  for (const count of counts) {
+    const index = Math.min(buckets.length - 1, Math.floor((count - 1) / 5))
+    tally[index]! += 1
+  }
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
+      xAxis: categoryAxis(c, buckets),
+      yAxis: valueAxis(c, { name: 'sessions' }),
+      series: [
+        {
+          type: 'bar',
+          data: tally,
+          barMaxWidth: 40,
+          itemStyle: { color: c.plot, borderRadius: [4, 4, 0, 0] },
+        },
+      ],
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tally.join(), appearance])
+
+  return (
+    <ChartCard
+      title="Sets per session"
+      subtitle="How much work per workout"
+      isEmpty={counts.length < 2}
+      emptyMessage="Log a couple of sessions to see the spread."
+      table={{
+        columns: ['Sets', 'Sessions'],
+        rows: buckets.map((bucket, i) => [bucket, tally[i]!]),
+      }}
+    >
+      <Chart option={option} ariaLabel="Histogram of working sets per session" />
+    </ChartCard>
+  )
+}
+
+// ─────────────────────────────────────────────────── C-33 exercise variety
+/** Distinct exercises trained per week. */
+export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const labels = weekLabels(data.weeks)
+  // Recompute distinct exercises per week from the exercise series points.
+  const distinctByWeek = new Map<string, Set<string>>()
+  for (const series of data.exerciseSeries) {
+    for (const point of series.points) {
+      const week = weekKey(point.at, data.profile.weekStartsOn)
+      const set = distinctByWeek.get(week) ?? new Set<string>()
+      set.add(series.exerciseId)
+      distinctByWeek.set(week, set)
+    }
+  }
+  const counts = data.weeks.map((week) => distinctByWeek.get(week)?.size ?? 0)
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      xAxis: categoryAxis(c, labels),
+      yAxis: valueAxis(c, { name: 'lifts' }),
+      series: [
+        {
+          type: 'line',
+          data: counts,
+          symbol: 'circle',
+          symbolSize: 5,
+          lineStyle: { width: 2, color: c.plot },
+          itemStyle: { color: c.plot },
+        },
+      ],
+    }
+  }, [labels, counts, appearance])
+
+  return (
+    <ChartCard
+      title="Exercise variety"
+      subtitle="Distinct lifts each week"
+      isEmpty={data.weeks.length < 2}
+      emptyMessage="Two weeks of history will show how varied your training is."
+      table={{
+        columns: ['Week', 'Distinct lifts'],
+        rows: labels.map((label, i) => [label, counts[i]!]),
+      }}
+    >
+      <Chart option={option} ariaLabel="Line chart of distinct exercises trained per week" />
+    </ChartCard>
+  )
+}
+
+// ──────────────────────────────────────────────────── B-17 per-exercise volume
+/** Volume per session for the filtered lift. */
+export function PerExerciseVolumeChart({
+  data,
+  activeExerciseId,
+}: {
+  data: InsightsData
+  activeExerciseId: string | null
+}) {
+  const appearance = useAppearanceKey()
+  const unit = data.profile.unitWeight
+  const active = activeExerciseId
+    ? data.exerciseSeries.find((s) => s.exerciseId === activeExerciseId)
+    : undefined
+  const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
+  const labels = points.map((p) => format(p.at, 'MMM d'))
+  const values = points.map((p) => Math.round(weightFromKg(p.volumeKg, unit)))
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      xAxis: categoryAxis(c, labels),
+      yAxis: valueAxis(c, { name: unit }),
+      series: [
+        {
+          type: 'bar',
+          data: values,
+          barMaxWidth: 28,
+          itemStyle: { color: c.plot, borderRadius: [4, 4, 0, 0] },
+        },
+      ],
+    }
+  }, [labels, values, unit, appearance])
+
+  if (!active) {
+    return (
+      <PickExerciseCard
+        title="Volume per session"
+        subtitle="Training load per session for one lift"
+      />
+    )
+  }
+
+  return (
+    <ChartCard
+      title="Volume per session"
+      subtitle={`${active.name} — load per session in ${unit}`}
+      isEmpty={points.length < 2}
+      emptyMessage="Log this lift on two days to see its volume trend."
+      table={{
+        columns: ['Date', `Volume (${unit})`],
+        rows: labels.map((label, i) => [label, values[i]!.toLocaleString()]).reverse(),
+      }}
+    >
+      <Chart option={option} ariaLabel="Bar chart of per-exercise volume per session" />
+    </ChartCard>
+  )
+}
+
+// ─────────────────────────────────────────────── C-25 pattern coverage
+/** Working sets per movement pattern — surfaces a neglected pattern. */
+export function PatternCoverageChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const entries = MOVEMENT_PATTERNS.map((pattern) => ({
+    pattern,
+    count: data.setsByPattern.get(pattern) ?? 0,
+  })).filter((e) => e.count > 0)
+  const labels = entries.map((e) => titleCasePattern(e.pattern))
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
+      grid: { left: 8, right: 16, top: 8, bottom: 4, containLabel: true },
+      xAxis: valueAxis(c, { name: 'sets' }),
+      yAxis: { ...categoryAxis(c, labels), inverse: true },
+      series: [
+        {
+          type: 'bar',
+          data: entries.map((e) => e.count),
+          barMaxWidth: 18,
+          itemStyle: { color: c.plot, borderRadius: [0, 4, 4, 0] },
+        },
+      ],
+    }
+  }, [entries, labels, appearance])
+
+  return (
+    <ChartCard
+      title="Pattern coverage"
+      subtitle="Working sets per movement pattern"
+      isEmpty={entries.length === 0}
+      emptyMessage="Log some sets to see which movement patterns you train."
+      table={{
+        columns: ['Pattern', 'Sets'],
+        rows: entries.map((e) => [titleCasePattern(e.pattern), e.count]),
+      }}
+    >
+      <Chart
+        option={option}
+        height={Math.max(160, entries.length * 30)}
+        ariaLabel="Bar chart of working sets per movement pattern"
+      />
+    </ChartCard>
+  )
+}
+
+// ─────────────────────────────────────────────────── C-26 equipment mix
+/** Where training happens — working sets per equipment type. */
+export function EquipmentMixChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const entries = [...data.setsByEquipment.entries()]
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+  const labels = entries.map(([eq]) => titleCasePattern(eq))
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
+      grid: { left: 8, right: 16, top: 8, bottom: 4, containLabel: true },
+      xAxis: valueAxis(c, { name: 'sets' }),
+      yAxis: { ...categoryAxis(c, labels), inverse: true },
+      series: [
+        {
+          type: 'bar',
+          data: entries.map(([, count]) => count),
+          barMaxWidth: 18,
+          itemStyle: { color: c.plot, borderRadius: [0, 4, 4, 0] },
+        },
+      ],
+    }
+  }, [entries, labels, appearance])
+
+  return (
+    <ChartCard
+      title="Equipment mix"
+      subtitle="Working sets per equipment type"
+      isEmpty={entries.length === 0}
+      emptyMessage="Log some sets to see your equipment mix."
+      table={{
+        columns: ['Equipment', 'Sets'],
+        rows: entries.map(([eq, count]) => [titleCasePattern(eq), count]),
+      }}
+    >
+      <Chart
+        option={option}
+        height={Math.max(160, entries.length * 30)}
+        ariaLabel="Bar chart of working sets per equipment type"
+      />
+    </ChartCard>
+  )
+}
+
+// ─────────────────────────────────────────────────── D-39 gap distribution
+/** Days between sessions — how long the layoffs run. */
+export function GapDistributionChart({ data }: { data: InsightsData }) {
+  const appearance = useAppearanceKey()
+  const times = data.sessions.map((s) => s.at).sort((a, b) => a - b)
+  const gaps: number[] = []
+  for (let i = 1; i < times.length; i += 1) {
+    gaps.push(Math.round((times[i]! - times[i - 1]!) / 86_400_000))
+  }
+  const buckets = ['0-1', '2', '3', '4-6', '7+']
+  const tally = new Array<number>(buckets.length).fill(0)
+  for (const g of gaps) {
+    const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
+    tally[i]! += 1
+  }
+
+  const option = useMemo<EChartsOption>(() => {
+    const c = chrome()
+    return {
+      ...baseOption(c),
+      tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
+      xAxis: categoryAxis(c, buckets),
+      yAxis: valueAxis(c, { name: 'gaps' }),
+      series: [
+        {
+          type: 'bar',
+          data: tally,
+          barMaxWidth: 40,
+          itemStyle: { color: c.plot, borderRadius: [4, 4, 0, 0] },
+        },
+      ],
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tally.join(), appearance])
+
+  return (
+    <ChartCard
+      title="Gaps between sessions"
+      subtitle="Days off between workouts"
+      isEmpty={gaps.length < 2}
+      emptyMessage="Log a few sessions to see how long your breaks run."
+      table={{
+        columns: ['Days off', 'Times'],
+        rows: buckets.map((b, i) => [b, tally[i]!]),
+      }}
+    >
+      <Chart option={option} ariaLabel="Histogram of days between sessions" />
+    </ChartCard>
+  )
+}
+
+// ─────────────────────────────────────────────────── B-16 stalled lifts
+/**
+ * Lifts whose estimated 1RM hasn't improved recently — what needs attention.
+ * A table, not a chart: the useful output is a ranked list with numbers (§9).
+ */
+export function StalledLiftsChart({ data }: { data: InsightsData }) {
+  const unit = data.profile.unitWeight
+  const rows = data.exerciseSeries
+    .map((series) => {
+      const withE1rm = series.points.filter((p) => p.e1rmKg !== null)
+      if (withE1rm.length < 2) return null
+      const best = Math.max(...withE1rm.map((p) => p.e1rmKg!))
+      const bestAt = withE1rm.find((p) => p.e1rmKg === best)!.at
+      const weeksStalled = Math.round((Date.now() - bestAt) / (7 * 86_400_000))
+      const current = withE1rm[withE1rm.length - 1]!.e1rmKg!
+      return { name: series.name, best, current, weeksStalled }
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null && r.weeksStalled >= 2)
+    .sort((a, b) => b.weeksStalled - a.weeksStalled)
+    .slice(0, 8)
+
+  return (
+    <ChartCard
+      title="Stalled lifts"
+      subtitle="No new e1RM in 2+ weeks"
+      isEmpty={rows.length === 0}
+      emptyMessage="Nothing stalled — every tracked lift set a recent best."
+      table={{
+        columns: ['Lift', 'Weeks', `Best (${unit})`],
+        rows: rows.map((r) => [
+          r.name,
+          r.weeksStalled,
+          Math.round(weightFromKg(r.best, unit)).toLocaleString(),
+        ]),
+      }}
+    >
+      <div className="space-y-1.5 px-2 py-2">
+        {rows.map((r) => (
+          <div key={r.name} className="flex items-center justify-between gap-2 text-[13.5px]">
+            <span className="min-w-0 flex-1 truncate">{r.name}</span>
+            <span className="tabular shrink-0 text-ink-muted">
+              {Math.round(weightFromKg(r.best, unit))} {unit}
+            </span>
+            <span
+              className="tabular w-16 shrink-0 text-right font-semibold"
+              style={{ color: 'var(--status-warning)' }}
+            >
+              {r.weeksStalled}w
+            </span>
+          </div>
+        ))}
+      </div>
+    </ChartCard>
+  )
+}
+
+function formatHour(hour: number): string {
+  const period = hour < 12 ? 'a' : 'p'
+  const twelve = hour % 12 === 0 ? 12 : hour % 12
+  return `${twelve}${period}`
+}
+
+function titleCasePattern(value: string): string {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 /** Region colors for a chart that needs them outside a series definition. */

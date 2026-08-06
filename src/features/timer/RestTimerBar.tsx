@@ -13,8 +13,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Play, Timer } from 'lucide-react'
+import { Timer } from 'lucide-react'
 import { formatClock } from '@/lib/units'
+import { parseDuration } from '@/features/workout/SetRow'
 import { remainingSeconds, useRestTimer } from './restTimerStore'
 import { playCue, signalRestComplete } from './sounds'
 
@@ -22,6 +23,8 @@ import { playCue, signalRestComplete } from './sounds'
 const WARNING_AT = 10
 /** How long "Rest over" stays up before the bar returns to idle. */
 const EXPIRED_LINGER_MS = 8000
+/** The one-tap presets (§12.1). Custom covers anything else. */
+const REST_PRESETS = [60, 180, 300] as const
 
 export function RestTimerBar({
   defaultSeconds,
@@ -79,19 +82,15 @@ export function RestTimerBar({
   const isRunning = targetAt !== null && remaining > 0
   const isEndingSoon = isRunning && remaining <= WARNING_AT
 
-  // Idle: an explicit start button, labeled with the duration it will run for.
+  // Idle: explicit quick-start buttons for the common durations, plus a custom
+  // entry (§12.1). `defaultSeconds` — the resolved per-exercise default — is
+  // marked so the user can see which preset the exercise leans toward.
   if (!isRunning && !hasExpired) {
     return (
-      <div className="border-t border-line bg-surface px-3 py-2">
-        <button
-          onClick={() => start(defaultSeconds, { setId: null, exerciseId: null })}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-sunken text-[14.5px] font-semibold text-ink-secondary active:bg-accent-wash"
-        >
-          <Play size={16} />
-          Start rest
-          <span className="tabular text-ink-muted">{formatClock(defaultSeconds)}</span>
-        </button>
-      </div>
+      <RestStartBar
+        defaultSeconds={defaultSeconds}
+        onStart={(seconds) => start(seconds, { setId: null, exerciseId: null })}
+      />
     )
   }
 
@@ -164,6 +163,96 @@ export function RestTimerBar({
           Skip
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Idle bar: 1 / 3 / 5-minute quick starts plus a custom entry.
+ *
+ * The preset matching this exercise's resolved default is highlighted, so the
+ * one-tap choice reflects the per-exercise rest override when one exists.
+ */
+function RestStartBar({
+  defaultSeconds,
+  onStart,
+}: {
+  defaultSeconds: number
+  onStart: (seconds: number) => void
+}) {
+  const [isCustom, setIsCustom] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  function commitCustom() {
+    const seconds = parseDuration(draft)
+    setIsCustom(false)
+    setDraft('')
+    if (seconds !== null && seconds > 0) onStart(seconds)
+  }
+
+  if (isCustom) {
+    return (
+      <div className="flex items-center gap-2 border-t border-line bg-surface px-3 py-2">
+        <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+          Rest
+        </span>
+        <input
+          autoFocus
+          value={draft}
+          inputMode="numeric"
+          placeholder="m:ss"
+          aria-label="custom rest duration"
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commitCustom()
+          }}
+          className="tabular h-11 min-w-0 flex-1 rounded-xl border border-line bg-sunken text-center text-[16px] font-semibold focus:border-accent focus:outline-none"
+        />
+        <button
+          onClick={commitCustom}
+          className="h-11 shrink-0 rounded-xl bg-accent px-4 text-[14px] font-semibold text-white active:opacity-80"
+        >
+          Start
+        </button>
+        <button
+          onClick={() => {
+            setIsCustom(false)
+            setDraft('')
+          }}
+          className="h-11 shrink-0 px-1 text-[13px] font-semibold text-ink-secondary active:opacity-60"
+        >
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 border-t border-line bg-surface px-3 py-2">
+      <span className="mr-0.5 flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+        <Timer size={14} />
+        Rest
+      </span>
+      {REST_PRESETS.map((seconds) => (
+        <button
+          key={seconds}
+          onClick={() => onStart(seconds)}
+          className={
+            'h-11 flex-1 rounded-xl text-[14.5px] font-semibold active:bg-accent-wash ' +
+            (seconds === defaultSeconds
+              ? 'bg-accent-wash text-accent ring-1 ring-inset ring-accent'
+              : 'bg-sunken text-ink-secondary')
+          }
+        >
+          {formatClock(seconds)}
+        </button>
+      ))}
+      <button
+        onClick={() => setIsCustom(true)}
+        className="h-11 shrink-0 rounded-xl bg-sunken px-3.5 text-[13px] font-semibold text-ink-secondary active:bg-accent-wash"
+      >
+        Custom
+      </button>
     </div>
   )
 }

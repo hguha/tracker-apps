@@ -221,10 +221,4 @@ describe('LocalAuthProvider', () => {
     expect(await db.workouts.count()).toBe(0)
     expect(await db.exercises.count()).toBe(0)
   })
-
-  it('declines Google sign-in honestly instead of faking it', async () => {
-    const auth = new LocalAuthProvider()
-    const result = await auth.signInWithGoogle()
-    expect(result.kind).toBe('error')
-  })
 })

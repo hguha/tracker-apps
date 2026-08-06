@@ -30,7 +30,6 @@ export interface AuthProvider {
 
   signInWithEmail(email: string): Promise<SignInResult>
   verifyCode(email: string, code: string): Promise<SignInResult>
-  signInWithGoogle(): Promise<SignInResult>
   /** Offline-only path: claims the on-device account with no verification. */
   continueOffline(displayName?: string): Promise<SignInResult>
 

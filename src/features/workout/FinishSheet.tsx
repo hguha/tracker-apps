@@ -13,12 +13,7 @@ import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
 import { REGION_LABELS, type Region } from '@/domain/types'
-import {
-  attributeVolumeToMuscles,
-  isWorkingSet,
-  rollUpToRegions,
-  volumeLoadKg,
-} from '@/lib/metrics'
+import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
 import { formatDuration, weightFromKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 
@@ -48,7 +43,9 @@ export function FinishSheet({
     let workingSets = 0
     let completedSets = 0
     let cardioSeconds = 0
-    const volumeByMuscle = new Map<string, number>()
+    // One lift → its single primary body part (task simplification). Secondary
+    // spreading is kept only for the detailed muscle-volume charts.
+    const byRegionMap = new Map<Region, number>()
 
     for (const we of workoutExercises) {
       const exercise = await db.exercises.get(we.exerciseId)
@@ -65,15 +62,11 @@ export function FinishSheet({
       const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
       totalVolumeKg += exerciseVolume
 
-      for (const [muscleId, value] of attributeVolumeToMuscles(
-        exerciseVolume,
-        exercise,
-      )) {
-        volumeByMuscle.set(muscleId, (volumeByMuscle.get(muscleId) ?? 0) + value)
-      }
+      const region = regionOf.get(exercise.primaryMuscleId)
+      if (region) byRegionMap.set(region, (byRegionMap.get(region) ?? 0) + exerciseVolume)
     }
 
-    const byRegion = rollUpToRegions(volumeByMuscle, (id) => regionOf.get(id))
+    const byRegion = byRegionMap
 
     return {
       workout,

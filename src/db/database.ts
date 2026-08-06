@@ -43,12 +43,34 @@ export interface OutboxEntry {
   queuedAt: number
   attempts: number
   lastError?: string
+  /** Earliest time to retry after a transient failure. Set by the drain's backoff. */
+  nextAttemptAt?: number
 }
 
 /** Per-table high-water marks for delta pulls. */
 export interface SyncState {
   table: string
   lastPulledAt: number
+}
+
+/**
+ * An outbox entry that failed permanently (§5.5).
+ *
+ * A 4xx (other than 401/429) means the write will never succeed as-is — a poison
+ * entry left in the outbox would silently block every write behind it, the
+ * classic hand-rolled-queue failure. So it moves here, out of the drain path,
+ * and is surfaced in Settings for the user to see rather than retried forever.
+ */
+export interface DeadLetterEntry {
+  seq?: number
+  table: string
+  op: 'insert' | 'update' | 'delete'
+  rowId: string
+  payload: object
+  clientRev: number
+  queuedAt: number
+  failedAt: number
+  error: string
 }
 
 /**
@@ -86,6 +108,7 @@ export class WorkoutDatabase extends Dexie {
   metricEntries!: EntityTable<MetricEntry, 'id'>
   lastPerformance!: EntityTable<LastPerformance, 'exerciseId'>
   outbox!: EntityTable<OutboxEntry, 'seq'>
+  deadLetter!: EntityTable<DeadLetterEntry, 'seq'>
   syncState!: EntityTable<SyncState, 'table'>
   placeholderOverrides!: EntityTable<PlaceholderOverrides, 'workoutId'>
 
@@ -108,6 +131,12 @@ export class WorkoutDatabase extends Dexie {
       outbox: '++seq, table, rowId',
       syncState: 'table',
       placeholderOverrides: 'workoutId',
+    })
+
+    // v3 adds the dead-letter table (§5.5). Additive, so existing data upgrades
+    // untouched — Dexie carries every prior store forward automatically.
+    this.version(3).stores({
+      deadLetter: '++seq, table, rowId',
     })
   }
 }

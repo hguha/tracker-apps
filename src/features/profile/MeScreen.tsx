@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Check, ChevronRight, Dumbbell } from 'lucide-react'
+import { Check, ChevronRight, ClipboardList, Dumbbell, RefreshCw } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
@@ -15,6 +15,7 @@ import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
 import { useAuth } from '@/auth/AuthContext'
 import { initialsOf } from '@/auth/types'
+import { useSync } from '@/sync/useSync'
 import { playCue, setSoundEnabled } from '@/features/timer/sounds'
 import { AppearanceSection } from './AppearanceSection'
 import { cn } from '@/lib/cn'
@@ -27,14 +28,18 @@ const QUICK_METRIC_KEYS = ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']
 
 export function MeScreen({
   onOpenLibrary,
+  onOpenTemplates,
   onOpenAccount,
 }: {
   onOpenLibrary: () => void
+  onOpenTemplates: () => void
   onOpenAccount: () => void
 }) {
   const toast = useToast()
   const { session } = useAuth()
+  const sync = useSync()
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
+  const [isClearing, setIsClearing] = useState(false)
 
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
@@ -52,19 +57,17 @@ export function MeScreen({
     const workoutCount = (await repo.listWorkouts(500)).filter(
       (w) => w.endedAt !== null,
     ).length
-    const pendingWrites = await db.outbox.count()
 
     return {
       profile,
       quick: quick.filter((q): q is NonNullable<typeof q> => q !== null),
       workoutCount,
-      pendingWrites,
     }
   }, [])
 
   if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
 
-  const { profile, quick, workoutCount, pendingWrites } = data
+  const { profile, quick, workoutCount } = data
 
   /** Converts a typed display value into canonical storage units. */
   function toCanonical(unitType: string, raw: number): number {
@@ -131,6 +134,21 @@ export function MeScreen({
             <span className="block text-[15px] font-semibold">Exercise library</span>
             <span className="block text-[12.5px] text-ink-muted">
               Browse, search, and edit every exercise
+            </span>
+          </span>
+          <ChevronRight size={17} className="shrink-0 text-ink-muted" />
+        </button>
+        <button
+          onClick={onOpenTemplates}
+          className="flex w-full items-center gap-3 border-t border-line px-4 py-3.5 text-left active:bg-accent-wash"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-wash text-accent">
+            <ClipboardList size={19} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">Templates</span>
+            <span className="block text-[12.5px] text-ink-muted">
+              Build and edit reusable workout plans
             </span>
           </span>
           <ChevronRight size={17} className="shrink-0 text-ink-muted" />
@@ -306,17 +324,84 @@ export function MeScreen({
           </div>
           <div className="flex justify-between">
             <dt className="text-ink-secondary">Queued for sync</dt>
-            <dd className="tabular font-semibold">{pendingWrites}</dd>
+            <dd className="tabular font-semibold">{sync.pending}</dd>
           </div>
+          {sync.deadLettered > 0 && (
+            <div className="flex justify-between">
+              <dt style={{ color: 'var(--status-serious)' }}>Failed to sync</dt>
+              <dd className="tabular font-semibold" style={{ color: 'var(--status-serious)' }}>
+                {sync.deadLettered}
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between">
-            <dt className="text-ink-secondary">Storage</dt>
-            <dd className="font-semibold">On this device only</dd>
+            <dt className="text-ink-secondary">Sync</dt>
+            <dd className="font-semibold">
+              {sync.enabled ? 'On — syncs to your account' : 'This device only'}
+            </dd>
           </div>
         </dl>
-        <p className="mt-2.5 text-[12px] text-ink-muted">
-          Data lives in this browser. Sync to a server is not connected yet, but
-          every change is already queued for it.
-        </p>
+
+        {sync.enabled ? (
+          <>
+            <Button
+              variant="secondary"
+              className="mt-3 w-full"
+              disabled={sync.phase === 'syncing'}
+              onClick={() => {
+                void sync.syncNow().then(() => {
+                  toast.show(
+                    sync.pending === 0 ? 'Everything is synced' : 'Sync finished',
+                  )
+                })
+              }}
+            >
+              <RefreshCw
+                size={16}
+                className={sync.phase === 'syncing' ? 'animate-spin' : undefined}
+              />
+              {sync.phase === 'syncing'
+                ? 'Syncing…'
+                : sync.pending > 0
+                  ? `Sync now (${sync.pending} pending)`
+                  : 'Sync now'}
+            </Button>
+            <p className="mt-2.5 text-[12px] text-ink-muted">
+              Everything saves on this device instantly and syncs to your account in
+              the background. Use “Sync now” to push right away.
+            </p>
+          </>
+        ) : (
+          <p className="mt-2.5 text-[12px] text-ink-muted">
+            This account keeps everything in this browser. Nothing is uploaded.
+          </p>
+        )}
+
+        {/* Clears IndexedDB. On a synced account the next pull rehydrates from
+            the server; on an offline account this is a genuine reset. */}
+        <button
+          onClick={() => {
+            if (isClearing) return
+            const ok = window.confirm(
+              sync.enabled
+                ? 'Clear this device’s local copy? Your data stays on the server and will re-download on the next sync.'
+                : 'Clear all local data on this device? This cannot be undone — export first if you want a copy.',
+            )
+            if (!ok) return
+            setIsClearing(true)
+            void repo
+              .clearLocalData()
+              .then(() => window.location.reload())
+              .catch(() => {
+                setIsClearing(false)
+                toast.show('Could not clear data')
+              })
+          }}
+          disabled={isClearing}
+          className="mt-3 w-full py-2 text-[13px] font-semibold text-critical active:opacity-60 disabled:opacity-40"
+        >
+          {isClearing ? 'Clearing…' : 'Clear local data'}
+        </button>
       </Card>
     </div>
   )

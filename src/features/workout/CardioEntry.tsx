@@ -33,8 +33,8 @@ import { parseDuration } from './SetRow'
 export interface CardioEntryProps {
   exercise: Exercise
   sets: WorkoutSet[]
-  /** Last session's entries, for placeholders. */
-  previous: PerformedSet[]
+  /** Last session's entries, for placeholders. Aligned to `sets` by index. */
+  previous: (PerformedSet | undefined)[]
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   onChange: (setId: string, patch: Partial<WorkoutSet>) => void

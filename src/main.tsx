@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
+import { ErrorBoundary } from './app/ErrorBoundary'
 import { applyDefaultAppearance } from './lib/theme'
 import './styles/index.css'
 
@@ -13,6 +14,8 @@ if (!container) throw new Error('Root element missing from index.html')
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

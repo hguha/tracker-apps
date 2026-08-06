@@ -15,6 +15,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.1",
     "@tanstack/react-router": "^1.170.18",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

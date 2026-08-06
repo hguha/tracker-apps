@@ -14,8 +14,13 @@ import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'
-import { REGION_LABELS, REGIONS } from '@/domain/types'
+import { EQUIPMENT, REGION_LABELS, REGIONS } from '@/domain/types'
 import { NewExerciseForm } from './NewExerciseForm'
+
+/** Title-cases an equipment/pattern enum value: `smith` → `Smith`. */
+function titleCase(value: string): string {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
 export function ExercisePicker({
   onPick,
@@ -26,6 +31,7 @@ export function ExercisePicker({
 }) {
   const [query, setQuery] = useState('')
   const [regionFilter, setRegionFilter] = useState<string | null>(null)
+  const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
   const data = useLiveQuery(async () => {
@@ -58,6 +64,9 @@ export function ExercisePicker({
         (e) => data.muscleById.get(e.primaryMuscleId)?.region === regionFilter,
       )
     }
+    if (equipmentFilter) {
+      list = list.filter((e) => e.equipment === equipmentFilter)
+    }
 
     if (normalized === '') {
       return [...list].sort((a, b) => {
@@ -84,7 +93,7 @@ export function ExercisePicker({
       .filter((r) => r.score >= 0)
       .sort((a, b) => a.score - b.score || a.exercise.name.localeCompare(b.exercise.name))
       .map((r) => r.exercise)
-  }, [data, query, regionFilter])
+  }, [data, query, regionFilter, equipmentFilter])
 
   if (isCreating) {
     return (
@@ -144,6 +153,27 @@ export function ExercisePicker({
                 />
               )}
               {REGION_LABELS[region]}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Equipment filter chips — a second axis alongside body part. */}
+      <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
+        {EQUIPMENT.map((equipment) => {
+          const isActive = equipmentFilter === equipment
+          return (
+            <button
+              key={equipment}
+              onClick={() => setEquipmentFilter(isActive ? null : equipment)}
+              className={cn(
+                'shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium',
+                isActive
+                  ? 'border-accent bg-accent-wash text-accent'
+                  : 'border-line text-ink-secondary',
+              )}
+            >
+              {titleCase(equipment)}
             </button>
           )
         })}

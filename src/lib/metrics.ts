@@ -23,13 +23,32 @@ export function countsTowardVolume(set: VolumeInput): boolean {
 }
 
 /**
- * The weight actually moved, which is not the number on the bar for
- * bodyweight movements. A weighted pull-up at +20 kg for a 80 kg lifter is
- * 100 kg per rep, and treating it as 20 kg makes back volume look trivial.
+ * How many implements are moved per rep, so entered weight becomes total load.
+ *
+ * A two-arm dumbbell lift moves a dumbbell in each hand every rep, so the total
+ * lifted is twice the weight the user enters (they enter one dumbbell — §6). A
+ * one-arm (unilateral) dumbbell lift moves a single dumbbell. Everything else —
+ * barbells, machines, cables — is entered as its true total, so the factor is 1.
+ */
+export function loadUnitsMoved(
+  exercise: Pick<Exercise, 'equipment' | 'isUnilateral'>,
+): number {
+  return exercise.equipment === 'dumbbell' && !exercise.isUnilateral ? 2 : 1
+}
+
+/**
+ * The weight actually moved, which is not the number the user typed:
+ *   - Two-arm dumbbell lifts move a pair, so double the entered weight (§6).
+ *   - Bodyweight movements move a fraction of the lifter's mass — a weighted
+ *     pull-up at +20 kg for an 80 kg lifter is 100 kg per rep, not 20.
+ *
+ * This drives volume load only. Max-weight and e1RM PRs deliberately use the raw
+ * entered weight, because "the 100s" is the strength number a lifter thinks in,
+ * not the 200 kg of total tonnage.
  */
 export function effectiveWeightKg(
   set: Pick<VolumeInput, 'weightKg'>,
-  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor'>,
+  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'>,
   bodyweightKg: number | null,
 ): number | null {
   const entered = set.weightKg ?? 0
@@ -39,7 +58,7 @@ export function effectiveWeightKg(
   switch (exercise.trackingType) {
     case 'weight_reps':
     case 'weight_time':
-      return set.weightKg
+      return set.weightKg === null ? null : set.weightKg * loadUnitsMoved(exercise)
     case 'bodyweight_reps':
       return bw === null ? null : bw * factor
     case 'weighted_bodyweight':
@@ -58,7 +77,7 @@ export function effectiveWeightKg(
 /** Σ (effective weight × reps) over completed, non-warmup sets. */
 export function volumeLoadKg(
   sets: VolumeInput[],
-  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor'>,
+  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'>,
   bodyweightKg: number | null,
 ): number {
   let total = 0
@@ -101,6 +120,21 @@ export function estimatedOneRepMaxKg(
   return weightKg * (1 + reps / 30)
 }
 
+/**
+ * The weight you could expect to lift for a given rep count, from a known 1RM.
+ *
+ * The inverse of Epley: if `w × (1 + r/30)` estimates the 1RM, then a target
+ * rep count `r` projects back to `oneRepMaxKg / (1 + r/30)`. Used by the PR
+ * estimator to answer "what's my likely 5RM / 3RM?" from any logged set.
+ */
+export function weightForRepsKg(oneRepMaxKg: number, reps: number): number | null {
+  if (oneRepMaxKg <= 0 || reps < 1 || reps > 12) return null
+  return oneRepMaxKg / (1 + reps / 30)
+}
+
+/** Rep counts the PR estimator projects a working weight for. */
+export const PROJECTION_REPS = [1, 2, 3, 5, 8, 10, 12] as const
+
 /** Best e1RM across a group of sets, ignoring sets outside the valid window. */
 export function bestOneRepMaxKg(
   sets: Pick<PerformedSet, 'weightKg' | 'reps' | 'setType'>[],
@@ -137,7 +171,10 @@ export function attributeVolumeToMuscles(
 ): Map<string, number> {
   const byMuscle = new Map<string, number>()
   byMuscle.set(exercise.primaryMuscleId, volumeKg)
-  for (const secondary of exercise.secondaryMuscles) {
+  // Tolerate a row missing its secondaries (e.g. one that arrived from a sync
+  // pull, where secondaries live in a separate table) — treat it as none rather
+  // than crashing the whole render.
+  for (const secondary of exercise.secondaryMuscles ?? []) {
     const existing = byMuscle.get(secondary.muscleId) ?? 0
     byMuscle.set(secondary.muscleId, existing + volumeKg * secondary.contribution)
   }

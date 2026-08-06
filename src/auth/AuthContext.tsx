@@ -16,6 +16,9 @@ import {
   type ReactNode,
 } from 'react'
 import { LocalAuthProvider } from './localAuthProvider'
+import { CompositeAuthProvider } from './compositeAuthProvider'
+import { getSupabase } from '@/sync/supabaseClient'
+import { setActiveUserId, LOCAL_USER_ID } from '@/db/seed'
 import type { AuthProvider, Session, SignInResult } from './types'
 
 interface AuthState {
@@ -24,7 +27,6 @@ interface AuthState {
   isLoading: boolean
   signInWithEmail: (email: string) => Promise<SignInResult>
   verifyCode: (email: string, code: string) => Promise<SignInResult>
-  signInWithGoogle: () => Promise<SignInResult>
   continueOffline: (displayName?: string) => Promise<SignInResult>
   signOut: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
@@ -33,18 +35,35 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null)
 
-/** Swapped for `SupabaseAuthProvider` in Phase 5. Nothing else changes. */
-const provider: AuthProvider = new LocalAuthProvider()
+/**
+ * With a project configured (Phase 5), a composite provider offers both the
+ * Supabase email path and the offline "this device only" path side by side.
+ * With no project, the local provider is the whole story. Chosen once, here —
+ * no screen knows which it got.
+ */
+const supabase = getSupabase()
+const provider: AuthProvider = supabase
+  ? new CompositeAuthProvider(supabase)
+  : new LocalAuthProvider()
 
 export function AuthProviderScope({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
 
   useEffect(() => {
     let cancelled = false
-    void provider.getSession().then((initial) => {
-      if (!cancelled) setSession(initial)
-    })
-    const unsubscribe = provider.onSessionChange(setSession)
+
+    // Point the data layer at the current owner *before* the signed-in tree
+    // mounts and seeds, so every row is stamped with an id RLS will accept when
+    // it syncs. An offline account keeps the local id; a real session uses its
+    // UID. Because the tree is keyed on userId (App.tsx), this runs at the
+    // signed-out↔signed-in boundary and the app remounts cleanly after it.
+    const apply = (next: Session | null) => {
+      setActiveUserId(next && !next.isLocal ? next.userId : LOCAL_USER_ID)
+      if (!cancelled) setSession(next)
+    }
+
+    void provider.getSession().then(apply)
+    const unsubscribe = provider.onSessionChange(apply)
     return () => {
       cancelled = true
       unsubscribe()
@@ -56,7 +75,6 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     (email: string, code: string) => provider.verifyCode(email, code),
     [],
   )
-  const signInWithGoogle = useCallback(() => provider.signInWithGoogle(), [])
   const continueOffline = useCallback(
     (displayName?: string) => provider.continueOffline(displayName),
     [],
@@ -71,7 +89,6 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       isLoading: session === undefined,
       signInWithEmail,
       verifyCode,
-      signInWithGoogle,
       continueOffline,
       signOut,
       updateDisplayName,
@@ -81,7 +98,6 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       session,
       signInWithEmail,
       verifyCode,
-      signInWithGoogle,
       continueOffline,
       signOut,
       updateDisplayName,

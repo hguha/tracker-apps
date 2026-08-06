@@ -63,7 +63,12 @@ export function DragList({
 }: {
   itemIds: string[]
   onReorder: (orderedIds: string[]) => void
-  onSuperset: (draggedId: string, targetId: string) => void
+  /**
+   * Optional. When omitted, there is no superset gesture and the middle band
+   * reorders like the rest — used by the template editor, where grouping isn't
+   * offered and an accidental superset would be a surprise.
+   */
+  onSuperset?: (draggedId: string, targetId: string) => void
   children: ReactNode
 }) {
   const [state, setState] = useState<DragState>({ activeId: null, intent: { kind: 'none' } })
@@ -92,13 +97,14 @@ export function DragList({
 
         if (box.id === draggedId) return { kind: 'none' }
 
-        // The middle band supersets; the outer thirds reorder around the card.
+        // The middle band supersets (when grouping is enabled); the outer thirds
+        // reorder around the card. With no `onSuperset`, the whole card reorders.
         const offset = (clientY - top) / height
         const bandStart = (1 - SUPERSET_BAND) / 2
-        if (offset > bandStart && offset < 1 - bandStart) {
+        if (onSuperset && offset > bandStart && offset < 1 - bandStart) {
           return { kind: 'superset', targetId: box.id }
         }
-        return { kind: 'reorder', index: offset <= bandStart ? index : index + 1 }
+        return { kind: 'reorder', index: offset <= 0.5 ? index : index + 1 }
       }
 
       // Past the end of the list.
@@ -114,7 +120,7 @@ export function DragList({
   const finish = useCallback(
     (draggedId: string, intent: DropIntent) => {
       if (intent.kind === 'superset') {
-        onSuperset(draggedId, intent.targetId)
+        onSuperset?.(draggedId, intent.targetId)
       } else if (intent.kind === 'reorder') {
         const without = itemIds.filter((id) => id !== draggedId)
         const from = itemIds.indexOf(draggedId)
@@ -205,7 +211,7 @@ export function DragItem({
   id: string
   index: number
   /** Shown while hovering this card as a superset target, e.g. "Bench Press". */
-  supersetLabel: string
+  supersetLabel?: string
   children: ReactNode
 }) {
   const { activeId, intent, registerItem, beginDrag } = useDragList()

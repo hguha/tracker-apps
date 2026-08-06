@@ -91,14 +91,6 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'session', session }
   }
 
-  async signInWithGoogle(): Promise<SignInResult> {
-    // Honest about being unavailable rather than pretending to work — a fake
-    // Google flow would hide the real integration's problems until Phase 5.
-    return {
-      kind: 'error',
-      message: 'Google sign-in needs the server. Use your email or continue offline.',
-    }
-  }
 
   async continueOffline(displayName = 'You'): Promise<SignInResult> {
     const session = await this.establish('local@device', displayName, false)

@@ -50,7 +50,10 @@ node smoke3.mjs   # auth flow + Phase 2b interactions
 | Swipe-dismissable toasts | ✅ |
 | **Sound cues** — set logged, PR, rest warning, rest over, workout done | ✅ |
 | **7 themes × light/dark, plus a custom accent** with enforced contrast | ✅ |
-| Insights — 5 sub-tabs, 12 charts, searchable filters, table view on each | ✅ |
+| **Preview a past workout or template before starting** — confirm, then start | ✅ |
+| **Templates** — list with folders, editor, clear plan-vs-workout separation | ✅ |
+| **Rest timer** — 1 / 3 / 5-min quick starts plus a custom entry | ✅ |
+| Insights — 5 sub-tabs, 21 charts, searchable filters, table view on each | ✅ |
 | Body metrics — bodyweight, body fat, waist, resting HR | ✅ |
 | Units — lb/kg, mi/km, in/cm, exact round-trip | ✅ |
 
@@ -58,18 +61,22 @@ node smoke3.mjs   # auth flow + Phase 2b interactions
 
 Deliberately deferred, in spec order:
 
-- **Sync and the real auth backend.** The auth *front end* is complete and runs
-  against `LocalAuthProvider` (`src/auth/`); Phase 5 swaps in
-  `SupabaseAuthProvider` behind the same interface. Every mutation already lands
-  in a durable outbox queue, so turning sync on means implementing the drain, not
-  rewriting the app. No Supabase project needed to use the prototype.
+- **A live Supabase project.** The backend is *built* — full SQL schema, RLS
+  policies and their test suite (`supabase/`), plus the client sync engine
+  (`src/sync/`): ordered outbox drain, failure classification with a
+  dead-letter queue, delta pull, and the pending-write guard, all tested against
+  an in-memory backend. `SupabaseAuthProvider` and `SupabaseBackend` are written
+  and auto-selected once `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are set;
+  with them unset the app runs entirely local-first, as it does today. What
+  remains is provisioning an actual project, applying the migrations, and the
+  bootstrap-pull progress UI. See **supabase/README.md**.
 - **PWA install and offline shell.** Works offline today because IndexedDB is
   the read path, but there's no service worker or manifest yet.
 - **Server-scheduled push** for the rest timer (spec §12.3). The in-app timer
   works; a notification with the app closed needs the Cloudflare Worker.
-- **The remaining 29 charts** (spec §9). Twelve are built, covering every color
-  job so the system is proven; the rest follow the same pattern.
-- **Plate calculator**, **template editor and folders**, **URL filter state**.
+- **The remaining charts** (spec §9). Seventeen of 41 are built, covering every
+  color job so the system is proven; the rest follow the same pattern.
+- **Plate calculator**, **URL filter state**, **pinned charts**.
 - **AI coach** (spec §13) and **progress photos** (spec §4.9).
 
 ## Layout

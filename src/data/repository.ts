@@ -11,10 +11,12 @@
  */
 
 import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
-import { LOCAL_USER_ID } from '@/db/seed'
+import { getActiveUserId } from '@/db/seed'
+import { formatDistance, formatWeight } from '@/lib/units'
 import { bestOneRepMaxKg, estimatedOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
 import { sessionTitle, type SetSignal } from '@/lib/sessionTitle'
 import type {
+  DistanceUnit,
   Exercise,
   LastPerformance,
   Region,
@@ -57,7 +59,7 @@ async function enqueue(
 // ------------------------------------------------------------------ profile
 
 export async function getProfile(): Promise<Profile> {
-  const profile = await db.profiles.get(LOCAL_USER_ID)
+  const profile = await db.profiles.get(getActiveUserId())
   if (!profile) throw new Error('Profile missing — seeding did not run')
   return profile
 }
@@ -65,8 +67,8 @@ export async function getProfile(): Promise<Profile> {
 export async function updateProfile(patch: Partial<Profile>): Promise<void> {
   const current = await getProfile()
   const next = { ...patch, ...touch(current.clientRev) }
-  await db.profiles.update(LOCAL_USER_ID, next)
-  await enqueue('profiles', 'update', LOCAL_USER_ID, next, current.clientRev + 1)
+  await db.profiles.update(getActiveUserId(), next)
+  await enqueue('profiles', 'update', getActiveUserId(), next, current.clientRev + 1)
 }
 
 // ---------------------------------------------------------------- exercises
@@ -98,7 +100,7 @@ export interface NewExerciseInput {
 export async function createExercise(input: NewExerciseInput): Promise<string> {
   const exercise: Exercise = {
     id: newId(),
-    userId: LOCAL_USER_ID,
+    userId: getActiveUserId(),
     name: input.name.trim(),
     primaryMuscleId: input.primaryMuscleId,
     secondaryMuscles: input.secondaryMuscles ?? [],
@@ -163,7 +165,7 @@ export async function getExerciseDetail(
 
   const primary = await db.muscles.get(exercise.primaryMuscleId)
   const secondaries = await Promise.all(
-    exercise.secondaryMuscles.map(async (s) => {
+    (exercise.secondaryMuscles ?? []).map(async (s) => {
       const muscle = await db.muscles.get(s.muscleId)
       return muscle
         ? {
@@ -271,7 +273,7 @@ export async function startWorkout(opts: {
   const profile = await getProfile()
   const workout: Workout = {
     id: newId(),
-    userId: LOCAL_USER_ID,
+    userId: getActiveUserId(),
     startedAt: opts.startedAt ?? Date.now(),
     endedAt: null,
     title: opts.title ?? '',
@@ -373,6 +375,102 @@ export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[
   const regionOf = await buildRegionMap()
   const workouts = await listWorkouts(limit)
   return Promise.all(workouts.map((w) => getWorkoutSummary(w, regionOf)))
+}
+
+/**
+ * A read-only outline of what a session (or template) contains, for the
+ * preview shown before committing to start a copy (§7.2, §7.4). Lets the user
+ * confirm they're about to start the right workout instead of starting it on
+ * the first tap.
+ */
+export interface WorkoutPreview {
+  title: string
+  performedAt: number | null
+  exercises: {
+    name: string
+    region: Region | undefined
+    /** e.g. "3 × 8 @ 60kg" for lifting, "27:30 · 3.1mi" for cardio. */
+    detail: string
+    setCount: number
+  }[]
+  totalSets: number
+}
+
+export async function getWorkoutPreview(
+  workoutId: string,
+): Promise<WorkoutPreview | null> {
+  const workout = await getWorkout(workoutId)
+  if (!workout) return null
+  const profile = await getProfile()
+  const regionOf = await buildRegionMap()
+  const workoutExercises = await listWorkoutExercises(workoutId)
+  const signals: SetSignal[] = []
+
+  const exercises: WorkoutPreview['exercises'] = []
+  let totalSets = 0
+
+  for (const we of workoutExercises) {
+    const exercise = await db.exercises.get(we.exerciseId)
+    if (!exercise) continue
+    const region = regionOf.get(exercise.primaryMuscleId)
+    const logged = (await listSets(we.id)).filter((s) => s.isCompleted)
+    totalSets += logged.length
+    for (const set of logged) {
+      if (set.setType !== 'warmup' && region) {
+        signals.push({ region, pattern: exercise.movementPattern })
+      }
+    }
+    exercises.push({
+      name: exercise.name,
+      region,
+      detail: summarizeSets(logged, profile.unitWeight, profile.unitDistance),
+      setCount: logged.length,
+    })
+  }
+
+  return {
+    title: sessionTitle(workout.title, workout.startedAt, signals),
+    performedAt: workout.startedAt,
+    exercises,
+    totalSets,
+  }
+}
+
+/**
+ * A compact one-line summary of a group of sets, for the preview.
+ * Weights and distances are shown in the user's units (§4.12) — the preview is a
+ * display surface, so it converts out of canonical storage like every other one.
+ */
+function summarizeSets(
+  sets: Pick<WorkoutSet, 'setType' | 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>[],
+  weightUnit: WeightUnit,
+  distanceUnit: DistanceUnit,
+): string {
+  const working = sets.filter((s) => s.setType !== 'warmup')
+  if (working.length === 0) return 'no sets'
+
+  const first = working[0]!
+  // Cardio-shaped: duration and optional distance.
+  if (first.durationSeconds !== null) {
+    const seconds = working.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
+    const meters = working.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
+    const mins = Math.round(seconds / 60)
+    return meters > 0
+      ? `${mins} min · ${formatDistance(meters, distanceUnit)}`
+      : `${mins} min`
+  }
+
+  const reps = working.map((s) => s.reps).filter((r): r is number => r !== null)
+  const weights = working.map((s) => s.weightKg).filter((w): w is number => w !== null)
+  const repPart =
+    reps.length === 0
+      ? ''
+      : Math.min(...reps) === Math.max(...reps)
+        ? ` × ${reps[0]}`
+        : ` × ${Math.min(...reps)}-${Math.max(...reps)}`
+  const weightPart =
+    weights.length > 0 ? ` @ ${formatWeight(Math.max(...weights), weightUnit)}` : ''
+  return `${working.length} sets${repPart}${weightPart}`
 }
 
 async function buildRegionMap(): Promise<Map<string, Region>> {
@@ -792,15 +890,24 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
   const workoutExercise = await db.workoutExercises.get(set.workoutExerciseId)
   if (!workoutExercise) return []
 
-  const siblings = await listSets(set.workoutExerciseId)
-  const workingIndex = siblings
-    .filter((s) => s.setType !== 'warmup')
-    .findIndex((s) => s.id === setId)
+  // A repeated session stores per-set placeholder overrides that win over
+  // history (§7.2), and the row already shows them. "Same as last" must copy
+  // the numbers the user is looking at, not the most-recent session's — else
+  // the value logged silently contradicts the placeholder displayed.
+  const overrides = await getPlaceholderOverrides(workoutExercise.workoutId)
+  let prefill = overrides[setId] ?? null
 
-  const prefill = await getPrefillForSet(
-    workoutExercise.exerciseId,
-    workingIndex < 0 ? 0 : workingIndex,
-  )
+  if (!prefill) {
+    const siblings = await listSets(set.workoutExerciseId)
+    const workingIndex = siblings
+      .filter((s) => s.setType !== 'warmup')
+      .findIndex((s) => s.id === setId)
+
+    prefill = await getPrefillForSet(
+      workoutExercise.exerciseId,
+      workingIndex < 0 ? 0 : workingIndex,
+    )
+  }
   if (!prefill) return []
 
   return logSetValues(setId, {
@@ -917,7 +1024,7 @@ export async function refreshPersonalRecords(
   await db.personalRecords.where('exerciseId').equals(exerciseId).delete()
   const records: PersonalRecord[] = [...candidates].map(([recordType, best]) => ({
     id: `${exerciseId}:${recordType}`,
-    userId: LOCAL_USER_ID,
+    userId: getActiveUserId(),
     exerciseId,
     recordType,
     value: best.value,
@@ -1076,47 +1183,18 @@ export async function getPrefillForSet(
 }
 
 /**
- * Adds a set already carrying its placeholder, so "Add set" never produces a
- * blank row when there is anything to suggest (§6.2).
- *
- * The suggestion is **persisted as a placeholder override** rather than returned
- * for the caller to hold. The row's own index is past what history covers, so
- * without a stored override the UI would fall back to history, find nothing, and
- * render blank — which is exactly the bug this function exists to prevent.
- *
- * The row itself stays unlogged: `addSet` with no values leaves `isCompleted`
- * false, and the placeholder is only a hint until the user types or taps "Same".
+ * Adds a new (empty) set. The row's placeholder is resolved live by the exercise
+ * card (§6.2): last time's matching set, or — for a row beyond history — the
+ * numbers carried forward from earlier in this session. That means "Add set"
+ * needs only to append the row; no placeholder has to be persisted here, which
+ * removes the override-writing that made this fragile.
  */
 export async function addSetWithPlaceholder(
   workoutExerciseId: string,
-  exerciseId: string,
-): Promise<{ setId: string; placeholder: SetPlaceholder | null }> {
-  const existing = await listSets(workoutExerciseId)
-  const workingIndex = existing.filter((s) => s.setType !== 'warmup').length
-  const placeholder = await getPrefillForSet(exerciseId, workingIndex, existing)
+  _exerciseId: string,
+): Promise<{ setId: string }> {
   const setId = await addSet({ workoutExerciseId })
-
-  if (placeholder && hasAnyValue(placeholder)) {
-    const workoutExercise = await db.workoutExercises.get(workoutExerciseId)
-    if (workoutExercise) {
-      const current = await getPlaceholderOverrides(workoutExercise.workoutId)
-      await savePlaceholderOverrides(workoutExercise.workoutId, {
-        ...current,
-        [setId]: placeholder,
-      })
-    }
-  }
-
-  return { setId, placeholder }
-}
-
-function hasAnyValue(placeholder: SetPlaceholder): boolean {
-  return (
-    placeholder.weightKg !== null ||
-    placeholder.reps !== null ||
-    placeholder.durationSeconds !== null ||
-    placeholder.distanceM !== null
-  )
+  return { setId }
 }
 
 // ---------------------------------------------------------------- templates
@@ -1129,7 +1207,8 @@ export async function listTemplates(): Promise<Template[]> {
 }
 
 export async function getTemplate(id: string): Promise<Template | undefined> {
-  return db.templates.get(id)
+  const template = await db.templates.get(id)
+  return template?.deletedAt === null ? template : undefined
 }
 
 export async function listTemplateExercises(
@@ -1137,6 +1216,164 @@ export async function listTemplateExercises(
 ): Promise<TemplateExercise[]> {
   const rows = await db.templateExercises.where('templateId').equals(templateId).toArray()
   return rows.filter((r) => r.deletedAt === null).sort((a, b) => a.position - b.position)
+}
+
+// -------------------------------------------------- template editing (§7)
+
+/**
+ * Creates an empty template. Editing it afterward mutates the plan only — never
+ * a workout, past or present (§4.7). The two are deliberately separate: a
+ * workout keeps its own copy of what was planned, so retuning a template never
+ * rewrites history.
+ */
+export async function createTemplate(
+  name: string,
+  folder: string | null = null,
+): Promise<string> {
+  const template: Template = {
+    id: newId(),
+    userId: getActiveUserId(),
+    name: name.trim() || 'New template',
+    description: '',
+    folder,
+    lastUsedAt: null,
+    timesUsed: 0,
+    isArchived: false,
+    ...syncStamp(),
+  }
+  await db.templates.add(template)
+  await enqueue('templates', 'insert', template.id, template, template.clientRev)
+  return template.id
+}
+
+export async function updateTemplate(
+  id: string,
+  patch: Partial<Template>,
+): Promise<void> {
+  const current = await db.templates.get(id)
+  if (!current) return
+  const next = { ...patch, ...touch(current.clientRev) }
+  await db.templates.update(id, next)
+  await enqueue('templates', 'update', id, next, current.clientRev + 1)
+}
+
+/** Soft-deletes a template. Workouts already run from it keep their own copy. */
+export async function deleteTemplate(id: string): Promise<void> {
+  const current = await db.templates.get(id)
+  if (!current) return
+  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
+  await db.templates.update(id, next)
+  await enqueue('templates', 'update', id, next, current.clientRev + 1)
+}
+
+export async function restoreTemplate(id: string): Promise<void> {
+  const current = await db.templates.get(id)
+  if (!current) return
+  const next = { deletedAt: null, ...touch(current.clientRev) }
+  await db.templates.update(id, next)
+  await enqueue('templates', 'update', id, next, current.clientRev + 1)
+}
+
+export async function addExerciseToTemplate(
+  templateId: string,
+  exerciseId: string,
+): Promise<string> {
+  const existing = await listTemplateExercises(templateId)
+  const row: TemplateExercise = {
+    id: newId(),
+    templateId,
+    exerciseId,
+    position: existing.length,
+    supersetGroup: null,
+    targetSets: 3,
+    targetRepsLow: null,
+    targetRepsHigh: null,
+    targetWeightKg: null,
+    targetRpe: null,
+    restSeconds: null,
+    notes: '',
+    ...syncStamp(),
+  }
+  await db.templateExercises.add(row)
+  await enqueue('templateExercises', 'insert', row.id, row, row.clientRev)
+  return row.id
+}
+
+export async function updateTemplateExercise(
+  id: string,
+  patch: Partial<TemplateExercise>,
+): Promise<void> {
+  const current = await db.templateExercises.get(id)
+  if (!current) return
+  const next = { ...patch, ...touch(current.clientRev) }
+  await db.templateExercises.update(id, next)
+  await enqueue('templateExercises', 'update', id, next, current.clientRev + 1)
+}
+
+export async function removeTemplateExercise(id: string): Promise<void> {
+  const current = await db.templateExercises.get(id)
+  if (!current) return
+  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
+  await db.templateExercises.update(id, next)
+  await enqueue('templateExercises', 'update', id, next, current.clientRev + 1)
+}
+
+export async function reorderTemplateExercises(orderedIds: string[]): Promise<void> {
+  for (const [index, id] of orderedIds.entries()) {
+    await updateTemplateExercise(id, { position: index })
+  }
+}
+
+/**
+ * A read-only outline of a template, for the preview shown before starting a
+ * workout from it (§7.4) — so the user confirms the plan before a session is
+ * created, and understands the workout is a fresh copy.
+ */
+export async function getTemplatePreview(
+  templateId: string,
+): Promise<WorkoutPreview | null> {
+  const template = await getTemplate(templateId)
+  if (!template) return null
+  const profile = await getProfile()
+  const regionOf = await buildRegionMap()
+  const templateExercises = await listTemplateExercises(templateId)
+
+  const exercises: WorkoutPreview['exercises'] = []
+  let totalSets = 0
+
+  for (const te of templateExercises) {
+    const exercise = await db.exercises.get(te.exerciseId)
+    if (!exercise) continue
+    const region = regionOf.get(exercise.primaryMuscleId)
+    const sets = te.targetSets ?? 3
+    totalSets += sets
+    exercises.push({
+      name: exercise.name,
+      region,
+      detail: describeTemplateTarget(te, profile.unitWeight),
+      setCount: sets,
+    })
+  }
+
+  return { title: template.name, performedAt: null, exercises, totalSets }
+}
+
+/** "3 × 8-10 @ 60 lb" from a template exercise's targets, in the user's unit. */
+export function describeTemplateTarget(
+  te: TemplateExercise,
+  weightUnit: WeightUnit,
+): string {
+  const sets = te.targetSets ?? 3
+  const parts: string[] = [`${sets} sets`]
+  if (te.targetRepsLow !== null || te.targetRepsHigh !== null) {
+    const low = te.targetRepsLow
+    const high = te.targetRepsHigh
+    if (low !== null && high !== null && low !== high) parts[0] = `${sets} × ${low}-${high}`
+    else parts[0] = `${sets} × ${low ?? high}`
+  }
+  if (te.targetWeightKg !== null) parts.push(`@ ${formatWeight(te.targetWeightKg, weightUnit)}`)
+  if (te.targetRpe !== null) parts.push(`RPE ${te.targetRpe}`)
+  return parts.join(' ')
 }
 
 /**
@@ -1153,7 +1390,7 @@ export async function saveWorkoutAsTemplate(
 
   const template: Template = {
     id: newId(),
-    userId: LOCAL_USER_ID,
+    userId: getActiveUserId(),
     name: name.trim(),
     description: '',
     folder,
@@ -1205,6 +1442,7 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
 
   const workoutId = await startWorkout({ title: template.name, templateId })
   const templateExercises = await listTemplateExercises(templateId)
+  const placeholders: Record<string, SetPlaceholder> = {}
 
   for (const te of templateExercises) {
     const workoutExerciseId = await addExerciseToWorkout(workoutId, te.exerciseId)
@@ -1216,11 +1454,26 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
     }
 
     // Empty rows. The template supplies the *shape* — how many sets — while the
-    // numbers arrive as placeholders from history at log time (§6.2).
+    // numbers show as placeholders. A template target seeds the ghost when it
+    // has one; otherwise the placeholder falls back to history at log time
+    // (§6.2). Either way the row stays unlogged until the user types or taps.
     const targetSets = te.targetSets ?? 3
+    const targetReps = te.targetRepsLow ?? te.targetRepsHigh
     for (let index = 0; index < targetSets; index += 1) {
-      await addSet({ workoutExerciseId })
+      const setId = await addSet({ workoutExerciseId })
+      if (te.targetWeightKg !== null || targetReps !== null) {
+        placeholders[setId] = {
+          weightKg: te.targetWeightKg,
+          reps: targetReps,
+          durationSeconds: null,
+          distanceM: null,
+        }
+      }
     }
+  }
+
+  if (Object.keys(placeholders).length > 0) {
+    await savePlaceholderOverrides(workoutId, placeholders)
   }
 
   await db.templates.update(templateId, {
@@ -1340,7 +1593,7 @@ export async function addMetricEntry(input: {
 }): Promise<string> {
   const entry: MetricEntry = {
     id: newId(),
-    userId: LOCAL_USER_ID,
+    userId: getActiveUserId(),
     definitionId: input.definitionId,
     measuredAt: input.measuredAt ?? Date.now(),
     value: input.value,
@@ -1364,4 +1617,59 @@ export async function deleteMetricEntry(id: string): Promise<void> {
   const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
   await db.metricEntries.update(id, next)
   await enqueue('metricEntries', 'update', id, next, current.clientRev + 1)
+}
+
+// ------------------------------------------------------------- maintenance
+
+/**
+ * Wipes all local training data and the sync queues, then re-seeds the shared
+ * library and a fresh profile.
+ *
+ * For starting a clean sync test, or recovering from stale prototype data
+ * stamped with the old `local-user` id. This clears IndexedDB only — it does
+ * NOT delete anything already on the server. After a wipe the next pull rehydrates
+ * whatever the server holds for the signed-in user, so on a synced account this
+ * is a "resync from the server" rather than true deletion; on an offline account
+ * it is a genuine reset.
+ */
+export async function clearLocalData(): Promise<void> {
+  await db.transaction(
+    'rw',
+    [
+      db.profiles,
+      db.workouts,
+      db.workoutExercises,
+      db.sets,
+      db.templates,
+      db.templateExercises,
+      db.personalRecords,
+      db.metricEntries,
+      db.exercises,
+      db.lastPerformance,
+      db.placeholderOverrides,
+      db.outbox,
+      db.deadLetter,
+      db.syncState,
+    ],
+    async () => {
+      // User-owned data.
+      await db.workouts.clear()
+      await db.workoutExercises.clear()
+      await db.sets.clear()
+      await db.templates.clear()
+      await db.templateExercises.clear()
+      await db.personalRecords.clear()
+      await db.metricEntries.clear()
+      await db.lastPerformance.clear()
+      await db.placeholderOverrides.clear()
+      await db.profiles.clear()
+      // Custom exercises only — the system library is re-seeded below.
+      await db.exercises.filter((e) => e.userId !== null).delete()
+      // Sync bookkeeping: drop queued/failed writes and reset delta cursors so
+      // the next pull starts from zero.
+      await db.outbox.clear()
+      await db.deadLetter.clear()
+      await db.syncState.clear()
+    },
+  )
 }

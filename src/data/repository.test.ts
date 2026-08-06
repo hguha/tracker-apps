@@ -8,10 +8,13 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
-import { seedIfNeeded } from '@/db/seed'
+import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import * as repo from '@/data/repository'
 
 beforeEach(async () => {
+  // Reset the owner id first, so a test that switched it can't leak into the
+  // next one's seeding.
+  setActiveUserId(LOCAL_USER_ID)
   // A clean database per test, so ordering can't leak state between them.
   await db.delete()
   await db.open()
@@ -206,6 +209,31 @@ describe('placeholder logging semantics (§6.2)', () => {
 
     await repo.confirmPlaceholder(target)
     const set = await db.sets.get(target)
+    expect(set).toMatchObject({ weightKg: 100, reps: 8, isCompleted: true })
+  })
+
+  it('confirmPlaceholder copies the repeated session’s numbers, not the latest (§7.2)', async () => {
+    // An older session at 100×8, then a more recent one at 120×5.
+    const older = await repo.startWorkout()
+    const olderExercise = await repo.addExerciseToWorkout(older, 'barbell_bench_press')
+    const olderSet = await repo.addSet({ workoutExerciseId: olderExercise })
+    await repo.logSetValues(olderSet, { weightKg: 100, reps: 8 })
+    await repo.finishWorkout(older)
+
+    const newer = await repo.startWorkout()
+    const newerExercise = await repo.addExerciseToWorkout(newer, 'barbell_bench_press')
+    const newerSet = await repo.addSet({ workoutExerciseId: newerExercise })
+    await repo.logSetValues(newerSet, { weightKg: 120, reps: 5 })
+    await repo.finishWorkout(newer)
+
+    // Repeating the OLDER session must suggest — and confirm — its numbers,
+    // even though a heavier, more recent session exists.
+    const repeated = await repo.repeatWorkout(older)
+    expect(repeated).not.toBeNull()
+    const [target] = await repo.listSetsForWorkout(repeated!.workoutId)
+
+    await repo.confirmPlaceholder(target!.id)
+    const set = await db.sets.get(target!.id)
     expect(set).toMatchObject({ weightKg: 100, reps: 8, isCompleted: true })
   })
 })
@@ -686,7 +714,7 @@ describe('empty workouts are never saved (§6.4.1)', () => {
   })
 })
 
-describe('add set carries a placeholder (§6.2)', () => {
+describe('placeholder resolution (§6.2)', () => {
   it('suggests the matching set index from history', async () => {
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
@@ -696,19 +724,14 @@ describe('add set carries a placeholder (§6.2)', () => {
     }
     await repo.finishWorkout(first)
 
-    const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'barbell_bench_press')
-
-    const { placeholder } = await repo.addSetWithPlaceholder(
-      secondExercise,
-      'barbell_bench_press',
-    )
-    expect(placeholder).toMatchObject({ weightKg: 100, reps: 8 })
+    // Set 0 of a fresh session suggests set 0 from history.
+    const prefill = await repo.getPrefillForSet('barbell_bench_press', 0)
+    expect(prefill).toMatchObject({ weightKg: 100, reps: 8 })
   })
 
   it('carries forward this session when history runs out', async () => {
-    // History has 2 sets; adding a 3rd should suggest what was just done rather
-    // than going blank at the moment the user is most tired.
+    // History has 2 sets; a 3rd should suggest what was just done this session
+    // rather than going blank at the moment the user is most tired.
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
     for (const [weightKg, reps] of [[100, 8], [100, 7]] as const) {
@@ -723,60 +746,20 @@ describe('add set carries a placeholder (§6.2)', () => {
       const setId = await repo.addSet({ workoutExerciseId: secondExercise, weightKg, reps })
       await repo.logSetValues(setId, {})
     }
+    const current = await repo.listSets(secondExercise)
 
-    const { placeholder } = await repo.addSetWithPlaceholder(
-      secondExercise,
-      'barbell_bench_press',
-    )
-    expect(placeholder).toMatchObject({ weightKg: 105, reps: 6 })
+    // Index 2 is past the 2 sets of history, so it carries forward set index 1
+    // of *this* session (105 × 6).
+    const prefill = await repo.getPrefillForSet('barbell_bench_press', 2, current)
+    expect(prefill).toMatchObject({ weightKg: 105, reps: 6 })
   })
 
   it('has no placeholder for a first-ever exercise', async () => {
-    const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
-    const { placeholder } = await repo.addSetWithPlaceholder(
-      workoutExerciseId,
-      'deadlift',
-    )
-    expect(placeholder).toBeNull()
+    const prefill = await repo.getPrefillForSet('deadlift', 0)
+    expect(prefill).toBeNull()
   })
 
-  it('persists the carried-forward suggestion so the row renders it', async () => {
-    // The added row's index is past what history covers, so without a stored
-    // override the UI falls back to history, finds nothing, and shows a blank
-    // placeholder — the exact bug this path exists to prevent.
-    const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
-    for (const [weightKg, reps] of [[100, 8], [100, 7]] as const) {
-      const setId = await repo.addSet({ workoutExerciseId: firstExercise, weightKg, reps })
-      await repo.logSetValues(setId, {})
-    }
-    await repo.finishWorkout(first)
-
-    const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'barbell_bench_press')
-    for (const [weightKg, reps] of [[105, 8], [105, 6]] as const) {
-      const setId = await repo.addSet({ workoutExerciseId: secondExercise, weightKg, reps })
-      await repo.logSetValues(setId, {})
-    }
-
-    const { setId } = await repo.addSetWithPlaceholder(
-      secondExercise,
-      'barbell_bench_press',
-    )
-
-    const overrides = await repo.getPlaceholderOverrides(second)
-    expect(overrides[setId]).toMatchObject({ weightKg: 105, reps: 6 })
-  })
-
-  it('stores no override when there is nothing to suggest', async () => {
-    const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
-    await repo.addSetWithPlaceholder(workoutExerciseId, 'deadlift')
-    expect(await repo.getPlaceholderOverrides(workoutId)).toEqual({})
-  })
-
-  it('adds an unlogged row, not a pre-filled one', async () => {
+  it('addSetWithPlaceholder adds an unlogged row', async () => {
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift')
     const seed = await repo.addSet({ workoutExerciseId: firstExercise, weightKg: 150, reps: 5 })
@@ -787,7 +770,7 @@ describe('add set carries a placeholder (§6.2)', () => {
     const secondExercise = await repo.addExerciseToWorkout(second, 'deadlift')
     const { setId } = await repo.addSetWithPlaceholder(secondExercise, 'deadlift')
 
-    // The suggestion is a hint, not data — the row is still unlogged.
+    // The suggestion is resolved live in the UI — the added row is still unlogged.
     const set = await db.sets.get(setId)
     expect(set?.isCompleted).toBe(false)
     expect(set?.weightKg).toBeNull()
@@ -906,5 +889,123 @@ describe('editing a past workout', () => {
     const lastTuesday = Date.now() - 5 * 86400000
     const workoutId = await repo.startWorkout({ startedAt: lastTuesday })
     expect((await repo.getWorkout(workoutId))?.startedAt).toBe(lastTuesday)
+  })
+})
+
+describe('templates (§7)', () => {
+  it('creates, edits, and previews a template without touching workouts', async () => {
+    const templateId = await repo.createTemplate('Push A')
+    await repo.updateTemplate(templateId, { folder: 'PPL' })
+    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_bench_press')
+    await repo.updateTemplateExercise(teId, {
+      targetSets: 3,
+      targetRepsLow: 8,
+      targetRepsHigh: 10,
+      targetWeightKg: 60,
+    })
+
+    const preview = await repo.getTemplatePreview(templateId)
+    expect(preview?.title).toBe('Push A')
+    expect(preview?.exercises).toHaveLength(1)
+    expect(preview?.exercises[0]!.detail).toContain('3 × 8-10')
+    expect(preview?.totalSets).toBe(3)
+  })
+
+  it('instantiating a template seeds planned sets with target-based placeholders', async () => {
+    const templateId = await repo.createTemplate('Legs')
+    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_back_squat')
+    await repo.updateTemplateExercise(teId, {
+      targetSets: 2,
+      targetRepsLow: 5,
+      targetWeightKg: 100,
+    })
+
+    const workoutId = await repo.startWorkoutFromTemplate(templateId)
+    const [we] = await repo.listWorkoutExercises(workoutId)
+    const sets = await repo.listSets(we!.id)
+    expect(sets).toHaveLength(2)
+    // Planned, not logged — the rows stay ghosts until the user acts.
+    expect(sets.every((s) => !s.isCompleted)).toBe(true)
+
+    const overrides = await repo.getPlaceholderOverrides(workoutId)
+    expect(overrides[sets[0]!.id]).toMatchObject({ weightKg: 100, reps: 5 })
+  })
+
+  it('editing a template never rewrites a workout already started from it', async () => {
+    const templateId = await repo.createTemplate('Pull')
+    await repo.addExerciseToTemplate(templateId, 'barbell_row')
+    const workoutId = await repo.startWorkoutFromTemplate(templateId)
+    const before = await repo.listWorkoutExercises(workoutId)
+
+    // Add another exercise to the *template* after the workout exists.
+    await repo.addExerciseToTemplate(templateId, 'lat_pulldown')
+
+    const after = await repo.listWorkoutExercises(workoutId)
+    expect(after.map((r) => r.exerciseId)).toEqual(before.map((r) => r.exerciseId))
+  })
+
+  it('a deleted template disappears from the list but its workouts remain', async () => {
+    const templateId = await repo.createTemplate('Throwaway')
+    await repo.addExerciseToTemplate(templateId, 'deadlift')
+    const workoutId = await repo.startWorkoutFromTemplate(templateId)
+
+    await repo.deleteTemplate(templateId)
+    expect(await repo.getTemplate(templateId)).toBeUndefined()
+    expect((await repo.listTemplates()).some((t) => t.id === templateId)).toBe(false)
+    // The workout is untouched.
+    expect(await repo.getWorkout(workoutId)).toBeDefined()
+  })
+})
+
+describe('active user id + local data reset', () => {
+  it('stamps writes with the active user id so they pass RLS on sync', async () => {
+    setActiveUserId('11111111-1111-1111-1111-111111111111')
+    // Re-seed so a profile exists for the new owner.
+    await seedIfNeeded()
+
+    const workoutId = await repo.startWorkout()
+    const workout = await db.workouts.get(workoutId)
+    expect(workout?.userId).toBe('11111111-1111-1111-1111-111111111111')
+
+    const exId = await repo.createExercise({
+      name: 'My Lift',
+      primaryMuscleId: 'mid_chest',
+      equipment: 'barbell',
+      movementPattern: 'horizontal_push',
+      trackingType: 'weight_reps',
+    })
+    expect((await db.exercises.get(exId))?.userId).toBe(
+      '11111111-1111-1111-1111-111111111111',
+    )
+  })
+
+  it('clearLocalData wipes training data and queues but keeps the system library', async () => {
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
+      {},
+    )
+    await repo.createExercise({
+      name: 'Custom Move',
+      primaryMuscleId: 'mid_chest',
+      equipment: 'dumbbell',
+      movementPattern: 'isolation',
+      trackingType: 'weight_reps',
+    })
+
+    const systemBefore = (await db.exercises.toArray()).filter((e) => e.userId === null).length
+    expect(systemBefore).toBeGreaterThan(100)
+
+    await repo.clearLocalData()
+
+    expect(await db.workouts.count()).toBe(0)
+    expect(await db.sets.count()).toBe(0)
+    expect(await db.outbox.count()).toBe(0)
+    expect(await db.deadLetter.count()).toBe(0)
+    expect(await db.syncState.count()).toBe(0)
+    // Custom exercise gone, system library intact.
+    expect((await db.exercises.toArray()).every((e) => e.userId === null)).toBe(true)
+    expect((await db.exercises.toArray()).length).toBe(systemBefore)
   })
 })

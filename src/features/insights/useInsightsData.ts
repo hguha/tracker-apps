@@ -10,11 +10,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import {
-  attributeVolumeToMuscles,
   bestOneRepMaxKg,
   estimatedOneRepMaxKg,
   isWorkingSet,
-  rollUpToRegions,
   topSetWeightKg,
   volumeLoadKg,
 } from '@/lib/metrics'
@@ -61,6 +59,9 @@ export interface InsightsData {
   workoutsByWeek: Map<string, number>
   volumeByRegion: Map<Region, number>
   setsByRegion: Map<Region, number>
+  /** Working sets per movement pattern (C-25) and per equipment (C-26). */
+  setsByPattern: Map<string, number>
+  setsByEquipment: Map<string, number>
   regionVolumeByWeek: Map<string, Map<Region, number>>
   /** Per-exercise progression, only for exercises with data in range. */
   exerciseSeries: ExerciseSeries[]
@@ -68,6 +69,10 @@ export interface InsightsData {
   /** Rep-bucket distribution: how the training is actually distributed. */
   repBuckets: Map<string, number>
   dayOfWeekCounts: number[]
+  /** Session start hour, 0–23, for the time-of-day histogram (D-37). */
+  hourCounts: number[]
+  /** Volume per calendar day (yyyy-MM-dd), for the training-calendar heatmap (A-3). */
+  volumeByDay: Map<string, number>
   /** Every exercise trained ever, for the filter sheet. */
   exerciseOptions: { id: string; name: string; region: Region | undefined }[]
   bodyMetrics: Map<string, { at: number; value: number }[]>
@@ -110,9 +115,13 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       const workoutsByWeek = new Map<string, number>()
       const volumeByRegion = new Map<Region, number>()
       const setsByRegion = new Map<Region, number>()
+      const setsByPattern = new Map<string, number>()
+      const setsByEquipment = new Map<string, number>()
       const regionVolumeByWeek = new Map<string, Map<Region, number>>()
       const repBuckets = new Map<string, number>()
       const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
+      const hourCounts = new Array<number>(24).fill(0)
+      const volumeByDay = new Map<string, number>()
       const sessions: SessionPoint[] = []
       const seriesByExercise = new Map<string, ExerciseSeries>()
       const exerciseOptions = new Map<
@@ -184,14 +193,16 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
             }
           }
 
-          const byRegion = rollUpToRegions(
-            attributeVolumeToMuscles(exerciseVolume, exercise),
-            (id) => regionOf.get(id),
-          )
-          for (const [r, value] of byRegion) {
-            volumeByRegion.set(r, (volumeByRegion.get(r) ?? 0) + value)
+          // Region-level views attribute to the exercise's *single primary*
+          // region, not spread across secondaries. Crediting "back" for a back
+          // squat (via the erectors it works secondarily) is technically true
+          // but reads as noise on a body-part chart. Secondary-muscle spreading
+          // is kept for the muscle-level volume analysis, where partial credit
+          // is the point (§4.3); here, one lift → one body part.
+          if (region) {
+            volumeByRegion.set(region, (volumeByRegion.get(region) ?? 0) + exerciseVolume)
             const weekMap = regionVolumeByWeek.get(key) ?? new Map<Region, number>()
-            weekMap.set(r, (weekMap.get(r) ?? 0) + value)
+            weekMap.set(region, (weekMap.get(region) ?? 0) + exerciseVolume)
             regionVolumeByWeek.set(key, weekMap)
           }
 
@@ -199,6 +210,16 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
             sessionRegions.add(region)
             setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
           }
+
+          // Pattern and equipment coverage, counted in working sets.
+          setsByPattern.set(
+            exercise.movementPattern,
+            (setsByPattern.get(exercise.movementPattern) ?? 0) + working.length,
+          )
+          setsByEquipment.set(
+            exercise.equipment,
+            (setsByEquipment.get(exercise.equipment) ?? 0) + working.length,
+          )
 
           const series =
             seriesByExercise.get(exercise.id) ??
@@ -216,7 +237,11 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         if (!matchedFilter) continue
 
         workoutsByWeek.set(key, (workoutsByWeek.get(key) ?? 0) + 1)
-        dayOfWeekCounts[new Date(workout.startedAt).getDay()]! += 1
+        const started = new Date(workout.startedAt)
+        dayOfWeekCounts[started.getDay()]! += 1
+        hourCounts[started.getHours()]! += 1
+        const dayKey = format(workout.startedAt, 'yyyy-MM-dd')
+        volumeByDay.set(dayKey, (volumeByDay.get(dayKey) ?? 0) + sessionVolume)
         sessions.push({
           workoutId: workout.id,
           at: workout.startedAt,
@@ -267,11 +292,15 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         workoutsByWeek,
         volumeByRegion,
         setsByRegion,
+        setsByPattern,
+        setsByEquipment,
         regionVolumeByWeek,
         exerciseSeries,
         sessions: sessions.sort((a, b) => a.at - b.at),
         repBuckets,
         dayOfWeekCounts,
+        hourCounts,
+        volumeByDay,
         exerciseOptions: [...exerciseOptions.values()].sort((a, b) =>
           a.name.localeCompare(b.name),
         ),

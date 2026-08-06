@@ -22,8 +22,11 @@ import { MeScreen } from '@/features/profile/MeScreen'
 import { ExerciseLibraryScreen } from '@/features/library/ExerciseLibraryScreen'
 import { ActiveWorkoutScreen } from '@/features/workout/ActiveWorkoutScreen'
 import { StartWorkoutScreen } from '@/features/workout/StartWorkoutScreen'
+import { TemplatesScreen } from '@/features/templates/TemplatesScreen'
+import { TemplateEditorScreen } from '@/features/templates/TemplateEditorScreen'
 import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
+import { useSync } from '@/sync/useSync'
 
 // The chart library is the biggest dependency in the app, so the logging path
 // must never download it. Loaded only when the Insights tab is opened.
@@ -37,6 +40,8 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'start' }
   | { kind: 'account' }
+  | { kind: 'templates' }
+  | { kind: 'templateEditor'; templateId: string }
   | { kind: 'workout'; workoutId: string; isEditMode: boolean }
 
 export function App() {
@@ -82,6 +87,10 @@ function SignedInApp() {
   const [isReady, setIsReady] = useState(false)
   const [tab, setTab] = useState<TabKey>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
+
+  // Runs the outbox drain and delta pull on its own triggers when a backend is
+  // attached; a no-op in the local-only prototype (§5.5).
+  useSync()
 
   useEffect(() => {
     void seedIfNeeded().then(() => setIsReady(true))
@@ -161,6 +170,27 @@ function SignedInApp() {
     return <AccountScreen onBack={() => setView({ kind: 'tabs' })} />
   }
 
+  if (view.kind === 'templates') {
+    return (
+      <TemplatesScreen
+        onEditTemplate={(templateId) => setView({ kind: 'templateEditor', templateId })}
+        onStartWorkout={(workoutId) =>
+          setView({ kind: 'workout', workoutId, isEditMode: false })
+        }
+        onBack={() => setView({ kind: 'tabs' })}
+      />
+    )
+  }
+
+  if (view.kind === 'templateEditor') {
+    return (
+      <TemplateEditorScreen
+        templateId={view.templateId}
+        onExit={() => setView({ kind: 'templates' })}
+      />
+    )
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Bottom padding clears the raised center action, which overhangs the tab
@@ -196,6 +226,7 @@ function SignedInApp() {
         {tab === 'me' && (
           <MeScreen
             onOpenLibrary={() => setTab('library')}
+            onOpenTemplates={() => setView({ kind: 'templates' })}
             onOpenAccount={() => setView({ kind: 'account' })}
           />
         )}

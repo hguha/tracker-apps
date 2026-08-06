@@ -39,6 +39,21 @@ export interface SetPlaceholderHint {
   distanceM: number | null
 }
 
+/** Whether a placeholder carries anything worth showing as a ghost value. */
+function hasValue(p: {
+  weightKg: number | null
+  reps: number | null
+  durationSeconds: number | null
+  distanceM: number | null
+}): boolean {
+  return (
+    p.weightKg !== null ||
+    p.reps !== null ||
+    p.durationSeconds !== null ||
+    p.distanceM !== null
+  )
+}
+
 export interface ExerciseCardProps {
   exercise: Exercise
   muscle: Muscle | undefined
@@ -111,53 +126,59 @@ export function ExerciseCard(props: ExerciseCardProps) {
   const lastSession = lastPerformance?.sessions[0]
   const isCardio = exercise.movementPattern === 'cardio'
 
-  /** Working sets from last time, indexed to line up with this session's rows. */
+  /** Working sets from last time, lined up with this session's working rows. */
   const previousWorkingSets = useMemo<PerformedSet[]>(
     () => (lastSession?.sets ?? []).filter((s) => s.setType !== 'warmup'),
     [lastSession],
   )
 
   /**
-   * The placeholder for each row, in row order. A per-set override from a repeated
-   * session wins over history, because choosing that session is a request for its
-   * numbers specifically (§7.2).
+   * The placeholder for each row, resolved once in row order (§6.2, §7.2).
+   *
+   * One pass so it's obvious what wins, and so a row beyond history can carry
+   * forward from earlier *in this session* — the case that used to need a
+   * persisted override just to avoid rendering blank. Precedence per row:
+   *   1. A per-set override from a repeated session (§7.2) — an explicit request
+   *      for that session's numbers.
+   *   2. The matching set from last time, indexed by *working-set* position so a
+   *      warmup row never shifts the alignment.
+   *   3. Carry-forward: the most recent placeholder resolved earlier in this same
+   *      card — so a 4th set suggests the 3rd's numbers, filled or not.
+   * Warmups never carry a placeholder and never advance the carry-forward.
    */
-  const placeholderFor = useMemo<PerformedSet[]>(
-    () =>
-      sets.map((set, index) => {
-        const override = placeholderOverrides[set.id]
-        if (override) {
-          return {
+  const placeholderFor = useMemo<(PerformedSet | undefined)[]>(() => {
+    const resolved: (PerformedSet | undefined)[] = []
+    let workingPos = 0
+    let carry: PerformedSet | undefined
+
+    for (const set of sets) {
+      if (set.setType === 'warmup') {
+        resolved.push(undefined)
+        continue
+      }
+
+      const override = placeholderOverrides[set.id]
+      const candidate: PerformedSet | undefined = override
+        ? {
             setType: set.setType,
             weightKg: override.weightKg,
             reps: override.reps,
             durationSeconds: override.durationSeconds,
             distanceM: override.distanceM,
           }
-        }
-        return (
-          previousWorkingSets[index] ?? {
-            setType: set.setType,
-            weightKg: null,
-            reps: null,
-            durationSeconds: null,
-            distanceM: null,
-          }
-        )
-      }),
-    [sets, placeholderOverrides, previousWorkingSets],
-  )
+        : (previousWorkingSets[workingPos] ?? carry)
+
+      resolved.push(candidate)
+      if (candidate && hasValue(candidate)) carry = candidate
+      workingPos += 1
+    }
+    return resolved
+  }, [sets, placeholderOverrides, previousWorkingSets])
 
   /** A placeholder with nothing in it shouldn't render as one. */
   function placeholderAt(index: number): PerformedSet | undefined {
     const candidate = placeholderFor[index]
-    if (!candidate) return undefined
-    const isEmpty =
-      candidate.weightKg === null &&
-      candidate.reps === null &&
-      candidate.durationSeconds === null &&
-      candidate.distanceM === null
-    return isEmpty ? undefined : candidate
+    return candidate && hasValue(candidate) ? candidate : undefined
   }
 
   return (
@@ -196,6 +217,11 @@ export function ExerciseCard(props: ExerciseCardProps) {
           <p className="mt-0.5 text-[12.5px] text-ink-secondary">
             {summarizeLastSession(lastPerformance, weightUnit, distanceUnit)}
           </p>
+          {loggingHint(exercise, weightUnit) && (
+            <p className="mt-0.5 text-[11.5px] text-ink-muted">
+              {loggingHint(exercise, weightUnit)}
+            </p>
+          )}
         </div>
 
         <button
@@ -292,6 +318,20 @@ export function ExerciseCard(props: ExerciseCardProps) {
       )}
     </Card>
   )
+}
+
+/**
+ * A one-line convention hint, so logging is unambiguous where it commonly isn't:
+ *   - Dumbbell lifts: enter the weight of **one** dumbbell, not the pair.
+ *   - Unilateral lifts: the entry is **per side** (both sides assumed equal).
+ * Kept short and only shown when it actually applies.
+ */
+function loggingHint(exercise: Exercise, weightUnit: WeightUnit): string | null {
+  const parts: string[] = []
+  if (exercise.equipment === 'dumbbell') parts.push(`Enter one dumbbell’s ${weightUnit}`)
+  if (exercise.isUnilateral) parts.push('per side')
+  if (parts.length === 0) return null
+  return parts.join(' · ')
 }
 
 /**

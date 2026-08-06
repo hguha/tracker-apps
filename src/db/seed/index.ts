@@ -13,10 +13,27 @@ import { METRIC_SEEDS } from './metrics'
 import { MUSCLE_SEEDS } from './muscles'
 
 /**
- * Single-user local prototype, so the owner id is a constant. When Supabase
- * auth lands this becomes the authenticated user's id and nothing else changes.
+ * The offline account's owner id. A real signed-in session replaces this with
+ * the authenticated user's UID via `setActiveUserId`, so rows are stamped with
+ * an id RLS will accept when they sync.
  */
 export const LOCAL_USER_ID = 'local-user'
+
+/**
+ * The id every write is stamped with. Defaults to the offline account and is set
+ * to the authenticated UID on sign-in (§11.1.3). Kept as module state rather than
+ * threaded through every repository call, because it changes only at the
+ * signed-out↔signed-in boundary and the tree remounts there anyway.
+ */
+let activeUserId: string = LOCAL_USER_ID
+
+export function setActiveUserId(id: string): void {
+  activeUserId = id
+}
+
+export function getActiveUserId(): string {
+  return activeUserId
+}
 
 /** Stable id from a name, so re-seeding never duplicates an exercise. */
 function slugify(name: string): string {
@@ -45,14 +62,38 @@ async function runSeed(): Promise<void> {
   await seedMuscles()
   await seedExercises()
   await seedMetricDefinitions()
+  await repairExerciseRows()
+}
+
+/**
+ * Heals exercise rows whose array fields went missing.
+ *
+ * A sync pull once wrote exercises straight from Postgres, where secondary
+ * muscles live in a separate table and `aliases` may be absent — leaving those
+ * fields undefined locally and throwing "secondaryMuscles is not iterable" on
+ * render. Reads now tolerate that, and the pull now backfills, but rows already
+ * written need fixing. Cheap and idempotent, so it can run on every launch.
+ */
+async function repairExerciseRows(): Promise<void> {
+  const broken = await db.exercises
+    .filter((e) => e.secondaryMuscles === undefined || e.aliases === undefined)
+    .toArray()
+  if (broken.length === 0) return
+  await db.exercises.bulkPut(
+    broken.map((e) => ({
+      ...e,
+      secondaryMuscles: e.secondaryMuscles ?? [],
+      aliases: e.aliases ?? [],
+    })),
+  )
 }
 
 async function seedProfile(): Promise<void> {
-  const existing = await db.profiles.get(LOCAL_USER_ID)
+  const existing = await db.profiles.get(getActiveUserId())
   if (existing) return
 
   const profile: Profile = {
-    id: LOCAL_USER_ID,
+    id: getActiveUserId(),
     displayName: 'You',
     unitWeight: 'lb',
     unitDistance: 'mi',

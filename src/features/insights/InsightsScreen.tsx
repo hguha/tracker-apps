@@ -27,16 +27,26 @@ import {
   BodyweightChart,
   CardioChart,
   DayOfWeekChart,
+  DurationTrendChart,
+  EquipmentMixChart,
+  ExerciseVarietyChart,
+  GapDistributionChart,
+  PatternCoverageChart,
+  PerExerciseVolumeChart,
   RegionShareChart,
   RegionVolumeOverTimeChart,
   RepRangeChart,
   SetsByRegionChart,
+  SetsPerSessionChart,
+  StalledLiftsChart,
   StrengthProgressionChart,
+  TimeOfDayChart,
   TopSetChart,
   VolumeVsDurationChart,
   WeeklyVolumeChart,
   WorkoutsPerWeekChart,
 } from './charts'
+import { PrEstimator } from './PrEstimator'
 
 const RANGES = [
   { key: '4w', label: '4 weeks', weeks: 4 },
@@ -64,9 +74,14 @@ export function InsightsScreen() {
   const [regions, setRegions] = useState<string[]>([])
   const [exerciseIds, setExerciseIds] = useState<string[]>([])
   const [openSheet, setOpenSheet] = useState<'range' | 'region' | 'exercise' | null>(null)
-  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null)
 
   const range = RANGES.find((r) => r.key === rangeKey)!
+
+  // Single-lift charts (strength progression, top set) follow the shared
+  // Exercise filter rather than a per-chart control (§9.0). One explicit pick
+  // is the subject; otherwise the most-trained lift is shown with a hint.
+  const isExerciseExplicit = exerciseIds.length === 1
+  const activeExerciseId = isExerciseExplicit ? exerciseIds[0]! : null
 
   const filters: InsightsFilters = useMemo(
     () => ({ weeks: range.weeks, regions, exerciseIds }),
@@ -162,13 +177,15 @@ export function InsightsScreen() {
 
             {subTab === 'strength' && (
               <>
+                <PrEstimator data={data} />
                 <StrengthProgressionChart
                   data={data}
-                  selectedExerciseId={selectedExerciseId}
-                  onSelectExercise={setSelectedExerciseId}
+                  activeExerciseId={activeExerciseId}
                 />
-                <TopSetChart data={data} selectedExerciseId={selectedExerciseId} />
+                <TopSetChart data={data} activeExerciseId={activeExerciseId} />
+                <PerExerciseVolumeChart data={data} activeExerciseId={activeExerciseId} />
                 <RepRangeChart data={data} />
+                <StalledLiftsChart data={data} />
               </>
             )}
 
@@ -177,6 +194,10 @@ export function InsightsScreen() {
                 <RegionVolumeOverTimeChart data={data} />
                 <RegionShareChart data={data} />
                 <SetsByRegionChart data={data} />
+                <PatternCoverageChart data={data} />
+                <EquipmentMixChart data={data} />
+                <SetsPerSessionChart data={data} />
+                <ExerciseVarietyChart data={data} />
                 <VolumeVsDurationChart data={data} />
               </>
             )}
@@ -185,6 +206,9 @@ export function InsightsScreen() {
               <>
                 <WorkoutsPerWeekChart data={data} />
                 <DayOfWeekChart data={data} />
+                <TimeOfDayChart data={data} />
+                <DurationTrendChart data={data} />
+                <GapDistributionChart data={data} />
                 <CardioChart data={data} />
               </>
             )}

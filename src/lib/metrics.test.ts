@@ -12,6 +12,7 @@ import {
   tonnagePerMinute,
   topSetWeightKg,
   volumeLoadKg,
+  weightForRepsKg,
 } from './metrics'
 
 type SetInput = Parameters<typeof volumeLoadKg>[0][number] & Pick<WorkoutSet, 'rpe'>
@@ -103,6 +104,17 @@ describe('effectiveWeightKg', () => {
   it('is null when bodyweight is unknown for a bodyweight movement', () => {
     const pushup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 0.64 })
     expect(effectiveWeightKg(set({ weightKg: null }), pushup, null)).toBeNull()
+  })
+
+  it('doubles a two-arm dumbbell lift — a pair moves each rep (§6)', () => {
+    const dbPress = exercise({ equipment: 'dumbbell', isUnilateral: false })
+    // The user enters one 40 kg dumbbell; the load moved is 80 kg.
+    expect(effectiveWeightKg(set({ weightKg: 40 }), dbPress, 80)).toBe(80)
+  })
+
+  it('does not double a one-arm dumbbell lift — only one is held', () => {
+    const oneArmRow = exercise({ equipment: 'dumbbell', isUnilateral: true })
+    expect(effectiveWeightKg(set({ weightKg: 40 }), oneArmRow, 80)).toBe(40)
   })
 })
 
@@ -222,6 +234,16 @@ describe('attributeVolumeToMuscles', () => {
     expect(result.get('front_delt')).toBe(500)
     expect(result.get('triceps')).toBe(500)
   })
+
+  it('survives a row whose secondaryMuscles is missing (a synced exercise)', () => {
+    // A pulled row can arrive without the field; it must not throw "not
+    // iterable" and blank the screen — just credit the primary.
+    const broken = { primaryMuscleId: 'm1' } as unknown as Parameters<
+      typeof attributeVolumeToMuscles
+    >[1]
+    const result = attributeVolumeToMuscles(1000, broken)
+    expect(result.get('m1')).toBe(1000)
+  })
 })
 
 describe('rollUpToRegions', () => {
@@ -259,5 +281,22 @@ describe('cardio and density', () => {
 
   it('returns null density for a zero-length session', () => {
     expect(tonnagePerMinute(6000, 0)).toBeNull()
+  })
+})
+
+describe('weightForRepsKg (PR estimator projection)', () => {
+  it('inverts Epley: projecting from a 1RM back to reps', () => {
+    // 100 kg × 5 → e1RM; projecting that e1RM back to 5 reps returns ~100.
+    const e1rm = estimatedOneRepMaxKg(100, 5)!
+    expect(weightForRepsKg(e1rm, 5)).toBeCloseTo(100, 5)
+  })
+
+  it('a 1-rep projection scales the 1RM by the Epley factor', () => {
+    expect(weightForRepsKg(150, 1)).toBeCloseTo(150 / (1 + 1 / 30), 5)
+  })
+
+  it('returns null past the 12-rep cap or for a non-positive max', () => {
+    expect(weightForRepsKg(150, 15)).toBeNull()
+    expect(weightForRepsKg(0, 5)).toBeNull()
   })
 })

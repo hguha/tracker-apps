@@ -10,6 +10,7 @@
  * (§6.4), which removes a whole screen without removing the capability.
  */
 
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -19,6 +20,8 @@ import { formatRelativeDay } from '@/lib/dates'
 import { weightFromKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS } from '@/domain/types'
+import { WorkoutPreviewSheet } from './WorkoutPreviewSheet'
+import { TemplatePreviewSheet } from '@/features/templates/TemplatePreviewSheet'
 
 export function StartWorkoutScreen({
   onStarted,
@@ -27,6 +30,10 @@ export function StartWorkoutScreen({
   onStarted: (workoutId: string) => void
   onCancel: () => void
 }) {
+  // Which workout / template is being previewed before committing to start it.
+  const [previewWorkoutId, setPreviewWorkoutId] = useState<string | null>(null)
+  const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null)
+
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
     const templates = await repo.listTemplates()
@@ -44,11 +51,6 @@ export function StartWorkoutScreen({
 
   async function startEmpty() {
     onStarted(await repo.startWorkout())
-  }
-
-  async function repeat(workoutId: string) {
-    const result = await repo.repeatWorkout(workoutId)
-    if (result) onStarted(result.workoutId)
   }
 
   return (
@@ -78,9 +80,7 @@ export function StartWorkoutScreen({
             {data.templates.map(({ template, exerciseCount }) => (
               <button
                 key={template.id}
-                onClick={async () => {
-                  onStarted(await repo.startWorkoutFromTemplate(template.id))
-                }}
+                onClick={() => setPreviewTemplateId(template.id)}
                 className="flex w-full items-center gap-3 border-t border-line px-4 py-3.5 text-left active:bg-accent-wash"
               >
                 <span className="min-w-0 flex-1">
@@ -105,7 +105,7 @@ export function StartWorkoutScreen({
             {data.recent.map((summary) => (
               <button
                 key={summary.workout.id}
-                onClick={() => void repeat(summary.workout.id)}
+                onClick={() => setPreviewWorkoutId(summary.workout.id)}
                 className="flex w-full items-start gap-3 border-t border-line px-4 py-3.5 text-left active:bg-accent-wash"
               >
                 <span className="min-w-0 flex-1">
@@ -150,6 +150,28 @@ export function StartWorkoutScreen({
 
         <div className="h-4" />
       </div>
+
+      {previewWorkoutId && (
+        <WorkoutPreviewSheet
+          workoutId={previewWorkoutId}
+          onStart={(newId) => {
+            setPreviewWorkoutId(null)
+            onStarted(newId)
+          }}
+          onDismiss={() => setPreviewWorkoutId(null)}
+        />
+      )}
+
+      {previewTemplateId && (
+        <TemplatePreviewSheet
+          templateId={previewTemplateId}
+          onStart={(newId) => {
+            setPreviewTemplateId(null)
+            onStarted(newId)
+          }}
+          onDismiss={() => setPreviewTemplateId(null)}
+        />
+      )}
     </div>
   )
 }
