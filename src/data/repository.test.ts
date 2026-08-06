@@ -350,6 +350,40 @@ describe('session title signals (§6.7)', () => {
 
 })
 
+describe('listWorkoutSummaries — batched load', () => {
+  it('matches the per-workout builder exactly for a mixed history', async () => {
+    // Two sessions of different shapes, so a batching bug (wrong exercise
+    // bucketed to the wrong workout, or unsorted sets) would surface as a
+    // divergence from the trusted single-workout path.
+    const a = await repo.startWorkout({ title: 'Push' })
+    const bench = await repo.addExerciseToWorkout(a, 'barbell_bench_press')
+    for (const reps of [8, 6]) {
+      const id = await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps })
+      await repo.logSetValues(id, {})
+    }
+    await repo.finishWorkout(a)
+
+    const b = await repo.startWorkout({ title: 'Pull' })
+    const row = await repo.addExerciseToWorkout(b, 'lat_pulldown')
+    const setId = await repo.addSet({ workoutExerciseId: row, weightKg: 60, reps: 10 })
+    await repo.logSetValues(setId, {})
+    await repo.finishWorkout(b)
+
+    const batched = await repo.listWorkoutSummaries(100)
+    // The trusted reference: build each summary one at a time.
+    const oneByOne = await Promise.all(
+      batched.map((s) => repo.getWorkoutSummary(s.workout)),
+    )
+
+    expect(batched).toHaveLength(2)
+    expect(batched).toEqual(oneByOne)
+  })
+
+  it('returns an empty list for an empty history without querying', async () => {
+    expect(await repo.listWorkoutSummaries(100)).toEqual([])
+  })
+})
+
 describe('repeating a workout from history (§7.2)', () => {
   it('copies the structure without the numbers', async () => {
     const source = await repo.startWorkout({ title: 'Pull A' })

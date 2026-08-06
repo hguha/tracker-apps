@@ -240,14 +240,28 @@ export async function getExerciseDetail(
  * "last trained" in the library list.
  */
 export async function getLastTrainedMap(): Promise<Map<string, number>> {
-  const recent = await db.workouts.orderBy('startedAt').reverse().limit(200).toArray()
+  const recent = (
+    await db.workouts.orderBy('startedAt').reverse().limit(200).toArray()
+  ).filter((w) => w.deletedAt === null)
+  const startedAtById = new Map(recent.map((w) => [w.id, w.startedAt]))
+  if (startedAtById.size === 0) return new Map()
+
+  // One indexed range read for every exercise row across the recent window,
+  // rather than a sequential listWorkoutExercises per workout.
+  const rows = await db.workoutExercises
+    .where('workoutId')
+    .anyOf([...startedAtById.keys()])
+    .toArray()
+
   const lastTrained = new Map<string, number>()
-  for (const workout of recent) {
-    if (workout.deletedAt !== null) continue
-    for (const we of await listWorkoutExercises(workout.id)) {
-      if (!lastTrained.has(we.exerciseId)) {
-        lastTrained.set(we.exerciseId, workout.startedAt)
-      }
+  for (const we of rows) {
+    if (we.deletedAt !== null) continue
+    const startedAt = startedAtById.get(we.workoutId)
+    if (startedAt === undefined) continue
+    // Keep the most recent sighting per exercise.
+    const existing = lastTrained.get(we.exerciseId)
+    if (existing === undefined || startedAt > existing) {
+      lastTrained.set(we.exerciseId, startedAt)
     }
   }
   return lastTrained
@@ -346,7 +360,29 @@ export async function getWorkoutSummary(
 ): Promise<WorkoutSummary> {
   const regions = regionOf ?? (await buildRegionMap())
   const workoutExercises = await listWorkoutExercises(workout.id)
+  const exercises = await db.exercises.bulkGet(workoutExercises.map((we) => we.exerciseId))
+  const exercisesById = new Map<string, Exercise>()
+  exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
+  const setsByWe = new Map<string, WorkoutSet[]>()
+  await Promise.all(
+    workoutExercises.map(async (we) => setsByWe.set(we.id, await listSets(we.id))),
+  )
 
+  return buildWorkoutSummary(workout, workoutExercises, exercisesById, setsByWe, regions)
+}
+
+/**
+ * The pure summary calculation, given everything preloaded. Kept apart from the
+ * loading so the batched `listWorkoutSummaries` and the single-workout
+ * `getWorkoutSummary` share one definition and can never drift.
+ */
+function buildWorkoutSummary(
+  workout: Workout,
+  workoutExercises: WorkoutExercise[],
+  exercisesById: Map<string, Exercise>,
+  setsByWe: Map<string, WorkoutSet[]>,
+  regions: Map<string, Region>,
+): WorkoutSummary {
   const exerciseNames: string[] = []
   const regionSet = new Set<Region>()
   let setCount = 0
@@ -355,14 +391,14 @@ export async function getWorkoutSummary(
   const signals: SetSignal[] = []
 
   for (const we of workoutExercises) {
-    const exercise = await db.exercises.get(we.exerciseId)
+    const exercise = exercisesById.get(we.exerciseId)
     if (!exercise) continue
     exerciseNames.push(exercise.name)
 
     const region = regions.get(exercise.primaryMuscleId)
     if (region) regionSet.add(region)
 
-    const logged = (await listSets(we.id)).filter((s) => s.isCompleted)
+    const logged = (setsByWe.get(we.id) ?? []).filter((s) => s.isCompleted)
     setCount += logged.length
     volumeKg += volumeLoadKg(logged, exercise, workout.bodyweightKg)
 
@@ -397,7 +433,49 @@ export async function getWorkoutSummary(
 export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[]> {
   const regionOf = await buildRegionMap()
   const workouts = await listWorkouts(limit)
-  return Promise.all(workouts.map((w) => getWorkoutSummary(w, regionOf)))
+  if (workouts.length === 0) return []
+
+  // Load in three bulk passes rather than per-workout. The old shape did
+  // 1 + (exercises × 2) sequential IndexedDB round-trips per summary, so a
+  // 500-workout history opened ~6,500 queries in series; this is a handful of
+  // indexed range reads regardless of history size.
+  const workoutIds = workouts.map((w) => w.id)
+  const allWe = (
+    await db.workoutExercises.where('workoutId').anyOf(workoutIds).toArray()
+  ).filter((r) => r.deletedAt === null)
+
+  const weIds = allWe.map((we) => we.id)
+  const allSets = (
+    await db.sets.where('workoutExerciseId').anyOf(weIds).toArray()
+  ).filter((s) => s.deletedAt === null)
+
+  const exercises = await db.exercises.bulkGet([
+    ...new Set(allWe.map((we) => we.exerciseId)),
+  ])
+  const exercisesById = new Map<string, Exercise>()
+  exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
+
+  // Bucket the flat rows by their parent, sorting once, so the pure builder
+  // sees the same per-workout/per-exercise shape it would from the DB.
+  const weByWorkout = new Map<string, WorkoutExercise[]>()
+  for (const we of allWe) {
+    const list = weByWorkout.get(we.workoutId)
+    if (list) list.push(we)
+    else weByWorkout.set(we.workoutId, [we])
+  }
+  for (const list of weByWorkout.values()) list.sort((a, b) => a.position - b.position)
+
+  const setsByWe = new Map<string, WorkoutSet[]>()
+  for (const set of allSets) {
+    const list = setsByWe.get(set.workoutExerciseId)
+    if (list) list.push(set)
+    else setsByWe.set(set.workoutExerciseId, [set])
+  }
+  for (const list of setsByWe.values()) list.sort((a, b) => a.position - b.position)
+
+  return workouts.map((w) =>
+    buildWorkoutSummary(w, weByWorkout.get(w.id) ?? [], exercisesById, setsByWe, regionOf),
+  )
 }
 
 /**
