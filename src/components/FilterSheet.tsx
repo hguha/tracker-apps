@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from 'react'
 import { Check, Search, X } from 'lucide-react'
+import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { cn } from '@/lib/cn'
 
@@ -81,104 +82,102 @@ export function FilterSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
-      <div className="flex max-h-[85%] flex-col rounded-t-3xl bg-surface pb-safe">
-        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
-          <h2 className="text-[17px] font-bold tracking-tight">{title}</h2>
-          <div className="flex items-center gap-1">
-            {!singleSelect && selected.length > 0 && (
-              <button
-                onClick={() => onChange([])}
-                className="px-2 text-[13.5px] font-semibold text-accent"
-              >
-                Clear
-              </button>
-            )}
+    <BottomSheet onDismiss={onDismiss} panelClassName="flex max-h-[85%] flex-col">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+        <h2 className="text-[17px] font-bold tracking-tight">{title}</h2>
+        <div className="flex items-center gap-1">
+          {!singleSelect && selected.length > 0 && (
             <button
-              onClick={onDismiss}
-              aria-label="Close"
-              className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+              onClick={() => onChange([])}
+              className="px-2 text-[13.5px] font-semibold text-accent"
             >
-              <X size={19} />
+              Clear
             </button>
-          </div>
-        </div>
-
-        {isSearchable && (
-          <div className="border-b border-line px-4 py-2.5">
-            <div className="flex h-10 items-center gap-2 rounded-xl bg-sunken px-3">
-              <Search size={16} className="shrink-0 text-ink-muted" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={`Search ${title.toLowerCase()}`}
-                className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-ink-muted"
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto">
-          {grouped.map((group, groupIndex) => (
-            <div key={group.name ?? groupIndex}>
-              {group.name && (
-                <p className="sticky top-0 bg-sunken px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                  {group.name}
-                </p>
-              )}
-              {group.options.map((option) => {
-                const isSelected = selected.includes(option.value)
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => toggle(option.value)}
-                    className="flex w-full items-center gap-3 border-b border-line px-5 py-3 text-left active:bg-accent-wash"
-                  >
-                    {option.swatch && (
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ background: option.swatch }}
-                        aria-hidden
-                      />
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-medium">
-                        {option.label}
-                      </span>
-                      {option.hint && (
-                        <span className="block truncate text-[12.5px] text-ink-muted">
-                          {option.hint}
-                        </span>
-                      )}
-                    </span>
-                    {isSelected && (
-                      <Check size={17} strokeWidth={3} className="shrink-0 text-accent" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-
-          {filtered.length === 0 && (
-            <p className="px-5 py-8 text-center text-[14px] text-ink-muted">
-              Nothing matches "{query.trim()}".
-            </p>
           )}
+          <button
+            onClick={onDismiss}
+            aria-label="Close"
+            className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+          >
+            <X size={19} />
+          </button>
         </div>
+      </div>
 
-        {!singleSelect && (
-          <div className="border-t border-line px-4 py-3">
-            <Button size="lg" className="w-full" onClick={onDismiss}>
-              {selected.length === 0
-                ? 'Show all'
-                : `Apply ${selected.length} ${selected.length === 1 ? 'filter' : 'filters'}`}
-            </Button>
+      {isSearchable && (
+        <div className="border-b border-line px-4 py-2.5">
+          <div className="flex h-10 items-center gap-2 rounded-xl bg-sunken px-3">
+            <Search size={16} className="shrink-0 text-ink-muted" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${title.toLowerCase()}`}
+              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-ink-muted"
+            />
           </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {grouped.map((group, groupIndex) => (
+          <div key={group.name ?? groupIndex}>
+            {group.name && (
+              <p className="sticky top-0 bg-sunken px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                {group.name}
+              </p>
+            )}
+            {group.options.map((option) => {
+              const isSelected = selected.includes(option.value)
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => toggle(option.value)}
+                  className="flex w-full items-center gap-3 border-b border-line px-5 py-3 text-left active:bg-accent-wash"
+                >
+                  {option.swatch && (
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ background: option.swatch }}
+                      aria-hidden
+                    />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-medium">
+                      {option.label}
+                    </span>
+                    {option.hint && (
+                      <span className="block truncate text-[12.5px] text-ink-muted">
+                        {option.hint}
+                      </span>
+                    )}
+                  </span>
+                  {isSelected && (
+                    <Check size={17} strokeWidth={3} className="shrink-0 text-accent" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+
+        {filtered.length === 0 && (
+          <p className="px-5 py-8 text-center text-[14px] text-ink-muted">
+            Nothing matches "{query.trim()}".
+          </p>
         )}
       </div>
-    </div>
+
+      {!singleSelect && (
+        <div className="border-t border-line px-4 py-3">
+          <Button size="lg" className="w-full" onClick={onDismiss}>
+            {selected.length === 0
+              ? 'Show all'
+              : `Apply ${selected.length} ${selected.length === 1 ? 'filter' : 'filters'}`}
+          </Button>
+        </div>
+      )}
+    </BottomSheet>
   )
 }
 

@@ -13,7 +13,7 @@
  * on purpose rather than a forked mega-component.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { db } from '@/db/database'
@@ -23,7 +23,8 @@ import { useToast } from '@/components/Toast'
 import { DragItem, DragList } from '@/components/DragList'
 import { ExercisePicker } from '@/features/workout/ExercisePicker'
 import { regionVar } from '@/lib/palette'
-import { weightFromKg, weightToKg } from '@/lib/units'
+import { parseNumber, weightFromKg, weightToKg } from '@/lib/units'
+import { useDraftInput } from '@/lib/useDraftInput'
 import type { TemplateExercise, WeightUnit } from '@/domain/types'
 
 export function TemplateEditorScreen({
@@ -172,26 +173,15 @@ function NameField({
   value: string
   onCommit: (name: string) => void
 }) {
-  const [draft, setDraft] = useState(value)
-  const isFocused = useRef(false)
-
-  useEffect(() => {
-    if (!isFocused.current) setDraft(value)
-  }, [value])
+  const { inputProps } = useDraftInput({
+    value,
+    onCommit,
+    commitOnChange: true,
+  })
 
   return (
     <input
-      value={draft}
-      onFocus={() => {
-        isFocused.current = true
-      }}
-      onChange={(event) => {
-        setDraft(event.target.value)
-        onCommit(event.target.value)
-      }}
-      onBlur={() => {
-        isFocused.current = false
-      }}
+      {...inputProps}
       placeholder="Template name"
       aria-label="Template name"
       className="w-full truncate bg-transparent text-[16px] font-semibold tracking-tight outline-none"
@@ -282,7 +272,9 @@ function TemplateExerciseRow({
               : weightFromKg(te.targetWeightKg, weightUnit)
           }
           onCommit={(n) =>
-            onChange({ targetWeightKg: n === null ? null : weightToKg(n, weightUnit) })
+            onChange({
+              targetWeightKg: n === null ? null : weightToKg(n, weightUnit),
+            })
           }
         />
       </div>
@@ -301,13 +293,10 @@ function TargetField({
   onCommit: (value: number | null) => void
 }) {
   const display = value === null ? '' : String(value)
-  const [draft, setDraft] = useState(display)
-  const isFocused = useRef(false)
-
-  // Adopt external changes unless the user is mid-edit, mirroring the set row.
-  useEffect(() => {
-    if (!isFocused.current) setDraft(display)
-  }, [display])
+  const { inputProps } = useDraftInput({
+    value: display,
+    onCommit: (draft) => onCommit(parseNumber(draft)),
+  })
 
   return (
     <label className="block">
@@ -315,20 +304,10 @@ function TargetField({
         {label}
       </span>
       <input
-        value={draft}
+        {...inputProps}
         inputMode="decimal"
         placeholder="—"
         aria-label={label}
-        onFocus={() => {
-          isFocused.current = true
-        }}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          isFocused.current = false
-          const trimmed = draft.trim()
-          const parsed = trimmed === '' ? null : Number(trimmed)
-          onCommit(parsed !== null && Number.isFinite(parsed) ? parsed : null)
-        }}
         className="h-10 w-full rounded-lg border border-line bg-sunken text-center tabular text-[15px] font-semibold outline-none focus:border-accent focus:bg-surface"
       />
     </label>

@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
+import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
 import { REGION_LABELS, type Region } from '@/domain/types'
@@ -77,7 +78,9 @@ export function FinishSheet({
       cardioSeconds,
       // Drop zero-volume regions: cardio has no volume load by definition
       // (§8.1), so listing it at 0% in a volume breakdown is misleading.
-      byRegion: [...byRegion].filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]),
+      byRegion: [...byRegion]
+        .filter(([, value]) => value > 0)
+        .sort((a, b) => b[1] - a[1]),
       isFromTemplate: workout.templateId !== null,
       exerciseCount: workoutExercises.length,
     }
@@ -109,9 +112,7 @@ export function FinishSheet({
       }
       const outcome = await repo.finishWorkout(workoutId)
       toast.show(
-        outcome === 'discarded-empty'
-          ? 'Empty workout discarded'
-          : 'Workout saved',
+        outcome === 'discarded-empty' ? 'Empty workout discarded' : 'Workout saved',
       )
       onFinished(outcome)
     } finally {
@@ -121,127 +122,121 @@ export function FinishSheet({
 
   if (isEmpty) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
-        <div className="rounded-t-3xl bg-surface p-5 pb-safe">
-          <h2 className="text-[20px] font-bold tracking-tight">
-            Nothing logged yet
-          </h2>
-          <p className="mt-2 text-[14px] text-ink-secondary">
-            This workout has no sets, so there's nothing to save. Log a set to keep
-            it, or discard it — an empty workout would just clutter your history and
-            skew your averages.
-          </p>
-          <div className="mt-5 flex gap-2">
-            <Button variant="secondary" size="lg" className="flex-1" onClick={onDismiss}>
-              Keep logging
-            </Button>
-            <Button
-              variant="danger"
-              size="lg"
-              className="flex-1"
-              disabled={isSaving}
-              onClick={() => void finish()}
-            >
-              Discard
-            </Button>
-          </div>
+      <BottomSheet onDismiss={onDismiss} panelClassName="p-5">
+        <h2 className="text-[20px] font-bold tracking-tight">Nothing logged yet</h2>
+        <p className="mt-2 text-[14px] text-ink-secondary">
+          This workout has no sets, so there's nothing to save. Log a set to keep it, or
+          discard it — an empty workout would just clutter your history and skew your
+          averages.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="secondary" size="lg" className="flex-1" onClick={onDismiss}>
+            Keep logging
+          </Button>
+          <Button
+            variant="danger"
+            size="lg"
+            className="flex-1"
+            disabled={isSaving}
+            onClick={() => void finish()}
+          >
+            Discard
+          </Button>
         </div>
-      </div>
+      </BottomSheet>
     )
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
-      <div className="max-h-[88%] overflow-y-auto rounded-t-3xl bg-surface pb-safe">
-        <div className="px-5 pt-5">
-          <h2 className="text-[20px] font-bold tracking-tight">Session complete</h2>
+    <BottomSheet onDismiss={onDismiss} panelClassName="max-h-[88%] overflow-y-auto">
+      <div className="px-5 pt-5">
+        <h2 className="text-[20px] font-bold tracking-tight">Session complete</h2>
 
-          <div className="mt-4 grid grid-cols-2 gap-2.5">
-            <StatTile label="Duration" value={formatDuration(durationSeconds)} />
-            <StatTile label="Sets" value={String(workingSets)} />
-            {totalVolumeKg > 0 && (
-              <StatTile
-                label="Volume"
-                value={`${Math.round(convertWeight(totalVolumeKg, profile.unitWeight)).toLocaleString()} ${profile.unitWeight}`}
-              />
-            )}
-            {/* Cardio time is reported on its own, never folded into volume. */}
-            {cardioSeconds > 0 && (
-              <StatTile label="Cardio time" value={formatDuration(cardioSeconds)} />
-            )}
-          </div>
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
+          <StatTile label="Duration" value={formatDuration(durationSeconds)} />
+          <StatTile label="Sets" value={String(workingSets)} />
+          {totalVolumeKg > 0 && (
+            <StatTile
+              label="Volume"
+              value={`${Math.round(convertWeight(totalVolumeKg, profile.unitWeight)).toLocaleString()} ${profile.unitWeight}`}
+            />
+          )}
+          {/* Cardio time is reported on its own, never folded into volume. */}
+          {cardioSeconds > 0 && (
+            <StatTile label="Cardio time" value={formatDuration(cardioSeconds)} />
+          )}
+        </div>
 
-          {byRegion.length > 0 && (
-            <div className="mt-5">
-              <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-                Where the work went
-              </p>
-              {/* A 100% stacked bar rather than a pie: length is read accurately,
+        {byRegion.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+              Where the work went
+            </p>
+            {/* A 100% stacked bar rather than a pie: length is read accurately,
                   angle is not, and regions are often close in size. */}
-              <div className="flex h-3 gap-[2px] overflow-hidden rounded-full">
-                {byRegion.map(([region, value]) => (
-                  <div
-                    key={region}
-                    style={{
-                      width: `${(value / totalRegionVolume) * 100}%`,
-                      background: regionVar(region as Region),
-                    }}
-                    title={`${REGION_LABELS[region as Region]}`}
-                  />
-                ))}
-              </div>
-              {/* Direct labels, not color alone — three light-mode region colors
+            <div className="flex h-3 gap-[2px] overflow-hidden rounded-full">
+              {byRegion.map(([region, value]) => (
+                <div
+                  key={region}
+                  style={{
+                    width: `${(value / totalRegionVolume) * 100}%`,
+                    background: regionVar(region as Region),
+                  }}
+                  title={`${REGION_LABELS[region as Region]}`}
+                />
+              ))}
+            </div>
+            {/* Direct labels, not color alone — three light-mode region colors
                   are below 3:1 contrast, so identity can't rest on the swatch. */}
-              <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1.5">
-                {byRegion.map(([region, value]) => (
-                  <span key={region} className="flex items-center gap-1.5 text-[12.5px]">
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ background: regionVar(region as Region) }}
-                      aria-hidden
-                    />
-                    <span className="text-ink-secondary">
-                      {REGION_LABELS[region as Region]}
-                    </span>
-                    <span className="tabular text-ink-muted">
-                      {Math.round((value / totalRegionVolume) * 100)}%
-                    </span>
+            <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1.5">
+              {byRegion.map(([region, value]) => (
+                <span key={region} className="flex items-center gap-1.5 text-[12.5px]">
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ background: regionVar(region as Region) }}
+                    aria-hidden
+                  />
+                  <span className="text-ink-secondary">
+                    {REGION_LABELS[region as Region]}
                   </span>
-                ))}
-              </div>
+                  <span className="tabular text-ink-muted">
+                    {Math.round((value / totalRegionVolume) * 100)}%
+                  </span>
+                </span>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {!summary.isFromTemplate && summary.exerciseCount > 0 && (
-            <div className="mt-5">
-              <p className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-                Save as a template
-              </p>
-              <input
-                value={templateName}
-                onChange={(event) => setTemplateName(event.target.value)}
-                placeholder="Optional — e.g. Pull A"
-                className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="sticky bottom-0 mt-5 flex gap-2 border-t border-line bg-surface px-4 py-3">
-          <Button variant="secondary" size="lg" onClick={onDismiss} className="flex-1">
-            Keep going
-          </Button>
-          <Button
-            size="lg"
-            className="flex-[2]"
-            disabled={isSaving}
-            onClick={() => void finish()}
-          >
-            Finish
-          </Button>
-        </div>
+        {!summary.isFromTemplate && summary.exerciseCount > 0 && (
+          <div className="mt-5">
+            <p className="mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+              Save as a template
+            </p>
+            <input
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Optional — e.g. Pull A"
+              className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+            />
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="sticky bottom-0 mt-5 flex gap-2 border-t border-line bg-surface px-4 py-3">
+        <Button variant="secondary" size="lg" onClick={onDismiss} className="flex-1">
+          Keep going
+        </Button>
+        <Button
+          size="lg"
+          className="flex-[2]"
+          disabled={isSaving}
+          onClick={() => void finish()}
+        >
+          Finish
+        </Button>
+      </div>
+    </BottomSheet>
   )
 }
 

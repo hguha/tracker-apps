@@ -16,6 +16,7 @@ import { AlertTriangle, Check, ChevronLeft, LogOut, Trash2 } from 'lucide-react'
 import { db } from '@/db/database'
 import { useAuth } from '@/auth/AuthContext'
 import { initialsOf } from '@/auth/types'
+import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -95,7 +96,11 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
               className="h-11 flex-1 rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
             />
             {nameDraft !== null && nameDraft.trim() !== session.displayName && (
-              <Button variant="secondary" onClick={() => void commitName()} aria-label="Save name">
+              <Button
+                variant="secondary"
+                onClick={() => void commitName()}
+                aria-label="Save name"
+              >
                 <Check size={17} />
               </Button>
             )}
@@ -116,9 +121,9 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
                 style={{ color: 'var(--status-warning)' }}
               />
               <span>
-                This account lives only in this browser. Clearing site data or
-                switching devices loses everything — sign in with email once the
-                server is connected to sync and back up.
+                This account lives only in this browser. Clearing site data or switching
+                devices loses everything — sign in with email once the server is connected
+                to sync and back up.
               </span>
             </p>
           </Card>
@@ -250,25 +255,23 @@ function Dialog({
   onDismiss: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
-      <div className="rounded-t-3xl bg-surface p-5 pb-safe">
-        <h2 className="text-[19px] font-bold tracking-tight">{title}</h2>
-        <div className="mt-2">{children}</div>
-        <div className="mt-5 flex gap-2">
-          <Button variant="secondary" size="lg" className="flex-1" onClick={onDismiss}>
-            Cancel
-          </Button>
-          <Button
-            variant={confirmVariant}
-            size="lg"
-            className="flex-1"
-            disabled={isConfirmDisabled}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </Button>
-        </div>
+    <BottomSheet onDismiss={onDismiss} panelClassName="p-5">
+      <h2 className="text-[19px] font-bold tracking-tight">{title}</h2>
+      <div className="mt-2">{children}</div>
+      <div className="mt-5 flex gap-2">
+        <Button variant="secondary" size="lg" className="flex-1" onClick={onDismiss}>
+          Cancel
+        </Button>
+        <Button
+          variant={confirmVariant}
+          size="lg"
+          className="flex-1"
+          disabled={isConfirmDisabled}
+          onClick={onConfirm}
+        >
+          {confirmLabel}
+        </Button>
       </div>
-    </div>
+    </BottomSheet>
   )
 }

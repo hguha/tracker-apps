@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { CalendarClock, FileText, Pencil, Trash2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { cn } from '@/lib/cn'
 import { fromDateTimeInputValue, toDateTimeInputValue } from '@/lib/dates'
@@ -76,121 +77,119 @@ export function SessionMenu({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
-      <div className="rounded-t-3xl bg-surface pb-safe">
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="text-[17px] font-bold tracking-tight">
-            {panel === 'menu'
-              ? 'Workout options'
-              : panel === 'rename'
-                ? 'Rename workout'
-                : panel === 'datetime'
-                  ? 'Date and time'
-                  : 'Save as template'}
-          </h2>
-          <button
-            onClick={panel === 'menu' ? onDismiss : () => setPanel('menu')}
-            aria-label={panel === 'menu' ? 'Close' : 'Back'}
-            className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-          >
-            <X size={19} />
-          </button>
-        </div>
-
-        {panel === 'menu' && (
-          <div className="p-3">
-            <MenuRow
-              icon={<Pencil size={18} />}
-              label="Rename"
-              hint={workout.title || 'Currently auto-titled'}
-              onClick={() => setPanel('rename')}
-            />
-            <MenuRow
-              icon={<CalendarClock size={18} />}
-              label="Change date and time"
-              hint="For a workout you did earlier"
-              onClick={() => setPanel('datetime')}
-            />
-            {canSaveAsTemplate && (
-              <MenuRow
-                icon={<FileText size={18} />}
-                label="Save as template"
-                hint="Reuse this structure later"
-                onClick={() => setPanel('template')}
-              />
-            )}
-            <MenuRow
-              icon={<Trash2 size={18} />}
-              label="Discard workout"
-              hint="Deletes everything logged here"
-              destructive
-              onClick={onDiscard}
-            />
-          </div>
-        )}
-
-        {panel === 'rename' && (
-          <Panel
-            onCancel={() => setPanel('menu')}
-            onConfirm={() => void saveTitle()}
-            confirmLabel="Save"
-            isBusy={isBusy}
-          >
-            <input
-              autoFocus
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Leave blank for an automatic title"
-              className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
-            />
-            <p className="mt-2 text-[12.5px] text-ink-muted">
-              Blank titles become the date, time of day, and body parts worked.
-            </p>
-          </Panel>
-        )}
-
-        {panel === 'datetime' && (
-          <Panel
-            onCancel={() => setPanel('menu')}
-            onConfirm={() => void saveDateTime()}
-            confirmLabel="Save"
-            isBusy={isBusy}
-          >
-            <input
-              type="datetime-local"
-              value={startedAt}
-              onChange={(event) => setStartedAt(event.target.value)}
-              className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
-            />
-            <p className="mt-2 text-[12.5px] text-ink-muted">
-              Moving a workout re-sorts your history and recalculates the charts
-              for both dates.
-            </p>
-          </Panel>
-        )}
-
-        {panel === 'template' && (
-          <Panel
-            onCancel={() => setPanel('menu')}
-            onConfirm={() => void saveTemplate()}
-            confirmLabel="Save template"
-            isBusy={isBusy || !templateName.trim()}
-          >
-            <input
-              autoFocus
-              value={templateName}
-              onChange={(event) => setTemplateName(event.target.value)}
-              placeholder="e.g. Pull A"
-              className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
-            />
-            <p className="mt-2 text-[12.5px] text-ink-muted">
-              Saves the exercises and set counts. Weights come from your history
-              each time you run it.
-            </p>
-          </Panel>
-        )}
+    <BottomSheet onDismiss={onDismiss}>
+      <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+        <h2 className="text-[17px] font-bold tracking-tight">
+          {panel === 'menu'
+            ? 'Workout options'
+            : panel === 'rename'
+              ? 'Rename workout'
+              : panel === 'datetime'
+                ? 'Date and time'
+                : 'Save as template'}
+        </h2>
+        <button
+          onClick={panel === 'menu' ? onDismiss : () => setPanel('menu')}
+          aria-label={panel === 'menu' ? 'Close' : 'Back'}
+          className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+        >
+          <X size={19} />
+        </button>
       </div>
-    </div>
+
+      {panel === 'menu' && (
+        <div className="p-3">
+          <MenuRow
+            icon={<Pencil size={18} />}
+            label="Rename"
+            hint={workout.title || 'Currently auto-titled'}
+            onClick={() => setPanel('rename')}
+          />
+          <MenuRow
+            icon={<CalendarClock size={18} />}
+            label="Change date and time"
+            hint="For a workout you did earlier"
+            onClick={() => setPanel('datetime')}
+          />
+          {canSaveAsTemplate && (
+            <MenuRow
+              icon={<FileText size={18} />}
+              label="Save as template"
+              hint="Reuse this structure later"
+              onClick={() => setPanel('template')}
+            />
+          )}
+          <MenuRow
+            icon={<Trash2 size={18} />}
+            label="Discard workout"
+            hint="Deletes everything logged here"
+            destructive
+            onClick={onDiscard}
+          />
+        </div>
+      )}
+
+      {panel === 'rename' && (
+        <Panel
+          onCancel={() => setPanel('menu')}
+          onConfirm={() => void saveTitle()}
+          confirmLabel="Save"
+          isBusy={isBusy}
+        >
+          <input
+            autoFocus
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Leave blank for an automatic title"
+            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          />
+          <p className="mt-2 text-[12.5px] text-ink-muted">
+            Blank titles become the date, time of day, and body parts worked.
+          </p>
+        </Panel>
+      )}
+
+      {panel === 'datetime' && (
+        <Panel
+          onCancel={() => setPanel('menu')}
+          onConfirm={() => void saveDateTime()}
+          confirmLabel="Save"
+          isBusy={isBusy}
+        >
+          <input
+            type="datetime-local"
+            value={startedAt}
+            onChange={(event) => setStartedAt(event.target.value)}
+            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          />
+          <p className="mt-2 text-[12.5px] text-ink-muted">
+            Moving a workout re-sorts your history and recalculates the charts for both
+            dates.
+          </p>
+        </Panel>
+      )}
+
+      {panel === 'template' && (
+        <Panel
+          onCancel={() => setPanel('menu')}
+          onConfirm={() => void saveTemplate()}
+          confirmLabel="Save template"
+          isBusy={isBusy || !templateName.trim()}
+        >
+          <input
+            autoFocus
+            value={templateName}
+            onChange={(event) => setTemplateName(event.target.value)}
+            placeholder="e.g. Pull A"
+            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          />
+          <p className="mt-2 text-[12.5px] text-ink-muted">
+            Saves the exercises and set counts. Weights come from your history each time
+            you run it.
+          </p>
+        </Panel>
+      )}
+    </BottomSheet>
   )
 }
 

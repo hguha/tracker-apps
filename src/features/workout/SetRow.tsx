@@ -17,7 +17,6 @@
  *   - No modal, ever. Editing happens in place.
  */
 
-import { useEffect, useRef, useState } from 'react'
 import { Copy, Trash2, Trophy } from 'lucide-react'
 import type {
   DistanceUnit,
@@ -28,6 +27,7 @@ import type {
 } from '@/domain/types'
 import { SwipeableRow } from '@/components/SwipeableRow'
 import { cn } from '@/lib/cn'
+import { useDraftInput } from '@/lib/useDraftInput'
 import {
   distanceFromM,
   distanceToM,
@@ -163,7 +163,9 @@ export function SetRow(props: SetRowProps) {
           {layout.weight && (
             <NumericField
               value={
-                set.weightKg === null ? '' : String(weightFromKg(set.weightKg, weightUnit))
+                set.weightKg === null
+                  ? ''
+                  : String(weightFromKg(set.weightKg, weightUnit))
               }
               placeholder={
                 previous?.weightKg != null
@@ -296,38 +298,22 @@ function NumericField({
   integer?: boolean
   className?: string
 }) {
-  const [draft, setDraft] = useState(value)
-  const isFocused = useRef(false)
-
-  // Adopt external changes (a "same as last" tap, an edit elsewhere) unless
-  // the user is mid-edit in this field.
-  useEffect(() => {
-    if (!isFocused.current) setDraft(value)
-  }, [value])
-
-  const isEmpty = draft === ''
+  const { isEmpty, inputProps } = useDraftInput({
+    value,
+    selectOnFocus: true,
+    // Parse here so a non-numeric entry becomes null, never a stored NaN.
+    onCommit: (draft) => {
+      const parsed = parseNumber(draft)
+      onCommit(integer && parsed !== null ? Math.round(parsed) : parsed)
+    },
+  })
 
   return (
     <input
-      value={draft}
+      {...inputProps}
       placeholder={placeholder}
       inputMode={integer ? 'numeric' : 'decimal'}
       aria-label={ariaLabel}
-      onFocus={(event) => {
-        isFocused.current = true
-        event.currentTarget.select()
-      }}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        isFocused.current = false
-        // Parse here so a non-numeric entry becomes null, never a stored NaN.
-        // Guard on the parsed result, not the string, so "12" vs "12.0" don't
-        // thrash but a genuine change still commits.
-        if (draft !== value) {
-          const parsed = parseNumber(draft)
-          onCommit(integer && parsed !== null ? Math.round(parsed) : parsed)
-        }
-      }}
       className={cn(
         'h-11 min-w-0 flex-1 rounded-xl border text-center tabular text-[16px] font-semibold',
         'focus:border-accent focus:bg-surface focus:outline-none',
@@ -352,32 +338,20 @@ function DurationField({
   onCommit: (seconds: number | null) => void
 }) {
   const display = seconds === null ? '' : formatDuration(seconds)
-  const [draft, setDraft] = useState(display)
-  const isFocused = useRef(false)
-
-  useEffect(() => {
-    if (!isFocused.current) setDraft(display)
-  }, [display])
-
-  const isEmpty = draft === ''
+  const { isEmpty, inputProps } = useDraftInput({
+    value: display,
+    selectOnFocus: true,
+    onCommit: (draft) => onCommit(parseDuration(draft)),
+  })
 
   return (
     <input
-      value={draft}
+      {...inputProps}
       inputMode="numeric"
-      placeholder={placeholderSeconds !== null ? formatDuration(placeholderSeconds) : 'm:ss'}
+      placeholder={
+        placeholderSeconds !== null ? formatDuration(placeholderSeconds) : 'm:ss'
+      }
       aria-label="duration"
-      onFocus={(event) => {
-        isFocused.current = true
-        event.currentTarget.select()
-      }}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        isFocused.current = false
-        // Only commit a real edit, matching NumericField — tabbing through an
-        // unchanged duration shouldn't rewrite the set and retrigger PR checks.
-        if (draft !== display) onCommit(parseDuration(draft))
-      }}
       className={cn(
         'h-11 min-w-0 flex-1 rounded-xl border text-center tabular text-[16px] font-semibold',
         'focus:border-accent focus:bg-surface focus:outline-none',

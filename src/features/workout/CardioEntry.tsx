@@ -10,7 +10,6 @@
  * secondary, because most cardio is one block.
  */
 
-import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type {
   DistanceUnit,
@@ -29,6 +28,7 @@ import {
   weightFromKg,
   weightToKg,
 } from '@/lib/units'
+import { useDraftInput } from '@/lib/useDraftInput'
 import { parseDuration } from './SetRow'
 
 export interface CardioEntryProps {
@@ -81,10 +81,7 @@ export function CardioEntry(props: CardioEntryProps) {
         const hasValues = set.durationSeconds !== null || set.distanceM !== null
 
         return (
-          <div
-            key={set.id}
-            className={cn(index > 0 && 'mt-3 border-t border-line pt-3')}
-          >
+          <div key={set.id} className={cn(index > 0 && 'mt-3 border-t border-line pt-3')}>
             {isInterval && (
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -104,7 +101,9 @@ export function CardioEntry(props: CardioEntryProps) {
               <Field label="Time">
                 <BigInput
                   value={
-                    set.durationSeconds === null ? '' : formatDuration(set.durationSeconds)
+                    set.durationSeconds === null
+                      ? ''
+                      : formatDuration(set.durationSeconds)
                   }
                   placeholder={
                     placeholder?.durationSeconds != null
@@ -112,7 +111,9 @@ export function CardioEntry(props: CardioEntryProps) {
                       : 'm:ss'
                   }
                   ariaLabel="duration"
-                  onCommit={(raw) => onChange(set.id, { durationSeconds: parseDuration(raw) })}
+                  onCommit={(raw) =>
+                    onChange(set.id, { durationSeconds: parseDuration(raw) })
+                  }
                 />
               </Field>
 
@@ -133,7 +134,8 @@ export function CardioEntry(props: CardioEntryProps) {
                     onCommit={(raw) => {
                       const value = parseNumber(raw)
                       onChange(set.id, {
-                        distanceM: value === null ? null : distanceToM(value, distanceUnit),
+                        distanceM:
+                          value === null ? null : distanceToM(value, distanceUnit),
                       })
                     }}
                   />
@@ -243,30 +245,18 @@ function BigInput({
   /** Receives the trimmed raw text; the caller parses (number vs m:ss). */
   onCommit: (raw: string) => void
 }) {
-  const [draft, setDraft] = useState(value)
-  const isFocused = useRef(false)
-
-  useEffect(() => {
-    if (!isFocused.current) setDraft(value)
-  }, [value])
-
-  const isEmpty = draft === ''
+  const { isEmpty, inputProps } = useDraftInput({
+    value,
+    selectOnFocus: true,
+    onCommit: (draft) => onCommit(draft.trim()),
+  })
 
   return (
     <input
-      value={draft}
+      {...inputProps}
       placeholder={placeholder}
       inputMode="decimal"
       aria-label={ariaLabel}
-      onFocus={(event) => {
-        isFocused.current = true
-        event.currentTarget.select()
-      }}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        isFocused.current = false
-        if (draft !== value) onCommit(draft.trim())
-      }}
       className={cn(
         'tabular h-12 w-full rounded-xl border text-center text-[19px] font-semibold',
         'focus:border-accent focus:bg-surface focus:outline-none',
