@@ -10,14 +10,14 @@
  * (§6.4), which removes a whole screen without removing the capability.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { formatRelativeDay } from '@/lib/dates'
-import { weightFromKg } from '@/lib/units'
+import { convertWeight } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS } from '@/domain/types'
 import { WorkoutPreviewSheet } from './WorkoutPreviewSheet'
@@ -33,6 +33,7 @@ export function StartWorkoutScreen({
   // Which workout / template is being previewed before committing to start it.
   const [previewWorkoutId, setPreviewWorkoutId] = useState<string | null>(null)
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
@@ -43,11 +44,35 @@ export function StartWorkoutScreen({
         exerciseCount: (await repo.listTemplateExercises(template.id)).length,
       })),
     )
-    const recent = (await repo.listWorkoutSummaries(12)).filter(
+    // Pull a deep list so search reaches real history; the unsearched view still
+    // shows just the most recent handful (sliced below).
+    const recent = (await repo.listWorkoutSummaries(500)).filter(
       (s) => s.workout.endedAt !== null && s.setCount > 0,
     )
     return { profile, templates: withCounts, recent }
   }, [])
+
+  const q = query.trim().toLowerCase()
+
+  // With no query, show the recent handful; with one, search title + exercises
+  // across all of history so an old rotation is findable by name.
+  const shownTemplates = useMemo(() => {
+    const all = data?.templates ?? []
+    if (!q) return all
+    return all.filter((t) => t.template.name.toLowerCase().includes(q))
+  }, [data, q])
+
+  const shownRecent = useMemo(() => {
+    const all = data?.recent ?? []
+    if (!q) return all.slice(0, 12)
+    return all.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        s.exerciseNames.some((name) => name.toLowerCase().includes(q)),
+    )
+  }, [data, q])
+
+  const unit = data?.profile.unitWeight ?? 'lb'
 
   async function startEmpty() {
     onStarted(await repo.startWorkout())
@@ -74,10 +99,27 @@ export function StartWorkoutScreen({
           Start an empty workout
         </Button>
 
-        {data && data.templates.length > 0 && (
+        {/* Search templates and past workouts by name — find a rotation without
+            scrolling once history is deep. */}
+        <div className="flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
+          <Search size={17} className="shrink-0 text-ink-muted" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search to repeat a workout"
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-muted"
+          />
+          {query && (
+            <button onClick={() => setQuery('')} aria-label="Clear search">
+              <X size={17} className="text-ink-muted" />
+            </button>
+          )}
+        </div>
+
+        {shownTemplates.length > 0 && (
           <Card className="overflow-hidden">
             <SectionLabel>Templates</SectionLabel>
-            {data.templates.map(({ template, exerciseCount }) => (
+            {shownTemplates.map(({ template, exerciseCount }) => (
               <button
                 key={template.id}
                 onClick={() => setPreviewTemplateId(template.id)}
@@ -99,10 +141,10 @@ export function StartWorkoutScreen({
           </Card>
         )}
 
-        {data && data.recent.length > 0 && (
+        {shownRecent.length > 0 && (
           <Card className="overflow-hidden">
-            <SectionLabel>Do one again</SectionLabel>
-            {data.recent.map((summary) => (
+            <SectionLabel>{q ? 'Matching workouts' : 'Do one again'}</SectionLabel>
+            {shownRecent.map((summary) => (
               <button
                 key={summary.workout.id}
                 onClick={() => setPreviewWorkoutId(summary.workout.id)}
@@ -131,8 +173,8 @@ export function StartWorkoutScreen({
                     {summary.setCount} sets
                     {summary.volumeKg > 0 &&
                       ` · ${Math.round(
-                        weightFromKg(summary.volumeKg, data.profile.unitWeight),
-                      ).toLocaleString()} ${data.profile.unitWeight}`}
+                        convertWeight(summary.volumeKg, unit),
+                      ).toLocaleString()} ${unit}`}
                   </span>
                 </span>
                 <ChevronRight size={17} className="mt-1 shrink-0 text-ink-muted" />
@@ -141,10 +183,11 @@ export function StartWorkoutScreen({
           </Card>
         )}
 
-        {data && data.recent.length === 0 && data.templates.length === 0 && (
+        {data && shownRecent.length === 0 && shownTemplates.length === 0 && (
           <p className="px-4 pt-6 text-center text-[13.5px] text-ink-muted">
-            Once you've logged a few workouts, they'll show up here so you can
-            repeat one with a tap.
+            {q
+              ? `Nothing matches “${query.trim()}”.`
+              : "Once you've logged a few workouts, they'll show up here so you can repeat one with a tap."}
           </p>
         )}
 

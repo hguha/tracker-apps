@@ -19,7 +19,6 @@ type SetInput = Parameters<typeof volumeLoadKg>[0][number] & Pick<WorkoutSet, 'r
 
 function set(partial: Partial<SetInput> = {}): SetInput {
   return {
-    setType: 'normal',
     weightKg: 100,
     reps: 5,
     durationSeconds: null,
@@ -56,17 +55,12 @@ function exercise(partial: Partial<Exercise> = {}): Exercise {
 }
 
 describe('countsTowardVolume', () => {
-  it('excludes warmups', () => {
-    expect(countsTowardVolume(set({ setType: 'warmup' }))).toBe(false)
+  it('counts a completed set', () => {
+    expect(countsTowardVolume(set())).toBe(true)
   })
 
   it('excludes planned-but-not-performed sets', () => {
     expect(countsTowardVolume(set({ isCompleted: false }))).toBe(false)
-  })
-
-  it('includes dropsets and AMRAPs — they are real work', () => {
-    expect(countsTowardVolume(set({ setType: 'dropset' }))).toBe(true)
-    expect(countsTowardVolume(set({ setType: 'amrap' }))).toBe(true)
   })
 })
 
@@ -123,8 +117,8 @@ describe('volumeLoadKg', () => {
     expect(volumeLoadKg([set(), set()], exercise(), 80)).toBe(1000)
   })
 
-  it('leaves warmups out of the total', () => {
-    const sets = [set({ setType: 'warmup', weightKg: 60, reps: 10 }), set()]
+  it('leaves planned-but-unperformed sets out of the total', () => {
+    const sets = [set({ isCompleted: false, weightKg: 60, reps: 10 }), set()]
     expect(volumeLoadKg(sets, exercise(), 80)).toBe(500)
   })
 
@@ -147,10 +141,6 @@ describe('isWorkingSet', () => {
   it('counts a set regardless of RPE, which is optional', () => {
     expect(isWorkingSet(set({ reps: 10, rpe: 5 }))).toBe(true)
     expect(isWorkingSet(set({ reps: 10, rpe: null }))).toBe(true)
-  })
-
-  it('excludes warmups', () => {
-    expect(isWorkingSet(set({ setType: 'warmup', reps: 12 }))).toBe(false)
   })
 
   it('excludes a planned set that was never performed', () => {
@@ -183,35 +173,21 @@ describe('estimatedOneRepMaxKg', () => {
 describe('bestOneRepMaxKg', () => {
   it('picks the best across a session', () => {
     const sets = [
-      { setType: 'normal' as const, weightKg: 100, reps: 5 },
-      { setType: 'normal' as const, weightKg: 110, reps: 3 },
+      { weightKg: 100, reps: 5 },
+      { weightKg: 110, reps: 3 },
     ]
     // 110 × (1 + 3/30) = 121 beats 116.67
     expect(bestOneRepMaxKg(sets)).toBeCloseTo(121, 2)
   })
 
-  it('ignores warmups', () => {
-    const sets = [
-      { setType: 'warmup' as const, weightKg: 200, reps: 1 },
-      { setType: 'normal' as const, weightKg: 100, reps: 5 },
-    ]
-    expect(bestOneRepMaxKg(sets)).toBeCloseTo(116.667, 2)
-  })
-
   it('is null when every set is outside the rep window', () => {
-    expect(bestOneRepMaxKg([{ setType: 'normal', weightKg: 50, reps: 20 }])).toBeNull()
+    expect(bestOneRepMaxKg([{ weightKg: 50, reps: 20 }])).toBeNull()
   })
 })
 
 describe('topSetWeightKg', () => {
   it('finds the heaviest working set', () => {
     expect(topSetWeightKg([set({ weightKg: 100 }), set({ weightKg: 120 })])).toBe(120)
-  })
-
-  it('ignores a heavy warmup', () => {
-    expect(
-      topSetWeightKg([set({ setType: 'warmup', weightKg: 200 }), set({ weightKg: 100 })]),
-    ).toBe(100)
   })
 })
 

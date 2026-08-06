@@ -245,7 +245,6 @@ describe('previewRecords — the PR glow (§6.2)', () => {
       reps: 5,
       durationSeconds: null,
       distanceM: null,
-      setType: 'normal',
     })
     expect(broken).toEqual([])
   })
@@ -262,26 +261,8 @@ describe('previewRecords — the PR glow (§6.2)', () => {
       reps: 5,
       durationSeconds: null,
       distanceM: null,
-      setType: 'normal',
     })
     expect(broken).toContain('max_weight')
-  })
-
-  it('never reports a warmup as a record', async () => {
-    const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
-    const setId = await repo.addSet({ workoutExerciseId, weightKg: 150, reps: 5 })
-    await repo.logSetValues(setId, {})
-    await repo.finishWorkout(workoutId)
-
-    const broken = await repo.previewRecords('deadlift', {
-      weightKg: 300,
-      reps: 5,
-      durationSeconds: null,
-      distanceM: null,
-      setType: 'warmup',
-    })
-    expect(broken).toEqual([])
   })
 
   it('writes nothing — it is a preview', async () => {
@@ -291,7 +272,6 @@ describe('previewRecords — the PR glow (§6.2)', () => {
       reps: 5,
       durationSeconds: null,
       distanceM: null,
-      setType: 'normal',
     })
     expect(await db.personalRecords.count()).toBe(before)
   })
@@ -368,19 +348,6 @@ describe('session title signals (§6.7)', () => {
     })
   })
 
-  it('excludes warmups, so they cannot skew the inferred split', async () => {
-    const workoutId = await repo.startWorkout()
-    const squatId = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
-    const warmup = await repo.addSet({
-      workoutExerciseId: squatId,
-      weightKg: 40,
-      reps: 10,
-      setType: 'warmup',
-    })
-    await repo.logSetValues(warmup, {})
-
-    expect(await repo.getSessionTitleSignals(workoutId)).toHaveLength(0)
-  })
 })
 
 describe('repeating a workout from history (§7.2)', () => {
@@ -460,28 +427,6 @@ describe('last performance and pre-fill', () => {
     expect(await repo.getPrefillForSet('barbell_bench_press', 0)).toBeNull()
   })
 
-  it('excludes warmups from pre-fill, so it recalls working weight', async () => {
-    const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(
-      workoutId,
-      'barbell_back_squat',
-    )
-    const warmup = await repo.addSet({
-      workoutExerciseId,
-      weightKg: 40,
-      reps: 10,
-      setType: 'warmup',
-    })
-    await repo.logSetValues(warmup, {})
-    const working = await repo.addSet({ workoutExerciseId, weightKg: 120, reps: 5 })
-    await repo.logSetValues(working, {})
-    await repo.finishWorkout(workoutId)
-
-    expect(await repo.getPrefillForSet('barbell_back_squat', 0)).toMatchObject({
-      weightKg: 120,
-    })
-  })
-
   it('keeps only the last three sessions in the cache', async () => {
     for (let session = 0; session < 5; session += 1) {
       const workoutId = await repo.startWorkout()
@@ -537,21 +482,6 @@ describe('personal records', () => {
     const broken = await repo.logSetValues(secondSet, {})
     expect(broken).toContain('max_weight')
     expect(broken).toContain('max_est_1rm')
-  })
-
-  it('ignores warmups when setting records', async () => {
-    const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
-    const warmup = await repo.addSet({
-      workoutExerciseId,
-      weightKg: 200,
-      reps: 1,
-      setType: 'warmup',
-    })
-    await repo.logSetValues(warmup, {})
-
-    const records = await repo.listPersonalRecords('deadlift')
-    expect(records).toHaveLength(0)
   })
 
   it('removes a record when a past workout is edited downward', async () => {

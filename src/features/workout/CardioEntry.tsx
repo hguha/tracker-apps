@@ -25,6 +25,7 @@ import {
   distanceToM,
   formatDuration,
   formatPace,
+  parseNumber,
   weightFromKg,
   weightToKg,
 } from '@/lib/units'
@@ -65,7 +66,17 @@ export function CardioEntry(props: CardioEntryProps) {
   return (
     <div className="px-3 pb-1 pt-2">
       {sets.map((set, index) => {
-        const placeholder = previous[index]
+        const raw = previous[index]
+        // Only treat it as a placeholder if it actually carries something — an
+        // all-null carry-forward shouldn't offer a "Same as last" that copies
+        // nothing (matches SetRow's placeholderAt guard).
+        const placeholder =
+          raw &&
+          (raw.durationSeconds !== null ||
+            raw.distanceM !== null ||
+            raw.weightKg !== null)
+            ? raw
+            : undefined
         const pace = formatPace(set.durationSeconds, set.distanceM, distanceUnit)
         const hasValues = set.durationSeconds !== null || set.distanceM !== null
 
@@ -119,11 +130,12 @@ export function CardioEntry(props: CardioEntryProps) {
                         : '0.00'
                     }
                     ariaLabel={`distance in ${distanceUnit}`}
-                    onCommit={(raw) =>
+                    onCommit={(raw) => {
+                      const value = parseNumber(raw)
                       onChange(set.id, {
-                        distanceM: raw === '' ? null : distanceToM(Number(raw), distanceUnit),
+                        distanceM: value === null ? null : distanceToM(value, distanceUnit),
                       })
-                    }
+                    }}
                   />
                 </Field>
               )}
@@ -142,12 +154,13 @@ export function CardioEntry(props: CardioEntryProps) {
                         : '0'
                     }
                     ariaLabel={`weight in ${weightUnit}`}
-                    onCommit={(raw) =>
+                    onCommit={(raw) => {
+                      const value = parseNumber(raw)
                       onChange(set.id, {
-                        weightKg: raw === '' ? null : weightToKg(Number(raw), weightUnit),
+                        weightKg: value === null ? null : weightToKg(value, weightUnit),
                         enteredUnit: weightUnit,
                       })
-                    }
+                    }}
                   />
                 </Field>
               )}
@@ -227,6 +240,7 @@ function BigInput({
   value: string
   placeholder: string
   ariaLabel: string
+  /** Receives the trimmed raw text; the caller parses (number vs m:ss). */
   onCommit: (raw: string) => void
 }) {
   const [draft, setDraft] = useState(value)

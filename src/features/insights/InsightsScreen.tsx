@@ -21,7 +21,7 @@ import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
-import { formatDuration, weightFromKg } from '@/lib/units'
+import { convertWeight, formatDuration } from '@/lib/units'
 import { useInsightsData, type InsightsData, type InsightsFilters } from './useInsightsData'
 import {
   BodyweightChart,
@@ -291,7 +291,7 @@ function SummaryCard({
       </p>
       {/* A hero figure, not a one-bar chart. */}
       <p className="mt-1 text-[36px] font-bold leading-none tracking-tight">
-        {Math.round(weightFromKg(data.totalVolumeKg, unit)).toLocaleString()}
+        {Math.round(convertWeight(data.totalVolumeKg, unit)).toLocaleString()}
         <span className="ml-1.5 text-[15px] font-semibold text-ink-muted">
           {unit} lifted
         </span>

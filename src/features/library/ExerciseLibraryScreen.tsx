@@ -9,7 +9,7 @@
 
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, Plus, Search, SlidersHorizontal, Star, X } from 'lucide-react'
+import { ChevronRight, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
@@ -206,13 +206,6 @@ export function ExerciseLibraryScreen() {
                     <span className="truncate text-[15px] font-medium">
                       {exercise.name}
                     </span>
-                    {exercise.isKeyLift && (
-                      <Star
-                        size={12}
-                        className="shrink-0 text-accent"
-                        fill="currentColor"
-                      />
-                    )}
                   </span>
                   <span className="block truncate text-[12.5px] text-ink-muted">
                     {muscle?.name} · {titleCase(exercise.equipment)}

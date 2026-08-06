@@ -24,7 +24,15 @@
 import { db, type OutboxEntry } from '@/db/database'
 import type { PushRow, SyncBackend } from './backend'
 
-/** Tables that participate in sync, in dependency order for the initial pull. */
+/**
+ * Tables that participate in sync, in dependency order for the initial pull.
+ *
+ * `personalRecords` is deliberately absent: PRs are *derived* from sets, and the
+ * repository recomputes them locally on every set change without enqueuing. Each
+ * device rebuilds its own from the synced sets (the server does the same via
+ * `rebuild_prs`), so syncing the derived rows would be both redundant and a
+ * source of push/pull disagreement.
+ */
 export const SYNCED_TABLES = [
   'profiles',
   'muscles',
@@ -34,18 +42,24 @@ export const SYNCED_TABLES = [
   'workouts',
   'workoutExercises',
   'sets',
-  'personalRecords',
   'metricDefinitions',
   'metricEntries',
 ] as const
 
 export type SyncedTable = (typeof SYNCED_TABLES)[number]
 
-/** Backoff schedule for transient failures: exponential with a 5-minute cap. */
-export function backoffMs(attempts: number): number {
+/**
+ * Backoff for transient failures: exponential with a 5-minute cap, plus jitter.
+ *
+ * `jitter` is a 0–1 fraction the caller supplies (a random value in prod), used
+ * to spread retries across ±25% so many clients don't retry in lockstep after a
+ * shared outage. Defaulting it to 0.5 keeps the function pure and testable; the
+ * drain passes a real random value.
+ */
+export function backoffMs(attempts: number, jitter = 0.5): number {
   const base = Math.min(5 * 60_000, 1000 * 2 ** attempts)
-  // Jitter so many clients don't retry in lockstep after an outage.
-  return base
+  const spread = base * 0.25 * (jitter * 2 - 1) // ±25%
+  return Math.round(base + spread)
 }
 
 export interface DrainResult {
@@ -124,7 +138,7 @@ export class SyncEngine {
         await db.outbox.update(entry.seq!, {
           attempts,
           lastError: outcome.error,
-          nextAttemptAt: now + backoffMs(attempts),
+          nextAttemptAt: now + backoffMs(attempts, Math.random()),
         })
         return { pushed, deadLettered, stoppedBecause: 'transient' }
       }

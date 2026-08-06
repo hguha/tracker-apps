@@ -5,15 +5,15 @@
  * than only from the finish sheet.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, Copy, FileText, MoreHorizontal, Trash2, X } from 'lucide-react'
+import { ChevronRight, Copy, FileText, MoreHorizontal, Search, Trash2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
 import { formatDayHeading, formatTimeOfDay } from '@/lib/dates'
-import { formatDuration, weightFromKg } from '@/lib/units'
+import { convertWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import { WorkoutPreviewSheet } from '@/features/workout/WorkoutPreviewSheet'
 import { REGION_LABELS } from '@/domain/types'
@@ -26,6 +26,7 @@ export function HistoryScreen({
   onStartedCopy: (workoutId: string) => void
 }) {
   const toast = useToast()
+  const [query, setQuery] = useState('')
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [previewFor, setPreviewFor] = useState<string | null>(null)
   const [templateFor, setTemplateFor] = useState<{ id: string; name: string } | null>(
@@ -33,11 +34,25 @@ export function HistoryScreen({
   )
 
   // One shared summary builder, so History, Home, and the start screen can never
-  // disagree about what a session contained (§5.2.1).
+  // disagree about what a session contained (§5.2.1). Pull more here since the
+  // list is now searchable — the search should reach well back, not just 100.
   const data = useLiveQuery(async () => ({
     profile: await repo.getProfile(),
-    summaries: await repo.listWorkoutSummaries(100),
+    summaries: await repo.listWorkoutSummaries(500),
   }), [])
+
+  // Filter by title or any exercise name. Computed before the early returns so
+  // the hook order stays stable.
+  const filtered = useMemo(() => {
+    const summaries = data?.summaries ?? []
+    const q = query.trim().toLowerCase()
+    if (!q) return summaries
+    return summaries.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        s.exerciseNames.some((name) => name.toLowerCase().includes(q)),
+    )
+  }, [data, query])
 
   if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
 
@@ -59,8 +74,32 @@ export function HistoryScreen({
   }
 
   return (
-    <div className="space-y-2.5 px-3 py-3">
-      {data.summaries.map((summary) => (
+    <div className="px-3 py-3">
+      {/* Search by workout name or any exercise in it — the QOL win once there
+          are hundreds of sessions. */}
+      <div className="mb-2.5 flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
+        <Search size={17} className="shrink-0 text-ink-muted" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search workouts and exercises"
+          className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-muted"
+        />
+        {query && (
+          <button onClick={() => setQuery('')} aria-label="Clear search">
+            <X size={17} className="text-ink-muted" />
+          </button>
+        )}
+      </div>
+
+      {filtered.length === 0 && (
+        <p className="mt-10 text-center text-[14px] text-ink-muted">
+          No workouts match “{query.trim()}”.
+        </p>
+      )}
+
+      <div className="space-y-2.5">
+      {filtered.map((summary) => (
         <Card key={summary.workout.id} className="relative overflow-visible">
           <div className="flex items-start">
             <button
@@ -97,7 +136,7 @@ export function HistoryScreen({
                 {summary.volumeKg > 0 && (
                   <span className="tabular">
                     {Math.round(
-                      weightFromKg(summary.volumeKg, data.profile.unitWeight),
+                      convertWeight(summary.volumeKg, data.profile.unitWeight),
                     ).toLocaleString()}{' '}
                     {data.profile.unitWeight}
                   </span>
@@ -142,6 +181,7 @@ export function HistoryScreen({
           )}
         </Card>
       ))}
+      </div>
 
       {previewFor && (
         <WorkoutPreviewSheet

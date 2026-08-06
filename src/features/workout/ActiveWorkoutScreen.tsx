@@ -20,7 +20,7 @@ import { useRestTimer } from '@/features/timer/restTimerStore'
 import { playCue } from '@/features/timer/sounds'
 import { formatDuration } from '@/lib/units'
 import { sessionTitle } from '@/lib/sessionTitle'
-import type { SetType, WorkoutSet } from '@/domain/types'
+import type { WorkoutSet } from '@/domain/types'
 import { ExerciseCard } from './ExerciseCard'
 import { ExerciseDetailSheet } from './ExerciseDetailSheet'
 import { ExercisePicker } from './ExercisePicker'
@@ -113,12 +113,11 @@ export function ActiveWorkoutScreen({
         playCue('set-logged')
 
         const row = data?.rows.find((r) => r.workoutExercise.exerciseId === exerciseId)
-        // Auto-start is opt-in (§6.4.2). Dropsets never rest, and a timer already
-        // running is never restarted — that would misreport the measured gap.
+        // Auto-start is opt-in (§6.4.2). A timer already running is never
+        // restarted — that would misreport the measured gap. Cardio never rests.
         const shouldAutoStart =
           (data?.profile.autoStartRest ?? false) &&
           !isEditMode &&
-          after?.setType !== 'dropset' &&
           row?.exercise?.movementPattern !== 'cardio' &&
           timer.targetAt === null
         if (shouldAutoStart) {
@@ -161,7 +160,6 @@ export function ActiveWorkoutScreen({
   const handleDuplicateSet = useCallback(async (set: WorkoutSet) => {
     await repo.addSet({
       workoutExerciseId: set.workoutExerciseId,
-      setType: set.setType,
       weightKg: set.weightKg,
       reps: set.reps,
       durationSeconds: set.durationSeconds,
@@ -332,9 +330,6 @@ export function ActiveWorkoutScreen({
                       const set = row.sets.find((s) => s.id === setId)
                       if (set) void handleDuplicateSet(set)
                     }}
-                    onSetTypeChange={(setId, setType: SetType) =>
-                      void repo.updateSet(setId, { setType })
-                    }
                     onOpenDetail={() =>
                       setDetailFor({
                         exerciseId: row.workoutExercise.exerciseId,

@@ -11,7 +11,6 @@ import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import {
   bestOneRepMaxKg,
-  estimatedOneRepMaxKg,
   isWorkingSet,
   topSetWeightKg,
   volumeLoadKg,
@@ -321,6 +320,3 @@ function computeRepRange(sets: WorkoutSet[]): [number, number] | null {
   if (reps.length === 0) return null
   return [Math.min(...reps), Math.max(...reps)]
 }
-
-/** Estimated 1RM for one set — re-exported so charts don't reach into metrics. */
-export { estimatedOneRepMaxKg }

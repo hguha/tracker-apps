@@ -8,12 +8,11 @@
 
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Star, Trash2, X } from 'lucide-react'
+import { Trash2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
-import { cn } from '@/lib/cn'
 import { formatRelativeDay } from '@/lib/dates'
-import { formatDuration, weightFromKg, distanceFromM } from '@/lib/units'
+import { convertWeight, formatDuration, distanceFromM, weightFromKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import {
   REGION_LABELS,
@@ -141,12 +140,12 @@ export function ExerciseDetailSheet({
                 <Stat label="Sets" value={String(thisSession.sets.length)} />
                 <Stat
                   label="Volume"
-                  value={`${Math.round(weightFromKg(thisSession.volumeKg, weightUnit)).toLocaleString()}`}
+                  value={`${Math.round(convertWeight(thisSession.volumeKg, weightUnit)).toLocaleString()}`}
                 />
                 {thisSession.bestE1rmKg !== null && (
                   <Stat
                     label="Best e1RM"
-                    value={String(weightFromKg(thisSession.bestE1rmKg, weightUnit))}
+                    value={String(convertWeight(thisSession.bestE1rmKg, weightUnit))}
                   />
                 )}
               </div>
@@ -210,15 +209,12 @@ export function ExerciseDetailSheet({
                       </p>
                       {session.bestE1rmKg !== null && (
                         <p className="text-[11.5px] text-ink-muted">
-                          e1RM {weightFromKg(session.bestE1rmKg, weightUnit)}
+                          e1RM {convertWeight(session.bestE1rmKg, weightUnit)}
                         </p>
                       )}
                     </div>
                     <p className="tabular mt-0.5 text-[12.5px] text-ink-secondary">
-                      {session.sets
-                        .filter((s) => s.setType !== 'warmup')
-                        .map(describeSet)
-                        .join(' · ')}
+                      {session.sets.map(describeSet).join(' · ')}
                     </p>
                   </div>
                 ))}
@@ -232,38 +228,20 @@ export function ExerciseDetailSheet({
             </p>
           )}
 
-          <Section title="Actions">
-            <div className="space-y-2">
+          {onRemoveFromWorkout && (
+            <Section title="Actions">
               <button
-                onClick={() => void repo.toggleKeyLift(exerciseId)}
-                className={cn(
-                  'flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left text-[14.5px] font-medium',
-                  exercise.isKeyLift
-                    ? 'border-accent bg-accent-wash text-accent'
-                    : 'border-line',
-                )}
+                onClick={() => {
+                  onRemoveFromWorkout()
+                  onDismiss()
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl border border-line px-3.5 py-3 text-left text-[14.5px] font-medium text-critical"
               >
-                <Star
-                  size={17}
-                  fill={exercise.isKeyLift ? 'currentColor' : 'none'}
-                />
-                {exercise.isKeyLift ? 'Key lift' : 'Mark as a key lift'}
+                <Trash2 size={17} />
+                Remove from this workout
               </button>
-
-              {onRemoveFromWorkout && (
-                <button
-                  onClick={() => {
-                    onRemoveFromWorkout()
-                    onDismiss()
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-xl border border-line px-3.5 py-3 text-left text-[14.5px] font-medium text-critical"
-                >
-                  <Trash2 size={17} />
-                  Remove from this workout
-                </button>
-              )}
-            </div>
-          </Section>
+            </Section>
+          )}
         </div>
 
         <div className="sticky bottom-0 border-t border-line bg-surface px-4 py-3">

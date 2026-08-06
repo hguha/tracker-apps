@@ -44,6 +44,7 @@ export function RestTimerBar({
   const [hasExpired, setHasExpired] = useState(false)
   const hasFired = useRef(false)
   const hasWarned = useRef(false)
+  const lingerTimeout = useRef<number | null>(null)
 
   useEffect(() => {
     if (targetAt === null) return
@@ -71,13 +72,24 @@ export function RestTimerBar({
       signalRestComplete()
       onExpire?.()
       // Clear the timer state but hold the "rest over" message briefly, so the
-      // bar doesn't snap back to idle before it's been seen.
-      window.setTimeout(() => {
+      // bar doesn't snap back to idle before it's been seen. Tracked so the
+      // effect cleanup can cancel it — otherwise finishing the workout (which
+      // unmounts the bar within this window) fires a setState on an unmounted
+      // component and a redundant cancel().
+      lingerTimeout.current = window.setTimeout(() => {
         setHasExpired(false)
         cancel()
       }, EXPIRED_LINGER_MS)
     }
   }, [remaining, targetAt, onExpire, cancel])
+
+  // Clear the linger timeout if the bar unmounts before it fires (e.g. finishing
+  // the workout), so it can't setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (lingerTimeout.current !== null) clearTimeout(lingerTimeout.current)
+    }
+  }, [])
 
   const isRunning = targetAt !== null && remaining > 0
   const isEndingSoon = isRunning && remaining <= WARNING_AT

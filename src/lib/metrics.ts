@@ -7,19 +7,21 @@
  * agree with it on a shared fixture (§8.3).
  */
 
-import type { Exercise, PerformedSet, Region, SetType, WorkoutSet } from '@/domain/types'
+import type { Exercise, PerformedSet, Region, WorkoutSet } from '@/domain/types'
 
 /** Set shapes that carry enough to compute volume. Accepts stored or cached rows. */
 type VolumeInput = Pick<
   WorkoutSet,
-  'setType' | 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'
+  'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'
 > & { isCompleted?: boolean }
 
-const EXCLUDED_FROM_VOLUME: SetType[] = ['warmup']
-
+/**
+ * Whether a set counts toward volume. Now simply "was it performed" — the set
+ * types that used to exclude some sets (warmup) were removed, so every logged
+ * set is real work.
+ */
 export function countsTowardVolume(set: VolumeInput): boolean {
-  if (set.isCompleted === false) return false
-  return !EXCLUDED_FROM_VOLUME.includes(set.setType)
+  return set.isCompleted !== false
 }
 
 /**
@@ -74,7 +76,7 @@ export function effectiveWeightKg(
   }
 }
 
-/** Σ (effective weight × reps) over completed, non-warmup sets. */
+/** Σ (effective weight × reps) over completed sets. */
 export function volumeLoadKg(
   sets: VolumeInput[],
   exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'>,
@@ -91,13 +93,9 @@ export function volumeLoadKg(
 }
 
 /**
- * A set of real work — logged and not a warmup. This is the number shown to the
- * user and counted per body part.
- *
- * Replaces an earlier `isHardSet` that additionally required `reps >= 5` and an
- * RPE of 7+. Both rules were wrong to surface: a set of three heavy singles is
- * not easy, and "hard set" is jargon a reader cannot define on sight, so it
- * could not honestly label a stat tile.
+ * A set of real work — any logged set. This is the number shown to the user and
+ * counted per body part. Kept as a named alias of `countsTowardVolume` so call
+ * sites read clearly and there's one place to change if the definition evolves.
  */
 export function isWorkingSet(set: VolumeInput): boolean {
   return countsTowardVolume(set)
@@ -137,11 +135,10 @@ export const PROJECTION_REPS = [1, 2, 3, 5, 8, 10, 12] as const
 
 /** Best e1RM across a group of sets, ignoring sets outside the valid window. */
 export function bestOneRepMaxKg(
-  sets: Pick<PerformedSet, 'weightKg' | 'reps' | 'setType'>[],
+  sets: Pick<PerformedSet, 'weightKg' | 'reps'>[],
 ): number | null {
   let best: number | null = null
   for (const set of sets) {
-    if (set.setType === 'warmup') continue
     const e1rm = estimatedOneRepMaxKg(set.weightKg, set.reps)
     if (e1rm !== null && (best === null || e1rm > best)) best = e1rm
   }

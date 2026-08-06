@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  convertWeight,
   distanceFromM,
   distanceToM,
   formatDuration,
@@ -34,6 +35,22 @@ describe('weight round-trip', () => {
 
   it('honors a micro-plate increment when given one', () => {
     expect(weightFromKg(100, 'lb', 0.5)).toBe(220.5)
+  })
+})
+
+describe('convertWeight (aggregates — no plate snapping)', () => {
+  it('converts a volume total exactly, not snapped to a plate grid', () => {
+    // The reported bug: 12.5 × 10 = 125 kg total must display as 125, not get
+    // rounded to a loadable 120/122.5 the way a single set weight would.
+    expect(convertWeight(125, 'kg')).toBe(125)
+  })
+
+  it('does not snap a lb total onto the 2.5 lb increment', () => {
+    // A summed total can legitimately land off the plate grid; weightFromKg
+    // would snap it, convertWeight keeps it exact.
+    const totalKg = weightToKg(122.5, 'lb') * 3 // 367.5 lb of total volume
+    expect(Math.round(convertWeight(totalKg, 'lb'))).toBe(368)
+    expect(convertWeight(50, 'kg')).toBe(50)
   })
 })
 

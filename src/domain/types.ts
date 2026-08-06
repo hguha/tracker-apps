@@ -73,15 +73,13 @@ export const MOVEMENT_PATTERNS = [
 ] as const
 export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number]
 
-/** Warmups are excluded from volume; dropsets get no rest timer (§6.4). */
-export const SET_TYPES = [
-  'normal',
-  'warmup',
-  'dropset',
-  'failure',
-  'amrap',
-  'backoff',
-] as const
+/**
+ * Set type. Collapsed to a single `normal` value — the warmup/dropset/AMRAP/etc.
+ * distinctions were removed as confusing and unused. The column is kept (rather
+ * than dropped) so stored rows and the sync schema stay stable, and so the
+ * feature could return without a migration.
+ */
+export const SET_TYPES = ['normal'] as const
 export type SetType = (typeof SET_TYPES)[number]
 
 export type WeightUnit = 'lb' | 'kg'
@@ -158,7 +156,7 @@ export interface Exercise extends SyncColumns {
   isUnilateral: boolean
   /** Fraction of bodyweight moved: pull-up 1.00, push-up 0.64, dip 0.95. */
   bodyweightFactor: number | null
-  /** User-flagged. Drives the strength-to-bodyweight chart (B-14). */
+  /** Retained for schema/sync stability; the key-lift feature was removed. */
   isKeyLift: boolean
   /** Cues, pin settings, seat height. */
   notes: string
@@ -329,7 +327,6 @@ export interface PerformedSession {
 }
 
 export interface PerformedSet {
-  setType: SetType
   weightKg: number | null
   reps: number | null
   durationSeconds: number | null

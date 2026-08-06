@@ -16,14 +16,13 @@ import { Card } from '@/components/Card'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { formatRelativeDay } from '@/lib/dates'
-import { formatDuration, weightFromKg } from '@/lib/units'
+import { convertWeight, formatDuration, weightFromKg } from '@/lib/units'
 import type {
   DistanceUnit,
   Exercise,
   LastPerformance,
   Muscle,
   PerformedSet,
-  SetType,
   WeightUnit,
   WorkoutSet,
 } from '@/domain/types'
@@ -75,7 +74,6 @@ export interface ExerciseCardProps {
   onDeleteSet: (setId: string) => void
   onConfirmPlaceholder: (setId: string) => void
   onDuplicateSet: (setId: string) => void
-  onSetTypeChange: (setId: string, setType: SetType) => void
   onOpenDetail: () => void
 }
 
@@ -95,11 +93,8 @@ export function ExerciseCard(props: ExerciseCardProps) {
     onDeleteSet,
     onConfirmPlaceholder,
     onDuplicateSet,
-    onSetTypeChange,
     onOpenDetail,
   } = props
-
-  const [setTypeMenuFor, setSetTypeMenuFor] = useState<string | null>(null)
 
   /**
    * Which set ids currently hold record-beating values. Recomputed whenever the
@@ -126,54 +121,44 @@ export function ExerciseCard(props: ExerciseCardProps) {
   const lastSession = lastPerformance?.sessions[0]
   const isCardio = exercise.movementPattern === 'cardio'
 
-  /** Working sets from last time, lined up with this session's working rows. */
-  const previousWorkingSets = useMemo<PerformedSet[]>(
-    () => (lastSession?.sets ?? []).filter((s) => s.setType !== 'warmup'),
+  /** Sets from last time, lined up with this session's rows by index. */
+  const previousSets = useMemo<PerformedSet[]>(
+    () => lastSession?.sets ?? [],
     [lastSession],
   )
 
   /**
    * The placeholder for each row, resolved once in row order (§6.2, §7.2).
    *
-   * One pass so it's obvious what wins, and so a row beyond history can carry
-   * forward from earlier *in this session* — the case that used to need a
-   * persisted override just to avoid rendering blank. Precedence per row:
-   *   1. A per-set override from a repeated session (§7.2) — an explicit request
-   *      for that session's numbers.
-   *   2. The matching set from last time, indexed by *working-set* position so a
-   *      warmup row never shifts the alignment.
-   *   3. Carry-forward: the most recent placeholder resolved earlier in this same
-   *      card — so a 4th set suggests the 3rd's numbers, filled or not.
-   * Warmups never carry a placeholder and never advance the carry-forward.
+   * Precedence per row, highest first:
+   *   1. A per-set override from a repeated workout or a template (§7.2) — an
+   *      explicit request for *that* source's numbers.
+   *   2. The matching set from the last time this exercise was trained.
+   *   3. Carry-forward: the most recent non-empty placeholder from earlier in
+   *      this same card — so set 4 suggests set 3's numbers.
+   * Blank only when the exercise has never been done and nothing precedes the
+   * row — which, given carry-forward, effectively never happens after set 1.
    */
   const placeholderFor = useMemo<(PerformedSet | undefined)[]>(() => {
     const resolved: (PerformedSet | undefined)[] = []
-    let workingPos = 0
     let carry: PerformedSet | undefined
 
-    for (const set of sets) {
-      if (set.setType === 'warmup') {
-        resolved.push(undefined)
-        continue
-      }
-
+    sets.forEach((set, index) => {
       const override = placeholderOverrides[set.id]
       const candidate: PerformedSet | undefined = override
         ? {
-            setType: set.setType,
             weightKg: override.weightKg,
             reps: override.reps,
             durationSeconds: override.durationSeconds,
             distanceM: override.distanceM,
           }
-        : (previousWorkingSets[workingPos] ?? carry)
+        : (previousSets[index] ?? carry)
 
       resolved.push(candidate)
       if (candidate && hasValue(candidate)) carry = candidate
-      workingPos += 1
-    }
+    })
     return resolved
-  }, [sets, placeholderOverrides, previousWorkingSets])
+  }, [sets, placeholderOverrides, previousSets])
 
   /** A placeholder with nothing in it shouldn't render as one. */
   function placeholderAt(index: number): PerformedSet | undefined {
@@ -277,33 +262,21 @@ export function ExerciseCard(props: ExerciseCardProps) {
 
       <div className="divide-y divide-line">
         {sets.map((set, index) => (
-          <div key={set.id} className="relative">
-            <SetRow
-              set={set}
-              index={index}
-              exercise={exercise}
-              previous={placeholderAt(index)}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              showRpe={showRpe}
-              isRecord={recordSetIds.has(set.id)}
-              onChange={(patch) => onSetChange(set.id, patch)}
-              onDelete={() => onDeleteSet(set.id)}
-              onConfirmPlaceholder={() => onConfirmPlaceholder(set.id)}
-              onDuplicate={() => onDuplicateSet(set.id)}
-              onLongPress={() => setSetTypeMenuFor(set.id)}
-            />
-            {setTypeMenuFor === set.id && (
-              <SetTypeMenu
-                current={set.setType}
-                onSelect={(setType) => {
-                  onSetTypeChange(set.id, setType)
-                  setSetTypeMenuFor(null)
-                }}
-                onDismiss={() => setSetTypeMenuFor(null)}
-              />
-            )}
-          </div>
+          <SetRow
+            key={set.id}
+            set={set}
+            index={index}
+            exercise={exercise}
+            previous={placeholderAt(index)}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            showRpe={showRpe}
+            isRecord={recordSetIds.has(set.id)}
+            onChange={(patch) => onSetChange(set.id, patch)}
+            onDelete={() => onDeleteSet(set.id)}
+            onConfirmPlaceholder={() => onConfirmPlaceholder(set.id)}
+            onDuplicate={() => onDuplicateSet(set.id)}
+          />
         ))}
       </div>
 
@@ -322,16 +295,12 @@ export function ExerciseCard(props: ExerciseCardProps) {
 
 /**
  * A one-line convention hint, so logging is unambiguous where it commonly isn't:
- *   - Dumbbell lifts: enter the weight of **one** dumbbell, not the pair.
- *   - Unilateral lifts: the entry is **per side** (both sides assumed equal).
- * Kept short and only shown when it actually applies.
+ * for a dumbbell lift, enter the weight of **one** dumbbell, not the pair. (The
+ * "per side" note was dropped — it read as more confusing than helpful.)
  */
 function loggingHint(exercise: Exercise, weightUnit: WeightUnit): string | null {
-  const parts: string[] = []
-  if (exercise.equipment === 'dumbbell') parts.push(`Enter one dumbbell’s ${weightUnit}`)
-  if (exercise.isUnilateral) parts.push('per side')
-  if (parts.length === 0) return null
-  return parts.join(' · ')
+  if (exercise.equipment === 'dumbbell') return `Enter one dumbbell’s ${weightUnit}`
+  return null
 }
 
 /**
@@ -371,7 +340,7 @@ function summarizeLastSession(
   const session = lastPerformance?.sessions[0]
   if (!session) return 'First time — no history yet'
 
-  const working = session.sets.filter((s) => s.setType !== 'warmup')
+  const working = session.sets
   if (working.length === 0) return formatRelativeDay(session.performedAt)
 
   const when = formatRelativeDay(session.performedAt)
@@ -407,48 +376,7 @@ function summarizeLastSession(
     pieces.push(`${working.length}×${repRange}${weightPart}`)
   }
   if (session.bestE1rmKg !== null) {
-    pieces.push(`e1RM ${weightFromKg(session.bestE1rmKg, weightUnit)}`)
+    pieces.push(`e1RM ${convertWeight(session.bestE1rmKg, weightUnit)}`)
   }
   return pieces.join(' · ')
-}
-
-const SET_TYPE_OPTIONS: { value: SetType; label: string; hint: string }[] = [
-  { value: 'normal', label: 'Normal', hint: 'Counts toward volume' },
-  { value: 'warmup', label: 'Warmup', hint: 'Excluded from volume and records' },
-  { value: 'dropset', label: 'Dropset', hint: 'Indented, no rest timer' },
-  { value: 'failure', label: 'To failure', hint: 'Taken to technical failure' },
-  { value: 'amrap', label: 'AMRAP', hint: 'As many reps as possible' },
-  { value: 'backoff', label: 'Backoff', hint: 'Lighter set after a top set' },
-]
-
-/** Long-press menu, anchored inline rather than a modal (§5.3). */
-function SetTypeMenu({
-  current,
-  onSelect,
-  onDismiss,
-}: {
-  current: SetType
-  onSelect: (setType: SetType) => void
-  onDismiss: () => void
-}) {
-  return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onDismiss} />
-      <div className="absolute left-3 right-3 top-full z-50 -mt-1 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-xl">
-        {SET_TYPE_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => onSelect(option.value)}
-            className={cn(
-              'flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left active:bg-accent-wash',
-              option.value === current && 'bg-accent-wash',
-            )}
-          >
-            <span className="text-[14px] font-medium">{option.label}</span>
-            <span className="text-[11.5px] text-ink-muted">{option.hint}</span>
-          </button>
-        ))}
-      </div>
-    </>
-  )
 }

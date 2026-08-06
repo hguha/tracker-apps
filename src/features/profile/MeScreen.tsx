@@ -93,7 +93,10 @@ export function MeScreen({
     const raw = draftValues[definitionId]
     if (!raw || raw.trim() === '') return
     const parsed = Number(raw)
-    if (!Number.isFinite(parsed)) return
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      toast.show('Enter a positive number')
+      return
+    }
 
     await repo.addMetricEntry({
       definitionId,

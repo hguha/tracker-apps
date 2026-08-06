@@ -65,11 +65,6 @@ export function installAudioUnlock(): () => void {
   }
 }
 
-/** True when a cue would actually be audible. Surfaced in Settings for support. */
-export function isAudioReady(): boolean {
-  return context !== null && context.state === 'running'
-}
-
 interface Tone {
   /** Hz. */
   frequency: number
@@ -153,9 +148,4 @@ export function vibrate(pattern: number | number[]): void {
 export function signalRestComplete(): void {
   playCue('rest-complete')
   vibrate([120, 60, 120])
-}
-
-export function signalPersonalRecord(): void {
-  playCue('pr')
-  vibrate([40, 40, 40, 40, 120])
 }

@@ -14,7 +14,7 @@ import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
 import { REGION_LABELS, type Region } from '@/domain/types'
 import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
-import { formatDuration, weightFromKg } from '@/lib/units'
+import { convertWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 
 export function FinishSheet({
@@ -158,12 +158,11 @@ export function FinishSheet({
 
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <StatTile label="Duration" value={formatDuration(durationSeconds)} />
-            {/* Working sets, not every row — warmups aren't the point. */}
             <StatTile label="Sets" value={String(workingSets)} />
             {totalVolumeKg > 0 && (
               <StatTile
                 label="Volume"
-                value={`${Math.round(weightFromKg(totalVolumeKg, profile.unitWeight)).toLocaleString()} ${profile.unitWeight}`}
+                value={`${Math.round(convertWeight(totalVolumeKg, profile.unitWeight)).toLocaleString()} ${profile.unitWeight}`}
               />
             )}
             {/* Cardio time is reported on its own, never folded into volume. */}

@@ -19,7 +19,7 @@ import {
   PROJECTION_REPS,
   weightForRepsKg,
 } from '@/lib/metrics'
-import { weightFromKg, weightToKg } from '@/lib/units'
+import { convertWeight, weightFromKg, weightToKg } from '@/lib/units'
 import type { InsightsData } from './useInsightsData'
 
 export function PrEstimator({ data }: { data: InsightsData }) {
@@ -116,7 +116,7 @@ export function PrEstimator({ data }: { data: InsightsData }) {
                 Estimated 1RM
               </p>
               <p className="text-[30px] font-bold leading-tight text-accent">
-                {Math.round(weightFromKg(e1rmKg, unit)).toLocaleString()}
+                {Math.round(convertWeight(e1rmKg, unit)).toLocaleString()}
                 <span className="ml-1 text-[15px] font-semibold">{unit}</span>
               </p>
             </div>

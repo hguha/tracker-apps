@@ -23,6 +23,21 @@ function roundToIncrement(value: number, increment: number): number {
   return Math.round(value / increment) * increment
 }
 
+/**
+ * Parse user-typed text into a finite number, or null.
+ *
+ * `Number("abc")` is `NaN`, and a stored NaN is `!== null` so it reads as a
+ * "logged" value and then poisons every volume/PR/format downstream. Inputs are
+ * `inputMode`-hinted but not validated by the browser (paste, desktop typing),
+ * so every commit boundary must go through this rather than a bare `Number()`.
+ */
+export function parseNumber(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  return Number.isFinite(n) ? n : null
+}
+
 /** Kill float dust like 134.99999999999997 without changing real precision. */
 function clean(value: number, decimals = 4): number {
   return Number(value.toFixed(decimals))
@@ -55,10 +70,23 @@ export function formatWeight(
   opts: { withUnit?: boolean } = {},
 ): string {
   if (kg === null) return '—'
-  const value = weightFromKg(kg, unit)
-  // Drop a trailing .0 — "65" reads better than "65.0" on a set row.
-  const text = value % 1 === 0 ? String(value) : value.toFixed(2).replace(/0$/, '')
+  // weightFromKg already returns a cleaned number (e.g. 65, 12.5), so String()
+  // gives "65" / "12.5" with no trailing zeros — no extra formatting needed.
+  const text = String(weightFromKg(kg, unit))
   return opts.withUnit === false ? text : `${text} ${unit}`
+}
+
+/**
+ * Convert a weight to the user's unit **without** snapping to a plate increment.
+ *
+ * `weightFromKg` rounds to the nearest loadable plate (2.5 lb / 1.25 kg) — right
+ * for a single set's weight, but wrong for a *volume total* or any derived
+ * aggregate, which is a sum and not something you load on a bar. Rounding those
+ * to a plate grid visibly shifts them (e.g. a 125 total landing on 120). Volume
+ * and other aggregates use this instead, then round to whole units for display.
+ */
+export function convertWeight(kg: number, to: WeightUnit): number {
+  return to === 'kg' ? kg : kg * LB_PER_KG
 }
 
 // -------------------------------------------------------------- distance
@@ -126,9 +154,4 @@ export function formatPace(
   const distance = distanceFromM(distanceM, unit)
   if (distance <= 0) return null
   return `${formatDuration(durationSeconds / distance)} / ${unit}`
-}
-
-/** Quick-adjust chip values, in the user's own unit (§5.3). */
-export function quickAdjustSteps(unit: WeightUnit): number[] {
-  return unit === 'kg' ? [1.25, 2.5, 5] : [2.5, 5, 10]
 }

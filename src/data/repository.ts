@@ -25,7 +25,6 @@ import type {
   PersonalRecord,
   Profile,
   RecordType,
-  SetType,
   Template,
   TemplateExercise,
   WeightUnit,
@@ -56,6 +55,42 @@ async function enqueue(
   })
 }
 
+/** The sync columns every user-owned row carries (§4.11). */
+type SyncFields = {
+  updatedAt: number
+  deletedAt: number | null
+  clientRev: number
+}
+
+/** A Dexie table of rows carrying the sync columns, keyed by a string id. */
+type SyncedStore<T extends SyncFields> = {
+  get: (id: string) => Promise<T | undefined>
+  update: (id: string, changes: Partial<T>) => Promise<number>
+}
+
+/**
+ * The one place a row is patched, stamped, and enqueued.
+ *
+ * Every field edit, soft-delete, and restore in this module funnels through here
+ * — previously ~17 functions repeated the same read/touch/update/enqueue block,
+ * which meant the `clientRev + 1` sent to the outbox had to stay in lockstep with
+ * `touch()` by hand in every copy. One helper removes that whole class of drift.
+ * A missing row is a no-op (a deleted row can't be patched), matching the old
+ * behavior.
+ */
+async function patchRow<T extends SyncFields>(
+  store: SyncedStore<T>,
+  table: string,
+  id: string,
+  patch: Partial<T>,
+): Promise<void> {
+  const current = await store.get(id)
+  if (!current) return
+  const next = { ...patch, ...touch(current.clientRev) } as Partial<T>
+  await store.update(id, next)
+  await enqueue(table, 'update', id, next, current.clientRev + 1)
+}
+
 // ------------------------------------------------------------------ profile
 
 export async function getProfile(): Promise<Profile> {
@@ -65,10 +100,7 @@ export async function getProfile(): Promise<Profile> {
 }
 
 export async function updateProfile(patch: Partial<Profile>): Promise<void> {
-  const current = await getProfile()
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.profiles.update(getActiveUserId(), next)
-  await enqueue('profiles', 'update', getActiveUserId(), next, current.clientRev + 1)
+  await patchRow(db.profiles, 'profiles', getActiveUserId(), patch)
 }
 
 // ---------------------------------------------------------------- exercises
@@ -125,18 +157,9 @@ export async function updateExercise(
   id: string,
   patch: Partial<Exercise>,
 ): Promise<void> {
-  const current = await db.exercises.get(id)
-  if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.exercises.update(id, next)
-  await enqueue('exercises', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.exercises, 'exercises', id, patch)
 }
 
-export async function toggleKeyLift(id: string): Promise<void> {
-  const current = await db.exercises.get(id)
-  if (!current) return
-  await updateExercise(id, { isKeyLift: !current.isKeyLift })
-}
 
 /**
  * Everything the library detail screen shows for one exercise (§7.3):
@@ -347,9 +370,9 @@ export async function getWorkoutSummary(
       cardioSeconds += logged.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
     }
 
-    for (const set of logged) {
-      if (set.setType !== 'warmup') {
-        signals.push({ region: region!, pattern: exercise.movementPattern })
+    if (region) {
+      for (let i = 0; i < logged.length; i += 1) {
+        signals.push({ region, pattern: exercise.movementPattern })
       }
     }
   }
@@ -415,8 +438,8 @@ export async function getWorkoutPreview(
     const region = regionOf.get(exercise.primaryMuscleId)
     const logged = (await listSets(we.id)).filter((s) => s.isCompleted)
     totalSets += logged.length
-    for (const set of logged) {
-      if (set.setType !== 'warmup' && region) {
+    if (region) {
+      for (let i = 0; i < logged.length; i += 1) {
         signals.push({ region, pattern: exercise.movementPattern })
       }
     }
@@ -442,11 +465,11 @@ export async function getWorkoutPreview(
  * display surface, so it converts out of canonical storage like every other one.
  */
 function summarizeSets(
-  sets: Pick<WorkoutSet, 'setType' | 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>[],
+  sets: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>[],
   weightUnit: WeightUnit,
   distanceUnit: DistanceUnit,
 ): string {
-  const working = sets.filter((s) => s.setType !== 'warmup')
+  const working = sets
   if (working.length === 0) return 'no sets'
 
   const first = working[0]!
@@ -482,11 +505,7 @@ export async function updateWorkout(
   id: string,
   patch: Partial<Workout>,
 ): Promise<void> {
-  const current = await db.workouts.get(id)
-  if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.workouts.update(id, next)
-  await enqueue('workouts', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.workouts, 'workouts', id, patch)
 }
 
 /**
@@ -514,7 +533,7 @@ export async function finishWorkout(
   return 'saved'
 }
 
-/** Whether a session has any set with real values. */
+/** Whether a session has any completed set (§6.4.1 — empty workouts discard). */
 export async function hasLoggedWork(workoutId: string): Promise<boolean> {
   for (const we of await listWorkoutExercises(workoutId)) {
     const sets = await listSets(we.id)
@@ -556,22 +575,14 @@ export async function discardEmptySets(workoutId: string): Promise<number> {
 
 export async function deleteWorkout(id: string): Promise<void> {
   // Soft delete only — a hard delete can't be represented in pull-based sync.
-  const current = await db.workouts.get(id)
-  if (!current) return
-  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
-  await db.workouts.update(id, next)
-  await enqueue('workouts', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.workouts, 'workouts', id, { deletedAt: Date.now() })
   // A discarded workout's sets no longer count toward records.
   await rebuildLastPerformanceForWorkout(id)
 }
 
 /** Backs the undo on a discarded workout. */
 export async function restoreWorkout(id: string): Promise<void> {
-  const current = await db.workouts.get(id)
-  if (!current) return
-  const next = { deletedAt: null, ...touch(current.clientRev) }
-  await db.workouts.update(id, next)
-  await enqueue('workouts', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.workouts, 'workouts', id, { deletedAt: null })
   await rebuildLastPerformanceForWorkout(id)
 }
 
@@ -608,28 +619,16 @@ export async function updateWorkoutExercise(
   id: string,
   patch: Partial<WorkoutExercise>,
 ): Promise<void> {
-  const current = await db.workoutExercises.get(id)
-  if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.workoutExercises.update(id, next)
-  await enqueue('workoutExercises', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.workoutExercises, 'workoutExercises', id, patch)
 }
 
 export async function removeWorkoutExercise(id: string): Promise<void> {
-  const current = await db.workoutExercises.get(id)
-  if (!current) return
-  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
-  await db.workoutExercises.update(id, next)
-  await enqueue('workoutExercises', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.workoutExercises, 'workoutExercises', id, { deletedAt: Date.now() })
 }
 
 /** Restores a swipe-deleted exercise. Backs the undo toast (§6.4). */
 export async function restoreWorkoutExercise(id: string): Promise<void> {
-  const current = await db.workoutExercises.get(id)
-  if (!current) return
-  const next = { deletedAt: null, ...touch(current.clientRev) }
-  await db.workoutExercises.update(id, next)
-  await enqueue('workoutExercises', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.workoutExercises, 'workoutExercises', id, { deletedAt: null })
 }
 
 /** Applies a new order after a drag (§6.4). */
@@ -721,7 +720,7 @@ export async function getSessionTitleSignals(
     if (!muscle) continue
 
     const working = (await listSets(we.id)).filter(
-      (s) => s.isCompleted && s.setType !== 'warmup',
+      (s) => s.isCompleted,
     )
     for (let i = 0; i < working.length; i += 1) {
       signals.push({ region: muscle.region, pattern: exercise.movementPattern })
@@ -746,14 +745,13 @@ export async function listSetsForWorkout(workoutId: string): Promise<WorkoutSet[
 
 export interface NewSetInput {
   workoutExerciseId: string
-  setType?: SetType
   weightKg?: number | null
   reps?: number | null
   durationSeconds?: number | null
   distanceM?: number | null
   isCompleted?: boolean
   enteredUnit?: WeightUnit | null
-  /** Insert directly after this set instead of at the end (dropsets, duplicate). */
+  /** Insert directly after this set instead of at the end (duplicate a set). */
   afterPosition?: number
 }
 
@@ -777,7 +775,7 @@ export async function addSet(input: NewSetInput): Promise<string> {
     id: newId(),
     workoutExerciseId: input.workoutExerciseId,
     position,
-    setType: input.setType ?? 'normal',
+    setType: 'normal',
     weightKg: input.weightKg ?? null,
     reps: input.reps ?? null,
     repsLeft: null,
@@ -802,27 +800,15 @@ export async function updateSet(
   id: string,
   patch: Partial<WorkoutSet>,
 ): Promise<void> {
-  const current = await db.sets.get(id)
-  if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.sets.update(id, next)
-  await enqueue('sets', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.sets, 'sets', id, patch)
 }
 
 export async function deleteSet(id: string): Promise<void> {
-  const current = await db.sets.get(id)
-  if (!current) return
-  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
-  await db.sets.update(id, next)
-  await enqueue('sets', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.sets, 'sets', id, { deletedAt: Date.now() })
 }
 
 export async function restoreSet(id: string): Promise<void> {
-  const current = await db.sets.get(id)
-  if (!current) return
-  const next = { deletedAt: null, ...touch(current.clientRev) }
-  await db.sets.update(id, next)
-  await enqueue('sets', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.sets, 'sets', id, { deletedAt: null })
 }
 
 /**
@@ -899,13 +885,10 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
 
   if (!prefill) {
     const siblings = await listSets(set.workoutExerciseId)
-    const workingIndex = siblings
-      .filter((s) => s.setType !== 'warmup')
-      .findIndex((s) => s.id === setId)
-
+    const index = siblings.findIndex((s) => s.id === setId)
     prefill = await getPrefillForSet(
       workoutExercise.exerciseId,
-      workingIndex < 0 ? 0 : workingIndex,
+      index < 0 ? 0 : index,
     )
   }
   if (!prefill) return []
@@ -926,10 +909,8 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
  */
 export async function previewRecords(
   exerciseId: string,
-  candidate: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM' | 'setType'>,
+  candidate: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>,
 ): Promise<RecordType[]> {
-  if (candidate.setType === 'warmup') return []
-
   const existing = await listPersonalRecords(exerciseId)
   if (existing.length === 0) return []
   const best = new Map(existing.map((pr) => [pr.recordType, pr.value]))
@@ -949,18 +930,6 @@ export async function previewRecords(
   check('max_distance', candidate.distanceM)
 
   return broken
-}
-
-/** Clears a set's values, returning it to placeholder state. */
-export async function clearSetValues(id: string): Promise<void> {
-  await updateSet(id, {
-    weightKg: null,
-    reps: null,
-    durationSeconds: null,
-    distanceM: null,
-    isCompleted: false,
-    completedAt: null,
-  })
 }
 
 // -------------------------------------------------------- personal records
@@ -1002,7 +971,7 @@ export async function refreshPersonalRecords(
     const workout = await db.workouts.get(we.workoutId)
     if (!workout || workout.deletedAt !== null) continue
     const sets = (await listSets(we.id)).filter(
-      (s) => s.isCompleted && s.setType !== 'warmup',
+      (s) => s.isCompleted,
     )
     if (sets.length === 0) continue
 
@@ -1083,7 +1052,6 @@ export async function rebuildLastPerformance(exerciseId: string): Promise<void> 
       workoutId: workout.id,
       performedAt: workout.startedAt,
       sets: sets.map((s) => ({
-        setType: s.setType,
         weightKg: s.weightKg,
         reps: s.reps,
         durationSeconds: s.durationSeconds,
@@ -1142,7 +1110,7 @@ export async function getPrefillForSet(
 ): Promise<SetPlaceholder | null> {
   const cache = await getLastPerformance(exerciseId)
   const history = (cache?.sessions[0]?.sets ?? []).filter(
-    (s) => s.setType !== 'warmup',
+    () => true,
   )
 
   const fromHistory = history[setIndex]
@@ -1157,7 +1125,7 @@ export async function getPrefillForSet(
 
   // Beyond what history covers: carry forward what was just done in this session.
   const loggedThisSession = (currentSessionSets ?? []).filter(
-    (s) => s.isCompleted && s.setType !== 'warmup',
+    (s) => s.isCompleted,
   )
   const lastThisSession = loggedThisSession[loggedThisSession.length - 1]
   if (lastThisSession) {
@@ -1250,28 +1218,16 @@ export async function updateTemplate(
   id: string,
   patch: Partial<Template>,
 ): Promise<void> {
-  const current = await db.templates.get(id)
-  if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.templates.update(id, next)
-  await enqueue('templates', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.templates, 'templates', id, patch)
 }
 
 /** Soft-deletes a template. Workouts already run from it keep their own copy. */
 export async function deleteTemplate(id: string): Promise<void> {
-  const current = await db.templates.get(id)
-  if (!current) return
-  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
-  await db.templates.update(id, next)
-  await enqueue('templates', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.templates, 'templates', id, { deletedAt: Date.now() })
 }
 
 export async function restoreTemplate(id: string): Promise<void> {
-  const current = await db.templates.get(id)
-  if (!current) return
-  const next = { deletedAt: null, ...touch(current.clientRev) }
-  await db.templates.update(id, next)
-  await enqueue('templates', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.templates, 'templates', id, { deletedAt: null })
 }
 
 export async function addExerciseToTemplate(
@@ -1303,19 +1259,11 @@ export async function updateTemplateExercise(
   id: string,
   patch: Partial<TemplateExercise>,
 ): Promise<void> {
-  const current = await db.templateExercises.get(id)
-  if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) }
-  await db.templateExercises.update(id, next)
-  await enqueue('templateExercises', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.templateExercises, 'templateExercises', id, patch)
 }
 
 export async function removeTemplateExercise(id: string): Promise<void> {
-  const current = await db.templateExercises.get(id)
-  if (!current) return
-  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
-  await db.templateExercises.update(id, next)
-  await enqueue('templateExercises', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.templateExercises, 'templateExercises', id, { deletedAt: Date.now() })
 }
 
 export async function reorderTemplateExercises(orderedIds: string[]): Promise<void> {
@@ -1405,7 +1353,7 @@ export async function saveWorkoutAsTemplate(
   const workoutExercises = await listWorkoutExercises(workoutId)
   for (const we of workoutExercises) {
     const sets = (await listSets(we.id)).filter(
-      (s) => s.isCompleted && s.setType !== 'warmup',
+      (s) => s.isCompleted,
     )
     const reps = sets.map((s) => s.reps).filter((r): r is number => r !== null)
     const weights = sets.map((s) => s.weightKg).filter((w): w is number => w !== null)
@@ -1476,7 +1424,10 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
     await savePlaceholderOverrides(workoutId, placeholders)
   }
 
-  await db.templates.update(templateId, {
+  // Through updateTemplate so this "used it" bump enqueues and bumps clientRev
+  // like every other template edit — a raw db.update here never synced and left
+  // the row's revision stale, so a later pull could clobber it.
+  await updateTemplate(templateId, {
     lastUsedAt: Date.now(),
     timesUsed: template.timesUsed + 1,
   })
@@ -1512,12 +1463,11 @@ export async function repeatWorkout(
       })
     }
     const previousSets = (await listSets(we.id)).filter(
-      (s) => s.isCompleted && s.setType !== 'warmup',
+      (s) => s.isCompleted,
     )
     for (const set of previousSets) {
       const setId = await addSet({
         workoutExerciseId: newWorkoutExerciseId,
-        setType: set.setType,
       })
       placeholders[setId] = {
         weightKg: set.weightKg,
@@ -1559,15 +1509,6 @@ export async function getPlaceholderOverrides(
   return row?.placeholders ?? {}
 }
 
-/** Repeats the most recent finished session. */
-export async function repeatLastWorkout(): Promise<string | null> {
-  const finished = (await listWorkouts(20)).filter((w) => w.endedAt !== null)
-  const last = finished[0]
-  if (!last) return null
-  const result = await repeatWorkout(last.id)
-  return result?.workoutId ?? null
-}
-
 // ------------------------------------------------------------ body metrics
 
 export async function listMetricEntries(
@@ -1591,6 +1532,12 @@ export async function addMetricEntry(input: {
   measuredAt?: number
   notes?: string
 }): Promise<string> {
+  // Guard against a NaN or non-positive measurement poisoning the charts (and,
+  // for bodyweight, the volume math it feeds). Callers validate too, but this is
+  // the durable boundary.
+  if (!Number.isFinite(input.value) || input.value <= 0) {
+    throw new Error('Metric value must be a positive number')
+  }
   const entry: MetricEntry = {
     id: newId(),
     userId: getActiveUserId(),
@@ -1612,11 +1559,7 @@ export async function addMetricEntry(input: {
 }
 
 export async function deleteMetricEntry(id: string): Promise<void> {
-  const current = await db.metricEntries.get(id)
-  if (!current) return
-  const next = { deletedAt: Date.now(), ...touch(current.clientRev) }
-  await db.metricEntries.update(id, next)
-  await enqueue('metricEntries', 'update', id, next, current.clientRev + 1)
+  await patchRow(db.metricEntries, 'metricEntries', id, { deletedAt: Date.now() })
 }
 
 // ------------------------------------------------------------- maintenance

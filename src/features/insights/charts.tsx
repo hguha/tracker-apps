@@ -21,8 +21,8 @@ import { baseOption, categoryAxis, chrome, valueAxis } from './chartTheme'
 import { REP_BUCKETS, type InsightsData } from './useInsightsData'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { regionVar, resolveRegionColor, resolveToken } from '@/lib/palette'
-import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS, type Region } from '@/domain/types'
-import { formatDuration, weightFromKg } from '@/lib/units'
+import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS } from '@/domain/types'
+import { convertWeight, formatDuration, weightFromKg } from '@/lib/units'
 import { weekKey } from '@/lib/dates'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -40,7 +40,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   const labels = weekLabels(data.weeks)
 
   const points = data.weeks.map((week) =>
-    Math.round(weightFromKg(data.volumeByWeek.get(week) ?? 0, unit)),
+    Math.round(convertWeight(data.volumeByWeek.get(week) ?? 0, unit)),
   )
   const movingAverage = points.map((_, index) => {
     const window = points.slice(Math.max(0, index - 3), index + 1)
@@ -133,7 +133,7 @@ export function RegionShareChart({ data }: { data: InsightsData }) {
         rows: entries.map((entry) => [
           REGION_LABELS[entry.region],
           `${((entry.value / total) * 100).toFixed(1)}%`,
-          Math.round(weightFromKg(entry.value, unit)).toLocaleString(),
+          Math.round(convertWeight(entry.value, unit)).toLocaleString(),
         ]),
       }}
     >
@@ -188,7 +188,7 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
   const seriesData = activeRegions.map((region) => ({
     region,
     values: data.weeks.map((week) =>
-      Math.round(weightFromKg(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit)),
+      Math.round(convertWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit)),
     ),
   }))
 
@@ -326,7 +326,7 @@ export function StrengthProgressionChart({
         {
           name: `e1RM (${unit})`,
           type: 'line',
-          data: points.map((p) => Math.round(weightFromKg(p.e1rmKg!, unit))),
+          data: points.map((p) => Math.round(convertWeight(p.e1rmKg!, unit))),
           symbol: 'circle',
           symbolSize: 7,
           lineStyle: { width: 2, color: c.plot },
@@ -358,7 +358,7 @@ export function StrengthProgressionChart({
           .reverse()
           .map((p) => [
             format(p.at, 'MMM d, yyyy'),
-            Math.round(weightFromKg(p.e1rmKg!, unit)).toLocaleString(),
+            Math.round(convertWeight(p.e1rmKg!, unit)).toLocaleString(),
           ]),
       }}
     >
@@ -615,7 +615,7 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
     .filter((s) => s.durationSeconds !== null && s.volumeKg > 0)
     .map((s) => [
       Math.round(s.durationSeconds! / 60),
-      Math.round(weightFromKg(s.volumeKg, unit)),
+      Math.round(convertWeight(s.volumeKg, unit)),
       s.at,
     ])
 
@@ -1009,7 +1009,7 @@ export function PerExerciseVolumeChart({
     : undefined
   const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
   const labels = points.map((p) => format(p.at, 'MMM d'))
-  const values = points.map((p) => Math.round(weightFromKg(p.volumeKg, unit)))
+  const values = points.map((p) => Math.round(convertWeight(p.volumeKg, unit)))
 
   const option = useMemo<EChartsOption>(() => {
     const c = chrome()
@@ -1233,7 +1233,7 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
         rows: rows.map((r) => [
           r.name,
           r.weeksStalled,
-          Math.round(weightFromKg(r.best, unit)).toLocaleString(),
+          Math.round(convertWeight(r.best, unit)).toLocaleString(),
         ]),
       }}
     >
@@ -1242,7 +1242,7 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
           <div key={r.name} className="flex items-center justify-between gap-2 text-[13.5px]">
             <span className="min-w-0 flex-1 truncate">{r.name}</span>
             <span className="tabular shrink-0 text-ink-muted">
-              {Math.round(weightFromKg(r.best, unit))} {unit}
+              {Math.round(convertWeight(r.best, unit))} {unit}
             </span>
             <span
               className="tabular w-16 shrink-0 text-right font-semibold"
@@ -1265,9 +1265,4 @@ function formatHour(hour: number): string {
 
 function titleCasePattern(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-/** Region colors for a chart that needs them outside a series definition. */
-export function regionColor(region: Region): string {
-  return regionVar(region)
 }

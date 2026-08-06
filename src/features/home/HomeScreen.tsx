@@ -18,7 +18,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { isWorkingSet } from '@/lib/metrics'
-import { formatDuration, weightFromKg } from '@/lib/units'
+import { convertWeight, formatDuration } from '@/lib/units'
 import { formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
@@ -181,7 +181,7 @@ export function HomeScreen({
           {/* A hero figure with proportional figures — not a one-bar chart. */}
           <div className="mt-1 flex items-baseline gap-2">
             <p className="text-[38px] font-bold leading-none tracking-tight">
-              {Math.round(weightFromKg(thisWeekVolume, unit)).toLocaleString()}
+              {Math.round(convertWeight(thisWeekVolume, unit)).toLocaleString()}
             </p>
             <span className="text-[15px] font-semibold text-ink-muted">{unit}</span>
           </div>
@@ -287,7 +287,7 @@ export function HomeScreen({
                   {formatTimeOfDay(summary.workout.startedAt)} · {summary.setCount} sets
                   {summary.volumeKg > 0 &&
                     ` · ${Math.round(
-                      weightFromKg(summary.volumeKg, unit),
+                      convertWeight(summary.volumeKg, unit),
                     ).toLocaleString()} ${unit}`}
                 </span>
               </span>

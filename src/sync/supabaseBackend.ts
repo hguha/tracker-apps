@@ -100,19 +100,40 @@ function fromPostgresRow(row: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
- * Maps a PostgREST error to the engine's failure buckets (§5.5):
- *   - 401              → auth (pause for re-auth, never dead-letter)
- *   - 429 / 5xx / none → transient (back off and retry)
- *   - other 4xx        → permanent (dead-letter; the write can't succeed as-is)
+ * Maps a PostgREST error to the engine's failure buckets (§5.5).
+ *
+ * `PostgrestError` carries no HTTP status — only `code` (a PostgREST code like
+ * `PGRST301`, or a Postgres SQLSTATE like `42501`), `message`, `details`,
+ * `hint`. An earlier version read a non-existent `.status`, so every failure
+ * fell through to "transient" and the dead-letter / auth-pause paths never
+ * fired. Classify off `code` instead:
+ *   - JWT / auth codes (PGRST301/302, SQLSTATE 28xxx) → auth: pause for re-auth.
+ *   - A concrete Postgres SQLSTATE (RLS 42501, unique 23505, check 23514, …) →
+ *     permanent: the write can't succeed as-is, so dead-letter it rather than
+ *     retry forever.
+ *   - No code at all (a fetch/network throw surfaces upstream as a thrown
+ *     error, but a codeless PostgrestError is treated as transient) → retry.
  */
-function classify(error: PostgrestError): PushOutcome {
-  const code = Number((error as { status?: number }).status ?? 0)
-  if (code === 401) return { status: 'auth', error: error.message }
-  if (code === 429 || code >= 500 || code === 0) {
-    return { status: 'transient', error: error.message }
+export function classify(error: PostgrestError): PushOutcome {
+  const code = error.code ?? ''
+
+  // Auth: PostgREST JWT errors and Postgres invalid-authorization SQLSTATEs.
+  if (code === 'PGRST301' || code === 'PGRST302' || code.startsWith('28')) {
+    return { status: 'auth', error: error.message }
   }
-  if (code >= 400) return { status: 'permanent', error: error.message }
-  // No HTTP status (e.g. a PostgREST-level constraint message) — treat a
-  // constraint/validation error as permanent, anything else as transient.
-  return error.code ? { status: 'permanent', error: error.message } : { status: 'transient', error: error.message }
+
+  // A real SQLSTATE (5 chars, starts with a digit) is a definite server-side
+  // rejection — RLS, constraint, type, not-null. Retrying can't fix it.
+  if (/^[0-9]/.test(code)) {
+    return { status: 'permanent', error: error.message }
+  }
+
+  // Any other PostgREST code (e.g. PGRST1xx schema/parse issues) is also a
+  // request the client can't fix by retrying.
+  if (code.startsWith('PGRST')) {
+    return { status: 'permanent', error: error.message }
+  }
+
+  // No usable code — treat as transient and let backoff retry.
+  return { status: 'transient', error: error.message }
 }

@@ -32,6 +32,7 @@ import {
   distanceFromM,
   distanceToM,
   formatDuration,
+  parseNumber,
   weightFromKg,
   weightToKg,
 } from '@/lib/units'
@@ -52,7 +53,6 @@ export interface SetRowProps {
   /** Copy the placeholder in as real values — "same as last time". */
   onConfirmPlaceholder: () => void
   onDuplicate: () => void
-  onLongPress: () => void
 }
 
 /** Which inputs a tracking type needs. One switch, no forked screens. */
@@ -98,14 +98,6 @@ export function hasLoggedValues(set: WorkoutSet, exercise: Exercise): boolean {
   return false
 }
 
-const SET_TYPE_BADGE: Partial<Record<WorkoutSet['setType'], string>> = {
-  warmup: 'W',
-  dropset: 'D',
-  failure: 'F',
-  amrap: 'A',
-  backoff: 'B',
-}
-
 export function SetRow(props: SetRowProps) {
   const {
     set,
@@ -120,25 +112,10 @@ export function SetRow(props: SetRowProps) {
     onDelete,
     onConfirmPlaceholder,
     onDuplicate,
-    onLongPress,
   } = props
 
   const layout = inputLayoutFor(exercise)
   const isLogged = hasLoggedValues(set, exercise)
-  const isDropset = set.setType === 'dropset'
-  const isWarmup = set.setType === 'warmup'
-
-  const longPressTimer = useRef<number | null>(null)
-
-  function startLongPress() {
-    longPressTimer.current = window.setTimeout(onLongPress, 500)
-  }
-  function cancelLongPress() {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }
 
   return (
     <SwipeableRow
@@ -155,19 +132,7 @@ export function SetRow(props: SetRowProps) {
         onAction: isLogged ? onDuplicate : onConfirmPlaceholder,
       }}
     >
-      <div
-        className={cn(
-          'relative flex items-center gap-2 py-1.5 pr-2.5',
-          // Dropsets indent under their parent set — the nesting is what
-          // communicates "no rest between these".
-          isDropset ? 'pl-7' : 'pl-3',
-          isWarmup && 'opacity-55',
-        )}
-        onPointerDown={startLongPress}
-        onPointerUp={cancelLongPress}
-        onPointerLeave={cancelLongPress}
-        onPointerCancel={cancelLongPress}
-      >
+      <div className="relative flex items-center gap-2 py-1.5 pl-3 pr-2.5">
         {/* PR glow — an inset ring rather than a border, so nothing reflows. */}
         {isRecord && (
           <span
@@ -177,22 +142,16 @@ export function SetRow(props: SetRowProps) {
           />
         )}
 
-        {/* Set number, or a badge for a non-normal set type. */}
+        {/* Set number. */}
         <div className="w-6 shrink-0 text-center">
-          {SET_TYPE_BADGE[set.setType] ? (
-            <span className="text-[11px] font-bold text-ink-muted">
-              {SET_TYPE_BADGE[set.setType]}
-            </span>
-          ) : (
-            <span
-              className={cn(
-                'tabular text-[13px] font-semibold',
-                isLogged ? 'text-ink' : 'text-ink-muted',
-              )}
-            >
-              {index + 1}
-            </span>
-          )}
+          <span
+            className={cn(
+              'tabular text-[13px] font-semibold',
+              isLogged ? 'text-ink' : 'text-ink-muted',
+            )}
+          >
+            {index + 1}
+          </span>
         </div>
 
         {/* Last time, for this exact set index. */}
@@ -211,9 +170,9 @@ export function SetRow(props: SetRowProps) {
                   ? String(weightFromKg(previous.weightKg, weightUnit))
                   : ''
               }
-              onCommit={(raw) =>
+              onCommit={(value) =>
                 onChange({
-                  weightKg: raw === '' ? null : weightToKg(Number(raw), weightUnit),
+                  weightKg: value === null ? null : weightToKg(value, weightUnit),
                   enteredUnit: weightUnit,
                 })
               }
@@ -224,7 +183,7 @@ export function SetRow(props: SetRowProps) {
             <NumericField
               value={set.reps === null ? '' : String(set.reps)}
               placeholder={previous?.reps != null ? String(previous.reps) : ''}
-              onCommit={(raw) => onChange({ reps: raw === '' ? null : Number(raw) })}
+              onCommit={(value) => onChange({ reps: value })}
               ariaLabel="reps"
               integer
             />
@@ -248,9 +207,9 @@ export function SetRow(props: SetRowProps) {
                   ? String(distanceFromM(previous.distanceM, distanceUnit))
                   : ''
               }
-              onCommit={(raw) =>
+              onCommit={(value) =>
                 onChange({
-                  distanceM: raw === '' ? null : distanceToM(Number(raw), distanceUnit),
+                  distanceM: value === null ? null : distanceToM(value, distanceUnit),
                 })
               }
               ariaLabel={`distance in ${distanceUnit}`}
@@ -260,7 +219,7 @@ export function SetRow(props: SetRowProps) {
             <NumericField
               value={set.rpe === null ? '' : String(set.rpe)}
               placeholder=""
-              onCommit={(raw) => onChange({ rpe: raw === '' ? null : Number(raw) })}
+              onCommit={(value) => onChange({ rpe: value })}
               ariaLabel="RPE"
               className="w-12 flex-none"
             />
@@ -331,7 +290,8 @@ function NumericField({
 }: {
   value: string
   placeholder: string
-  onCommit: (raw: string) => void
+  /** Receives the parsed value, or null for empty/invalid — never a raw NaN. */
+  onCommit: (value: number | null) => void
   ariaLabel: string
   integer?: boolean
   className?: string
@@ -360,7 +320,13 @@ function NumericField({
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         isFocused.current = false
-        if (draft !== value) onCommit(draft.trim())
+        // Parse here so a non-numeric entry becomes null, never a stored NaN.
+        // Guard on the parsed result, not the string, so "12" vs "12.0" don't
+        // thrash but a genuine change still commits.
+        if (draft !== value) {
+          const parsed = parseNumber(draft)
+          onCommit(integer && parsed !== null ? Math.round(parsed) : parsed)
+        }
       }}
       className={cn(
         'h-11 min-w-0 flex-1 rounded-xl border text-center tabular text-[16px] font-semibold',
@@ -408,7 +374,9 @@ function DurationField({
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         isFocused.current = false
-        onCommit(parseDuration(draft))
+        // Only commit a real edit, matching NumericField — tabbing through an
+        // unchanged duration shouldn't rewrite the set and retrigger PR checks.
+        if (draft !== display) onCommit(parseDuration(draft))
       }}
       className={cn(
         'h-11 min-w-0 flex-1 rounded-xl border text-center tabular text-[16px] font-semibold',
