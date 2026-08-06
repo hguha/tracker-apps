@@ -5,27 +5,37 @@
  * than only from the finish sheet.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
+  CalendarDays,
   ChevronRight,
   Copy,
   FileText,
+  List,
   MoreHorizontal,
   Search,
   Trash2,
   X,
 } from 'lucide-react'
+import { format } from 'date-fns'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
+import { FilterChipButton, FilterSheet } from '@/components/FilterSheet'
 import { useToast } from '@/components/Toast'
-import { formatDayHeading, formatTimeOfDay } from '@/lib/dates'
+import { dayStart, formatDayHeading, formatTimeOfDay } from '@/lib/dates'
 import { convertWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
+import { cn } from '@/lib/cn'
+import { HistoryCalendar } from './HistoryCalendar'
 import { WorkoutPreviewSheet } from '@/features/workout/WorkoutPreviewSheet'
-import { REGION_LABELS } from '@/domain/types'
+import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
+
+/** How many rows to show at once; "Show more" reveals another page. Keeps the
+ *  DOM small on a huge history without a full virtualization dependency. */
+const PAGE_SIZE = 30
 
 export function HistoryScreen({
   onOpenWorkout,
@@ -36,6 +46,12 @@ export function HistoryScreen({
 }) {
   const toast = useToast()
   const [query, setQuery] = useState('')
+  const [view, setView] = useState<'list' | 'calendar'>('list')
+  const [regionFilter, setRegionFilter] = useState<string[]>([])
+  const [exerciseFilter, setExerciseFilter] = useState<string[]>([])
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [openSheet, setOpenSheet] = useState<'region' | 'exercise' | null>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [previewFor, setPreviewFor] = useState<string | null>(null)
   const [templateFor, setTemplateFor] = useState<{
@@ -54,18 +70,60 @@ export function HistoryScreen({
     [],
   )
 
-  // Filter by title or any exercise name. Computed before the early returns so
-  // the hook order stays stable.
+  // The exercise picker's options: every distinct lift in the loaded history,
+  // alphabetized. Built from summaries so it needs no extra query.
+  const exerciseOptions = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const s of data?.summaries ?? []) {
+      s.exerciseIds.forEach((id, i) => {
+        if (!names.has(id)) names.set(id, s.exerciseNames[i] ?? 'Exercise')
+      })
+    }
+    return [...names.entries()]
+      .map(([id, name]) => ({ value: id, label: name }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [data])
+
+  // Apply text search, body-part, exercise, and day filters together. Computed
+  // before the early returns so the hook order stays stable.
   const filtered = useMemo(() => {
     const summaries = data?.summaries ?? []
     const q = query.trim().toLowerCase()
-    if (!q) return summaries
-    return summaries.filter(
-      (s) =>
-        s.title.toLowerCase().includes(q) ||
-        s.exerciseNames.some((name) => name.toLowerCase().includes(q)),
-    )
-  }, [data, query])
+    return summaries.filter((s) => {
+      if (
+        q &&
+        !s.title.toLowerCase().includes(q) &&
+        !s.exerciseNames.some((name) => name.toLowerCase().includes(q))
+      ) {
+        return false
+      }
+      if (regionFilter.length > 0 && !s.regions.some((r) => regionFilter.includes(r))) {
+        return false
+      }
+      if (
+        exerciseFilter.length > 0 &&
+        !s.exerciseIds.some((id) => exerciseFilter.includes(id))
+      ) {
+        return false
+      }
+      if (selectedDay !== null && dayStart(s.workout.startedAt) !== selectedDay) {
+        return false
+      }
+      return true
+    })
+  }, [data, query, regionFilter, exerciseFilter, selectedDay])
+
+  const hasFilters =
+    query.trim() !== '' ||
+    regionFilter.length > 0 ||
+    exerciseFilter.length > 0 ||
+    selectedDay !== null
+
+  // A new filter should start from the top, not leave the user mid-way down a
+  // now-different list.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [query, regionFilter, exerciseFilter, selectedDay])
 
   if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
 
@@ -86,11 +144,38 @@ export function HistoryScreen({
     toast.show('Workout deleted', () => void repo.restoreWorkout(workoutId))
   }
 
+  const visible = filtered.slice(0, visibleCount)
+
   return (
     <div className="px-3 py-3">
+      {/* List / Calendar toggle. */}
+      <div className="mb-2.5 flex gap-1 rounded-xl bg-sunken p-1">
+        <ViewToggle
+          active={view === 'list'}
+          icon={<List size={15} />}
+          label="List"
+          onClick={() => setView('list')}
+        />
+        <ViewToggle
+          active={view === 'calendar'}
+          icon={<CalendarDays size={15} />}
+          label="Calendar"
+          onClick={() => setView('calendar')}
+        />
+      </div>
+
+      {view === 'calendar' && (
+        <HistoryCalendar
+          summaries={data.summaries}
+          weekStartsOn={data.profile.weekStartsOn}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
+        />
+      )}
+
       {/* Search by workout name or any exercise in it — the QOL win once there
           are hundreds of sessions. */}
-      <div className="mb-2.5 flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
+      <div className="mb-2 flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
         <Search size={17} className="shrink-0 text-ink-muted" />
         <input
           value={query}
@@ -105,14 +190,55 @@ export function HistoryScreen({
         )}
       </div>
 
+      {/* Body-part and exercise filters, mirroring the Insights filter bar. */}
+      <div className="mb-2.5 flex gap-1.5 overflow-x-auto">
+        <FilterChipButton
+          label={summarizeFilter(
+            'Body part',
+            regionFilter,
+            (v) => REGION_LABELS[v as Region],
+          )}
+          isActive={regionFilter.length > 0}
+          onClick={() => setOpenSheet('region')}
+        />
+        <FilterChipButton
+          label={summarizeFilter(
+            'Exercise',
+            exerciseFilter,
+            (id) => exerciseOptions.find((e) => e.value === id)?.label ?? 'Exercise',
+          )}
+          isActive={exerciseFilter.length > 0}
+          onClick={() => setOpenSheet('exercise')}
+        />
+        {selectedDay !== null && (
+          <button
+            onClick={() => setSelectedDay(null)}
+            className="flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent-wash px-3 py-1.5 text-[13px] font-medium text-accent"
+          >
+            {format(selectedDay, 'MMM d')} <X size={13} />
+          </button>
+        )}
+        {(regionFilter.length > 0 || exerciseFilter.length > 0) && (
+          <button
+            onClick={() => {
+              setRegionFilter([])
+              setExerciseFilter([])
+            }}
+            className="shrink-0 px-2 text-[13px] font-semibold text-accent"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {filtered.length === 0 && (
         <p className="mt-10 text-center text-[14px] text-ink-muted">
-          No workouts match “{query.trim()}”.
+          {hasFilters ? 'No workouts match these filters.' : 'No workouts to show.'}
         </p>
       )}
 
       <div className="space-y-2.5">
-        {filtered.map((summary) => (
+        {visible.map((summary) => (
           <Card key={summary.workout.id} className="relative overflow-visible">
             <div className="flex items-start">
               <button
@@ -199,6 +325,40 @@ export function HistoryScreen({
         ))}
       </div>
 
+      {/* Reveal another page rather than rendering thousands of rows at once. */}
+      {filtered.length > visible.length && (
+        <button
+          onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+          className="mt-3 w-full rounded-xl border border-line py-2.5 text-[14px] font-semibold text-ink-secondary active:bg-sunken"
+        >
+          Show more ({filtered.length - visible.length} older)
+        </button>
+      )}
+
+      {openSheet === 'region' && (
+        <FilterSheet
+          title="Body part"
+          options={REGIONS.map((region) => ({
+            value: region,
+            label: REGION_LABELS[region],
+            swatch: regionVar(region),
+          }))}
+          selected={regionFilter}
+          onChange={setRegionFilter}
+          onDismiss={() => setOpenSheet(null)}
+        />
+      )}
+
+      {openSheet === 'exercise' && (
+        <FilterSheet
+          title="Exercise"
+          options={exerciseOptions}
+          selected={exerciseFilter}
+          onChange={setExerciseFilter}
+          onDismiss={() => setOpenSheet(null)}
+        />
+      )}
+
       {previewFor && (
         <WorkoutPreviewSheet
           workoutId={previewFor}
@@ -223,6 +383,42 @@ export function HistoryScreen({
       )}
     </div>
   )
+}
+
+function ViewToggle({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[13.5px] font-semibold',
+        active ? 'bg-surface text-ink shadow-sm' : 'text-ink-secondary',
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+/** "Body part", "Chest", or "3 body parts" — the chip's label by selection count. */
+function summarizeFilter(
+  noun: string,
+  selected: string[],
+  labelOf: (value: string) => string,
+): string {
+  if (selected.length === 0) return noun
+  if (selected.length === 1) return labelOf(selected[0]!)
+  return `${selected.length} ${noun.toLowerCase()}s`
 }
 
 function RowMenu({

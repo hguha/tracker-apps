@@ -160,7 +160,6 @@ export async function updateExercise(
   await patchRow(db.exercises, 'exercises', id, patch)
 }
 
-
 /**
  * Everything the library detail screen shows for one exercise (§7.3):
  * taxonomy, records, and every session it appears in.
@@ -226,9 +225,7 @@ export async function getExerciseDetail(
     primaryMuscle: primary
       ? { id: primary.id, name: primary.name, region: primary.region as string }
       : undefined,
-    secondaryMuscles: secondaries.filter(
-      (s): s is NonNullable<typeof s> => s !== null,
-    ),
+    secondaryMuscles: secondaries.filter((s): s is NonNullable<typeof s> => s !== null),
     records: await listPersonalRecords(exerciseId),
     sessions,
     lastTrainedAt: sessions[0]?.performedAt ?? null,
@@ -302,11 +299,13 @@ export async function getActiveWorkout(): Promise<Workout | undefined> {
   return recent.find((w) => w.endedAt === null && w.deletedAt === null)
 }
 
-export async function startWorkout(opts: {
-  title?: string
-  startedAt?: number
-  templateId?: string | null
-} = {}): Promise<string> {
+export async function startWorkout(
+  opts: {
+    title?: string
+    startedAt?: number
+    templateId?: string | null
+  } = {},
+): Promise<string> {
   const profile = await getProfile()
   const workout: Workout = {
     id: newId(),
@@ -347,6 +346,8 @@ export interface WorkoutSummary {
   /** Derived per §6.7 unless the user set their own title. */
   title: string
   exerciseNames: string[]
+  /** Exercise ids in this session, for filtering History by a specific lift. */
+  exerciseIds: string[]
   regions: Region[]
   setCount: number
   volumeKg: number
@@ -360,7 +361,9 @@ export async function getWorkoutSummary(
 ): Promise<WorkoutSummary> {
   const regions = regionOf ?? (await buildRegionMap())
   const workoutExercises = await listWorkoutExercises(workout.id)
-  const exercises = await db.exercises.bulkGet(workoutExercises.map((we) => we.exerciseId))
+  const exercises = await db.exercises.bulkGet(
+    workoutExercises.map((we) => we.exerciseId),
+  )
   const exercisesById = new Map<string, Exercise>()
   exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
   const setsByWe = new Map<string, WorkoutSet[]>()
@@ -384,6 +387,7 @@ function buildWorkoutSummary(
   regions: Map<string, Region>,
 ): WorkoutSummary {
   const exerciseNames: string[] = []
+  const exerciseIds: string[] = []
   const regionSet = new Set<Region>()
   let setCount = 0
   let volumeKg = 0
@@ -394,6 +398,7 @@ function buildWorkoutSummary(
     const exercise = exercisesById.get(we.exerciseId)
     if (!exercise) continue
     exerciseNames.push(exercise.name)
+    exerciseIds.push(exercise.id)
 
     const region = regions.get(exercise.primaryMuscleId)
     if (region) regionSet.add(region)
@@ -421,6 +426,7 @@ function buildWorkoutSummary(
       signals.filter((s) => s.region !== undefined),
     ),
     exerciseNames,
+    exerciseIds,
     regions: [...regionSet],
     setCount,
     volumeKg,
@@ -474,7 +480,13 @@ export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[
   for (const list of setsByWe.values()) list.sort((a, b) => a.position - b.position)
 
   return workouts.map((w) =>
-    buildWorkoutSummary(w, weByWorkout.get(w.id) ?? [], exercisesById, setsByWe, regionOf),
+    buildWorkoutSummary(
+      w,
+      weByWorkout.get(w.id) ?? [],
+      exercisesById,
+      setsByWe,
+      regionOf,
+    ),
   )
 }
 
@@ -579,10 +591,7 @@ async function buildRegionMap(): Promise<Map<string, Region>> {
   return new Map(muscles.map((m) => [m.id, m.region]))
 }
 
-export async function updateWorkout(
-  id: string,
-  patch: Partial<Workout>,
-): Promise<void> {
+export async function updateWorkout(id: string, patch: Partial<Workout>): Promise<void> {
   await patchRow(db.workouts, 'workouts', id, patch)
 }
 
@@ -593,9 +602,7 @@ export async function updateWorkout(
  * of anything — saving one breaks streaks, dilutes averages, and leaves a row the
  * user can't identify.
  */
-export async function finishWorkout(
-  id: string,
-): Promise<'saved' | 'discarded-empty'> {
+export async function finishWorkout(id: string): Promise<'saved' | 'discarded-empty'> {
   await discardEmptySets(id)
 
   if (!(await hasLoggedWork(id))) {
@@ -747,8 +754,7 @@ export async function supersetExercises(
   const siblings = await listWorkoutExercises(dragged.workoutId)
   const existingGroup = target.supersetGroup ?? dragged.supersetGroup
   const group =
-    existingGroup ??
-    Math.max(0, ...siblings.map((s) => s.supersetGroup ?? 0)) + 1
+    existingGroup ?? Math.max(0, ...siblings.map((s) => s.supersetGroup ?? 0)) + 1
 
   await updateWorkoutExercise(draggedId, { supersetGroup: group })
   await updateWorkoutExercise(targetId, { supersetGroup: group })
@@ -785,9 +791,7 @@ export async function removeFromSuperset(workoutExerciseId: string): Promise<voi
  * The signals `lib/sessionTitle.ts` needs to derive a title (§6.7) — one entry
  * per working set, carrying the region and pattern that produced it.
  */
-export async function getSessionTitleSignals(
-  workoutId: string,
-): Promise<SetSignal[]> {
+export async function getSessionTitleSignals(workoutId: string): Promise<SetSignal[]> {
   const workoutExercises = await listWorkoutExercises(workoutId)
   const signals: SetSignal[] = []
 
@@ -797,9 +801,7 @@ export async function getSessionTitleSignals(
     const muscle = await db.muscles.get(exercise.primaryMuscleId)
     if (!muscle) continue
 
-    const working = (await listSets(we.id)).filter(
-      (s) => s.isCompleted,
-    )
+    const working = (await listSets(we.id)).filter((s) => s.isCompleted)
     for (let i = 0; i < working.length; i += 1) {
       signals.push({ region: muscle.region, pattern: exercise.movementPattern })
     }
@@ -811,7 +813,10 @@ export async function getSessionTitleSignals(
 // --------------------------------------------------------------------- sets
 
 export async function listSets(workoutExerciseId: string): Promise<WorkoutSet[]> {
-  const rows = await db.sets.where('workoutExerciseId').equals(workoutExerciseId).toArray()
+  const rows = await db.sets
+    .where('workoutExerciseId')
+    .equals(workoutExerciseId)
+    .toArray()
   return rows.filter((r) => r.deletedAt === null).sort((a, b) => a.position - b.position)
 }
 
@@ -874,10 +879,7 @@ export async function addSet(input: NewSetInput): Promise<string> {
   return set.id
 }
 
-export async function updateSet(
-  id: string,
-  patch: Partial<WorkoutSet>,
-): Promise<void> {
+export async function updateSet(id: string, patch: Partial<WorkoutSet>): Promise<void> {
   await patchRow(db.sets, 'sets', id, patch)
 }
 
@@ -964,10 +966,7 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
   if (!prefill) {
     const siblings = await listSets(set.workoutExerciseId)
     const index = siblings.findIndex((s) => s.id === setId)
-    prefill = await getPrefillForSet(
-      workoutExercise.exerciseId,
-      index < 0 ? 0 : index,
-    )
+    prefill = await getPrefillForSet(workoutExercise.exerciseId, index < 0 ? 0 : index)
   }
   if (!prefill) return []
 
@@ -1021,9 +1020,7 @@ export async function previewRecords(
  * able to remove a PR, which an incremental "is this better?" check can't do
  * (§6.6).
  */
-export async function refreshPersonalRecords(
-  exerciseId: string,
-): Promise<RecordType[]> {
+export async function refreshPersonalRecords(exerciseId: string): Promise<RecordType[]> {
   const exercise = await db.exercises.get(exerciseId)
   if (!exercise) return []
 
@@ -1048,9 +1045,7 @@ export async function refreshPersonalRecords(
   for (const we of workoutExercises) {
     const workout = await db.workouts.get(we.workoutId)
     if (!workout || workout.deletedAt !== null) continue
-    const sets = (await listSets(we.id)).filter(
-      (s) => s.isCompleted,
-    )
+    const sets = (await listSets(we.id)).filter((s) => s.isCompleted)
     if (sets.length === 0) continue
 
     const at = workout.startedAt
@@ -1092,9 +1087,7 @@ export async function refreshPersonalRecords(
     .map((pr) => pr.recordType)
 }
 
-export async function listPersonalRecords(
-  exerciseId: string,
-): Promise<PersonalRecord[]> {
+export async function listPersonalRecords(exerciseId: string): Promise<PersonalRecord[]> {
   return db.personalRecords.where('exerciseId').equals(exerciseId).toArray()
 }
 
@@ -1150,9 +1143,7 @@ export async function rebuildLastPerformance(exerciseId: string): Promise<void> 
 }
 
 /** Called on finish and after editing a past workout, which invalidates the cache. */
-export async function rebuildLastPerformanceForWorkout(
-  workoutId: string,
-): Promise<void> {
+export async function rebuildLastPerformanceForWorkout(workoutId: string): Promise<void> {
   const workoutExercises = await listWorkoutExercises(workoutId)
   for (const we of workoutExercises) {
     await rebuildLastPerformance(we.exerciseId)
@@ -1187,9 +1178,7 @@ export async function getPrefillForSet(
   currentSessionSets?: WorkoutSet[],
 ): Promise<SetPlaceholder | null> {
   const cache = await getLastPerformance(exerciseId)
-  const history = (cache?.sessions[0]?.sets ?? []).filter(
-    () => true,
-  )
+  const history = (cache?.sessions[0]?.sets ?? []).filter(() => true)
 
   const fromHistory = history[setIndex]
   if (fromHistory) {
@@ -1202,9 +1191,7 @@ export async function getPrefillForSet(
   }
 
   // Beyond what history covers: carry forward what was just done in this session.
-  const loggedThisSession = (currentSessionSets ?? []).filter(
-    (s) => s.isCompleted,
-  )
+  const loggedThisSession = (currentSessionSets ?? []).filter((s) => s.isCompleted)
   const lastThisSession = loggedThisSession[loggedThisSession.length - 1]
   if (lastThisSession) {
     return {
@@ -1394,10 +1381,12 @@ export function describeTemplateTarget(
   if (te.targetRepsLow !== null || te.targetRepsHigh !== null) {
     const low = te.targetRepsLow
     const high = te.targetRepsHigh
-    if (low !== null && high !== null && low !== high) parts[0] = `${sets} × ${low}-${high}`
+    if (low !== null && high !== null && low !== high)
+      parts[0] = `${sets} × ${low}-${high}`
     else parts[0] = `${sets} × ${low ?? high}`
   }
-  if (te.targetWeightKg !== null) parts.push(`@ ${formatWeight(te.targetWeightKg, weightUnit)}`)
+  if (te.targetWeightKg !== null)
+    parts.push(`@ ${formatWeight(te.targetWeightKg, weightUnit)}`)
   if (te.targetRpe !== null) parts.push(`RPE ${te.targetRpe}`)
   return parts.join(' ')
 }
@@ -1430,9 +1419,7 @@ export async function saveWorkoutAsTemplate(
 
   const workoutExercises = await listWorkoutExercises(workoutId)
   for (const we of workoutExercises) {
-    const sets = (await listSets(we.id)).filter(
-      (s) => s.isCompleted,
-    )
+    const sets = (await listSets(we.id)).filter((s) => s.isCompleted)
     const reps = sets.map((s) => s.reps).filter((r): r is number => r !== null)
     const weights = sets.map((s) => s.weightKg).filter((w): w is number => w !== null)
 
@@ -1540,9 +1527,7 @@ export async function repeatWorkout(
         supersetGroup: we.supersetGroup,
       })
     }
-    const previousSets = (await listSets(we.id)).filter(
-      (s) => s.isCompleted,
-    )
+    const previousSets = (await listSets(we.id)).filter((s) => s.isCompleted)
     for (const set of previousSets) {
       const setId = await addSet({
         workoutExerciseId: newWorkoutExerciseId,

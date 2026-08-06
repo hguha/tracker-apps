@@ -201,10 +201,7 @@ describe('placeholder logging semantics (§6.2)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(
-      second,
-      'barbell_bench_press',
-    )
+    const secondExercise = await repo.addExerciseToWorkout(second, 'barbell_bench_press')
     const target = await repo.addSet({ workoutExerciseId: secondExercise })
 
     await repo.confirmPlaceholder(target)
@@ -347,7 +344,6 @@ describe('session title signals (§6.7)', () => {
       pattern: 'horizontal_push',
     })
   })
-
 })
 
 describe('listWorkoutSummaries — batched load', () => {
@@ -381,6 +377,21 @@ describe('listWorkoutSummaries — batched load', () => {
 
   it('returns an empty list for an empty history without querying', async () => {
     expect(await repo.listWorkoutSummaries(100)).toEqual([])
+  })
+
+  it('carries exercise ids so History can filter by a specific lift', async () => {
+    const w = await repo.startWorkout({ title: 'Pull' })
+    const row = await repo.addExerciseToWorkout(w, 'lat_pulldown')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: row, weightKg: 60, reps: 10 }),
+      {},
+    )
+    await repo.finishWorkout(w)
+
+    const [summary] = await repo.listWorkoutSummaries(100)
+    expect(summary!.exerciseIds).toEqual(['lat_pulldown'])
+    // Names and ids stay aligned by index, which the exercise picker relies on.
+    expect(summary!.exerciseNames).toHaveLength(summary!.exerciseIds.length)
   })
 })
 
@@ -435,8 +446,16 @@ describe('last performance and pre-fill', () => {
     // Session one: 3 sets of increasing weight.
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
-    for (const [weightKg, reps] of [[100, 8], [105, 6], [110, 5]] as const) {
-      const setId = await repo.addSet({ workoutExerciseId: firstExercise, weightKg, reps })
+    for (const [weightKg, reps] of [
+      [100, 8],
+      [105, 6],
+      [110, 5],
+    ] as const) {
+      const setId = await repo.addSet({
+        workoutExerciseId: firstExercise,
+        weightKg,
+        reps,
+      })
       await repo.logSetValues(setId, {})
     }
     await repo.finishWorkout(first)
@@ -595,7 +614,11 @@ describe('templates', () => {
     const source = await repo.startWorkout({ title: 'Pull A' })
     const sourceExercise = await repo.addExerciseToWorkout(source, 'lat_pulldown')
     for (const reps of [10, 10, 10]) {
-      const setId = await repo.addSet({ workoutExerciseId: sourceExercise, weightKg: 60, reps })
+      const setId = await repo.addSet({
+        workoutExerciseId: sourceExercise,
+        weightKg: 60,
+        reps,
+      })
       await repo.logSetValues(setId, {})
     }
     await repo.finishWorkout(source)
@@ -682,8 +705,15 @@ describe('placeholder resolution (§6.2)', () => {
   it('suggests the matching set index from history', async () => {
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
-    for (const [weightKg, reps] of [[100, 8], [100, 7]] as const) {
-      const setId = await repo.addSet({ workoutExerciseId: firstExercise, weightKg, reps })
+    for (const [weightKg, reps] of [
+      [100, 8],
+      [100, 7],
+    ] as const) {
+      const setId = await repo.addSet({
+        workoutExerciseId: firstExercise,
+        weightKg,
+        reps,
+      })
       await repo.logSetValues(setId, {})
     }
     await repo.finishWorkout(first)
@@ -698,16 +728,30 @@ describe('placeholder resolution (§6.2)', () => {
     // rather than going blank at the moment the user is most tired.
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
-    for (const [weightKg, reps] of [[100, 8], [100, 7]] as const) {
-      const setId = await repo.addSet({ workoutExerciseId: firstExercise, weightKg, reps })
+    for (const [weightKg, reps] of [
+      [100, 8],
+      [100, 7],
+    ] as const) {
+      const setId = await repo.addSet({
+        workoutExerciseId: firstExercise,
+        weightKg,
+        reps,
+      })
       await repo.logSetValues(setId, {})
     }
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
     const secondExercise = await repo.addExerciseToWorkout(second, 'barbell_bench_press')
-    for (const [weightKg, reps] of [[105, 8], [105, 6]] as const) {
-      const setId = await repo.addSet({ workoutExerciseId: secondExercise, weightKg, reps })
+    for (const [weightKg, reps] of [
+      [105, 8],
+      [105, 6],
+    ] as const) {
+      const setId = await repo.addSet({
+        workoutExerciseId: secondExercise,
+        weightKg,
+        reps,
+      })
       await repo.logSetValues(setId, {})
     }
     const current = await repo.listSets(secondExercise)
@@ -726,7 +770,11 @@ describe('placeholder resolution (§6.2)', () => {
   it('addSetWithPlaceholder adds an unlogged row', async () => {
     const first = await repo.startWorkout()
     const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift')
-    const seed = await repo.addSet({ workoutExerciseId: firstExercise, weightKg: 150, reps: 5 })
+    const seed = await repo.addSet({
+      workoutExerciseId: firstExercise,
+      weightKg: 150,
+      reps: 5,
+    })
     await repo.logSetValues(seed, {})
     await repo.finishWorkout(first)
 
@@ -749,7 +797,11 @@ describe('body metrics', () => {
 
   it('returns entries newest first', async () => {
     const now = Date.now()
-    await repo.addMetricEntry({ definitionId: 'waist', value: 84, measuredAt: now - 86400000 })
+    await repo.addMetricEntry({
+      definitionId: 'waist',
+      value: 84,
+      measuredAt: now - 86400000,
+    })
     await repo.addMetricEntry({ definitionId: 'waist', value: 83, measuredAt: now })
 
     const entries = await repo.listMetricEntries('waist')
@@ -958,7 +1010,9 @@ describe('active user id + local data reset', () => {
       trackingType: 'weight_reps',
     })
 
-    const systemBefore = (await db.exercises.toArray()).filter((e) => e.userId === null).length
+    const systemBefore = (await db.exercises.toArray()).filter(
+      (e) => e.userId === null,
+    ).length
     expect(systemBefore).toBeGreaterThan(100)
 
     await repo.clearLocalData()
