@@ -37,19 +37,22 @@ function weekLabels(weeks: string[]): string[] {
 export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
-  const labels = weekLabels(data.weeks)
 
-  const points = data.weeks.map((week) =>
-    Math.round(convertWeight(data.volumeByWeek.get(week) ?? 0, unit)),
-  )
-  const movingAverage = points.map((_, index) => {
-    const window = points.slice(Math.max(0, index - 3), index + 1)
-    return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
-  })
-
-  const option = useMemo<EChartsOption>(() => {
+  // One memo over the stable inputs: the derivations and the option are built
+  // together, so `option`'s identity is stable across re-renders that don't
+  // change the data (e.g. switching Insights sub-tabs) and setOption doesn't
+  // needlessly re-run. `appearance` is a dep because chrome() reads the theme.
+  const { option, labels, points, movingAverage } = useMemo(() => {
+    const labels = weekLabels(data.weeks)
+    const points = data.weeks.map((week) =>
+      Math.round(convertWeight(data.volumeByWeek.get(week) ?? 0, unit)),
+    )
+    const movingAverage = points.map((_, index) => {
+      const window = points.slice(Math.max(0, index - 3), index + 1)
+      return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
+    })
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       legend: {
         show: true,
@@ -82,7 +85,8 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [labels, points, movingAverage, unit, appearance])
+    return { option, labels, points, movingAverage }
+  }, [data, unit, appearance])
 
   return (
     <ChartCard
@@ -179,22 +183,22 @@ export function RegionShareChart({ data }: { data: InsightsData }) {
 export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
-  const labels = weekLabels(data.weeks)
 
-  const activeRegions = REGIONS.filter(
-    (region) => (data.volumeByRegion.get(region) ?? 0) > 0,
-  )
-
-  const seriesData = activeRegions.map((region) => ({
-    region,
-    values: data.weeks.map((week) =>
-      Math.round(convertWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit)),
-    ),
-  }))
-
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, seriesData, activeRegions } = useMemo(() => {
+    const labels = weekLabels(data.weeks)
+    const activeRegions = REGIONS.filter(
+      (region) => (data.volumeByRegion.get(region) ?? 0) > 0,
+    )
+    const seriesData = activeRegions.map((region) => ({
+      region,
+      values: data.weeks.map((week) =>
+        Math.round(
+          convertWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit),
+        ),
+      ),
+    }))
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       legend: {
         show: true,
@@ -217,7 +221,8 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
         barMaxWidth: 28,
       })),
     }
-  }, [labels, seriesData, appearance])
+    return { option, labels, seriesData, activeRegions }
+  }, [data, unit, appearance])
 
   return (
     <ChartCard
@@ -320,7 +325,10 @@ export function StrengthProgressionChart({
     const points = (active?.points ?? []).filter((p) => p.e1rmKg !== null)
     return {
       ...baseOption(c),
-      xAxis: categoryAxis(c, points.map((p) => format(p.at, 'MMM d'))),
+      xAxis: categoryAxis(
+        c,
+        points.map((p) => format(p.at, 'MMM d')),
+      ),
       yAxis: valueAxis(c),
       series: [
         {
@@ -334,6 +342,7 @@ export function StrengthProgressionChart({
         },
       ],
     }
+    // `active` is derived from data+activeExerciseId; both are stable roots.
   }, [active, unit, appearance])
 
   if (!active) {
@@ -382,8 +391,8 @@ function PickExerciseCard({ title, subtitle }: { title: string; subtitle: string
         <TrendingUp size={22} className="shrink-0 text-ink-muted" />
         <p className="text-[13.5px] text-ink-secondary">
           Pick one exercise in the{' '}
-          <span className="font-semibold text-ink">Exercise</span> filter above to
-          see this chart.
+          <span className="font-semibold text-ink">Exercise</span> filter above to see
+          this chart.
         </p>
       </div>
     </div>
@@ -406,13 +415,16 @@ export function TopSetChart({
   const active = activeExerciseId
     ? data.exerciseSeries.find((s) => s.exerciseId === activeExerciseId)
     : undefined
-  const points = (active?.points ?? []).filter((p) => p.topSetKg !== null)
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, points } = useMemo(() => {
+    const points = (active?.points ?? []).filter((p) => p.topSetKg !== null)
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
-      xAxis: categoryAxis(c, points.map((p) => format(p.at, 'MMM d'))),
+      xAxis: categoryAxis(
+        c,
+        points.map((p) => format(p.at, 'MMM d')),
+      ),
       yAxis: valueAxis(c),
       series: [
         {
@@ -427,11 +439,15 @@ export function TopSetChart({
         },
       ],
     }
-  }, [points, unit, appearance])
+    return { option, points }
+  }, [active, unit, appearance])
 
   if (!active) {
     return (
-      <PickExerciseCard title="Top set" subtitle="Heaviest set per session for one lift" />
+      <PickExerciseCard
+        title="Top set"
+        subtitle="Heaviest set per session for one lift"
+      />
     )
   }
 
@@ -468,10 +484,9 @@ export function TopSetChart({
 export function RepRangeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
-  const counts = REP_BUCKETS.map((bucket) => data.repBuckets.get(bucket) ?? 0)
-  const total = counts.reduce((a, b) => a + b, 0)
-
-  const option = useMemo<EChartsOption>(() => {
+  const { option, counts, total } = useMemo(() => {
+    const counts = REP_BUCKETS.map((bucket) => data.repBuckets.get(bucket) ?? 0)
+    const total = counts.reduce((a, b) => a + b, 0)
     const c = chrome()
     // Ordinal ramp: the lightest step still clears 2:1 against the surface.
     const ramp = [
@@ -481,7 +496,7 @@ export function RepRangeChart({ data }: { data: InsightsData }) {
       resolveToken('--seq-600', '#184f95'),
       resolveToken('--seq-700', '#0d366b'),
     ]
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
       xAxis: categoryAxis(c, [...REP_BUCKETS]),
@@ -498,7 +513,8 @@ export function RepRangeChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [counts, appearance])
+    return { option, counts, total }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -524,12 +540,12 @@ export function RepRangeChart({ data }: { data: InsightsData }) {
 
 export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const labels = weekLabels(data.weeks)
-  const counts = data.weeks.map((week) => data.workoutsByWeek.get(week) ?? 0)
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, counts } = useMemo(() => {
+    const labels = weekLabels(data.weeks)
+    const counts = data.weeks.map((week) => data.workoutsByWeek.get(week) ?? 0)
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
       yAxis: valueAxis(c, { name: 'workouts' }),
@@ -542,7 +558,8 @@ export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [labels, counts, appearance])
+    return { option, labels, counts }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -564,16 +581,14 @@ export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
 
 export function DayOfWeekChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const profileStart = data.profile.weekStartsOn
 
-  // Rotate so the week starts where the user says it does.
-  const order = Array.from({ length: 7 }, (_, i) => (i + profileStart) % 7)
-  const labels = order.map((day) => DAY_LABELS[day]!)
-  const counts = order.map((day) => data.dayOfWeekCounts[day]!)
-
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, counts } = useMemo(() => {
+    // Rotate so the week starts where the user says it does.
+    const order = Array.from({ length: 7 }, (_, i) => (i + data.profile.weekStartsOn) % 7)
+    const labels = order.map((day) => DAY_LABELS[day]!)
+    const counts = order.map((day) => data.dayOfWeekCounts[day]!)
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
       yAxis: valueAxis(c, { name: 'workouts' }),
@@ -586,7 +601,8 @@ export function DayOfWeekChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [labels, counts, appearance])
+    return { option, labels, counts }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -611,17 +627,16 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
 
-  const points = data.sessions
-    .filter((s) => s.durationSeconds !== null && s.volumeKg > 0)
-    .map((s) => [
-      Math.round(s.durationSeconds! / 60),
-      Math.round(convertWeight(s.volumeKg, unit)),
-      s.at,
-    ])
-
-  const option = useMemo<EChartsOption>(() => {
+  const { option, points } = useMemo(() => {
+    const points = data.sessions
+      .filter((s) => s.durationSeconds !== null && s.volumeKg > 0)
+      .map((s) => [
+        Math.round(s.durationSeconds! / 60),
+        Math.round(convertWeight(s.volumeKg, unit)),
+        s.at,
+      ])
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       tooltip: {
         ...baseOption(c).tooltip,
@@ -642,7 +657,8 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [points, unit, appearance])
+    return { option, points }
+  }, [data, unit, appearance])
 
   return (
     <ChartCard
@@ -657,7 +673,10 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
           .map((p) => [format(p[2]!, 'MMM d'), p[0]!, p[1]!.toLocaleString()]),
       }}
     >
-      <Chart option={option} ariaLabel="Scatter plot of session volume against duration" />
+      <Chart
+        option={option}
+        ariaLabel="Scatter plot of session volume against duration"
+      />
     </ChartCard>
   )
 }
@@ -674,16 +693,15 @@ export function BodyweightChart({ data }: { data: InsightsData }) {
   const unit = data.profile.unitWeight
   const entries = data.bodyMetrics.get('bodyweight') ?? []
 
-  const raw = entries.map((e) => weightFromKg(e.value, unit, 0.1))
-  const average = raw.map((_, index) => {
-    const window = raw.slice(Math.max(0, index - 6), index + 1)
-    return Number((window.reduce((a, b) => a + b, 0) / window.length).toFixed(1))
-  })
-  const labels = entries.map((e) => format(e.at, 'MMM d'))
-
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, raw, average } = useMemo(() => {
+    const raw = entries.map((e) => weightFromKg(e.value, unit, 0.1))
+    const average = raw.map((_, index) => {
+      const window = raw.slice(Math.max(0, index - 6), index + 1)
+      return Number((window.reduce((a, b) => a + b, 0) / window.length).toFixed(1))
+    })
+    const labels = entries.map((e) => format(e.at, 'MMM d'))
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       legend: {
         show: true,
@@ -715,7 +733,8 @@ export function BodyweightChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [labels, raw, average, appearance])
+    return { option, labels, raw, average }
+  }, [entries, unit, appearance])
 
   return (
     <ChartCard
@@ -789,9 +808,9 @@ export function CardioChart({ data }: { data: InsightsData }) {
 /** When sessions start, over 24 hours. */
 export function TimeOfDayChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const labels = data.hourCounts.map((_, h) => (h % 3 === 0 ? formatHour(h) : ''))
 
   const option = useMemo<EChartsOption>(() => {
+    const labels = data.hourCounts.map((_, h) => (h % 3 === 0 ? formatHour(h) : ''))
     const c = chrome()
     return {
       ...baseOption(c),
@@ -807,7 +826,7 @@ export function TimeOfDayChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [data.hourCounts, labels, appearance])
+  }, [data.hourCounts, appearance])
 
   return (
     <ChartCard
@@ -831,17 +850,17 @@ export function TimeOfDayChart({ data }: { data: InsightsData }) {
 /** Session length over time, with a moving average. */
 export function DurationTrendChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const withDuration = data.sessions.filter((s) => s.durationSeconds !== null)
-  const labels = withDuration.map((s) => format(s.at, 'MMM d'))
-  const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
-  const average = minutes.map((_, index) => {
-    const window = minutes.slice(Math.max(0, index - 3), index + 1)
-    return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
-  })
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, minutes, average, withDuration } = useMemo(() => {
+    const withDuration = data.sessions.filter((s) => s.durationSeconds !== null)
+    const labels = withDuration.map((s) => format(s.at, 'MMM d'))
+    const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
+    const average = minutes.map((_, index) => {
+      const window = minutes.slice(Math.max(0, index - 3), index + 1)
+      return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
+    })
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       legend: {
         show: true,
@@ -873,7 +892,8 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [labels, minutes, average, appearance])
+    return { option, labels, minutes, average, withDuration }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -884,7 +904,9 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
       table={{
         columns: ['Date', 'Minutes', '4-session avg'],
         rows: labels
-          .map((label, i) => [label, minutes[i]!, average[i]!] as [string, number, number])
+          .map(
+            (label, i) => [label, minutes[i]!, average[i]!] as [string, number, number],
+          )
           .reverse(),
       }}
     >
@@ -897,18 +919,18 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
 /** Distribution of working-set counts per session. */
 export function SetsPerSessionChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const counts = data.sessions.map((s) => s.setCount).filter((n) => n > 0)
   // Bucket into ranges of 5 so the histogram stays readable.
   const buckets = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
-  const tally = new Array<number>(buckets.length).fill(0)
-  for (const count of counts) {
-    const index = Math.min(buckets.length - 1, Math.floor((count - 1) / 5))
-    tally[index]! += 1
-  }
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, tally, counts } = useMemo(() => {
+    const counts = data.sessions.map((s) => s.setCount).filter((n) => n > 0)
+    const tally = new Array<number>(buckets.length).fill(0)
+    for (const count of counts) {
+      const index = Math.min(buckets.length - 1, Math.floor((count - 1) / 5))
+      tally[index]! += 1
+    }
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
       xAxis: categoryAxis(c, buckets),
@@ -922,8 +944,9 @@ export function SetsPerSessionChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tally.join(), appearance])
+    return { option, tally, counts }
+    // buckets is a module-stable literal; data and appearance are the real roots.
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -945,22 +968,22 @@ export function SetsPerSessionChart({ data }: { data: InsightsData }) {
 /** Distinct exercises trained per week. */
 export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const labels = weekLabels(data.weeks)
-  // Recompute distinct exercises per week from the exercise series points.
-  const distinctByWeek = new Map<string, Set<string>>()
-  for (const series of data.exerciseSeries) {
-    for (const point of series.points) {
-      const week = weekKey(point.at, data.profile.weekStartsOn)
-      const set = distinctByWeek.get(week) ?? new Set<string>()
-      set.add(series.exerciseId)
-      distinctByWeek.set(week, set)
-    }
-  }
-  const counts = data.weeks.map((week) => distinctByWeek.get(week)?.size ?? 0)
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, counts } = useMemo(() => {
+    const labels = weekLabels(data.weeks)
+    // Recompute distinct exercises per week from the exercise series points.
+    const distinctByWeek = new Map<string, Set<string>>()
+    for (const series of data.exerciseSeries) {
+      for (const point of series.points) {
+        const week = weekKey(point.at, data.profile.weekStartsOn)
+        const set = distinctByWeek.get(week) ?? new Set<string>()
+        set.add(series.exerciseId)
+        distinctByWeek.set(week, set)
+      }
+    }
+    const counts = data.weeks.map((week) => distinctByWeek.get(week)?.size ?? 0)
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
       yAxis: valueAxis(c, { name: 'lifts' }),
@@ -975,7 +998,8 @@ export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [labels, counts, appearance])
+    return { option, labels, counts }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -988,7 +1012,10 @@ export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
         rows: labels.map((label, i) => [label, counts[i]!]),
       }}
     >
-      <Chart option={option} ariaLabel="Line chart of distinct exercises trained per week" />
+      <Chart
+        option={option}
+        ariaLabel="Line chart of distinct exercises trained per week"
+      />
     </ChartCard>
   )
 }
@@ -1007,13 +1034,13 @@ export function PerExerciseVolumeChart({
   const active = activeExerciseId
     ? data.exerciseSeries.find((s) => s.exerciseId === activeExerciseId)
     : undefined
-  const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
-  const labels = points.map((p) => format(p.at, 'MMM d'))
-  const values = points.map((p) => Math.round(convertWeight(p.volumeKg, unit)))
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, labels, values, points } = useMemo(() => {
+    const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
+    const labels = points.map((p) => format(p.at, 'MMM d'))
+    const values = points.map((p) => Math.round(convertWeight(p.volumeKg, unit)))
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
       yAxis: valueAxis(c, { name: unit }),
@@ -1026,7 +1053,8 @@ export function PerExerciseVolumeChart({
         },
       ],
     }
-  }, [labels, values, unit, appearance])
+    return { option, labels, values, points }
+  }, [active, unit, appearance])
 
   if (!active) {
     return (
@@ -1057,15 +1085,15 @@ export function PerExerciseVolumeChart({
 /** Working sets per movement pattern — surfaces a neglected pattern. */
 export function PatternCoverageChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const entries = MOVEMENT_PATTERNS.map((pattern) => ({
-    pattern,
-    count: data.setsByPattern.get(pattern) ?? 0,
-  })).filter((e) => e.count > 0)
-  const labels = entries.map((e) => titleCasePattern(e.pattern))
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, entries } = useMemo(() => {
+    const entries = MOVEMENT_PATTERNS.map((pattern) => ({
+      pattern,
+      count: data.setsByPattern.get(pattern) ?? 0,
+    })).filter((e) => e.count > 0)
+    const labels = entries.map((e) => titleCasePattern(e.pattern))
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
       grid: { left: 8, right: 16, top: 8, bottom: 4, containLabel: true },
@@ -1080,7 +1108,8 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [entries, labels, appearance])
+    return { option, entries }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -1106,14 +1135,14 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
 /** Where training happens — working sets per equipment type. */
 export function EquipmentMixChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const entries = [...data.setsByEquipment.entries()]
-    .filter(([, count]) => count > 0)
-    .sort((a, b) => b[1] - a[1])
-  const labels = entries.map(([eq]) => titleCasePattern(eq))
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, entries } = useMemo(() => {
+    const entries = [...data.setsByEquipment.entries()]
+      .filter(([, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1])
+    const labels = entries.map(([eq]) => titleCasePattern(eq))
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
       grid: { left: 8, right: 16, top: 8, bottom: 4, containLabel: true },
@@ -1128,7 +1157,8 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-  }, [entries, labels, appearance])
+    return { option, entries }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -1154,21 +1184,21 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
 /** Days between sessions — how long the layoffs run. */
 export function GapDistributionChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const times = data.sessions.map((s) => s.at).sort((a, b) => a - b)
-  const gaps: number[] = []
-  for (let i = 1; i < times.length; i += 1) {
-    gaps.push(Math.round((times[i]! - times[i - 1]!) / 86_400_000))
-  }
   const buckets = ['0-1', '2', '3', '4-6', '7+']
-  const tally = new Array<number>(buckets.length).fill(0)
-  for (const g of gaps) {
-    const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
-    tally[i]! += 1
-  }
 
-  const option = useMemo<EChartsOption>(() => {
+  const { option, tally, gaps } = useMemo(() => {
+    const times = data.sessions.map((s) => s.at).sort((a, b) => a - b)
+    const gaps: number[] = []
+    for (let i = 1; i < times.length; i += 1) {
+      gaps.push(Math.round((times[i]! - times[i - 1]!) / 86_400_000))
+    }
+    const tally = new Array<number>(buckets.length).fill(0)
+    for (const g of gaps) {
+      const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
+      tally[i]! += 1
+    }
     const c = chrome()
-    return {
+    const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
       xAxis: categoryAxis(c, buckets),
@@ -1182,8 +1212,8 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tally.join(), appearance])
+    return { option, tally, gaps }
+  }, [data, appearance])
 
   return (
     <ChartCard
@@ -1239,7 +1269,10 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
     >
       <div className="space-y-1.5 px-2 py-2">
         {rows.map((r) => (
-          <div key={r.name} className="flex items-center justify-between gap-2 text-[13.5px]">
+          <div
+            key={r.name}
+            className="flex items-center justify-between gap-2 text-[13.5px]"
+          >
             <span className="min-w-0 flex-1 truncate">{r.name}</span>
             <span className="tabular shrink-0 text-ink-muted">
               {Math.round(convertWeight(r.best, unit))} {unit}
