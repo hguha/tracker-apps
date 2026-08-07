@@ -25,6 +25,14 @@ import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 import { evaluateBadges, type BadgeState } from './badges'
+import {
+  conditionLabel,
+  evaluateAvatar,
+  overallCondition,
+  WINDOW_DAYS as AVATAR_WINDOW_DAYS,
+  type RegionInput,
+} from './avatar'
+import { TrainingAvatar } from './TrainingAvatar'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
 
@@ -58,12 +66,21 @@ export function HomeScreen({
     const sumVolume = (list: typeof finished) =>
       list.reduce((total, s) => total + s.volumeKg, 0)
 
-    // Sets per region this week, for the balance bars.
+    // Working sets per region, both this week (balance bars) and over the
+    // avatar's trailing window (§avatar). One pass over the window's workouts —
+    // this-week is a subset, so it's bucketed rather than queried twice.
     const muscles = await db.muscles.toArray()
     const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
     const setsByRegion = new Map<Region, number>()
+    const setsByRegionWindow = new Map<Region, number>()
 
-    for (const summary of thisWeek) {
+    const avatarWindowStart = Date.now() - AVATAR_WINDOW_DAYS * 24 * 3600 * 1000
+    const windowWorkouts = finished.filter(
+      (s) => s.workout.startedAt >= avatarWindowStart,
+    )
+
+    for (const summary of windowWorkouts) {
+      const inThisWeek = summary.workout.startedAt >= thisWeekStart
       for (const we of await repo.listWorkoutExercises(summary.workout.id)) {
         const exercise = await db.exercises.get(we.exerciseId)
         if (!exercise) continue
@@ -73,12 +90,15 @@ export function HomeScreen({
           (s) => s.isCompleted && isWorkingSet(s),
         ).length
         if (working > 0) {
-          setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working)
+          setsByRegionWindow.set(region, (setsByRegionWindow.get(region) ?? 0) + working)
+          if (inThisWeek)
+            setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working)
         }
       }
     }
 
-    // Which region has gone longest without work.
+    // Which region has gone longest without work — also the avatar's "days
+    // since trained" per region.
     const lastTrainedByRegion = new Map<Region, number>()
     for (const summary of finished) {
       for (const region of summary.regions) {
@@ -87,6 +107,21 @@ export function HomeScreen({
         }
       }
     }
+
+    // Assemble the avatar's per-region inputs (§avatar): work in the window plus
+    // days since last trained (from full history, so an old region still decays).
+    const avatarInputs = new Map<Region, RegionInput>()
+    for (const region of REGIONS) {
+      const lastAt = lastTrainedByRegion.get(region)
+      avatarInputs.set(region, {
+        setsInWindow: setsByRegionWindow.get(region) ?? 0,
+        daysSinceTrained:
+          lastAt === undefined
+            ? null
+            : Math.floor((Date.now() - lastAt) / (24 * 3600 * 1000)),
+      })
+    }
+    const avatar = evaluateAvatar(avatarInputs)
     const neglected = REGIONS.filter((r) => r !== 'cardio')
       .map((region) => ({ region, lastAt: lastTrainedByRegion.get(region) ?? 0 }))
       .sort((a, b) => a.lastAt - b.lastAt)[0]
@@ -146,6 +181,7 @@ export function HomeScreen({
       totalWorkouts: finished.length,
       totalVolumeKg,
       totalSets,
+      avatar,
     }
   }, [])
 
@@ -166,6 +202,7 @@ export function HomeScreen({
     totalWorkouts,
     totalVolumeKg,
     totalSets,
+    avatar,
   } = data
 
   const unit = profile.unitWeight
@@ -215,6 +252,27 @@ export function HomeScreen({
         <Button size="lg" className="w-full" onClick={onStartWorkout}>
           Log a workout
         </Button>
+      )}
+
+      {totalWorkouts > 0 && (
+        <Card className="flex flex-col items-center p-4">
+          <TrainingAvatar fitnesses={avatar} />
+          <p className="mt-1 text-[15px] font-bold tracking-tight">
+            {conditionLabel(overallCondition(avatar))}
+          </p>
+          <p className="text-[12px] text-ink-muted">
+            {/* Name the region that most needs work, so the figure suggests an
+                action rather than just judging. */}
+            {(() => {
+              const weakest = avatar
+                .filter((a) => a.region !== 'cardio')
+                .sort((a, b) => a.fitness - b.fitness)[0]
+              return weakest && weakest.fitness < 0.75
+                ? `${REGION_LABELS[weakest.region]} could use some work`
+                : 'Every body part is in shape — nice'
+            })()}
+          </p>
+        </Card>
       )}
 
       {totalWorkouts > 0 && (
