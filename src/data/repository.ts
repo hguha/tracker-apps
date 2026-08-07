@@ -490,6 +490,90 @@ export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[
   )
 }
 
+/** Slugs of the powerlifting big three, for the strength-club badges (§5.2.1). */
+export const BIG_THREE = {
+  squat: 'barbell_back_squat',
+  bench: 'barbell_bench_press',
+  deadlift: 'deadlift',
+} as const
+
+export interface BadgeStats {
+  bestSquatE1rmKg: number
+  bestBenchE1rmKg: number
+  bestDeadliftE1rmKg: number
+  bestAnyE1rmKg: number
+  totalCardioMeters: number
+  totalCardioSeconds: number
+  distinctExercises: number
+}
+
+/**
+ * Lifetime figures the Home badges need beyond what a workout summary carries:
+ * best estimated 1RMs (for the strength clubs), total cardio, and exercise
+ * variety. Reads the small personal-records table for e1RMs and scans cardio
+ * sets in bulk — cheap, and separate from the summary path so neither bloats.
+ */
+export async function getBadgeStats(): Promise<BadgeStats> {
+  // Best estimated 1RM per lift comes straight from the PR table. recordType
+  // isn't indexed on its own (the compound index is [exerciseId+recordType]),
+  // so filter in memory — the PR table is small (a few rows per lift).
+  const e1rmPrs = (await db.personalRecords.toArray()).filter(
+    (pr) => pr.recordType === 'max_est_1rm' && pr.deletedAt === null,
+  )
+  const bestE1rmByExercise = new Map<string, number>()
+  let bestAnyE1rmKg = 0
+  for (const pr of e1rmPrs) {
+    if (pr.value > (bestE1rmByExercise.get(pr.exerciseId) ?? 0)) {
+      bestE1rmByExercise.set(pr.exerciseId, pr.value)
+    }
+    if (pr.value > bestAnyE1rmKg) bestAnyE1rmKg = pr.value
+  }
+
+  // Cardio totals and exercise variety: one bulk scan of completed sets, joined
+  // to their exercise's movement pattern.
+  const workouts = await listWorkouts(1000)
+  const workoutIds = workouts.map((w) => w.id)
+  const allWe = (
+    await db.workoutExercises.where('workoutId').anyOf(workoutIds).toArray()
+  ).filter((r) => r.deletedAt === null)
+  const exercises = await db.exercises.bulkGet([
+    ...new Set(allWe.map((we) => we.exerciseId)),
+  ])
+  const patternByExercise = new Map<string, string>()
+  exercises.forEach((ex) => ex && patternByExercise.set(ex.id, ex.movementPattern))
+  const weToExercise = new Map(allWe.map((we) => [we.id, we.exerciseId]))
+
+  const allSets = (
+    await db.sets
+      .where('workoutExerciseId')
+      .anyOf(allWe.map((we) => we.id))
+      .toArray()
+  ).filter((s) => s.deletedAt === null && s.isCompleted)
+
+  let totalCardioMeters = 0
+  let totalCardioSeconds = 0
+  const distinctExercises = new Set<string>()
+  for (const set of allSets) {
+    const exerciseId = weToExercise.get(set.workoutExerciseId)
+    if (!exerciseId) continue
+    distinctExercises.add(exerciseId)
+    if (patternByExercise.get(exerciseId) === 'cardio') {
+      totalCardioMeters += set.distanceM ?? 0
+      totalCardioSeconds += set.durationSeconds ?? 0
+    }
+  }
+
+  return {
+    bestSquatE1rmKg: bestE1rmByExercise.get(BIG_THREE.squat) ?? 0,
+    bestBenchE1rmKg: bestE1rmByExercise.get(BIG_THREE.bench) ?? 0,
+    bestDeadliftE1rmKg: bestE1rmByExercise.get(BIG_THREE.deadlift) ?? 0,
+    bestAnyE1rmKg,
+    totalCardioMeters,
+    totalCardioSeconds,
+    distinctExercises: distinctExercises.size,
+  }
+}
+
 /**
  * A read-only outline of what a session (or template) contains, for the
  * preview shown before committing to start a copy (§7.2, §7.4). Lets the user

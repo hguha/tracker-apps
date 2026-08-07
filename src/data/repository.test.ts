@@ -346,6 +346,40 @@ describe('session title signals (§6.7)', () => {
   })
 })
 
+describe('getBadgeStats', () => {
+  it('reports best big-three e1RMs, cardio totals, and variety', async () => {
+    // Bench: 100 kg × 5 → Epley e1RM ≈ 116.7 kg, recorded as a PR.
+    const w = await repo.startWorkout({ title: 'Full' })
+    const bench = await repo.addExerciseToWorkout(w, 'barbell_bench_press')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps: 5 }),
+      {},
+    )
+    // A cardio interval: 5 km in 25 min.
+    const run = await repo.addExerciseToWorkout(w, 'treadmill_run')
+    await repo.logSetValues(await repo.addSet({ workoutExerciseId: run }), {
+      distanceM: 5000,
+      durationSeconds: 1500,
+    })
+    await repo.finishWorkout(w)
+
+    const stats = await repo.getBadgeStats()
+    expect(stats.bestBenchE1rmKg).toBeCloseTo(116.7, 0)
+    expect(stats.bestAnyE1rmKg).toBeCloseTo(116.7, 0)
+    expect(stats.bestDeadliftE1rmKg).toBe(0) // never trained
+    expect(stats.totalCardioMeters).toBe(5000)
+    expect(stats.totalCardioSeconds).toBe(1500)
+    expect(stats.distinctExercises).toBe(2)
+  })
+
+  it('is all zeros for an empty history', async () => {
+    const stats = await repo.getBadgeStats()
+    expect(stats.bestAnyE1rmKg).toBe(0)
+    expect(stats.totalCardioMeters).toBe(0)
+    expect(stats.distinctExercises).toBe(0)
+  })
+})
+
 describe('listWorkoutSummaries — batched load', () => {
   it('matches the per-workout builder exactly for a mixed history', async () => {
     // Two sessions of different shapes, so a batching bug (wrong exercise

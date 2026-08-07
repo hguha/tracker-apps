@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateBadges, type LifetimeStats } from './badges'
+import { bigThreeTotalKg, evaluateBadges, type LifetimeStats } from './badges'
+
+const KG_PER_LB = 1 / 2.20462262185
+const lb = (pounds: number) => pounds * KG_PER_LB
 
 function stats(partial: Partial<LifetimeStats> = {}): LifetimeStats {
   return {
@@ -8,6 +11,13 @@ function stats(partial: Partial<LifetimeStats> = {}): LifetimeStats {
     totalVolumeKg: 0,
     bestWeekStreak: 0,
     currentWeekStreak: 0,
+    bestSquatE1rmKg: 0,
+    bestBenchE1rmKg: 0,
+    bestDeadliftE1rmKg: 0,
+    bestAnyE1rmKg: 0,
+    totalCardioMeters: 0,
+    totalCardioSeconds: 0,
+    distinctExercises: 0,
     ...partial,
   }
 }
@@ -60,5 +70,58 @@ describe('evaluateBadges', () => {
     )!
     expect(half.fraction).toBeCloseTo(0.5, 1)
     expect(half.detail(stats({ totalVolumeKg: 226_796 }))).toBe('50%')
+  })
+})
+
+describe('strength club badges', () => {
+  it('earns the 1000 lb club on a big-three total in pounds', () => {
+    const s = stats({
+      bestSquatE1rmKg: lb(400),
+      bestBenchE1rmKg: lb(275),
+      bestDeadliftE1rmKg: lb(405),
+    })
+    expect(Math.round(bigThreeTotalKg(s) * 2.20462262185)).toBe(1080)
+    const club = evaluateBadges(s).find((b) => b.key === 'club-1000')!
+    expect(club.earned).toBe(true)
+    // The 1500 club is still a way off.
+    expect(evaluateBadges(s).find((b) => b.key === 'club-1500')!.earned).toBe(false)
+  })
+
+  it('renders a strength detail in pounds, not kg', () => {
+    const club = evaluateBadges(stats({ bestBenchE1rmKg: lb(185) })).find(
+      (b) => b.key === 'bench-225',
+    )!
+    expect(club.detailText).toBe('185 / 225 lb')
+  })
+
+  it('earns a single-lift plate badge at the threshold', () => {
+    const twoPlate = evaluateBadges(stats({ bestBenchE1rmKg: lb(225) })).find(
+      (b) => b.key === 'bench-225',
+    )!
+    expect(twoPlate.earned).toBe(true)
+  })
+})
+
+describe('cardio badges', () => {
+  it('earns the first-mile badge once a mile is logged', () => {
+    const b = evaluateBadges(stats({ totalCardioMeters: 1609.344 })).find(
+      (x) => x.key === 'cardio-first',
+    )!
+    expect(b.earned).toBe(true)
+  })
+
+  it('tracks marathon progress in whole miles', () => {
+    const b = evaluateBadges(stats({ totalCardioMeters: 1609.344 * 13 })).find(
+      (x) => x.key === 'cardio-marathon',
+    )!
+    expect(b.earned).toBe(false)
+    expect(b.detailText).toBe('13 / 26 mi')
+  })
+
+  it('earns the cardio-hours badge on total time', () => {
+    const b = evaluateBadges(stats({ totalCardioSeconds: 11 * 3600 })).find(
+      (x) => x.key === 'cardio-10h',
+    )!
+    expect(b.earned).toBe(true)
   })
 })

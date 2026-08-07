@@ -10,8 +10,16 @@
  * a number with no comparison isn't an insight.
  */
 
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, Flame, Play, TrendingDown, TrendingUp } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Flame,
+  Play,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
@@ -166,6 +174,9 @@ export function HomeScreen({
     const totalVolumeKg = finished.reduce((total, s) => total + s.volumeKg, 0)
     const totalSets = finished.reduce((total, s) => total + s.setCount, 0)
 
+    // Extra lifetime figures the strength/cardio/variety badges need.
+    const badgeStats = await repo.getBadgeStats()
+
     return {
       profile,
       active,
@@ -181,6 +192,7 @@ export function HomeScreen({
       totalWorkouts: finished.length,
       totalVolumeKg,
       totalSets,
+      badgeStats,
       avatar,
     }
   }, [])
@@ -202,6 +214,7 @@ export function HomeScreen({
     totalWorkouts,
     totalVolumeKg,
     totalSets,
+    badgeStats,
     avatar,
   } = data
 
@@ -216,6 +229,7 @@ export function HomeScreen({
     totalVolumeKg,
     bestWeekStreak,
     currentWeekStreak: streakWeeks,
+    ...badgeStats,
   })
 
   // Only compare when there is something to compare against — an invented
@@ -458,53 +472,82 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * The badges strip: earned badges plus the next one to chase.
+ * The badges card, collapsible.
  *
- * Earned badges render filled; the single nearest unearned badge renders with
- * its progress caption, so there's always a visible next goal without turning
- * the whole catalog into a wall of locked tiles.
+ * Collapsed (default): a horizontal strip of earned badges plus the single
+ * nearest unearned one — always a visible next goal, no wall of locked tiles.
+ * Tap the header to expand into the full catalog as a grid, every badge with
+ * its progress, so the whole set is discoverable.
  */
 function BadgeStrip({ badges }: { badges: BadgeState[] }) {
+  const [expanded, setExpanded] = useState(false)
   const earned = badges.filter((b) => b.earned)
   const next = badges.find((b) => !b.earned)
-  // The set to show: everything earned, then the nearest unearned as the target.
-  const shown = next ? [...earned, next] : earned
-  if (shown.length === 0) return null
+  // Collapsed set: everything earned, then the nearest unearned as the target.
+  const collapsed = next ? [...earned, next] : earned
+  if (badges.length === 0) return null
 
   return (
     <Card className="p-4">
-      <div className="flex items-baseline justify-between">
-        <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between"
+        aria-expanded={expanded}
+      >
+        <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
           Badges
-        </p>
-        <p className="text-[12px] text-ink-muted">
+        </span>
+        <span className="flex items-center gap-1 text-[12px] text-ink-muted">
           {earned.length} of {badges.length}
-        </p>
-      </div>
-      <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
-        {shown.map((badge) => (
-          <div
-            key={badge.key}
-            className="flex w-[76px] shrink-0 flex-col items-center gap-1 text-center"
-          >
-            <span
-              className={
-                'flex size-14 items-center justify-center rounded-2xl text-[26px] ' +
-                (badge.earned ? 'bg-accent-wash' : 'bg-sunken opacity-45 grayscale')
-              }
-              title={badge.caption}
-            >
-              {badge.icon}
-            </span>
-            <span className="text-[11px] font-semibold leading-tight">{badge.label}</span>
-            {!badge.earned && (
-              <span className="tabular text-[10.5px] text-ink-muted">
-                {badge.detailText}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+          <ChevronDown
+            size={15}
+            className={'transition-transform ' + (expanded ? 'rotate-180' : '')}
+          />
+        </span>
+      </button>
+
+      {expanded ? (
+        // Full catalog: a wrapping grid, each badge with its progress.
+        <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-4">
+          {badges.map((badge) => (
+            <BadgeTile key={badge.key} badge={badge} showProgress />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
+          {collapsed.map((badge) => (
+            <div key={badge.key} className="w-[76px] shrink-0">
+              <BadgeTile badge={badge} showProgress={!badge.earned} />
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
+  )
+}
+
+function BadgeTile({
+  badge,
+  showProgress,
+}: {
+  badge: BadgeState
+  showProgress: boolean
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1 text-center">
+      <span
+        className={
+          'flex size-14 items-center justify-center rounded-2xl text-[26px] ' +
+          (badge.earned ? 'bg-accent-wash' : 'bg-sunken opacity-45 grayscale')
+        }
+        title={badge.caption}
+      >
+        {badge.icon}
+      </span>
+      <span className="text-[11px] font-semibold leading-tight">{badge.label}</span>
+      {showProgress && (
+        <span className="tabular text-[10.5px] text-ink-muted">{badge.detailText}</span>
+      )}
+    </div>
   )
 }

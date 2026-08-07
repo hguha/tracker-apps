@@ -3,11 +3,11 @@
  *
  * Config-driven, like the Insights chart catalog: each badge declares its label,
  * a short caption, and a pure function from lifetime stats to progress. The Home
- * screen renders earned badges filled and the nearest unearned one with its
- * percentage, so there's always a next thing to chase.
+ * strip shows earned badges plus the next one to chase, and expands to the full
+ * grid on tap.
  *
  * Adding a badge is one entry here — no Home edits. `progress` returns 0–1;
- * `≥ 1` means earned. `detail` renders the concrete state ("82%", "1,240 / 100").
+ * `≥ 1` means earned. `detail` renders the concrete state ("82%", "620 / 1,000 lb").
  */
 
 export interface LifetimeStats {
@@ -21,6 +21,23 @@ export interface LifetimeStats {
   bestWeekStreak: number
   /** Current run of consecutive weeks with a session. */
   currentWeekStreak: number
+  /** Best estimated 1RM in kg on each of the big three, 0 if never trained. */
+  bestSquatE1rmKg: number
+  bestBenchE1rmKg: number
+  bestDeadliftE1rmKg: number
+  /** Best estimated 1RM in kg across *any* lift, for a general strength badge. */
+  bestAnyE1rmKg: number
+  /** Total cardio distance (meters) and time (seconds), all time. */
+  totalCardioMeters: number
+  totalCardioSeconds: number
+  /** Distinct exercises the user has logged, for a "variety" badge. */
+  distinctExercises: number
+}
+
+/** The combined best-e1RM of squat + bench + deadlift — the powerlifting total
+ *  the 1000 lb / 1200 lb / 1500 lb clubs are measured against. */
+export function bigThreeTotalKg(s: LifetimeStats): number {
+  return s.bestSquatE1rmKg + s.bestBenchE1rmKg + s.bestDeadliftE1rmKg
 }
 
 export interface Badge {
@@ -36,11 +53,20 @@ export interface Badge {
   detail: (s: LifetimeStats) => string
 }
 
-/** kg in a metric ton — the "1M Club" is a million lb, but stored volume is kg. */
-const MILLION_LB_IN_KG = 1_000_000 / 2.20462262185
+const LB_PER_KG = 2.20462262185
+/** Convert a pound target to the kg our data is stored in. */
+const lbToKg = (lb: number) => lb / LB_PER_KG
+/** kg in a million pounds — the "1M Club" is total volume, in lb. */
+const MILLION_LB_IN_KG = lbToKg(1_000_000)
+const METERS_PER_MILE = 1609.344
 
 function ratio(current: number, target: number): number {
   return target > 0 ? current / target : 0
+}
+
+/** "620 / 1,000 lb" — a kg value shown against a pound target. */
+function lbDetail(valueKg: number, targetLb: number): string {
+  return `${Math.round(valueKg * LB_PER_KG).toLocaleString()} / ${targetLb.toLocaleString()} lb`
 }
 
 /**
@@ -97,20 +123,134 @@ export const BADGES: Badge[] = [
     detail: (s) => `${Math.min(s.bestWeekStreak, 13)} / 13 wks`,
   },
   {
-    key: 'million-club',
-    label: '1M Club',
-    caption: 'Lift 1,000,000 lb total',
-    icon: '🏆',
-    progress: (s) => ratio(s.totalVolumeKg, MILLION_LB_IN_KG),
-    detail: (s) => `${Math.round((s.totalVolumeKg / MILLION_LB_IN_KG) * 100)}%`,
-  },
-  {
     key: 'year-streak',
     label: 'Unbreakable',
     caption: 'A 52-week training streak',
     icon: '💎',
     progress: (s) => ratio(s.bestWeekStreak, 52),
     detail: (s) => `${Math.min(s.bestWeekStreak, 52)} / 52 wks`,
+  },
+
+  // ── Strength: single-lift plate milestones (estimated 1RM) ──
+  {
+    key: 'bench-225',
+    label: 'Two Plate Bench',
+    caption: 'A 225 lb estimated bench press',
+    icon: '🏋️',
+    progress: (s) => ratio(s.bestBenchE1rmKg, lbToKg(225)),
+    detail: (s) => lbDetail(s.bestBenchE1rmKg, 225),
+  },
+  {
+    key: 'squat-315',
+    label: 'Three Plate Squat',
+    caption: 'A 315 lb estimated squat',
+    icon: '🦵',
+    progress: (s) => ratio(s.bestSquatE1rmKg, lbToKg(315)),
+    detail: (s) => lbDetail(s.bestSquatE1rmKg, 315),
+  },
+  {
+    key: 'deadlift-405',
+    label: 'Four Plate Pull',
+    caption: 'A 405 lb estimated deadlift',
+    icon: '🪝',
+    progress: (s) => ratio(s.bestDeadliftE1rmKg, lbToKg(405)),
+    detail: (s) => lbDetail(s.bestDeadliftE1rmKg, 405),
+  },
+
+  // ── Strength: powerlifting total (squat + bench + deadlift) ──
+  {
+    key: 'club-1000',
+    label: '1000 lb Club',
+    caption: 'Squat + bench + deadlift total of 1,000 lb',
+    icon: '🥉',
+    progress: (s) => ratio(bigThreeTotalKg(s), lbToKg(1000)),
+    detail: (s) => lbDetail(bigThreeTotalKg(s), 1000),
+  },
+  {
+    key: 'club-1200',
+    label: '1200 lb Club',
+    caption: 'A 1,200 lb powerlifting total',
+    icon: '🥈',
+    progress: (s) => ratio(bigThreeTotalKg(s), lbToKg(1200)),
+    detail: (s) => lbDetail(bigThreeTotalKg(s), 1200),
+  },
+  {
+    key: 'club-1500',
+    label: '1500 lb Club',
+    caption: 'A 1,500 lb powerlifting total',
+    icon: '🥇',
+    progress: (s) => ratio(bigThreeTotalKg(s), lbToKg(1500)),
+    detail: (s) => lbDetail(bigThreeTotalKg(s), 1500),
+  },
+
+  // ── Volume: cumulative tonnage moved ──
+  {
+    key: 'half-million-club',
+    label: '500K Club',
+    caption: 'Lift 500,000 lb of total volume',
+    icon: '🏅',
+    progress: (s) => ratio(s.totalVolumeKg, MILLION_LB_IN_KG / 2),
+    detail: (s) => `${Math.round((s.totalVolumeKg / (MILLION_LB_IN_KG / 2)) * 100)}%`,
+  },
+  {
+    key: 'million-club',
+    label: '1M Club',
+    caption: 'Lift 1,000,000 lb of total volume',
+    icon: '🏆',
+    progress: (s) => ratio(s.totalVolumeKg, MILLION_LB_IN_KG),
+    detail: (s) => `${Math.round((s.totalVolumeKg / MILLION_LB_IN_KG) * 100)}%`,
+  },
+
+  // ── Cardio ──
+  {
+    key: 'cardio-first',
+    label: 'First Mile',
+    caption: 'Log your first mile of cardio',
+    icon: '👟',
+    progress: (s) => ratio(s.totalCardioMeters, METERS_PER_MILE),
+    detail: (s) => `${(s.totalCardioMeters / METERS_PER_MILE).toFixed(1)} / 1 mi`,
+  },
+  {
+    key: 'cardio-marathon',
+    label: 'Marathoner',
+    caption: 'Log 26.2 miles of cardio',
+    icon: '🏃',
+    progress: (s) => ratio(s.totalCardioMeters, METERS_PER_MILE * 26.2),
+    detail: (s) => `${Math.round(s.totalCardioMeters / METERS_PER_MILE)} / 26 mi`,
+  },
+  {
+    key: 'cardio-century',
+    label: 'Century Rider',
+    caption: 'Log 100 miles of cardio',
+    icon: '🚴',
+    progress: (s) => ratio(s.totalCardioMeters, METERS_PER_MILE * 100),
+    detail: (s) => `${Math.round(s.totalCardioMeters / METERS_PER_MILE)} / 100 mi`,
+  },
+  {
+    key: 'cardio-10h',
+    label: 'Ten Hours In',
+    caption: 'Log 10 hours of cardio',
+    icon: '⏱️',
+    progress: (s) => ratio(s.totalCardioSeconds, 10 * 3600),
+    detail: (s) => `${Math.floor(s.totalCardioSeconds / 3600)} / 10 hrs`,
+  },
+
+  // ── Variety & scale ──
+  {
+    key: 'variety-25',
+    label: 'Well Rounded',
+    caption: 'Train 25 different exercises',
+    icon: '🎯',
+    progress: (s) => ratio(s.distinctExercises, 25),
+    detail: (s) => `${Math.min(s.distinctExercises, 25)} / 25`,
+  },
+  {
+    key: 'strong-first',
+    label: 'Bodyweight Strong',
+    caption: 'An estimated 1RM over 200 lb on any lift',
+    icon: '💪',
+    progress: (s) => ratio(s.bestAnyE1rmKg, lbToKg(200)),
+    detail: (s) => lbDetail(s.bestAnyE1rmKg, 200),
   },
 ]
 
