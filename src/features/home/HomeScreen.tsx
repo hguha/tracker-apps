@@ -42,6 +42,7 @@ import {
   type RegionInput,
 } from './avatar'
 import { TrainingAvatar } from './TrainingAvatar'
+import { computeStreaks } from './streaks'
 import { getHomeGreeting } from '@/features/coach/encouragement'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
@@ -141,42 +142,11 @@ export function HomeScreen({
       .map((region) => ({ region, lastAt: lastTrainedByRegion.get(region) ?? 0 }))
       .sort((a, b) => a.lastAt - b.lastAt)[0]
 
-    // Whether each week (walking back from this one) had a session. Shared by
-    // the current-streak count and the best-ever streak for badges.
-    const trainedThisWeekAt = (start: number) =>
-      finished.some(
-        (s) => s.workout.startedAt >= start && s.workout.startedAt < start + WEEK_MS,
-      )
-
-    // Current streak: consecutive trained weeks ending now. This week not being
-    // done *yet* shouldn't read as a broken streak, so a blank current week is
-    // skipped rather than counted as a break.
-    let streakWeeks = 0
-    for (let offset = 0; offset < 520; offset += 1) {
-      const trained = trainedThisWeekAt(thisWeekStart - offset * WEEK_MS)
-      if (!trained) {
-        if (offset === 0) continue
-        break
-      }
-      streakWeeks += 1
-    }
-
-    // Best streak ever: longest run of consecutive trained weeks anywhere in
-    // history. Walk from the earliest session's week forward to this week.
-    let bestWeekStreak = streakWeeks
-    if (finished.length > 0) {
-      const earliest = Math.min(...finished.map((s) => s.workout.startedAt))
-      const firstWeek = weekStart(earliest, profile.weekStartsOn)
-      let run = 0
-      for (let start = firstWeek; start <= thisWeekStart; start += WEEK_MS) {
-        if (trainedThisWeekAt(start)) {
-          run += 1
-          if (run > bestWeekStreak) bestWeekStreak = run
-        } else {
-          run = 0
-        }
-      }
-    }
+    // Current and best week streaks, from the one shared helper (§streaks).
+    const { currentWeekStreak: streakWeeks, bestWeekStreak } = computeStreaks(
+      finished.map((s) => s.workout.startedAt),
+      profile.weekStartsOn,
+    )
 
     const totalVolumeKg = finished.reduce((total, s) => total + s.volumeKg, 0)
     const totalSets = finished.reduce((total, s) => total + s.setCount, 0)

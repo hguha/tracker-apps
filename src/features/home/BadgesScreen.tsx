@@ -12,7 +12,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { weekStart } from '@/lib/dates'
+import { computeStreaks } from './streaks'
 import { evaluateBadges, groupedBadges, type BadgeState } from './badges'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 
@@ -25,34 +25,18 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
     const stats = await repo.getBadgeStats()
     const profile = await repo.getProfile()
 
-    // Best week streak, mirroring Home's computation, so "earned" agrees.
-    const WEEK_MS = 7 * 24 * 3600 * 1000
-    const weekStartOf = (ts: number) => weekStart(ts, profile.weekStartsOn)
-    const trainedWeeks = new Set(finished.map((s) => weekStartOf(s.workout.startedAt)))
-    let bestWeekStreak = 0
-    if (finished.length > 0) {
-      const earliest = Math.min(...finished.map((s) => s.workout.startedAt))
-      let run = 0
-      for (
-        let start = weekStartOf(earliest);
-        start <= weekStartOf(Date.now());
-        start += WEEK_MS
-      ) {
-        if (trainedWeeks.has(start)) {
-          run += 1
-          if (run > bestWeekStreak) bestWeekStreak = run
-        } else {
-          run = 0
-        }
-      }
-    }
+    // Same streak helper Home uses, so a badge evaluates identically here.
+    const { currentWeekStreak, bestWeekStreak } = computeStreaks(
+      finished.map((s) => s.workout.startedAt),
+      profile.weekStartsOn,
+    )
 
     return evaluateBadges({
       totalWorkouts: finished.length,
       totalSets: finished.reduce((t, s) => t + s.setCount, 0),
       totalVolumeKg: finished.reduce((t, s) => t + s.volumeKg, 0),
       bestWeekStreak,
-      currentWeekStreak: bestWeekStreak,
+      currentWeekStreak,
       ...stats,
     })
   }, [])
