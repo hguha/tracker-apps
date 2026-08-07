@@ -100,7 +100,14 @@ export interface CoachSummary {
   exercises: ExerciseAgg[]
 }
 
-function isWorkingSet(s: SummarySet): boolean {
+/**
+ * Whether a set carries any logged value. Distinct from `metrics.isWorkingSet`
+ * (which means "was performed" via `isCompleted`): the summary is only ever fed
+ * already-completed sets, so here the question is just "is this row non-empty",
+ * guarding a set with no numbers from inflating counts. Named `hasValue` rather
+ * than `isWorkingSet` so it isn't mistaken for the canonical volume predicate.
+ */
+function hasValue(s: SummarySet): boolean {
   return s.reps !== null || s.durationSeconds !== null || s.distanceM !== null
 }
 
@@ -150,7 +157,7 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
     week.workouts += 1
 
     for (const ex of session.exercises) {
-      const working = ex.sets.filter(isWorkingSet)
+      const working = ex.sets.filter(hasValue)
       if (working.length === 0) continue
 
       week.sets += working.length

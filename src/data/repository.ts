@@ -13,7 +13,12 @@
 import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import { formatDistance, formatWeight, weightToKg } from '@/lib/units'
-import { bestOneRepMaxKg, estimatedOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
+import {
+  bestOneRepMaxKg,
+  estimatedOneRepMaxKg,
+  isWorkingSet,
+  volumeLoadKg,
+} from '@/lib/metrics'
 import { nextTarget } from '@/lib/progression'
 import { weekStart } from '@/lib/dates'
 import {
@@ -361,6 +366,10 @@ export interface WorkoutSummary {
   volumeKg: number
   durationSeconds: number | null
   cardioSeconds: number
+  /** Working sets per region in this session. Lets Home derive its balance bars
+   *  and the avatar window from summaries already in memory, instead of a second
+   *  per-workout scan of workoutExercises + sets. */
+  workingSetsByRegion: Partial<Record<Region, number>>
 }
 
 export async function getWorkoutSummary(
@@ -397,6 +406,7 @@ function buildWorkoutSummary(
   const exerciseNames: string[] = []
   const exerciseIds: string[] = []
   const regionSet = new Set<Region>()
+  const workingSetsByRegion: Partial<Record<Region, number>> = {}
   let setCount = 0
   let volumeKg = 0
   let cardioSeconds = 0
@@ -420,6 +430,10 @@ function buildWorkoutSummary(
     }
 
     if (region) {
+      const workingSets = logged.filter((s) => isWorkingSet(s)).length
+      if (workingSets > 0) {
+        workingSetsByRegion[region] = (workingSetsByRegion[region] ?? 0) + workingSets
+      }
       for (let i = 0; i < logged.length; i += 1) {
         signals.push({ region, pattern: exercise.movementPattern })
       }
@@ -441,6 +455,7 @@ function buildWorkoutSummary(
     durationSeconds:
       workout.endedAt !== null ? (workout.endedAt - workout.startedAt) / 1000 : null,
     cardioSeconds,
+    workingSetsByRegion,
   }
 }
 
@@ -1570,16 +1585,23 @@ export async function createTemplatesFromPlan(plan: {
   const unmatched: string[] = []
 
   for (const session of plan.sessions) {
+    // Resolve matches first, so a session where nothing matched creates no empty
+    // template — a persisted "Upper" with zero exercises is just clutter.
+    const matched = session.exercises.map((pe) => ({
+      pe,
+      exerciseId: byName.get(pe.name.trim().toLowerCase()),
+    }))
+    for (const { pe, exerciseId } of matched) {
+      if (!exerciseId) unmatched.push(pe.name)
+    }
+    const resolved = matched.filter((m) => m.exerciseId)
+    if (resolved.length === 0) continue
+
     const templateId = await createTemplate(session.name, plan.folder ?? null)
     templateIds.push(templateId)
 
-    for (const pe of session.exercises) {
-      const exerciseId = byName.get(pe.name.trim().toLowerCase())
-      if (!exerciseId) {
-        unmatched.push(pe.name)
-        continue
-      }
-      const teId = await addExerciseToTemplate(templateId, exerciseId)
+    for (const { pe, exerciseId } of resolved) {
+      const teId = await addExerciseToTemplate(templateId, exerciseId!)
       await updateTemplateExercise(teId, {
         targetSets: pe.sets,
         targetRepsLow: pe.repLow,

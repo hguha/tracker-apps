@@ -489,6 +489,22 @@ describe('listWorkoutSummaries — batched load', () => {
     // Names and ids stay aligned by index, which the exercise picker relies on.
     expect(summary!.exerciseNames).toHaveLength(summary!.exerciseIds.length)
   })
+
+  it('carries per-region working-set counts so Home needs no second scan', async () => {
+    const w = await repo.startWorkout({ title: 'Push' })
+    const bench = await repo.addExerciseToWorkout(w, 'barbell_bench_press')
+    for (const reps of [8, 8, 8]) {
+      await repo.logSetValues(
+        await repo.addSet({ workoutExerciseId: bench, weightKg: 80, reps }),
+        {},
+      )
+    }
+    await repo.finishWorkout(w)
+
+    const [summary] = await repo.listWorkoutSummaries(100)
+    // Bench press is a chest lift; three working sets land under chest.
+    expect(summary!.workingSetsByRegion.chest).toBe(3)
+  })
 })
 
 describe('repeating a workout from history (§7.2)', () => {

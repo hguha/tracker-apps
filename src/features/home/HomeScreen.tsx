@@ -20,13 +20,11 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
-import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { ProgressRing } from '@/components/ProgressRing'
-import { isWorkingSet } from '@/lib/metrics'
 import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
 import { formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
@@ -82,34 +80,22 @@ export function HomeScreen({
     const sumVolume = (list: typeof finished) =>
       list.reduce((total, s) => total + s.volumeKg, 0)
 
-    // Working sets per region, both this week (balance bars) and over the
-    // avatar's trailing window (§avatar). One pass over the window's workouts —
-    // this-week is a subset, so it's bucketed rather than queried twice.
-    const muscles = await db.muscles.toArray()
-    const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
+    // Working sets per region — this week (balance bars) and over the avatar's
+    // trailing window (§avatar). Both come straight from the summaries already
+    // loaded above: each carries its own per-region working-set counts, so this
+    // is in-memory bucketing rather than a second per-workout scan of the DB.
     const setsByRegion = new Map<Region, number>()
     const setsByRegionWindow = new Map<Region, number>()
 
     const avatarWindowStart = Date.now() - AVATAR_WINDOW_DAYS * 24 * 3600 * 1000
-    const windowWorkouts = finished.filter(
-      (s) => s.workout.startedAt >= avatarWindowStart,
-    )
 
-    for (const summary of windowWorkouts) {
+    for (const summary of finished) {
+      if (summary.workout.startedAt < avatarWindowStart) continue
       const inThisWeek = summary.workout.startedAt >= thisWeekStart
-      for (const we of await repo.listWorkoutExercises(summary.workout.id)) {
-        const exercise = await db.exercises.get(we.exerciseId)
-        if (!exercise) continue
-        const region = regionOf.get(exercise.primaryMuscleId)
-        if (!region) continue
-        const working = (await repo.listSets(we.id)).filter(
-          (s) => s.isCompleted && isWorkingSet(s),
-        ).length
-        if (working > 0) {
-          setsByRegionWindow.set(region, (setsByRegionWindow.get(region) ?? 0) + working)
-          if (inThisWeek)
-            setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working)
-        }
+      for (const [region, count] of Object.entries(summary.workingSetsByRegion)) {
+        const r = region as Region
+        setsByRegionWindow.set(r, (setsByRegionWindow.get(r) ?? 0) + count)
+        if (inThisWeek) setsByRegion.set(r, (setsByRegion.get(r) ?? 0) + count)
       }
     }
 
