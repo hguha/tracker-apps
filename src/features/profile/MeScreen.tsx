@@ -5,11 +5,27 @@
  * routes matters once there are enough biomarker charts to fill a screen.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Check, ChevronRight, ClipboardList, Dumbbell, RefreshCw } from 'lucide-react'
+import {
+  Check,
+  ChevronRight,
+  ClipboardList,
+  Download,
+  Dumbbell,
+  RefreshCw,
+  Upload,
+} from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
+import {
+  backupFilename,
+  countsOf,
+  exportToJson,
+  importBackup,
+  parseBackup,
+  BackupParseError,
+} from '@/data/backup'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -40,6 +56,55 @@ export function MeScreen({
   const sync = useSync()
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [isClearing, setIsClearing] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleExport() {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      const json = await exportToJson()
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      // A sortable date stamp; toISOString is UTC but fine for a filename.
+      link.download = backupFilename(new Date().toISOString().slice(0, 10))
+      link.click()
+      URL.revokeObjectURL(url)
+      toast.show('Backup downloaded')
+    } catch {
+      toast.show('Could not export')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setIsImporting(true)
+    try {
+      const backup = parseBackup(await file.text())
+      const counts = countsOf(backup)
+      const ok = window.confirm(
+        `Import ${counts.workouts} workouts, ${counts.templates} templates, ` +
+          `${counts.exercises} custom exercises, and ${counts.metricEntries} measurements? ` +
+          `Existing items with the same id are overwritten; nothing is deleted.`,
+      )
+      if (!ok) return
+      await importBackup(backup)
+      toast.show('Backup imported')
+      // A hard reload is the simplest way to refresh every live query at once.
+      window.location.reload()
+    } catch (error) {
+      toast.show(
+        error instanceof BackupParseError ? error.message : 'Could not import that file',
+      )
+    } finally {
+      setIsImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
@@ -232,9 +297,7 @@ export function MeScreen({
         <h2 className="text-[15px] font-semibold tracking-tight">Logging</h2>
         <div className="mt-3 space-y-3">
           <div>
-            <label className="text-[13.5px] font-medium">
-              Default rest timer
-            </label>
+            <label className="text-[13.5px] font-medium">Default rest timer</label>
             <div className="mt-1.5 flex gap-1.5">
               {[30, 60, 90, 120, 180].map((seconds) => (
                 <button
@@ -332,7 +395,10 @@ export function MeScreen({
           {sync.deadLettered > 0 && (
             <div className="flex justify-between">
               <dt style={{ color: 'var(--status-serious)' }}>Failed to sync</dt>
-              <dd className="tabular font-semibold" style={{ color: 'var(--status-serious)' }}>
+              <dd
+                className="tabular font-semibold"
+                style={{ color: 'var(--status-serious)' }}
+              >
                 {sync.deadLettered}
               </dd>
             </div>
@@ -370,8 +436,8 @@ export function MeScreen({
                   : 'Sync now'}
             </Button>
             <p className="mt-2.5 text-[12px] text-ink-muted">
-              Everything saves on this device instantly and syncs to your account in
-              the background. Use “Sync now” to push right away.
+              Everything saves on this device instantly and syncs to your account in the
+              background. Use “Sync now” to push right away.
             </p>
           </>
         ) : (
@@ -379,6 +445,43 @@ export function MeScreen({
             This account keeps everything in this browser. Nothing is uploaded.
           </p>
         )}
+
+        {/* Export / import: the portable backup that makes depending on a free
+            tier acceptable (§11.3). Pure client-side JSON. */}
+        <div className="mt-3 flex gap-2">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={isExporting}
+            onClick={() => void handleExport()}
+          >
+            <Download size={16} />
+            {isExporting ? 'Exporting…' : 'Export'}
+          </Button>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={isImporting}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={16} />
+            {isImporting ? 'Importing…' : 'Import'}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void handleImportFile(file)
+            }}
+          />
+        </div>
+        <p className="mt-2 text-[12px] text-ink-muted">
+          Export a full JSON backup of your workouts, templates, custom exercises, and
+          measurements — or import one to restore or move devices.
+        </p>
 
         {/* Clears IndexedDB. On a synced account the next pull rehydrates from
             the server; on an offline account this is a genuine reset. */}
