@@ -1547,10 +1547,11 @@ export async function createTemplatesFromPlan(plan: {
       repLow: number
       repHigh: number
       weight: number | null
+      autoProgress?: boolean
     }[]
   }[]
-  /** null = user's stored unit; passed explicitly so the caller controls it. */
   unitWeight: WeightUnit
+  /** Folder to group the sessions under — a coach program's name (§13). */
   folder?: string | null
 }): Promise<{ templateIds: string[]; unmatched: string[] }> {
   // Build a name/alias → id index over the live library once.
@@ -1560,6 +1561,10 @@ export async function createTemplatesFromPlan(plan: {
     byName.set(ex.name.toLowerCase(), ex.id)
     for (const alias of ex.aliases) byName.set(alias.toLowerCase(), ex.id)
   }
+
+  // A sensible default progression step for the user's unit, applied when the
+  // plan flags an exercise for auto-progression.
+  const incrementKg = plan.unitWeight === 'kg' ? 2.5 : weightToKg(5, 'lb')
 
   const templateIds: string[] = []
   const unmatched: string[] = []
@@ -1581,6 +1586,9 @@ export async function createTemplatesFromPlan(plan: {
         targetRepsHigh: pe.repHigh,
         targetWeightKg:
           pe.weight === null ? null : weightToKg(pe.weight, plan.unitWeight),
+        // Carry the coach's progression intent into a real rule (§7 Phase 4),
+        // so a multi-week program's load increases happen automatically.
+        progression: pe.autoProgress ? { kind: 'double', incrementKg, maxRpe: 8 } : null,
       })
     }
   }

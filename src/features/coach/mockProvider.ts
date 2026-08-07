@@ -132,6 +132,8 @@ function plan(summary: CoachSummary): CoachPlan {
     return {
       overview:
         'A simple full-body week to start building a history the coach can learn from.',
+      programName: null,
+      durationWeeks: null,
       sessions: STARTER_SESSIONS,
     }
   }
@@ -157,6 +159,8 @@ function plan(summary: CoachSummary): CoachPlan {
       e.lastWeekOffset <= -2
         ? 'Been a couple weeks — ease back to your recent working weight.'
         : 'Continue at your recent working weight; add reps toward the top of the range.',
+    // Compound-ish work (low rep floor) auto-progresses; higher-rep accessory holds.
+    autoProgress: (e.repRange ? e.repRange[0] : 8) <= 6,
   })
 
   // Two sessions: an upper day and a lower day, filled from what's active,
@@ -191,6 +195,8 @@ function plan(summary: CoachSummary): CoachPlan {
   return {
     overview:
       'Next week continues your recent lifts at their working weights, split upper/lower. Edit anything before saving.',
+    programName: null,
+    durationWeeks: null,
     sessions,
   }
 }
@@ -206,6 +212,7 @@ const STARTER_SESSIONS: PlanSession[] = [
         repLow: 5,
         repHigh: 8,
         weight: null,
+        autoProgress: true,
         note: 'Start light and add weight each session.',
       },
       {
@@ -214,6 +221,7 @@ const STARTER_SESSIONS: PlanSession[] = [
         repLow: 5,
         repHigh: 8,
         weight: null,
+        autoProgress: true,
         note: 'Focus on clean, controlled reps.',
       },
       {
@@ -222,6 +230,7 @@ const STARTER_SESSIONS: PlanSession[] = [
         repLow: 8,
         repHigh: 12,
         weight: null,
+        autoProgress: false,
         note: 'Balances the pressing.',
       },
     ],
@@ -235,6 +244,7 @@ const STARTER_SESSIONS: PlanSession[] = [
         repLow: 5,
         repHigh: 5,
         weight: null,
+        autoProgress: true,
         note: 'Keep it crisp — stop when form slips.',
       },
       {
@@ -243,6 +253,7 @@ const STARTER_SESSIONS: PlanSession[] = [
         repLow: 5,
         repHigh: 8,
         weight: null,
+        autoProgress: true,
         note: 'Vertical pressing for the shoulders.',
       },
       {
@@ -251,6 +262,7 @@ const STARTER_SESSIONS: PlanSession[] = [
         repLow: 8,
         repHigh: 12,
         weight: null,
+        autoProgress: false,
         note: 'Vertical pulling to match.',
       },
     ],
@@ -297,7 +309,7 @@ export const mockCoachProvider: CoachProvider = {
         return { kind: 'critique', critique: critique(summary) }
       case 'plan':
         return { kind: 'plan', plan: plan(summary) }
-      case 'question':
+      case 'ask':
         return { kind: 'answer', text: answer(summary, request.question) }
     }
   },

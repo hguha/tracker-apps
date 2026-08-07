@@ -37,71 +37,120 @@ const CRITIQUE_SCHEMA = {
   required: ['observations', 'suggestions'],
 }
 
+const PLAN_EXERCISE_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    sets: { type: 'integer' },
+    repLow: { type: 'integer' },
+    repHigh: { type: 'integer' },
+    weight: { type: 'number', nullable: true },
+    note: { type: 'string' },
+    autoProgress: { type: 'boolean' },
+  },
+  required: ['name', 'sets', 'repLow', 'repHigh', 'note', 'autoProgress'],
+}
+
 const PLAN_SCHEMA = {
   type: 'object',
   properties: {
     overview: { type: 'string' },
+    programName: { type: 'string', nullable: true },
+    durationWeeks: { type: 'integer', nullable: true },
     sessions: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           name: { type: 'string' },
-          exercises: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                sets: { type: 'integer' },
-                repLow: { type: 'integer' },
-                repHigh: { type: 'integer' },
-                weight: { type: 'number', nullable: true },
-                note: { type: 'string' },
-              },
-              required: ['name', 'sets', 'repLow', 'repHigh', 'note'],
-            },
-          },
+          exercises: { type: 'array', items: PLAN_EXERCISE_SCHEMA },
         },
         required: ['name', 'exercises'],
       },
     },
   },
-  required: ['overview', 'sessions'],
+  required: ['overview', 'programName', 'durationWeeks', 'sessions'],
+}
+
+/** Ask can answer in prose OR return a plan — the model picks `mode`. */
+const ASK_SCHEMA = {
+  type: 'object',
+  properties: {
+    mode: { type: 'string', enum: ['text', 'plan'] },
+    text: { type: 'string', nullable: true },
+    plan: { ...PLAN_SCHEMA, nullable: true },
+  },
+  required: ['mode'],
 }
 
 const SYSTEM = [
-  'You are a strength and conditioning coach inside a workout-tracking app.',
-  'You are given a de-identified summary of a user\'s recent training: per-week',
-  'and per-exercise aggregates, weights in their unit, dates only as week offsets',
-  '(0 = this week, negative = past). There is no name or personal data.',
-  'Be specific and grounded in the numbers. Never give medical or injury advice,',
-  'never phrase anything as certainty, keep it concise. Weights you propose must',
-  'be in the same unit as the summary. Only reference exercises that appear in the',
-  'summary or are common barbell/dumbbell lifts by their standard name.',
-].join(' ')
+  'You are an expert strength & conditioning coach inside a workout-tracking app.',
+  'INPUT: a de-identified summary of the user\'s recent training — per-week and',
+  'per-exercise aggregates, weights already in the user\'s unit, dates only as week',
+  'offsets (0 = this week, negative = past). No personal data. You are also given',
+  'the list of exercise names available in the app.',
+  '',
+  'RULES:',
+  '- Ground every claim in the numbers you were given; do not invent history.',
+  '- Prefer exercises from the provided library list, by their exact name, so the',
+  '  app can save them. A well-known barbell/dumbbell lift is acceptable if absent.',
+  '- Weights you propose are in the user\'s unit. Use null to let the app seed the',
+  '  weight from history.',
+  '- Set autoProgress=true on straight-set compound work that should add weight over',
+  '  time; false for rep-range accessory or cardio work.',
+  '- Build toward the user\'s STATED GOAL, taken literally, even if that means an',
+  '  unbalanced emphasis. Only rebalance if the goal itself asks for balance or is',
+  '  blank. Do NOT simply pile more volume onto whatever they already do most.',
+  '- Never give medical or injury advice; never phrase anything as certainty; be',
+  '  concise and concrete.',
+].join('\n')
 
-function promptFor(request: { kind: string; question?: string }, summaryJson: string): string {
-  const base = `Training summary (JSON):\n${summaryJson}\n\n`
+function promptFor(
+  request: { kind: string; goal?: string; question?: string },
+  summaryJson: string,
+  libraryNames: string[],
+): string {
+  const context =
+    `Training summary (JSON):\n${summaryJson}\n\n` +
+    `Available exercises (use these exact names where possible):\n` +
+    `${libraryNames.join(', ')}\n\n`
+
   switch (request.kind) {
     case 'critique':
       return (
-        base +
-        'Critique this training: 2–4 short standalone observations about balance, ' +
-        'frequency, and progression, then concrete suggestions. Return JSON.'
+        context +
+        'Critique this training in 2–4 short, standalone observations about balance, ' +
+        'frequency, and progression, then give concrete suggestions.'
       )
-    case 'plan':
+    case 'plan': {
+      const goal = (request.goal ?? '').trim()
+      const goalLine = goal
+        ? `The user's goal: "${goal}". Build the plan toward this goal, literally.`
+        : 'No specific goal was given, so propose a balanced next week that ' +
+          'continues and progresses their training and fills obvious gaps.'
       return (
-        base +
-        'Propose next week as 1–3 sessions that continue and progress this training. ' +
-        'For each exercise give sets, a rep range (repLow/repHigh), an optional ' +
-        'working weight in the user\'s unit (null to let history decide), and a short ' +
-        'note. Return JSON.'
+        context +
+        goalLine +
+        '\n\nProduce a plan. If the goal implies a multi-week program (e.g. "12-week ' +
+        'strength block"), set programName and durationWeeks, and design the weekly ' +
+        'sessions to be repeated with autoProgress carrying the load increases over ' +
+        'the weeks — do NOT emit a separate session per week. Otherwise set ' +
+        'programName and durationWeeks to null for a single week. Each session ' +
+        'becomes one saved template; give it a clear name (e.g. "Push A", "Lower B").'
       )
-    case 'question':
-      return base + `Answer this question from the summary, concisely: "${request.question}"`
+    }
+    case 'ask': {
+      return (
+        context +
+        `The user asks: "${request.question}".\n\n` +
+        'If answering well means proposing workouts (e.g. "give me a push day", ' +
+        '"design a 12-week program"), set mode="plan" and fill `plan` using the same ' +
+        'rules as a plan request (programName/durationWeeks for multi-week, else ' +
+        'null). Otherwise set mode="text" and answer concisely in `text`.'
+      )
+    }
     default:
-      return base
+      return context
   }
 }
 
@@ -148,7 +197,11 @@ Deno.serve(async (req: Request) => {
   if (!userId) return json({ error: 'Unauthorized' }, 401)
   if (rateLimited(userId)) return json({ error: 'Too many requests — slow down' }, 429)
 
-  let payload: { summary?: unknown; request?: { kind?: string; question?: string } }
+  let payload: {
+    summary?: unknown
+    library?: unknown
+    request?: { kind?: string; goal?: string; question?: string }
+  }
   try {
     payload = await req.json()
   } catch {
@@ -158,26 +211,32 @@ Deno.serve(async (req: Request) => {
   const request = payload.request
   const summary = payload.summary
   if (!request?.kind || !summary) return json({ error: 'Missing summary or request' }, 400)
-  if (!['critique', 'plan', 'question'].includes(request.kind)) {
+  if (!['critique', 'plan', 'ask'].includes(request.kind)) {
     return json({ error: 'Unknown request kind' }, 400)
   }
+  // The exercise-name allowlist, so proposed plans use lifts the app can save.
+  const library = Array.isArray(payload.library)
+    ? (payload.library as unknown[]).filter((n): n is string => typeof n === 'string')
+    : []
 
   const schema =
     request.kind === 'critique'
       ? CRITIQUE_SCHEMA
       : request.kind === 'plan'
         ? PLAN_SCHEMA
-        : null // a freeform question returns plain text
+        : ASK_SCHEMA
 
-  const generationConfig: Record<string, unknown> = { temperature: 0.4 }
-  if (schema) {
-    generationConfig.responseMimeType = 'application/json'
-    generationConfig.responseSchema = schema
+  const generationConfig: Record<string, unknown> = {
+    temperature: 0.5,
+    responseMimeType: 'application/json',
+    responseSchema: schema,
   }
 
   const geminiBody = {
     systemInstruction: { parts: [{ text: SYSTEM }] },
-    contents: [{ parts: [{ text: promptFor(request, JSON.stringify(summary)) }] }],
+    contents: [
+      { parts: [{ text: promptFor(request, JSON.stringify(summary), library) }] },
+    ],
     generationConfig,
   }
 
@@ -209,7 +268,12 @@ Deno.serve(async (req: Request) => {
     if (request.kind === 'plan') {
       return json({ kind: 'plan', plan: JSON.parse(text) })
     }
-    return json({ kind: 'answer', text: text.trim() })
+    // Ask: the model chose text or a plan.
+    const parsed = JSON.parse(text)
+    if (parsed.mode === 'plan' && parsed.plan) {
+      return json({ kind: 'plan', plan: parsed.plan })
+    }
+    return json({ kind: 'answer', text: (parsed.text ?? '').trim() })
   } catch {
     return json({ error: 'Coach returned malformed output' }, 502)
   }

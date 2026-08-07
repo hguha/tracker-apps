@@ -10,6 +10,7 @@
  */
 
 import { getSupabase } from '@/sync/supabaseClient'
+import * as repo from '@/data/repository'
 import type { CoachSummary } from './summary'
 import type { CoachProvider, CoachRequest, CoachResponse } from './types'
 
@@ -20,9 +21,14 @@ export const geminiCoachProvider: CoachProvider = {
     const supabase = getSupabase()
     if (!supabase) throw new Error('Backend not configured')
 
+    // Send the exercise-name allowlist so proposed plans use lifts the app can
+    // actually save (matched by name/alias in createTemplatesFromPlan). Names
+    // aren't identifying — the library is shared and mostly system rows.
+    const library = (await repo.listExercises()).map((e) => e.name)
+
     // invoke() attaches the signed-in user's JWT, which the function verifies.
     const { data, error } = await supabase.functions.invoke('coach', {
-      body: { summary, request },
+      body: { summary, request, library },
     })
     if (error) throw error
 

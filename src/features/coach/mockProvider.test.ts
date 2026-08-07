@@ -87,7 +87,7 @@ describe('mockCoachProvider — plan', () => {
           ex({ name: 'Barbell Back Squat', region: 'legs', recentTopSetKg: 140 }),
         ],
       }),
-      { kind: 'plan' },
+      { kind: 'plan', goal: '' },
     )
     if (r.kind !== 'plan') throw new Error('wrong kind')
     expect(r.plan.sessions.length).toBeGreaterThan(0)
@@ -103,18 +103,23 @@ describe('mockCoachProvider — plan', () => {
   it('proposes a starter week when there is no history', async () => {
     const r = await mockCoachProvider.respond(
       summary({ totalWorkouts: 0, exercises: [] }),
-      { kind: 'plan' },
+      { kind: 'plan', goal: '' },
     )
     if (r.kind !== 'plan') throw new Error('wrong kind')
     expect(r.plan.sessions.length).toBe(2)
     expect(r.plan.overview.toLowerCase()).toContain('full-body')
+    // New plan shape: single week (no program), every exercise flags progression.
+    expect(r.plan.programName).toBeNull()
+    expect(r.plan.durationWeeks).toBeNull()
+    const allEx = r.plan.sessions.flatMap((s) => s.exercises)
+    expect(allEx.every((e) => typeof e.autoProgress === 'boolean')).toBe(true)
   })
 })
 
 describe('mockCoachProvider — questions', () => {
   it('answers a volume question from the summary', async () => {
     const r = await mockCoachProvider.respond(summary(), {
-      kind: 'question',
+      kind: 'ask',
       question: 'How much volume have I done?',
     })
     if (r.kind !== 'answer') throw new Error('wrong kind')
@@ -123,7 +128,7 @@ describe('mockCoachProvider — questions', () => {
 
   it('is honest when there is no data', async () => {
     const r = await mockCoachProvider.respond(summary({ totalWorkouts: 0 }), {
-      kind: 'question',
+      kind: 'ask',
       question: 'what should I do',
     })
     if (r.kind !== 'answer') throw new Error('wrong kind')

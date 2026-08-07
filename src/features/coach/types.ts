@@ -24,19 +24,30 @@ export interface PlanExercise {
   weight: number | null
   /** One-line rationale, shown under the exercise. */
   note: string
+  /** Set an auto-progression rule on this exercise when saved (§7 Phase 4). */
+  autoProgress?: boolean
 }
 
-/** One session in a proposed week. */
+/** One session — becomes one template. */
 export interface PlanSession {
   /** e.g. "Push A", "Legs". Becomes the template name. */
   name: string
   exercises: PlanExercise[]
 }
 
-/** A concrete next-week plan the user can edit and save as templates. */
+/**
+ * A plan the user can edit and save as templates. A single-week plan has one
+ * set of sessions; a multi-week program names a folder and explains the arc in
+ * `overview` and per-session notes, with progression rules carrying week-to-week
+ * load increases (rather than emitting one template per week per day).
+ */
 export interface CoachPlan {
-  /** 1–2 sentence summary of the week's intent. */
+  /** 1–3 sentence summary of the plan's intent and how to run it over time. */
   overview: string
+  /** Folder name for a multi-week program, or null for a loose set of days. */
+  programName: string | null
+  /** Intended program length in weeks, or null for a single week. */
+  durationWeeks: number | null
   sessions: PlanSession[]
 }
 
@@ -48,9 +59,17 @@ export interface CoachCritique {
   suggestions: string[]
 }
 
-/** What the user asked the coach for. */
+/**
+ * What the user asked the coach for.
+ *   - critique: no input.
+ *   - plan: a free-text goal ("strength-focused, 12 weeks"); may be empty.
+ *   - ask: a free-text question that may itself request a plan ("give me a
+ *     push day") — so the response can come back as a plan or as prose.
+ */
 export type CoachRequest =
-  { kind: 'critique' } | { kind: 'plan' } | { kind: 'question'; question: string }
+  | { kind: 'critique' }
+  | { kind: 'plan'; goal: string }
+  | { kind: 'ask'; question: string }
 
 /** The provider's answer, tagged by kind so the UI renders the right shape. */
 export type CoachResponse =
