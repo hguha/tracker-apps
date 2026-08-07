@@ -14,6 +14,8 @@ import {
   Download,
   Dumbbell,
   RefreshCw,
+  Sparkles,
+  Trophy,
   Upload,
 } from 'lucide-react'
 import { db } from '@/db/database'
@@ -46,10 +48,14 @@ export function MeScreen({
   onOpenLibrary,
   onOpenTemplates,
   onOpenAccount,
+  onOpenCoach,
+  onOpenBadges,
 }: {
   onOpenLibrary: () => void
   onOpenTemplates: () => void
   onOpenAccount: () => void
+  onOpenCoach: () => void
+  onOpenBadges: () => void
 }) {
   const toast = useToast()
   const { session } = useAuth()
@@ -217,6 +223,36 @@ export function MeScreen({
             <span className="block text-[15px] font-semibold">Templates</span>
             <span className="block text-[12.5px] text-ink-muted">
               Build and edit reusable workout plans
+            </span>
+          </span>
+          <ChevronRight size={17} className="shrink-0 text-ink-muted" />
+        </button>
+        <button
+          onClick={onOpenCoach}
+          className="flex w-full items-center gap-3 border-t border-line px-4 py-3.5 text-left active:bg-accent-wash"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-wash text-accent">
+            <Sparkles size={19} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">Coach</span>
+            <span className="block text-[12.5px] text-ink-muted">
+              Critique your balance and draft a plan from your history
+            </span>
+          </span>
+          <ChevronRight size={17} className="shrink-0 text-ink-muted" />
+        </button>
+        <button
+          onClick={onOpenBadges}
+          className="flex w-full items-center gap-3 border-t border-line px-4 py-3.5 text-left active:bg-accent-wash"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-wash text-accent">
+            <Trophy size={19} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">Badges</span>
+            <span className="block text-[12.5px] text-ink-muted">
+              Milestones across strength, consistency, and cardio
             </span>
           </span>
           <ChevronRight size={17} className="shrink-0 text-ink-muted" />

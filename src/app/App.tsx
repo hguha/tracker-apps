@@ -18,6 +18,7 @@ import { SignInScreen } from '@/features/auth/SignInScreen'
 import { AccountScreen } from '@/features/auth/AccountScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
 import { BadgesScreen } from '@/features/home/BadgesScreen'
+import { CoachScreen } from '@/features/coach/CoachScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { MeScreen } from '@/features/profile/MeScreen'
 import { ExerciseLibraryScreen } from '@/features/library/ExerciseLibraryScreen'
@@ -42,6 +43,7 @@ type View =
   | { kind: 'start' }
   | { kind: 'account' }
   | { kind: 'badges' }
+  | { kind: 'coach' }
   | { kind: 'templates' }
   | { kind: 'templateEditor'; templateId: string }
   | { kind: 'workout'; workoutId: string; isEditMode: boolean }
@@ -176,6 +178,15 @@ function SignedInApp() {
     return <BadgesScreen onBack={() => setView({ kind: 'tabs' })} />
   }
 
+  if (view.kind === 'coach') {
+    return (
+      <CoachScreen
+        onBack={() => setView({ kind: 'tabs' })}
+        onOpenTemplates={() => setView({ kind: 'templates' })}
+      />
+    )
+  }
+
   if (view.kind === 'templates') {
     return (
       <TemplatesScreen
@@ -235,6 +246,8 @@ function SignedInApp() {
             onOpenLibrary={() => setTab('library')}
             onOpenTemplates={() => setView({ kind: 'templates' })}
             onOpenAccount={() => setView({ kind: 'account' })}
+            onOpenCoach={() => setView({ kind: 'coach' })}
+            onOpenBadges={() => setView({ kind: 'badges' })}
           />
         )}
       </main>

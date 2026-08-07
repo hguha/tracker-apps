@@ -12,7 +12,7 @@
 
 import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
-import { formatDistance, formatWeight } from '@/lib/units'
+import { formatDistance, formatWeight, weightToKg } from '@/lib/units'
 import { bestOneRepMaxKg, estimatedOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
 import { nextTarget } from '@/lib/progression'
 import { weekStart } from '@/lib/dates'
@@ -1525,6 +1525,67 @@ export async function reorderTemplateExercises(orderedIds: string[]): Promise<vo
   for (const [index, id] of orderedIds.entries()) {
     await updateTemplateExercise(id, { position: index })
   }
+}
+
+/**
+ * Materialize a coach plan (§13) into real templates — one per session.
+ *
+ * Each plan exercise is matched to a library exercise by name or alias
+ * (case-insensitive); an unmatched name is skipped rather than inventing an
+ * exercise, and the skipped names are returned so the UI can say so. Weights in
+ * the plan are in the user's unit and converted back to canonical kg here.
+ *
+ * The plan is always reviewed/edited in the UI before this runs — nothing the
+ * coach proposes is auto-applied (§13).
+ */
+export async function createTemplatesFromPlan(plan: {
+  sessions: {
+    name: string
+    exercises: {
+      name: string
+      sets: number
+      repLow: number
+      repHigh: number
+      weight: number | null
+    }[]
+  }[]
+  /** null = user's stored unit; passed explicitly so the caller controls it. */
+  unitWeight: WeightUnit
+  folder?: string | null
+}): Promise<{ templateIds: string[]; unmatched: string[] }> {
+  // Build a name/alias → id index over the live library once.
+  const library = await listExercises()
+  const byName = new Map<string, string>()
+  for (const ex of library) {
+    byName.set(ex.name.toLowerCase(), ex.id)
+    for (const alias of ex.aliases) byName.set(alias.toLowerCase(), ex.id)
+  }
+
+  const templateIds: string[] = []
+  const unmatched: string[] = []
+
+  for (const session of plan.sessions) {
+    const templateId = await createTemplate(session.name, plan.folder ?? null)
+    templateIds.push(templateId)
+
+    for (const pe of session.exercises) {
+      const exerciseId = byName.get(pe.name.trim().toLowerCase())
+      if (!exerciseId) {
+        unmatched.push(pe.name)
+        continue
+      }
+      const teId = await addExerciseToTemplate(templateId, exerciseId)
+      await updateTemplateExercise(teId, {
+        targetSets: pe.sets,
+        targetRepsLow: pe.repLow,
+        targetRepsHigh: pe.repHigh,
+        targetWeightKg:
+          pe.weight === null ? null : weightToKg(pe.weight, plan.unitWeight),
+      })
+    }
+  }
+
+  return { templateIds, unmatched }
 }
 
 /**

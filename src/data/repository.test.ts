@@ -380,6 +380,39 @@ describe('getBadgeStats', () => {
   })
 })
 
+describe('createTemplatesFromPlan (§13)', () => {
+  it('materializes a plan into templates, matching exercises by name', async () => {
+    const result = await repo.createTemplatesFromPlan({
+      unitWeight: 'lb',
+      sessions: [
+        {
+          name: 'Upper',
+          exercises: [
+            { name: 'Barbell Bench Press', sets: 3, repLow: 5, repHigh: 8, weight: 225 },
+            {
+              name: 'Totally Made Up Lift',
+              sets: 3,
+              repLow: 8,
+              repHigh: 12,
+              weight: null,
+            },
+          ],
+        },
+      ],
+    })
+    expect(result.templateIds).toHaveLength(1)
+    // The unmatched name is reported, not invented.
+    expect(result.unmatched).toEqual(['Totally Made Up Lift'])
+
+    const tes = await repo.listTemplateExercises(result.templateIds[0]!)
+    expect(tes).toHaveLength(1)
+    expect(tes[0]!.exerciseId).toBe('barbell_bench_press')
+    expect(tes[0]!.targetRepsLow).toBe(5)
+    // 225 lb stored back as kg (~102).
+    expect(tes[0]!.targetWeightKg).toBeCloseTo(102, 0)
+  })
+})
+
 describe('getCoachSummary', () => {
   it('produces a de-identified summary from logged history', async () => {
     const w = await repo.startWorkout({ title: 'Push' })
