@@ -135,3 +135,29 @@ describe('mockCoachProvider — questions', () => {
     expect(r.text.toLowerCase()).toContain('no training history')
   })
 })
+
+describe('mockCoachProvider — encouragement', () => {
+  it('returns a short note for an active lifter', async () => {
+    const r = await mockCoachProvider.respond(summary(), { kind: 'encouragement' })
+    if (r.kind !== 'answer') throw new Error('wrong kind')
+    expect(r.text.length).toBeGreaterThan(0)
+  })
+
+  it('nudges a brand-new user to log their first session', async () => {
+    const r = await mockCoachProvider.respond(
+      summary({ totalWorkouts: 0, weeks: [], exercises: [] }),
+      { kind: 'encouragement' },
+    )
+    if (r.kind !== 'answer') throw new Error('wrong kind')
+    expect(r.text.toLowerCase()).toContain('first')
+  })
+
+  it('celebrates hitting the weekly goal', async () => {
+    const r = await mockCoachProvider.respond(
+      summary({ weeks: [{ weekOffset: 0, workouts: 4, sets: 40, volumeKg: 12000 }] }),
+      { kind: 'encouragement' },
+    )
+    if (r.kind !== 'answer') throw new Error('wrong kind')
+    expect(r.text.toLowerCase()).toContain('goal')
+  })
+})

@@ -70,6 +70,8 @@ export type CoachRequest =
   | { kind: 'critique' }
   | { kind: 'plan'; goal: string }
   | { kind: 'ask'; question: string }
+  /** A warm 1–2 sentence progress note for the Home greeting. Returns `answer`. */
+  | { kind: 'encouragement' }
 
 /** The provider's answer, tagged by kind so the UI renders the right shape. */
 export type CoachResponse =

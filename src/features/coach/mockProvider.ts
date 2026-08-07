@@ -297,6 +297,27 @@ function answer(summary: CoachSummary, question: string): string {
   )
 }
 
+/** A warm 1–2 sentence note for the Home greeting, grounded in the numbers. */
+function encouragement(summary: CoachSummary): string {
+  if (summary.totalWorkouts === 0) {
+    return "Every strong log starts with one session — get the first one in and I'll start tracking your progress."
+  }
+
+  const thisWeek = summary.weeks.find((w) => w.weekOffset === 0)?.workouts ?? 0
+  const goal = summary.weeklyWorkoutGoal
+  const topLift = summary.exercises
+    .filter((e) => e.bestE1rmKg !== null && e.lastWeekOffset >= -1)
+    .sort((a, b) => (b.recentTopSetKg ?? 0) - (a.recentTopSetKg ?? 0))[0]
+
+  if (thisWeek >= goal) {
+    return `You've hit your ${goal}-session goal this week — that consistency is exactly what drives progress. Keep it rolling.`
+  }
+  if (topLift) {
+    return `Nice work staying in the gym. Your ${topLift.name} is moving — keep chipping away and the numbers follow.`
+  }
+  return `${summary.totalWorkouts} sessions logged and counting. Showing up is the hard part, and you're doing it.`
+}
+
 /**
  * The offline coach. Available everywhere; used until a real LLM provider is
  * wired, and as the fallback when one is unreachable.
@@ -311,6 +332,8 @@ export const mockCoachProvider: CoachProvider = {
         return { kind: 'plan', plan: plan(summary) }
       case 'ask':
         return { kind: 'answer', text: answer(summary, request.question) }
+      case 'encouragement':
+        return { kind: 'answer', text: encouragement(summary) }
     }
   },
   async isAvailable() {

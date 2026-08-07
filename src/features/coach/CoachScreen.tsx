@@ -58,7 +58,8 @@ export function CoachScreen({
 
   async function ask(request: CoachRequest) {
     if (!summary) return
-    setPending(request.kind)
+    // The screen only issues critique/plan/ask; encouragement is Home-only.
+    if (request.kind !== 'encouragement') setPending(request.kind)
     setResponse(null)
     try {
       const live = await geminiCoachProvider.isAvailable()

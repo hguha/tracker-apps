@@ -223,6 +223,7 @@ function SignedInApp() {
               setView({ kind: 'workout', workoutId, isEditMode: true })
             }
             onOpenBadges={() => setView({ kind: 'badges' })}
+            onOpenCoach={() => setView({ kind: 'coach' })}
           />
         )}
         {tab === 'history' && (

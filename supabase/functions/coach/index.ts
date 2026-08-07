@@ -18,8 +18,7 @@
 // @ts-nocheck — Deno runtime; typed against the Deno std lib at deploy time.
 
 const GEMINI_MODEL = 'gemini-flash-latest'
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -85,8 +84,8 @@ const ASK_SCHEMA = {
 
 const SYSTEM = [
   'You are an expert strength & conditioning coach inside a workout-tracking app.',
-  'INPUT: a de-identified summary of the user\'s recent training — per-week and',
-  'per-exercise aggregates, weights already in the user\'s unit, dates only as week',
+  "INPUT: a de-identified summary of the user's recent training — per-week and",
+  "per-exercise aggregates, weights already in the user's unit, dates only as week",
   'offsets (0 = this week, negative = past). No personal data. You are also given',
   'the list of exercise names available in the app.',
   '',
@@ -94,11 +93,11 @@ const SYSTEM = [
   '- Ground every claim in the numbers you were given; do not invent history.',
   '- Prefer exercises from the provided library list, by their exact name, so the',
   '  app can save them. A well-known barbell/dumbbell lift is acceptable if absent.',
-  '- Weights you propose are in the user\'s unit. Use null to let the app seed the',
+  "- Weights you propose are in the user's unit. Use null to let the app seed the",
   '  weight from history.',
   '- Set autoProgress=true on straight-set compound work that should add weight over',
   '  time; false for rep-range accessory or cardio work.',
-  '- Build toward the user\'s STATED GOAL, taken literally, even if that means an',
+  "- Build toward the user's STATED GOAL, taken literally, even if that means an",
   '  unbalanced emphasis. Only rebalance if the goal itself asks for balance or is',
   '  blank. Do NOT simply pile more volume onto whatever they already do most.',
   '- Never give medical or injury advice; never phrase anything as certainty; be',
@@ -149,6 +148,15 @@ function promptFor(
         'null). Otherwise set mode="text" and answer concisely in `text`.'
       )
     }
+    case 'encouragement':
+      return (
+        context +
+        "Write a warm, specific 1–2 sentence note about this person's recent " +
+        'progress, for a home-screen greeting. Reference something concrete from ' +
+        'the numbers (a lift moving up, a consistent week, sticking with it). ' +
+        'Encouraging, never corrective, never a full critique. Return JSON: ' +
+        '{ "mode": "text", "text": "..." }.'
+      )
     default:
       return context
   }
@@ -210,8 +218,9 @@ Deno.serve(async (req: Request) => {
 
   const request = payload.request
   const summary = payload.summary
-  if (!request?.kind || !summary) return json({ error: 'Missing summary or request' }, 400)
-  if (!['critique', 'plan', 'ask'].includes(request.kind)) {
+  if (!request?.kind || !summary)
+    return json({ error: 'Missing summary or request' }, 400)
+  if (!['critique', 'plan', 'ask', 'encouragement'].includes(request.kind)) {
     return json({ error: 'Unknown request kind' }, 400)
   }
   // The exercise-name allowlist, so proposed plans use lifts the app can save.
@@ -219,6 +228,7 @@ Deno.serve(async (req: Request) => {
     ? (payload.library as unknown[]).filter((n): n is string => typeof n === 'string')
     : []
 
+  // Encouragement reuses the ask schema (it returns { mode:'text', text }).
   const schema =
     request.kind === 'critique'
       ? CRITIQUE_SCHEMA

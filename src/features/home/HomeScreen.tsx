@@ -10,9 +10,16 @@
  * a number with no comparison isn't an insight.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, Flame, Play, TrendingDown, TrendingUp } from 'lucide-react'
+import {
+  ChevronRight,
+  Flame,
+  Play,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
@@ -35,6 +42,7 @@ import {
   type RegionInput,
 } from './avatar'
 import { TrainingAvatar } from './TrainingAvatar'
+import { getHomeGreeting } from '@/features/coach/encouragement'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
 
@@ -43,13 +51,16 @@ export function HomeScreen({
   onStartWorkout,
   onOpenWorkout,
   onOpenBadges,
+  onOpenCoach,
 }: {
   onResumeWorkout: (workoutId: string) => void
   onStartWorkout: () => void
   onOpenWorkout: (workoutId: string) => void
   onOpenBadges: () => void
+  onOpenCoach: () => void
 }) {
   const { session } = useAuth()
+  const [greeting, setGreeting] = useState<string | null>(null)
 
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
@@ -193,6 +204,20 @@ export function HomeScreen({
     }
   }, [])
 
+  // The coach greeting refreshes only when the finished-workout count changes
+  // (i.e. after a new workout), not on every open — the caching lives in
+  // getHomeGreeting, keyed on that count.
+  const finishedCount = data?.totalWorkouts ?? 0
+  useEffect(() => {
+    let cancelled = false
+    void getHomeGreeting(finishedCount).then((text) => {
+      if (!cancelled) setGreeting(text)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [finishedCount])
+
   if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
 
   const {
@@ -242,6 +267,27 @@ export function HomeScreen({
           Good {partOfDay(Date.now()).toLowerCase()}, {firstName}
         </h1>
       </div>
+
+      {/* Coach greeting — a stable note that refreshes only after a new workout.
+          Tap through to the full coach. */}
+      {greeting && (
+        <button
+          onClick={onOpenCoach}
+          className="flex w-full items-start gap-3 rounded-2xl border border-accent/30 bg-accent-wash p-4 text-left active:opacity-80"
+        >
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+            <Sparkles size={16} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-medium leading-snug text-ink">
+              {greeting}
+            </span>
+            <span className="mt-1 flex items-center gap-0.5 text-[12px] font-semibold text-accent">
+              Ask your coach <ChevronRight size={13} />
+            </span>
+          </span>
+        </button>
+      )}
 
       {active && (
         <Card className="border-accent bg-accent-wash p-4">
