@@ -7,12 +7,20 @@
  * boundary, in `lib/units.ts`.
  */
 
-/** The 7 fixed regions. Matched to the 7 validated palette slots (§10.2). */
+/**
+ * The fixed training regions, each mapped to a palette slot (§10.2).
+ *
+ * Biceps and triceps are separate regions rather than one "Arms": pull work and
+ * push work load them on different days, so folding them together hid the
+ * imbalance the split is meant to surface. Elbow flexors (biceps, brachialis)
+ * and forearms roll up to `biceps`; the triceps stand alone.
+ */
 export const REGIONS = [
   'chest',
   'back',
   'shoulders',
-  'arms',
+  'biceps',
+  'triceps',
   'legs',
   'core',
   'cardio',
@@ -23,7 +31,8 @@ export const REGION_LABELS: Record<Region, string> = {
   chest: 'Chest',
   back: 'Back',
   shoulders: 'Shoulders',
-  arms: 'Arms',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
   legs: 'Legs',
   core: 'Core',
   cardio: 'Cardio',
@@ -265,13 +274,7 @@ export interface PersonalRecord extends SyncColumns {
 }
 
 export type MetricUnitType =
-  | 'mass'
-  | 'length'
-  | 'percent'
-  | 'count'
-  | 'duration'
-  | 'ratio'
-  | 'arbitrary'
+  'mass' | 'length' | 'percent' | 'count' | 'duration' | 'ratio' | 'arbitrary'
 
 export type MetricCategory =
   | 'body_composition'

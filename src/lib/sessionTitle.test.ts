@@ -37,7 +37,7 @@ describe('inferSplit', () => {
     const push = signals([
       ['chest', 'horizontal_push', 6],
       ['shoulders', 'vertical_push', 3],
-      ['arms', 'isolation', 3],
+      ['triceps', 'isolation', 3],
     ])
     expect(inferSplit(push)).toBe('Push')
   })
@@ -46,20 +46,21 @@ describe('inferSplit', () => {
     const pull = signals([
       ['back', 'vertical_pull', 6],
       ['back', 'horizontal_pull', 3],
-      ['arms', 'isolation', 3],
+      ['biceps', 'isolation', 3],
     ])
     expect(inferSplit(pull)).toBe('Pull')
   })
 
-  it('distinguishes push from pull when both share arms', () => {
-    // Same regions, opposite patterns — the pattern mix is what decides.
+  it('distinguishes push from pull when both share arm accessories', () => {
+    // Same movement story, opposite patterns — triceps ride with pressing,
+    // biceps with rowing.
     const mostlyPressing = signals([
       ['chest', 'horizontal_push', 8],
-      ['arms', 'isolation', 2],
+      ['triceps', 'isolation', 2],
     ])
     const mostlyRowing = signals([
       ['back', 'horizontal_pull', 8],
-      ['arms', 'isolation', 2],
+      ['biceps', 'isolation', 2],
     ])
     expect(inferSplit(mostlyPressing)).toBe('Push')
     expect(inferSplit(mostlyRowing)).toBe('Pull')
@@ -117,7 +118,7 @@ describe('sessionTitle', () => {
       atHour(19),
       signals([
         ['chest', 'horizontal_push', 6],
-        ['arms', 'isolation', 3],
+        ['triceps', 'isolation', 3],
       ]),
     )
     expect(title).toBe('Jul 29 Evening · Push')

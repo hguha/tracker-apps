@@ -16,7 +16,8 @@ const CSS_VARIABLE: Record<Region, string> = {
   back: '--region-back',
   legs: '--region-legs',
   shoulders: '--region-shoulders',
-  arms: '--region-arms',
+  biceps: '--region-biceps',
+  triceps: '--region-triceps',
   core: '--region-core',
   cardio: '--region-cardio',
 }
@@ -40,19 +41,17 @@ export function resolveRegionColor(region: Region): string {
 
 export function resolveToken(name: string, fallback: string): string {
   if (typeof window === 'undefined') return fallback
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim()
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return value || fallback
 }
 
 /**
  * Three light-mode region colors sit below 3:1 contrast on the light surface
- * (legs, shoulders, arms — measured, not estimated). Charts using them owe the
+ * (legs, shoulders, biceps — measured, not estimated). Charts using them owe the
  * reader a visible direct label or the table view; color alone is not enough.
  * Flagged here so the obligation is visible at the call site.
  */
-export const LOW_CONTRAST_ON_LIGHT: Region[] = ['legs', 'shoulders', 'arms']
+export const LOW_CONTRAST_ON_LIGHT: Region[] = ['legs', 'shoulders', 'biceps']
 
 /**
  * Scatter, bubble, and small-multiple forms compare every pair of colors at

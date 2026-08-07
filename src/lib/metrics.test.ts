@@ -230,10 +230,10 @@ describe('rollUpToRegions', () => {
       ['triceps', 250],
     ])
     const regions = rollUpToRegions(byMuscle, (id) =>
-      id === 'triceps' ? 'arms' : 'chest',
+      id === 'triceps' ? 'triceps' : 'chest',
     )
     expect(regions.get('chest')).toBe(1500)
-    expect(regions.get('arms')).toBe(250)
+    expect(regions.get('triceps')).toBe(250)
   })
 
   it('drops muscles it cannot place rather than inventing a region', () => {

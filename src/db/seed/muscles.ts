@@ -35,11 +35,13 @@ export const MUSCLE_SEEDS: MuscleSeed[] = [
   { id: 'side_delt', name: 'Side Delt', region: 'shoulders' },
   { id: 'rear_delt', name: 'Rear Delt', region: 'shoulders' },
 
-  // arms
-  { id: 'biceps', name: 'Biceps', region: 'arms' },
-  { id: 'triceps', name: 'Triceps', region: 'arms' },
-  { id: 'brachialis', name: 'Brachialis', region: 'arms' },
-  { id: 'forearms', name: 'Forearms', region: 'arms' },
+  // biceps (elbow flexors + forearms roll up here)
+  { id: 'biceps', name: 'Biceps', region: 'biceps' },
+  { id: 'brachialis', name: 'Brachialis', region: 'biceps' },
+  { id: 'forearms', name: 'Forearms', region: 'biceps' },
+
+  // triceps
+  { id: 'triceps', name: 'Triceps', region: 'triceps' },
 
   // legs
   { id: 'quads', name: 'Quads', region: 'legs' },

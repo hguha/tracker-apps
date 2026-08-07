@@ -87,9 +87,7 @@ export function SignInScreen() {
               <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent text-white">
                 <Dumbbell size={28} />
               </span>
-              <h1 className="mt-4 text-[26px] font-bold tracking-tight">
-                Workout Tracker
-              </h1>
+              <h1 className="mt-4 text-[26px] font-bold tracking-tight">FitNote</h1>
               <p className="mt-1.5 text-[14.5px] text-ink-secondary">
                 Log your lifts, watch the numbers move.
               </p>

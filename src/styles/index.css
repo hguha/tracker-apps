@@ -21,7 +21,8 @@
   --color-region-back: var(--region-back);
   --color-region-legs: var(--region-legs);
   --color-region-shoulders: var(--region-shoulders);
-  --color-region-arms: var(--region-arms);
+  --color-region-biceps: var(--region-biceps);
+  --color-region-triceps: var(--region-triceps);
   --color-region-core: var(--region-core);
   --color-region-cardio: var(--region-cardio);
 

@@ -21,7 +21,8 @@
   --region-back: #eb6834;
   --region-legs: #1baf7a;
   --region-shoulders: #eda100;
-  --region-arms: #e87ba4;
+  --region-biceps: #e87ba4;
+  --region-triceps: #9c5bd6;
   --region-core: #008300;
   --region-cardio: #4a3aa7;
 
@@ -58,7 +59,8 @@
   --region-back: #d95926;
   --region-legs: #199e70;
   --region-shoulders: #c98500;
-  --region-arms: #d55181;
+  --region-biceps: #d55181;
+  --region-triceps: #a771e0;
   --region-core: #008300;
   --region-cardio: #9085e9;
 

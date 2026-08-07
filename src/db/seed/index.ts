@@ -63,6 +63,27 @@ async function runSeed(): Promise<void> {
   await seedExercises()
   await seedMetricDefinitions()
   await repairExerciseRows()
+  await repairArmsRegion()
+}
+
+/**
+ * Migrates muscle rows off the retired 'arms' region (§10.2).
+ *
+ * 'Arms' was split into separate biceps and triceps regions. Rows seeded before
+ * the split still carry `region: 'arms'`, which is no longer a valid Region and
+ * would fall out of every chart and the region palette. Remap them: the triceps
+ * muscle becomes 'triceps', everything else that was 'arms' (biceps, brachialis,
+ * forearms) becomes 'biceps'. Idempotent — a no-op once no 'arms' rows remain.
+ */
+async function repairArmsRegion(): Promise<void> {
+  const stale = await db.muscles.filter((m) => (m.region as string) === 'arms').toArray()
+  if (stale.length === 0) return
+  await db.muscles.bulkPut(
+    stale.map((m) => ({
+      ...m,
+      region: m.id === 'triceps' ? 'triceps' : 'biceps',
+    })),
+  )
 }
 
 /**

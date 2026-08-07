@@ -30,7 +30,7 @@ export interface SetSignal {
 
 const PUSH_PATTERNS: MovementPattern[] = ['horizontal_push', 'vertical_push']
 const PULL_PATTERNS: MovementPattern[] = ['horizontal_pull', 'vertical_pull']
-const UPPER_REGIONS: Region[] = ['chest', 'back', 'shoulders', 'arms']
+const UPPER_REGIONS: Region[] = ['chest', 'back', 'shoulders', 'biceps', 'triceps']
 
 /** Share of the session a predicate accounts for, 0–1. */
 function share(signals: SetSignal[], predicate: (s: SetSignal) => boolean): number {
@@ -66,10 +66,12 @@ export function inferSplit(signals: SetSignal[]): string | null {
   const pushShare = share(signals, (s) => PUSH_PATTERNS.includes(s.pattern))
   const pullShare = share(signals, (s) => PULL_PATTERNS.includes(s.pattern))
 
+  // Triceps are push accessories; biceps are pull accessories. Splitting arms
+  // lets each land with the movement it actually accompanies.
   const chestShoulderArm = share(signals, (s) =>
-    ['chest', 'shoulders', 'arms'].includes(s.region),
+    ['chest', 'shoulders', 'triceps'].includes(s.region),
   )
-  const backArm = share(signals, (s) => ['back', 'arms'].includes(s.region))
+  const backArm = share(signals, (s) => ['back', 'biceps'].includes(s.region))
   const upperShare = share(signals, (s) => UPPER_REGIONS.includes(s.region))
   const legShare = share(signals, (s) => s.region === 'legs')
   const cardioShare = share(signals, (s) => s.region === 'cardio')
