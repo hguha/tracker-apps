@@ -15,6 +15,7 @@ import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
 import { format } from 'date-fns'
 import { TrendingUp } from 'lucide-react'
+import { Card } from '@/components/Card'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
 import { baseOption, categoryAxis, chrome, valueAxis } from './chartTheme'
@@ -22,7 +23,7 @@ import { REP_BUCKETS, type InsightsData } from './useInsightsData'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { regionVar, resolveRegionColor, resolveToken } from '@/lib/palette'
 import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS } from '@/domain/types'
-import { convertWeight, formatDuration, weightFromKg } from '@/lib/units'
+import { convertWeight, displayWeight, formatDuration, weightFromKg } from '@/lib/units'
 import { weekKey } from '@/lib/dates'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -1287,6 +1288,62 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
         ))}
       </div>
     </ChartCard>
+  )
+}
+
+// ─────────────────────────────────────────────────── overview summary + body
+/** Headline numbers for the active filter scope. Stat tiles, not a chart. */
+export function SummaryCard({
+  data,
+  rangeLabel,
+}: {
+  data: InsightsData
+  rangeLabel: string
+}) {
+  const unit = data.profile.unitWeight
+  return (
+    <Card className="p-4">
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+        Last {rangeLabel.toLowerCase()}
+      </p>
+      {/* A hero figure, not a one-bar chart. */}
+      <p className="mt-1 text-[36px] font-bold leading-none tracking-tight">
+        {displayWeight(data.totalVolumeKg, unit).toLocaleString()}
+        <span className="ml-1.5 text-[15px] font-semibold text-ink-muted">
+          {unit} lifted
+        </span>
+      </p>
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+        <SummaryStat label="Workouts" value={String(data.workoutCount)} />
+        <SummaryStat label="Sets" value={String(data.totalSets)} />
+        {data.cardioSeconds > 0 && (
+          <SummaryStat label="Cardio" value={formatDuration(data.cardioSeconds)} />
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[19px] font-bold leading-tight">{value}</p>
+      <p className="text-[11.5px] text-ink-muted">{label}</p>
+    </div>
+  )
+}
+
+/** Placeholder card for the Body sub-tab's not-yet-plottable measurements. */
+export function MoreBodyChartsCard() {
+  return (
+    <Card className="p-4">
+      <h2 className="text-[15px] font-semibold tracking-tight">More body charts</h2>
+      <p className="mt-1 text-[13px] text-ink-secondary">
+        Body composition, circumferences, vitals, and sleep-vs-training charts arrive once
+        there's enough logged data to plot. Log measurements under More to start filling
+        them in.
+      </p>
+    </Card>
   )
 }
 
