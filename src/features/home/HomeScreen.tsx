@@ -242,7 +242,10 @@ export function HomeScreen({
   const unit = profile.unitWeight
   const maxSets = Math.max(6, ...setsByRegion.values())
   const firstName = (session?.displayName ?? 'there').split(/\s+/)[0]
-  const goal = Math.max(1, profile.weeklyWorkoutGoal)
+  // A profile pulled from the server (or predating the goal column) can arrive
+  // without weeklyWorkoutGoal; Math.max(1, undefined) is NaN, which rendered the
+  // ring as "/NaN". Coalesce to the default before the floor.
+  const goal = Math.max(1, profile.weeklyWorkoutGoal || 4)
 
   const badges = evaluateBadges({
     totalWorkouts,

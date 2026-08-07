@@ -604,7 +604,7 @@ export async function getCoachSummary(): Promise<CoachSummary> {
   if (workouts.length === 0) {
     return buildCoachSummary({
       unitWeight: profile.unitWeight,
-      weeklyWorkoutGoal: profile.weeklyWorkoutGoal,
+      weeklyWorkoutGoal: profile.weeklyWorkoutGoal || 4,
       sessions: [],
     })
   }
@@ -673,7 +673,7 @@ export async function getCoachSummary(): Promise<CoachSummary> {
 
   return buildCoachSummary({
     unitWeight: profile.unitWeight,
-    weeklyWorkoutGoal: profile.weeklyWorkoutGoal,
+    weeklyWorkoutGoal: profile.weeklyWorkoutGoal || 4,
     sessions,
   })
 }

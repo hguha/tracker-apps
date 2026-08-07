@@ -193,7 +193,9 @@ export class SyncEngine {
   }
 
   /** A full reconcile: drain local writes first, then pull server deltas. */
-  async sync(now = Date.now()): Promise<{ drain: DrainResult; pull: { applied: number } }> {
+  async sync(
+    now = Date.now(),
+  ): Promise<{ drain: DrainResult; pull: { applied: number } }> {
     const drain = await this.drain(now)
     // Only pull if we're not paused on auth — a pull would also fail auth.
     const pull = drain.stoppedBecause === 'auth' ? { applied: 0 } : await this.pull()
@@ -230,6 +232,16 @@ function normalizeRow(
       ...row,
       secondaryMuscles: row.secondaryMuscles ?? [],
       aliases: row.aliases ?? [],
+    }
+  }
+  if (table === 'profiles') {
+    // A server profile from before a column existed arrives without it; backfill
+    // defaults so the client never renders against undefined (e.g. the Home ring
+    // showing "/NaN" when weeklyWorkoutGoal is missing).
+    return {
+      ...row,
+      weeklyWorkoutGoal: row.weeklyWorkoutGoal ?? 4,
+      showAvatar: row.showAvatar ?? false,
     }
   }
   return row

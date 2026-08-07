@@ -204,6 +204,26 @@ describe('delta pull (§5.5)', () => {
     expect((await repo.getProfile()).displayName).toBe('Local Name')
   })
 
+  it('backfills profile columns a server row predates, so the client never sees undefined', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    // A server profile from before the goal/avatar columns existed. It's newer
+    // than local (higher updatedAt) so the pull applies it.
+    backend.seed('profiles', {
+      id: 'local-user',
+      displayName: 'Server Name',
+      updatedAt: Date.now() + 10_000,
+    })
+
+    await engine.pull()
+    const profile = await db.profiles.get('local-user')
+    // Missing columns are defaulted, not undefined — this is what stopped the
+    // Home ring rendering "/NaN".
+    expect(profile?.weeklyWorkoutGoal).toBe(4)
+    expect(profile?.showAvatar).toBe(false)
+  })
+
   it('propagates a tombstone — a deleted row stays filtered out', async () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
