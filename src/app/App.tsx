@@ -17,6 +17,7 @@ import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { AccountScreen } from '@/features/auth/AccountScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
+import { BadgesScreen } from '@/features/home/BadgesScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { MeScreen } from '@/features/profile/MeScreen'
 import { ExerciseLibraryScreen } from '@/features/library/ExerciseLibraryScreen'
@@ -40,6 +41,7 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'start' }
   | { kind: 'account' }
+  | { kind: 'badges' }
   | { kind: 'templates' }
   | { kind: 'templateEditor'; templateId: string }
   | { kind: 'workout'; workoutId: string; isEditMode: boolean }
@@ -170,6 +172,10 @@ function SignedInApp() {
     return <AccountScreen onBack={() => setView({ kind: 'tabs' })} />
   }
 
+  if (view.kind === 'badges') {
+    return <BadgesScreen onBack={() => setView({ kind: 'tabs' })} />
+  }
+
   if (view.kind === 'templates') {
     return (
       <TemplatesScreen
@@ -205,6 +211,7 @@ function SignedInApp() {
             onOpenWorkout={(workoutId) =>
               setView({ kind: 'workout', workoutId, isEditMode: true })
             }
+            onOpenBadges={() => setView({ kind: 'badges' })}
           />
         )}
         {tab === 'history' && (

@@ -12,14 +12,7 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import {
-  ChevronDown,
-  ChevronRight,
-  Flame,
-  Play,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react'
+import { ChevronRight, Flame, Play, TrendingDown, TrendingUp } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
@@ -32,7 +25,8 @@ import { formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
-import { evaluateBadges, type BadgeState } from './badges'
+import { evaluateBadges, homeBadges, type BadgeState } from './badges'
+import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 import {
   conditionLabel,
   evaluateAvatar,
@@ -48,10 +42,12 @@ export function HomeScreen({
   onResumeWorkout,
   onStartWorkout,
   onOpenWorkout,
+  onOpenBadges,
 }: {
   onResumeWorkout: (workoutId: string) => void
   onStartWorkout: () => void
   onOpenWorkout: (workoutId: string) => void
+  onOpenBadges: () => void
 }) {
   const { session } = useAuth()
 
@@ -268,7 +264,7 @@ export function HomeScreen({
         </Button>
       )}
 
-      {totalWorkouts > 0 && (
+      {totalWorkouts > 0 && profile.showAvatar && (
         <Card className="flex flex-col items-center p-4">
           <TrainingAvatar fitnesses={avatar} />
           <p className="mt-1 text-[15px] font-bold tracking-tight">
@@ -357,7 +353,9 @@ export function HomeScreen({
         </Card>
       )}
 
-      {totalWorkouts > 0 && <BadgeStrip badges={badges} />}
+      {totalWorkouts > 0 && (
+        <BadgeStrip badges={homeBadges(badges)} onSeeAll={onOpenBadges} />
+      )}
 
       {setsByRegion.size > 0 && (
         <Card className="p-4">
@@ -472,82 +470,53 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * The badges card, collapsible.
- *
- * Collapsed (default): a horizontal strip of earned badges plus the single
- * nearest unearned one — always a visible next goal, no wall of locked tiles.
- * Tap the header to expand into the full catalog as a grid, every badge with
- * its progress, so the whole set is discoverable.
+ * The Home badges strip: a horizontal row of the badges in play (earned or
+ * started), each tappable for its description. The untouched catalog is not
+ * shown here — that would be a wall of locked tiles; "See all" opens the full
+ * grouped list on the More screen.
  */
-function BadgeStrip({ badges }: { badges: BadgeState[] }) {
-  const [expanded, setExpanded] = useState(false)
-  const earned = badges.filter((b) => b.earned)
-  const next = badges.find((b) => !b.earned)
-  // Collapsed set: everything earned, then the nearest unearned as the target.
-  const collapsed = next ? [...earned, next] : earned
+function BadgeStrip({
+  badges,
+  onSeeAll,
+}: {
+  badges: BadgeState[]
+  onSeeAll: () => void
+}) {
+  const [selected, setSelected] = useState<BadgeState | null>(null)
   if (badges.length === 0) return null
+  const earned = badges.filter((b) => b.earned).length
 
   return (
     <Card className="p-4">
       <button
-        onClick={() => setExpanded((v) => !v)}
+        onClick={onSeeAll}
         className="flex w-full items-center justify-between"
-        aria-expanded={expanded}
+        aria-label="See all badges"
       >
         <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
           Badges
         </span>
         <span className="flex items-center gap-1 text-[12px] text-ink-muted">
-          {earned.length} of {badges.length}
-          <ChevronDown
-            size={15}
-            className={'transition-transform ' + (expanded ? 'rotate-180' : '')}
-          />
+          {earned > 0 ? `${earned} earned · ` : ''}See all
+          <ChevronRight size={15} />
         </span>
       </button>
 
-      {expanded ? (
-        // Full catalog: a wrapping grid, each badge with its progress.
-        <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-4">
-          {badges.map((badge) => (
-            <BadgeTile key={badge.key} badge={badge} showProgress />
-          ))}
-        </div>
-      ) : (
-        <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
-          {collapsed.map((badge) => (
-            <div key={badge.key} className="w-[76px] shrink-0">
-              <BadgeTile badge={badge} showProgress={!badge.earned} />
-            </div>
-          ))}
-        </div>
+      <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
+        {badges.map((badge) => (
+          <div key={badge.key} className="w-[76px] shrink-0">
+            <BadgeTile
+              badge={badge}
+              showProgress={!badge.earned}
+              onClick={() => setSelected(badge)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {selected && (
+        <BadgeDetailSheet badge={selected} onDismiss={() => setSelected(null)} />
       )}
     </Card>
-  )
-}
-
-function BadgeTile({
-  badge,
-  showProgress,
-}: {
-  badge: BadgeState
-  showProgress: boolean
-}) {
-  return (
-    <div className="flex flex-col items-center gap-1 text-center">
-      <span
-        className={
-          'flex size-14 items-center justify-center rounded-2xl text-[26px] ' +
-          (badge.earned ? 'bg-accent-wash' : 'bg-sunken opacity-45 grayscale')
-        }
-        title={badge.caption}
-      >
-        {badge.icon}
-      </span>
-      <span className="text-[11px] font-semibold leading-tight">{badge.label}</span>
-      {showProgress && (
-        <span className="tabular text-[10.5px] text-ink-muted">{badge.detailText}</span>
-      )}
-    </div>
   )
 }

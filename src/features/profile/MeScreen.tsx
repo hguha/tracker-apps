@@ -394,6 +394,23 @@ export function MeScreen({
               className="size-5 accent-[var(--accent)]"
             />
           </label>
+
+          <label className="flex items-center justify-between">
+            <span>
+              <span className="block text-[13.5px] font-medium">Training avatar</span>
+              <span className="block text-[12px] text-ink-muted">
+                A body on Home that buffs up and deflates with your training
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={profile.showAvatar}
+              onChange={(event) =>
+                void repo.updateProfile({ showAvatar: event.target.checked })
+              }
+              className="size-5 accent-[var(--accent)]"
+            />
+          </label>
         </div>
       </Card>
 

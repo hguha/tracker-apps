@@ -113,9 +113,12 @@ async function seedProfile(): Promise<void> {
   const existing = await db.profiles.get(getActiveUserId())
   if (existing) {
     // Backfill fields added after this profile was first written, so an older
-    // local row doesn't render the new Home ring against `undefined`.
-    if (existing.weeklyWorkoutGoal === undefined) {
-      await db.profiles.update(existing.id, { weeklyWorkoutGoal: 4 })
+    // local row doesn't render new UI against `undefined`.
+    const backfill: Partial<Profile> = {}
+    if (existing.weeklyWorkoutGoal === undefined) backfill.weeklyWorkoutGoal = 4
+    if (existing.showAvatar === undefined) backfill.showAvatar = false
+    if (Object.keys(backfill).length > 0) {
+      await db.profiles.update(existing.id, backfill)
     }
     return
   }
@@ -137,6 +140,7 @@ async function seedProfile(): Promise<void> {
     accentOverride: null,
     soundEnabled: true,
     autoStartRest: false,
+    showAvatar: false,
     ...syncStamp(),
   }
   // `put` rather than `add` so a concurrent seed can't collide on the key.

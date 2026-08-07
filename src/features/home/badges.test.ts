@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bigThreeTotalKg, evaluateBadges, type LifetimeStats } from './badges'
+import {
+  bigThreeTotalKg,
+  evaluateBadges,
+  groupedBadges,
+  homeBadges,
+  type LifetimeStats,
+} from './badges'
 
 const KG_PER_LB = 1 / 2.20462262185
 const lb = (pounds: number) => pounds * KG_PER_LB
@@ -123,5 +129,52 @@ describe('cardio badges', () => {
       (x) => x.key === 'cardio-10h',
     )!
     expect(b.earned).toBe(true)
+  })
+})
+
+describe('non-finite guards (the NaN bug)', () => {
+  it('never produces a NaN fraction or detail from bad stats', () => {
+    // Simulate corrupt/old data: NaN and undefined leaking into the stats.
+    const bad = {
+      ...stats(),
+      totalVolumeKg: NaN,
+      bestBenchE1rmKg: undefined as unknown as number,
+      totalCardioMeters: NaN,
+    }
+    const result = evaluateBadges(bad)
+    for (const b of result) {
+      expect(Number.isFinite(b.fraction)).toBe(true)
+      expect(b.detailText).not.toContain('NaN')
+    }
+  })
+})
+
+describe('homeBadges', () => {
+  it('shows only badges earned or in progress, hiding untouched ones', () => {
+    // One workout: milestone badges start progressing; a 500-mile cardio badge
+    // stays untouched and should be hidden.
+    const shown = homeBadges(evaluateBadges(stats({ totalWorkouts: 1 })))
+    expect(shown.length).toBeGreaterThan(0)
+    expect(shown.every((b) => b.earned || b.fraction > 0)).toBe(true)
+    expect(shown.some((b) => b.key === 'cardio-500mi')).toBe(false)
+  })
+
+  it('falls back to the single closest badge for a brand-new user', () => {
+    const shown = homeBadges(evaluateBadges(stats()))
+    expect(shown).toHaveLength(1)
+  })
+})
+
+describe('groupedBadges', () => {
+  it('splits the catalog into ordered, non-empty sections', () => {
+    const groups = groupedBadges(evaluateBadges(stats()))
+    expect(groups.map((g) => g.group)).toEqual([
+      'Milestones',
+      'Consistency',
+      'Strength',
+      'Volume',
+      'Cardio',
+    ])
+    expect(groups.every((g) => g.badges.length > 0)).toBe(true)
   })
 })

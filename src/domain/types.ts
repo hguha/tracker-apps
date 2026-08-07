@@ -141,6 +141,9 @@ export interface Profile extends SyncColumns {
    * trigger and this the opt-in shortcut.
    */
   autoStartRest: boolean
+  /** Show the training avatar on Home. Off by default — opt-in while it's a
+   *  prototype (§5.2.1). */
+  showAvatar: boolean
 }
 
 export interface Muscle extends SyncColumns {
