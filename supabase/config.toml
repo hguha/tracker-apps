@@ -1,0 +1,12 @@
+# Supabase project config for the FitNote backend.
+#
+# The migrations here were originally applied by hand; this file lets the CLI
+# recognize the project so Edge Functions can be deployed with
+# `supabase functions deploy`. `project_id` is the project ref (the subdomain of
+# the project's supabase.co URL) — it is not a secret.
+project_id = "orzuzeojacttsxiydwye"
+
+[functions.coach]
+# The coach function verifies the caller's Supabase JWT itself and must be
+# reachable by any signed-in user, so the default gateway JWT check is fine.
+verify_jwt = true
