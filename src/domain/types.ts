@@ -119,6 +119,8 @@ export interface Profile extends SyncColumns {
   timezone: string
   /** 0 = Sunday, 1 = Monday. */
   weekStartsOn: 0 | 1
+  /** Target sessions per week, for the Home progress ring (§5.2.1). */
+  weeklyWorkoutGoal: number
   defaultRestSeconds: number
   /** RPE inputs are hidden by default (§6.4). The columns still exist. */
   showRpe: boolean

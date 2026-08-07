@@ -11,18 +11,20 @@
  */
 
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, Play, TrendingDown, TrendingUp } from 'lucide-react'
+import { ChevronRight, Flame, Play, TrendingDown, TrendingUp } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
+import { ProgressRing } from '@/components/ProgressRing'
 import { isWorkingSet } from '@/lib/metrics'
 import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
 import { formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
+import { evaluateBadges, type BadgeState } from './badges'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
 
@@ -40,7 +42,9 @@ export function HomeScreen({
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
     const active = await repo.getActiveWorkout()
-    const summaries = await repo.listWorkoutSummaries(80)
+    // Pull deep so lifetime badge stats (total workouts, volume, best streak)
+    // reflect real history, not just the recent window.
+    const summaries = await repo.listWorkoutSummaries(1000)
     const finished = summaries.filter((s) => s.workout.endedAt !== null)
 
     const thisWeekStart = weekStart(Date.now(), profile.weekStartsOn)
@@ -87,20 +91,45 @@ export function HomeScreen({
       .map((region) => ({ region, lastAt: lastTrainedByRegion.get(region) ?? 0 }))
       .sort((a, b) => a.lastAt - b.lastAt)[0]
 
-    // Consecutive weeks with at least one session, walking back from this week.
-    let streakWeeks = 0
-    for (let offset = 0; offset < 104; offset += 1) {
-      const start = thisWeekStart - offset * WEEK_MS
-      const trained = finished.some(
+    // Whether each week (walking back from this one) had a session. Shared by
+    // the current-streak count and the best-ever streak for badges.
+    const trainedThisWeekAt = (start: number) =>
+      finished.some(
         (s) => s.workout.startedAt >= start && s.workout.startedAt < start + WEEK_MS,
       )
+
+    // Current streak: consecutive trained weeks ending now. This week not being
+    // done *yet* shouldn't read as a broken streak, so a blank current week is
+    // skipped rather than counted as a break.
+    let streakWeeks = 0
+    for (let offset = 0; offset < 520; offset += 1) {
+      const trained = trainedThisWeekAt(thisWeekStart - offset * WEEK_MS)
       if (!trained) {
-        // This week not being done *yet* shouldn't read as a broken streak.
         if (offset === 0) continue
         break
       }
       streakWeeks += 1
     }
+
+    // Best streak ever: longest run of consecutive trained weeks anywhere in
+    // history. Walk from the earliest session's week forward to this week.
+    let bestWeekStreak = streakWeeks
+    if (finished.length > 0) {
+      const earliest = Math.min(...finished.map((s) => s.workout.startedAt))
+      const firstWeek = weekStart(earliest, profile.weekStartsOn)
+      let run = 0
+      for (let start = firstWeek; start <= thisWeekStart; start += WEEK_MS) {
+        if (trainedThisWeekAt(start)) {
+          run += 1
+          if (run > bestWeekStreak) bestWeekStreak = run
+        } else {
+          run = 0
+        }
+      }
+    }
+
+    const totalVolumeKg = finished.reduce((total, s) => total + s.volumeKg, 0)
+    const totalSets = finished.reduce((total, s) => total + s.setCount, 0)
 
     return {
       profile,
@@ -113,7 +142,10 @@ export function HomeScreen({
       setsByRegion,
       neglected,
       streakWeeks,
+      bestWeekStreak,
       totalWorkouts: finished.length,
+      totalVolumeKg,
+      totalSets,
     }
   }, [])
 
@@ -130,12 +162,24 @@ export function HomeScreen({
     setsByRegion,
     neglected,
     streakWeeks,
+    bestWeekStreak,
     totalWorkouts,
+    totalVolumeKg,
+    totalSets,
   } = data
 
   const unit = profile.unitWeight
   const maxSets = Math.max(6, ...setsByRegion.values())
   const firstName = (session?.displayName ?? 'there').split(/\s+/)[0]
+  const goal = Math.max(1, profile.weeklyWorkoutGoal)
+
+  const badges = evaluateBadges({
+    totalWorkouts,
+    totalSets,
+    totalVolumeKg,
+    bestWeekStreak,
+    currentWeekStreak: streakWeeks,
+  })
 
   // Only compare when there is something to compare against — an invented
   // baseline would present a first week as either a triumph or a collapse.
@@ -175,37 +219,73 @@ export function HomeScreen({
 
       {totalWorkouts > 0 && (
         <Card className="p-4">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-            This week
-          </p>
-          {/* A hero figure with proportional figures — not a one-bar chart. */}
-          <div className="mt-1 flex items-baseline gap-2">
-            <p className="text-[38px] font-bold leading-none tracking-tight">
-              {displayWeight(thisWeekVolume, unit).toLocaleString()}
-            </p>
-            <span className="text-[15px] font-semibold text-ink-muted">{unit}</span>
+          <div className="flex items-center gap-4">
+            {/* The weekly goal ring — the day-to-day thing to close. Turns
+                green once the goal is met, for a clear completion signal. */}
+            <ProgressRing
+              value={weeklyWorkouts}
+              max={goal}
+              size={104}
+              strokeWidth={11}
+              color={weeklyWorkouts >= goal ? 'var(--status-good)' : 'var(--accent)'}
+            >
+              <span className="text-[26px] font-bold leading-none tabular">
+                {weeklyWorkouts}
+                <span className="text-[15px] font-semibold text-ink-muted">/{goal}</span>
+              </span>
+              <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                this week
+              </span>
+            </ProgressRing>
+
+            <div className="min-w-0 flex-1">
+              {streakWeeks > 0 && (
+                <p
+                  className="flex items-center gap-1 text-[15px] font-bold"
+                  style={{ color: 'var(--region-biceps)' }}
+                >
+                  <Flame size={16} />
+                  {streakWeeks} week streak
+                </p>
+              )}
+              <p className="mt-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+                Volume this week
+              </p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[24px] font-bold leading-tight tracking-tight">
+                  {displayWeight(thisWeekVolume, unit).toLocaleString()}
+                </span>
+                <span className="text-[13px] font-semibold text-ink-muted">{unit}</span>
+              </div>
+              {deltaPercent !== null && (
+                <p
+                  className="flex items-center gap-1 text-[12.5px] font-semibold"
+                  style={{
+                    color:
+                      deltaPercent >= 0 ? 'var(--delta-good)' : 'var(--status-serious)',
+                  }}
+                >
+                  {deltaPercent >= 0 ? (
+                    <TrendingUp size={13} />
+                  ) : (
+                    <TrendingDown size={13} />
+                  )}
+                  {deltaPercent >= 0 ? '+' : ''}
+                  {deltaPercent}% vs last week
+                </p>
+              )}
+            </div>
           </div>
 
-          {deltaPercent !== null && (
-            <p
-              className="mt-1.5 flex items-center gap-1 text-[13px] font-semibold"
-              style={{
-                color: deltaPercent >= 0 ? 'var(--delta-good)' : 'var(--status-serious)',
-              }}
-            >
-              {deltaPercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {deltaPercent >= 0 ? '+' : ''}
-              {deltaPercent}% vs last week
-            </p>
-          )}
-
-          <div className="mt-3 flex gap-5">
+          <div className="mt-4 flex gap-5 border-t border-line pt-3">
             <Stat label="Workouts" value={String(weeklyWorkouts)} />
             <Stat label="Sets" value={String(weeklySets)} />
-            <Stat label="Week streak" value={String(streakWeeks)} />
+            <Stat label="Best streak" value={`${bestWeekStreak} wk`} />
           </div>
         </Card>
       )}
+
+      {totalWorkouts > 0 && <BadgeStrip badges={badges} />}
 
       {setsByRegion.size > 0 && (
         <Card className="p-4">
@@ -316,5 +396,57 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-[19px] font-bold leading-tight">{value}</p>
       <p className="text-[11.5px] text-ink-muted">{label}</p>
     </div>
+  )
+}
+
+/**
+ * The badges strip: earned badges plus the next one to chase.
+ *
+ * Earned badges render filled; the single nearest unearned badge renders with
+ * its progress caption, so there's always a visible next goal without turning
+ * the whole catalog into a wall of locked tiles.
+ */
+function BadgeStrip({ badges }: { badges: BadgeState[] }) {
+  const earned = badges.filter((b) => b.earned)
+  const next = badges.find((b) => !b.earned)
+  // The set to show: everything earned, then the nearest unearned as the target.
+  const shown = next ? [...earned, next] : earned
+  if (shown.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-baseline justify-between">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+          Badges
+        </p>
+        <p className="text-[12px] text-ink-muted">
+          {earned.length} of {badges.length}
+        </p>
+      </div>
+      <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
+        {shown.map((badge) => (
+          <div
+            key={badge.key}
+            className="flex w-[76px] shrink-0 flex-col items-center gap-1 text-center"
+          >
+            <span
+              className={
+                'flex size-14 items-center justify-center rounded-2xl text-[26px] ' +
+                (badge.earned ? 'bg-accent-wash' : 'bg-sunken opacity-45 grayscale')
+              }
+              title={badge.caption}
+            >
+              {badge.icon}
+            </span>
+            <span className="text-[11px] font-semibold leading-tight">{badge.label}</span>
+            {!badge.earned && (
+              <span className="tabular text-[10.5px] text-ink-muted">
+                {badge.detailText}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }

@@ -111,7 +111,14 @@ async function repairExerciseRows(): Promise<void> {
 
 async function seedProfile(): Promise<void> {
   const existing = await db.profiles.get(getActiveUserId())
-  if (existing) return
+  if (existing) {
+    // Backfill fields added after this profile was first written, so an older
+    // local row doesn't render the new Home ring against `undefined`.
+    if (existing.weeklyWorkoutGoal === undefined) {
+      await db.profiles.update(existing.id, { weeklyWorkoutGoal: 4 })
+    }
+    return
+  }
 
   const profile: Profile = {
     id: getActiveUserId(),
@@ -121,6 +128,7 @@ async function seedProfile(): Promise<void> {
     unitLength: 'in',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     weekStartsOn: 1,
+    weeklyWorkoutGoal: 4,
     defaultRestSeconds: 60,
     showRpe: false,
     bodyweightCacheKg: null,

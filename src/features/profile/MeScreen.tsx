@@ -316,6 +316,29 @@ export function MeScreen({
             </div>
           </div>
 
+          <div>
+            <label className="text-[13.5px] font-medium">Weekly workout goal</label>
+            <p className="text-[12px] text-ink-muted">
+              The target the Home ring fills toward.
+            </p>
+            <div className="mt-1.5 flex gap-1.5">
+              {[2, 3, 4, 5, 6].map((count) => (
+                <button
+                  key={count}
+                  onClick={() => void repo.updateProfile({ weeklyWorkoutGoal: count })}
+                  className={cn(
+                    'h-10 flex-1 rounded-lg text-[13px] font-semibold',
+                    profile.weeklyWorkoutGoal === count
+                      ? 'bg-accent text-white'
+                      : 'bg-sunken text-ink-secondary',
+                  )}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="flex items-center justify-between">
             <span>
               <span className="block text-[13.5px] font-medium">Track RPE</span>
