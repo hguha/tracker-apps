@@ -26,7 +26,7 @@ import { Card } from '@/components/Card'
 import { FilterChipButton, FilterSheet } from '@/components/FilterSheet'
 import { useToast } from '@/components/Toast'
 import { dayStart, formatDayHeading, formatTimeOfDay } from '@/lib/dates'
-import { convertWeight, formatDuration } from '@/lib/units'
+import { formatDisplayWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import { cn } from '@/lib/cn'
 import { HistoryCalendar } from './HistoryCalendar'
@@ -274,10 +274,7 @@ export function HistoryScreen({
                   <span className="tabular">{summary.setCount} sets</span>
                   {summary.volumeKg > 0 && (
                     <span className="tabular">
-                      {Math.round(
-                        convertWeight(summary.volumeKg, data.profile.unitWeight),
-                      ).toLocaleString()}{' '}
-                      {data.profile.unitWeight}
+                      {formatDisplayWeight(summary.volumeKg, data.profile.unitWeight)}
                     </span>
                   )}
                   {summary.durationSeconds !== null && (

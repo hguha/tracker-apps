@@ -15,7 +15,7 @@ import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
 import { REGION_LABELS, type Region } from '@/domain/types'
 import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
-import { convertWeight, formatDuration } from '@/lib/units'
+import { formatDisplayWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 
 export function FinishSheet({
@@ -158,7 +158,7 @@ export function FinishSheet({
           {totalVolumeKg > 0 && (
             <StatTile
               label="Volume"
-              value={`${Math.round(convertWeight(totalVolumeKg, profile.unitWeight)).toLocaleString()} ${profile.unitWeight}`}
+              value={formatDisplayWeight(totalVolumeKg, profile.unitWeight)}
             />
           )}
           {/* Cardio time is reported on its own, never folded into volume. */}

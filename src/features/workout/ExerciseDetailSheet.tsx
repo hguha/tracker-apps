@@ -13,7 +13,7 @@ import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { formatRelativeDay } from '@/lib/dates'
-import { convertWeight, formatDuration, distanceFromM, weightFromKg } from '@/lib/units'
+import { displayWeight, formatDuration, distanceFromM, weightFromKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import {
   REGION_LABELS,
@@ -36,6 +36,7 @@ const RECORD_LABELS: Record<RecordType, string> = {
 export function ExerciseDetailSheet({
   exerciseId,
   workoutExerciseId,
+  currentWorkoutId,
   weightUnit,
   distanceUnit,
   onRemoveFromWorkout,
@@ -44,6 +45,10 @@ export function ExerciseDetailSheet({
   exerciseId: string
   /** Present when opened from inside a session — enables session-scoped actions. */
   workoutExerciseId?: string
+  /** The active session's id, so "This session" reflects *this* workout — not
+   *  the most recent historical one, which would show stale numbers before
+   *  anything is logged here. */
+  currentWorkoutId?: string
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   onRemoveFromWorkout?: () => void
@@ -60,7 +65,14 @@ export function ExerciseDetailSheet({
   if (!detail) return null
 
   const { exercise, primaryMuscle, secondaryMuscles, records, sessions } = detail
-  const thisSession = sessions[0]
+  // "This session" must be *this* workout, matched by id. Falling back to
+  // sessions[0] (the most recent historical session) showed last workout's
+  // numbers before anything was logged here. When opened from a session where
+  // nothing's been logged yet, there's simply no matching session and the block
+  // is hidden.
+  const thisSession = currentWorkoutId
+    ? sessions.find((s) => s.workoutId === currentWorkoutId)
+    : sessions[0]
 
   function formatRecordValue(type: RecordType, value: number): string {
     switch (type) {
@@ -142,12 +154,12 @@ export function ExerciseDetailSheet({
               <Stat label="Sets" value={String(thisSession.sets.length)} />
               <Stat
                 label="Volume"
-                value={`${Math.round(convertWeight(thisSession.volumeKg, weightUnit)).toLocaleString()}`}
+                value={displayWeight(thisSession.volumeKg, weightUnit).toLocaleString()}
               />
               {thisSession.bestE1rmKg !== null && (
                 <Stat
                   label="Best e1RM"
-                  value={String(convertWeight(thisSession.bestE1rmKg, weightUnit))}
+                  value={String(displayWeight(thisSession.bestE1rmKg, weightUnit))}
                 />
               )}
             </div>
@@ -211,7 +223,7 @@ export function ExerciseDetailSheet({
                     </p>
                     {session.bestE1rmKg !== null && (
                       <p className="text-[11.5px] text-ink-muted">
-                        e1RM {convertWeight(session.bestE1rmKg, weightUnit)}
+                        e1RM {displayWeight(session.bestE1rmKg, weightUnit)}
                       </p>
                     )}
                   </div>

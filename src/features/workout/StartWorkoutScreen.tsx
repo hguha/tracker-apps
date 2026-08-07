@@ -17,7 +17,7 @@ import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { formatRelativeDay } from '@/lib/dates'
-import { convertWeight } from '@/lib/units'
+import { formatDisplayWeight } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS } from '@/domain/types'
 import { WorkoutPreviewSheet } from './WorkoutPreviewSheet'
@@ -88,9 +88,7 @@ export function StartWorkoutScreen({
         >
           <ChevronLeft size={22} />
         </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">
-          Log a workout
-        </h1>
+        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Log a workout</h1>
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
@@ -172,9 +170,7 @@ export function StartWorkoutScreen({
                   <span className="tabular mt-0.5 block text-[12px] text-ink-muted">
                     {summary.setCount} sets
                     {summary.volumeKg > 0 &&
-                      ` · ${Math.round(
-                        convertWeight(summary.volumeKg, unit),
-                      ).toLocaleString()} ${unit}`}
+                      ` · ${formatDisplayWeight(summary.volumeKg, unit)}`}
                   </span>
                 </span>
                 <ChevronRight size={17} className="mt-1 shrink-0 text-ink-muted" />

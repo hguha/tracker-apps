@@ -89,6 +89,29 @@ export function convertWeight(kg: number, to: WeightUnit): number {
   return to === 'kg' ? kg : kg * LB_PER_KG
 }
 
+/**
+ * A derived or aggregate weight — a volume total, an estimated 1RM, a projected
+ * max — converted to the user's unit and rounded to a whole number for display.
+ *
+ * This is the one function to reach for whenever a *computed* weight is shown.
+ * `weightFromKg` snaps to a loadable plate (wrong for a sum); raw `convertWeight`
+ * returns exact floats like 250.8333 (wrong for the screen). Everything derived
+ * that a person reads goes through here so no long decimal ever leaks to the UI.
+ */
+export function displayWeight(kg: number, unit: WeightUnit): number {
+  return Math.round(convertWeight(kg, unit))
+}
+
+/** `displayWeight` as a localized string, e.g. "1,240 lb". */
+export function formatDisplayWeight(
+  kg: number,
+  unit: WeightUnit,
+  opts: { withUnit?: boolean } = {},
+): string {
+  const text = displayWeight(kg, unit).toLocaleString()
+  return opts.withUnit === false ? text : `${text} ${unit}`
+}
+
 // -------------------------------------------------------------- distance
 
 export function distanceToM(value: number, from: DistanceUnit): number {

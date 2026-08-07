@@ -191,9 +191,7 @@ export function ActiveWorkoutScreen({
     async (draggedId: string, targetId: string) => {
       await repo.supersetExercises(draggedId, targetId)
       playCue('set-logged')
-      toast.show('Grouped as a superset', () =>
-        void repo.removeFromSuperset(draggedId),
-      )
+      toast.show('Grouped as a superset', () => void repo.removeFromSuperset(draggedId))
     },
     [toast],
   )
@@ -234,9 +232,7 @@ export function ActiveWorkoutScreen({
    * since that's the one just trained; falls back to the profile default.
    */
   const restDefaultSeconds =
-    [...rows]
-      .reverse()
-      .find((r) => r.exercise && r.exercise.movementPattern !== 'cardio')
+    [...rows].reverse().find((r) => r.exercise && r.exercise.movementPattern !== 'cardio')
       ?.workoutExercise.restSeconds ??
     [...rows].reverse().find((r) => r.exercise?.defaultRestSeconds != null)?.exercise
       ?.defaultRestSeconds ??
@@ -313,11 +309,7 @@ export function ActiveWorkoutScreen({
                       )
                     }
                     onSetChange={(setId, patch) =>
-                      void handleSetChange(
-                        setId,
-                        patch,
-                        row.workoutExercise.exerciseId,
-                      )
+                      void handleSetChange(setId, patch, row.workoutExercise.exerciseId)
                     }
                     onDeleteSet={(setId) => void handleDeleteSet(setId)}
                     onConfirmPlaceholder={(setId) => {
@@ -383,14 +375,13 @@ export function ActiveWorkoutScreen({
         <ExerciseDetailSheet
           exerciseId={detailFor.exerciseId}
           workoutExerciseId={detailFor.workoutExerciseId}
+          currentWorkoutId={workoutId}
           weightUnit={profile.unitWeight}
           distanceUnit={profile.unitDistance}
           onRemoveFromWorkout={() => {
             const id = detailFor.workoutExerciseId
             void repo.removeWorkoutExercise(id)
-            toast.show('Exercise removed', () =>
-              void repo.restoreWorkoutExercise(id),
-            )
+            toast.show('Exercise removed', () => void repo.restoreWorkoutExercise(id))
           }}
           onDismiss={() => setDetailFor(null)}
         />

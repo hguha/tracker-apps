@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   convertWeight,
+  displayWeight,
   distanceFromM,
   distanceToM,
+  formatDisplayWeight,
   formatDuration,
   formatPace,
   formatWeight,
@@ -51,6 +53,28 @@ describe('convertWeight (aggregates — no plate snapping)', () => {
     const totalKg = weightToKg(122.5, 'lb') * 3 // 367.5 lb of total volume
     expect(Math.round(convertWeight(totalKg, 'lb'))).toBe(368)
     expect(convertWeight(50, 'kg')).toBe(50)
+  })
+})
+
+describe('displayWeight (derived values — the e1RM long-decimal bug)', () => {
+  it('rounds a raw e1RM to a whole number, never a trailing decimal tail', () => {
+    // The reported bug: an e1RM of ~113.79 kg converted to lb is 250.833...,
+    // which leaked to the UI. It must read as a whole number.
+    const e1rmKg = 113.79
+    expect(displayWeight(e1rmKg, 'lb')).toBe(251)
+    expect(Number.isInteger(displayWeight(e1rmKg, 'lb'))).toBe(true)
+  })
+
+  it('does not plate-snap — 125 kg of volume stays 125, not 124/126', () => {
+    expect(displayWeight(125, 'kg')).toBe(125)
+  })
+
+  it('formats with a thousands separator and unit', () => {
+    expect(formatDisplayWeight(weightToKg(1240, 'lb'), 'lb')).toBe('1,240 lb')
+  })
+
+  it('omits the unit when asked', () => {
+    expect(formatDisplayWeight(50, 'kg', { withUnit: false })).toBe('50')
   })
 })
 

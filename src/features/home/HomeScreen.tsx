@@ -18,7 +18,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { isWorkingSet } from '@/lib/metrics'
-import { convertWeight, formatDuration } from '@/lib/units'
+import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
 import { formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
@@ -181,7 +181,7 @@ export function HomeScreen({
           {/* A hero figure with proportional figures — not a one-bar chart. */}
           <div className="mt-1 flex items-baseline gap-2">
             <p className="text-[38px] font-bold leading-none tracking-tight">
-              {Math.round(convertWeight(thisWeekVolume, unit)).toLocaleString()}
+              {displayWeight(thisWeekVolume, unit).toLocaleString()}
             </p>
             <span className="text-[15px] font-semibold text-ink-muted">{unit}</span>
           </div>
@@ -280,15 +280,15 @@ export function HomeScreen({
                       aria-label={REGION_LABELS[region]}
                     />
                   ))}
-                  <span className="truncate text-[15px] font-medium">{summary.title}</span>
+                  <span className="truncate text-[15px] font-medium">
+                    {summary.title}
+                  </span>
                 </span>
                 <span className="tabular mt-0.5 block text-[12.5px] text-ink-muted">
                   {formatRelativeDay(summary.workout.startedAt)} ·{' '}
                   {formatTimeOfDay(summary.workout.startedAt)} · {summary.setCount} sets
                   {summary.volumeKg > 0 &&
-                    ` · ${Math.round(
-                      convertWeight(summary.volumeKg, unit),
-                    ).toLocaleString()} ${unit}`}
+                    ` · ${formatDisplayWeight(summary.volumeKg, unit)}`}
                 </span>
               </span>
               <ChevronRight size={17} className="mt-1 shrink-0 text-ink-muted" />

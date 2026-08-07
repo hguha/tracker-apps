@@ -14,12 +14,8 @@
 import { useMemo, useState } from 'react'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
-import {
-  estimatedOneRepMaxKg,
-  PROJECTION_REPS,
-  weightForRepsKg,
-} from '@/lib/metrics'
-import { convertWeight, weightFromKg, weightToKg } from '@/lib/units'
+import { estimatedOneRepMaxKg, PROJECTION_REPS, weightForRepsKg } from '@/lib/metrics'
+import { displayWeight, weightFromKg, weightToKg } from '@/lib/units'
 import type { InsightsData } from './useInsightsData'
 
 export function PrEstimator({ data }: { data: InsightsData }) {
@@ -116,7 +112,7 @@ export function PrEstimator({ data }: { data: InsightsData }) {
                 Estimated 1RM
               </p>
               <p className="text-[30px] font-bold leading-tight text-accent">
-                {Math.round(convertWeight(e1rmKg, unit)).toLocaleString()}
+                {displayWeight(e1rmKg, unit).toLocaleString()}
                 <span className="ml-1 text-[15px] font-semibold">{unit}</span>
               </p>
             </div>

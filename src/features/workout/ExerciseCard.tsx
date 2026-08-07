@@ -16,7 +16,7 @@ import { Card } from '@/components/Card'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { formatRelativeDay } from '@/lib/dates'
-import { convertWeight, formatDuration, weightFromKg } from '@/lib/units'
+import { displayWeight, formatDuration, weightFromKg } from '@/lib/units'
 import type {
   DistanceUnit,
   Exercise,
@@ -29,6 +29,7 @@ import type {
 import { regionVar } from '@/lib/palette'
 import { CardioEntry } from './CardioEntry'
 import { SetRow, hasLoggedValues } from './SetRow'
+import { hasValue, resolvePlaceholders } from './resolvePlaceholders'
 
 /** The subset of a performed set that can act as a placeholder. */
 export interface SetPlaceholderHint {
@@ -36,21 +37,6 @@ export interface SetPlaceholderHint {
   reps: number | null
   durationSeconds: number | null
   distanceM: number | null
-}
-
-/** Whether a placeholder carries anything worth showing as a ghost value. */
-function hasValue(p: {
-  weightKg: number | null
-  reps: number | null
-  durationSeconds: number | null
-  distanceM: number | null
-}): boolean {
-  return (
-    p.weightKg !== null ||
-    p.reps !== null ||
-    p.durationSeconds !== null ||
-    p.distanceM !== null
-  )
 }
 
 export interface ExerciseCardProps {
@@ -134,31 +120,17 @@ export function ExerciseCard(props: ExerciseCardProps) {
    *   1. A per-set override from a repeated workout or a template (§7.2) — an
    *      explicit request for *that* source's numbers.
    *   2. The matching set from the last time this exercise was trained.
-   *   3. Carry-forward: the most recent non-empty placeholder from earlier in
-   *      this same card — so set 4 suggests set 3's numbers.
+   *   3. Carry-forward: the most recent numbers from earlier in this same card —
+   *      either what was actually logged in an earlier row, or that row's own
+   *      placeholder. So on a brand-new exercise, logging set 1 gives set 2 a
+   *      placeholder even with no history at all.
    * Blank only when the exercise has never been done and nothing precedes the
    * row — which, given carry-forward, effectively never happens after set 1.
    */
-  const placeholderFor = useMemo<(PerformedSet | undefined)[]>(() => {
-    const resolved: (PerformedSet | undefined)[] = []
-    let carry: PerformedSet | undefined
-
-    sets.forEach((set, index) => {
-      const override = placeholderOverrides[set.id]
-      const candidate: PerformedSet | undefined = override
-        ? {
-            weightKg: override.weightKg,
-            reps: override.reps,
-            durationSeconds: override.durationSeconds,
-            distanceM: override.distanceM,
-          }
-        : (previousSets[index] ?? carry)
-
-      resolved.push(candidate)
-      if (candidate && hasValue(candidate)) carry = candidate
-    })
-    return resolved
-  }, [sets, placeholderOverrides, previousSets])
+  const placeholderFor = useMemo<(PerformedSet | undefined)[]>(
+    () => resolvePlaceholders(sets, placeholderOverrides, previousSets),
+    [sets, placeholderOverrides, previousSets],
+  )
 
   /** A placeholder with nothing in it shouldn't render as one. */
   function placeholderAt(index: number): PerformedSet | undefined {
@@ -234,59 +206,59 @@ export function ExerciseCard(props: ExerciseCardProps) {
         </div>
       ) : (
         <>
-      {/* Column headings, so an untouched first-ever row still reads clearly. */}
-      <div className="mt-1 flex items-center gap-2 border-t border-line px-3 pb-1 pt-1.5 pr-2.5">
-        <span className="w-6 shrink-0 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-          Set
-        </span>
-        <span className="w-14 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-          Last
-        </span>
-        <span className="flex min-w-0 flex-1 gap-1.5">
-          {columnLabels(exercise, weightUnit, distanceUnit).map((label) => (
-            <span
-              key={label}
-              className="flex-1 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted"
-            >
-              {label}
+          {/* Column headings, so an untouched first-ever row still reads clearly. */}
+          <div className="mt-1 flex items-center gap-2 border-t border-line px-3 pb-1 pt-1.5 pr-2.5">
+            <span className="w-6 shrink-0 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              Set
             </span>
-          ))}
-          {showRpe && (
-            <span className="w-12 flex-none text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-              RPE
+            <span className="w-14 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              Last
             </span>
-          )}
-        </span>
-        <span className="w-8 shrink-0" aria-hidden />
-      </div>
+            <span className="flex min-w-0 flex-1 gap-1.5">
+              {columnLabels(exercise, weightUnit, distanceUnit).map((label) => (
+                <span
+                  key={label}
+                  className="flex-1 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted"
+                >
+                  {label}
+                </span>
+              ))}
+              {showRpe && (
+                <span className="w-12 flex-none text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                  RPE
+                </span>
+              )}
+            </span>
+            <span className="w-8 shrink-0" aria-hidden />
+          </div>
 
-      <div className="divide-y divide-line">
-        {sets.map((set, index) => (
-          <SetRow
-            key={set.id}
-            set={set}
-            index={index}
-            exercise={exercise}
-            previous={placeholderAt(index)}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            showRpe={showRpe}
-            isRecord={recordSetIds.has(set.id)}
-            onChange={(patch) => onSetChange(set.id, patch)}
-            onDelete={() => onDeleteSet(set.id)}
-            onConfirmPlaceholder={() => onConfirmPlaceholder(set.id)}
-            onDuplicate={() => onDuplicateSet(set.id)}
-          />
-        ))}
-      </div>
+          <div className="divide-y divide-line">
+            {sets.map((set, index) => (
+              <SetRow
+                key={set.id}
+                set={set}
+                index={index}
+                exercise={exercise}
+                previous={placeholderAt(index)}
+                weightUnit={weightUnit}
+                distanceUnit={distanceUnit}
+                showRpe={showRpe}
+                isRecord={recordSetIds.has(set.id)}
+                onChange={(patch) => onSetChange(set.id, patch)}
+                onDelete={() => onDeleteSet(set.id)}
+                onConfirmPlaceholder={() => onConfirmPlaceholder(set.id)}
+                onDuplicate={() => onDuplicateSet(set.id)}
+              />
+            ))}
+          </div>
 
-      <button
-        onClick={onAddSet}
-        className="flex w-full items-center gap-1.5 border-t border-line px-4 py-3 text-[14px] font-semibold text-accent active:bg-accent-wash"
-      >
-        <Plus size={16} />
-        Add set
-      </button>
+          <button
+            onClick={onAddSet}
+            className="flex w-full items-center gap-1.5 border-t border-line px-4 py-3 text-[14px] font-semibold text-accent active:bg-accent-wash"
+          >
+            <Plus size={16} />
+            Add set
+          </button>
         </>
       )}
     </Card>
@@ -376,7 +348,7 @@ function summarizeLastSession(
     pieces.push(`${working.length}×${repRange}${weightPart}`)
   }
   if (session.bestE1rmKg !== null) {
-    pieces.push(`e1RM ${convertWeight(session.bestE1rmKg, weightUnit)}`)
+    pieces.push(`e1RM ${displayWeight(session.bestE1rmKg, weightUnit)}`)
   }
   return pieces.join(' · ')
 }

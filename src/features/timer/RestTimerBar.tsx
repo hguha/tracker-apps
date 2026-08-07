@@ -66,7 +66,11 @@ export function RestTimerBar({
       playCue('rest-warning')
     }
 
-    if (!hasFired.current && remaining === 0) {
+    // Recompute from the target rather than trusting `remaining`: when a fresh
+    // timer starts, this effect and the reset effect run in the same commit, so
+    // `remaining` can still be the stale 0 from a previous expired timer. Reading
+    // the clock here avoids firing "rest over" the instant a preset is tapped.
+    if (!hasFired.current && remainingSeconds(targetAt) === 0) {
       hasFired.current = true
       setHasExpired(true)
       signalRestComplete()
