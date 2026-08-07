@@ -1,6 +1,6 @@
-# Workout Tracker — Technical Specification
+# FitNote — Technical Specification
 
-Draft 2026-07-29. Hand-off ready.
+Draft 2026-07-29. Hand-off ready. (Renamed from "Workout Tracker" to **FitNote** 2026-08-07.)
 
 ---
 
@@ -1233,3 +1233,72 @@ Solo dev, evenings. Phase 0 ~1wk · 1 ~2wk · 2 ~2wk · 3 ~2wk · 4 ~2–3wk · 
 | **Total** | | **$0** (~$2/mo if AI moves to DeepSeek) |
 
 Watch two dependencies: Supabase's free limits and 1-week pause policy (mitigated §5.4), and the Workers AI daily allowance. Both are de-risked by §11.3 — the data is portable by construction, so a pricing change is an inconvenience, not a crisis.
+
+---
+
+## 16. Shipping to the App Store
+
+### 16.1 The short answer
+
+FitNote is a PWA. Getting it onto the **iOS App Store** does **not** require a rewrite — the React/Vite front end runs unchanged inside a native WebView shell. What it requires is (a) a thin native wrapper, (b) an Apple Developer account, and (c) meeting a handful of review-guideline bars that a pure PWA never has to. No redesign of the app's logic, data model, or UI is needed; the work is packaging, a few native integrations, and store paperwork.
+
+Three honest realities up front:
+
+- **iOS has no "upload a PWA" path.** Unlike Android (where a Trusted Web Activity wraps a PWA almost verbatim), Apple requires a real app binary built with Xcode. A WebView wrapper is the standard, allowed way to produce one.
+- **Apple rejects "just a website" apps** (Guideline 4.2 — minimum functionality). A wrapper that only loads a URL risks rejection. FitNote clears this because it's an installed, offline-first app with device integration (local storage, notifications, haptics) — but the native integrations below are what make that case to the reviewer, so they're not optional polish.
+- **You already have 90% of it.** Local-first storage, offline operation, an installable manifest, and a service worker are exactly what a good wrapped app needs. The gap is native shell + store assets, not product.
+
+### 16.2 Recommended path: Capacitor
+
+**[Capacitor](https://capacitorjs.com/)** (by the Ionic team) is the right wrapper for this app. It loads the existing built `dist/` in a native WebView, exposes native APIs through a JS bridge, and produces a standard Xcode project. It's the lowest-friction option that still allows real native features.
+
+Why Capacitor over the alternatives:
+
+| Option | What it is | Verdict for FitNote |
+|---|---|---|
+| **Capacitor** | Native shell around the web build; JS bridge to native APIs | **Recommended.** Minimal code change, keeps one codebase, real native push/haptics/filesystem. |
+| **PWABuilder** | Microsoft tool that generates a wrapper (uses a packaged WebView) | Fine for Android/Windows; its iOS output is less maintained and gives less control than Capacitor. Good for a quick spike. |
+| **React Native / Expo** | A true native rewrite of the UI | Overkill. Throws away the working web app to solve a packaging problem. Only worth it if the app ever needs heavy native UI. |
+| **TWA (Trusted Web Activity)** | Android-only; wraps the live PWA with no WebView chrome | Best **Android/Play Store** path (near-zero packaging), but iOS still needs Capacitor, so Capacitor covers both. |
+
+### 16.3 What the build process looks like
+
+One-time setup:
+
+1. `npm install @capacitor/core @capacitor/cli && npx cap init FitNote com.hirshguha.fitnote`
+2. Set Capacitor's `webDir` to `dist` and build with `BASE_PATH=/ npm run build` — **the app must be served from the bundle root inside the shell**, not the `/workout-tracker/` subpath the web deployment uses (§5, `vite.config.ts` already makes `BASE_PATH` overridable for exactly this).
+3. `npx cap add ios` (and `npx cap add android`) to generate the native projects.
+4. Point the app at the hosted Supabase backend (unchanged) — the wrapper is just a client.
+
+Each release:
+
+1. `BASE_PATH=/ npm run build`
+2. `npx cap copy` (pushes the fresh `dist/` into the native projects)
+3. `npx cap open ios` → Xcode → Archive → upload to App Store Connect via TestFlight, then submit for review.
+
+CI can automate steps 1–2 and the Xcode Archive with `fastlane`, but for a ~5-user app manual Xcode upload is fine.
+
+### 16.4 What actually needs to change in the app
+
+Small, additive — no redesign:
+
+- **Native push instead of Web Push.** The Tier-3 push design (§12.3) uses VAPID Web Push, which iOS only supports for installed PWAs and unreliably. In a wrapped app, swap to **APNs via `@capacitor/push-notifications`**. The §12.4 `RestScheduler`/notification abstraction was written for exactly this — it's one implementation swap behind a stable interface, no caller changes.
+- **Native file save/open for export/import (§11.3)** via `@capacitor/filesystem` + share sheet, instead of the browser download/upload. Same JSON payload; different I/O boundary. Keep the web path too — one `if (Capacitor.isNativePlatform())` fork.
+- **Safe-area & status bar**: already handled by the `viewport-fit=cover` + `pt-safe`/`pb-safe` classes; verify against the iOS notch in the shell.
+- **Haptics** (`@capacitor/haptics`) on set-logged / PR — optional, but it's the kind of native touch that both improves feel and strengthens the "not just a website" case.
+- **Remove the iOS "Add to Home Screen" education card (§5.8)** when running natively — it's meaningless in a wrapped app. Gate it on `!Capacitor.isNativePlatform()`.
+
+Explicitly **not** needed: no change to the data model, the repository/sync layer, the charts, the metrics, or any screen's layout. The WebView renders the same DOM.
+
+### 16.5 Store requirements checklist
+
+- **Apple Developer Program** membership — **$99/year** (this breaks the app's $0 running cost; it's the one unavoidable fee). Google Play is a **$25 one-time** fee if Android is wanted too.
+- **App icons and launch screen** in native densities — generated from the existing `public/icon.svg` (`@capacitor/assets` automates this).
+- **Privacy nutrition label / `App Privacy` questionnaire.** FitNote is easy here: data is local-first and only syncs to the user's own Supabase row; no third-party tracking, no ads, no data sold. §11.2 already states the posture.
+- **A privacy policy URL** (required even for trivial data use). A short static page suffices.
+- **Screenshots** for the required device sizes, and a review note explaining the offline-first, single-user nature so the reviewer understands the (intentionally minimal) sign-in.
+- **Account deletion** must be in-app if there are accounts — already covered by the delete-account flow (§11.1.2).
+
+### 16.6 Recommendation
+
+For reaching a few users on iPhone, wrap with **Capacitor**, swap Web Push → APNs and the export I/O to native file APIs behind the existing abstractions, pay the $99/year Apple fee, and submit. Budget the real effort as **days, not weeks** — most of it is the Apple account, icons/screenshots, and one round of review feedback, not code. Keep shipping the PWA in parallel; the wrapper is an additional distribution channel over the same build, not a replacement.
