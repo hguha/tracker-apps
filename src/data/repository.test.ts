@@ -380,6 +380,35 @@ describe('getBadgeStats', () => {
   })
 })
 
+describe('getCoachSummary', () => {
+  it('produces a de-identified summary from logged history', async () => {
+    const w = await repo.startWorkout({ title: 'Push' })
+    const bench = await repo.addExerciseToWorkout(w, 'barbell_bench_press')
+    for (const reps of [10, 10]) {
+      await repo.logSetValues(
+        await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps }),
+        {},
+      )
+    }
+    await repo.finishWorkout(w)
+
+    const summary = await repo.getCoachSummary()
+    expect(summary.totalWorkouts).toBe(1)
+    expect(summary.exercises[0]!.name).toBe('Barbell Bench Press')
+    expect(summary.weeks[0]!.weekOffset).toBe(0)
+    // The privacy contract holds end-to-end: nothing identifying serializes.
+    const json = JSON.stringify(summary)
+    expect(json).not.toMatch(/\d{13}/) // no epoch ms
+    expect(json.toLowerCase()).not.toContain('startedat')
+  })
+
+  it('returns an empty summary for no history', async () => {
+    const summary = await repo.getCoachSummary()
+    expect(summary.totalWorkouts).toBe(0)
+    expect(summary.exercises).toEqual([])
+  })
+})
+
 describe('listWorkoutSummaries — batched load', () => {
   it('matches the per-workout builder exactly for a mixed history', async () => {
     // Two sessions of different shapes, so a batching bug (wrong exercise

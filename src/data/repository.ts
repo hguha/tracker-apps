@@ -15,6 +15,13 @@ import { getActiveUserId } from '@/db/seed'
 import { formatDistance, formatWeight } from '@/lib/units'
 import { bestOneRepMaxKg, estimatedOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
 import { nextTarget } from '@/lib/progression'
+import { weekStart } from '@/lib/dates'
+import {
+  buildCoachSummary,
+  SUMMARY_WEEKS,
+  type CoachSummary,
+  type SummarySession,
+} from '@/features/coach/summary'
 import { sessionTitle, type SetSignal } from '@/lib/sessionTitle'
 import type {
   DistanceUnit,
@@ -573,6 +580,102 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     totalCardioSeconds,
     distinctExercises: distinctExercises.size,
   }
+}
+
+/**
+ * Assemble the de-identified training summary for the AI coach (§13).
+ *
+ * Loads the last SUMMARY_WEEKS of completed sessions in bulk, reduces each to
+ * the shape `buildCoachSummary` needs (taxonomy + sets, dates as week offsets),
+ * and returns the aggregate. This is the *only* function that feeds the coach —
+ * the privacy contract lives in `buildCoachSummary`, which never sees a name,
+ * note, or absolute date.
+ */
+export async function getCoachSummary(): Promise<CoachSummary> {
+  const profile = await getProfile()
+  const regionOf = await buildRegionMap()
+
+  const cutoff = Date.now() - SUMMARY_WEEKS * 7 * 24 * 3600 * 1000
+  const thisWeekStart = weekStart(Date.now(), profile.weekStartsOn)
+  const workouts = (await listWorkouts(1000)).filter(
+    (w) => w.endedAt !== null && w.startedAt >= cutoff,
+  )
+
+  if (workouts.length === 0) {
+    return buildCoachSummary({
+      unitWeight: profile.unitWeight,
+      weeklyWorkoutGoal: profile.weeklyWorkoutGoal,
+      sessions: [],
+    })
+  }
+
+  // Bulk-load exercises and sets for the window (same shape as summaries).
+  const allWe = (
+    await db.workoutExercises
+      .where('workoutId')
+      .anyOf(workouts.map((w) => w.id))
+      .toArray()
+  ).filter((r) => r.deletedAt === null)
+  const exercises = await db.exercises.bulkGet([
+    ...new Set(allWe.map((we) => we.exerciseId)),
+  ])
+  const exercisesById = new Map<string, Exercise>()
+  exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
+  const allSets = (
+    await db.sets
+      .where('workoutExerciseId')
+      .anyOf(allWe.map((we) => we.id))
+      .toArray()
+  ).filter((s) => s.deletedAt === null && s.isCompleted)
+
+  const setsByWe = new Map<string, WorkoutSet[]>()
+  for (const s of allSets) {
+    const list = setsByWe.get(s.workoutExerciseId)
+    if (list) list.push(s)
+    else setsByWe.set(s.workoutExerciseId, [s])
+  }
+  const weByWorkout = new Map<string, WorkoutExercise[]>()
+  for (const we of allWe) {
+    const list = weByWorkout.get(we.workoutId)
+    if (list) list.push(we)
+    else weByWorkout.set(we.workoutId, [we])
+  }
+
+  const WEEK_MS = 7 * 24 * 3600 * 1000
+  const sessions: SummarySession[] = workouts.map((w) => {
+    // Whole-week offset from the current week; 0 = this week, negative = past.
+    const weekOffset = Math.round(
+      (weekStart(w.startedAt, profile.weekStartsOn) - thisWeekStart) / WEEK_MS,
+    )
+    const exerciseInstances = (weByWorkout.get(w.id) ?? [])
+      .map((we) => {
+        const exercise = exercisesById.get(we.exerciseId)
+        if (!exercise) return null
+        return {
+          exerciseId: exercise.id,
+          name: exercise.name,
+          region: regionOf.get(exercise.primaryMuscleId),
+          pattern: exercise.movementPattern,
+          equipment: exercise.equipment,
+          isCardio: exercise.movementPattern === 'cardio',
+          sets: (setsByWe.get(we.id) ?? []).map((s) => ({
+            weightKg: s.weightKg,
+            reps: s.reps,
+            rpe: s.rpe,
+            durationSeconds: s.durationSeconds,
+            distanceM: s.distanceM,
+          })),
+        }
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null)
+    return { weekOffset, exercises: exerciseInstances }
+  })
+
+  return buildCoachSummary({
+    unitWeight: profile.unitWeight,
+    weeklyWorkoutGoal: profile.weeklyWorkoutGoal,
+    sessions,
+  })
 }
 
 /**
