@@ -14,6 +14,7 @@ import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import { formatDistance, formatWeight } from '@/lib/units'
 import { bestOneRepMaxKg, estimatedOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
+import { nextTarget } from '@/lib/progression'
 import { sessionTitle, type SetSignal } from '@/lib/sessionTitle'
 import type {
   DistanceUnit,
@@ -1211,6 +1212,7 @@ export async function rebuildLastPerformance(exerciseId: string): Promise<void> 
         reps: s.reps,
         durationSeconds: s.durationSeconds,
         distanceM: s.distanceM,
+        rpe: s.rpe,
       })),
       bestE1rmKg: bestOneRepMaxKg(sets),
       volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
@@ -1397,6 +1399,7 @@ export async function addExerciseToTemplate(
     targetRpe: null,
     restSeconds: null,
     notes: '',
+    progression: null,
     ...syncStamp(),
   }
   await db.templateExercises.add(row)
@@ -1520,6 +1523,7 @@ export async function saveWorkoutAsTemplate(
       targetRpe: null,
       restSeconds: we.restSeconds,
       notes: '',
+      progression: null,
       ...syncStamp(),
     }
     await db.templateExercises.add(row)
@@ -1550,17 +1554,39 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
       })
     }
 
+    // Apply a progression rule (§7 Phase 4) if the template-exercise has one:
+    // nudge the seeded weight/reps based on how the last session against this
+    // exercise went. Deterministic and total — with no rule or no history it
+    // just returns the template's own targets unchanged.
+    let seedWeightKg = te.targetWeightKg
+    let targetReps = te.targetRepsLow ?? te.targetRepsHigh
+    if (te.progression) {
+      const last = (await getLastPerformance(te.exerciseId))?.sessions[0]
+      const stepped = nextTarget({
+        rule: te.progression,
+        targetWeightKg: te.targetWeightKg,
+        targetRepsLow: te.targetRepsLow,
+        targetRepsHigh: te.targetRepsHigh,
+        lastSets: (last?.sets ?? []).map((s) => ({
+          weightKg: s.weightKg,
+          reps: s.reps,
+          rpe: s.rpe ?? null,
+        })),
+      })
+      seedWeightKg = stepped.targetWeightKg
+      targetReps = stepped.targetReps
+    }
+
     // Empty rows. The template supplies the *shape* — how many sets — while the
     // numbers show as placeholders. A template target seeds the ghost when it
     // has one; otherwise the placeholder falls back to history at log time
     // (§6.2). Either way the row stays unlogged until the user types or taps.
     const targetSets = te.targetSets ?? 3
-    const targetReps = te.targetRepsLow ?? te.targetRepsHigh
     for (let index = 0; index < targetSets; index += 1) {
       const setId = await addSet({ workoutExerciseId })
-      if (te.targetWeightKg !== null || targetReps !== null) {
+      if (seedWeightKg !== null || targetReps !== null) {
         placeholders[setId] = {
-          weightKg: te.targetWeightKg,
+          weightKg: seedWeightKg,
           reps: targetReps,
           durationSeconds: null,
           distanceM: null,

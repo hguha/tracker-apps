@@ -278,6 +278,83 @@ function TemplateExerciseRow({
           }
         />
       </div>
+
+      <ProgressionControl te={te} weightUnit={weightUnit} onChange={onChange} />
+    </div>
+  )
+}
+
+/**
+ * Auto-progression toggle for one template-exercise (§7 Phase 4).
+ *
+ * Off = manual (the target weight is whatever you set). On = double progression:
+ * when the last session hit the top of the rep range at RPE ≤ 8, the next
+ * instantiation seeds +increment and resets to the bottom of the range. The
+ * increment defaults to the smallest sensible plate step for the unit.
+ */
+function ProgressionControl({
+  te,
+  weightUnit,
+  onChange,
+}: {
+  te: TemplateExercise
+  weightUnit: WeightUnit
+  onChange: (patch: Partial<TemplateExercise>) => void
+}) {
+  const on = te.progression !== null
+  const defaultIncrementKg = weightUnit === 'kg' ? 2.5 : weightToKg(5, 'lb')
+  const incrementDisplay = te.progression
+    ? weightFromKg(te.progression.incrementKg, weightUnit)
+    : weightFromKg(defaultIncrementKg, weightUnit)
+
+  return (
+    <div className="border-t border-line px-3 py-2.5">
+      <label className="flex items-center justify-between gap-2">
+        <span className="min-w-0">
+          <span className="block text-[13px] font-medium">Auto-progress</span>
+          <span className="block text-[11.5px] text-ink-muted">
+            {on
+              ? `+${incrementDisplay} ${weightUnit} when you clear the rep range`
+              : 'Add weight automatically as you hit the top of the range'}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(event) =>
+            onChange({
+              progression: event.target.checked
+                ? { kind: 'double', incrementKg: defaultIncrementKg, maxRpe: 8 }
+                : null,
+            })
+          }
+          className="size-5 shrink-0 accent-[var(--accent)]"
+        />
+      </label>
+
+      {on && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[12px] text-ink-muted">Increment</span>
+          <div className="w-20">
+            <TargetField
+              label={weightUnit}
+              value={incrementDisplay}
+              onCommit={(n) =>
+                onChange({
+                  progression: {
+                    kind: 'double',
+                    incrementKg:
+                      n === null || n <= 0
+                        ? defaultIncrementKg
+                        : weightToKg(n, weightUnit),
+                    maxRpe: te.progression?.maxRpe ?? 8,
+                  },
+                })
+              }
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

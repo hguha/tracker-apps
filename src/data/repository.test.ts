@@ -981,6 +981,59 @@ describe('templates (§7)', () => {
     expect(overrides[sets[0]!.id]).toMatchObject({ weightKg: 100, reps: 5 })
   })
 
+  it('applies a progression rule at instantiation after a top-of-range session', async () => {
+    const templateId = await repo.createTemplate('Push')
+    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_bench_press')
+    await repo.updateTemplateExercise(teId, {
+      targetSets: 2,
+      targetRepsLow: 8,
+      targetRepsHigh: 10,
+      targetWeightKg: 100,
+      progression: { kind: 'double', incrementKg: 2.5, maxRpe: 8 },
+    })
+
+    // Log a session that hits the top of the range at the template weight.
+    const w1 = await repo.startWorkoutFromTemplate(templateId)
+    const [we1] = await repo.listWorkoutExercises(w1)
+    for (const set of await repo.listSets(we1!.id)) {
+      await repo.logSetValues(set.id, { weightKg: 100, reps: 10 })
+    }
+    await repo.finishWorkout(w1)
+
+    // Next instantiation should seed +2.5 kg, reset to the bottom of the range.
+    const w2 = await repo.startWorkoutFromTemplate(templateId)
+    const [we2] = await repo.listWorkoutExercises(w2)
+    const sets2 = await repo.listSets(we2!.id)
+    const overrides = await repo.getPlaceholderOverrides(w2)
+    expect(overrides[sets2[0]!.id]).toMatchObject({ weightKg: 102.5, reps: 8 })
+  })
+
+  it('holds the progression weight after a session that missed the range', async () => {
+    const templateId = await repo.createTemplate('Push')
+    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_bench_press')
+    await repo.updateTemplateExercise(teId, {
+      targetSets: 2,
+      targetRepsLow: 8,
+      targetRepsHigh: 10,
+      targetWeightKg: 100,
+      progression: { kind: 'double', incrementKg: 2.5, maxRpe: 8 },
+    })
+
+    const w1 = await repo.startWorkoutFromTemplate(templateId)
+    const [we1] = await repo.listWorkoutExercises(w1)
+    const sets1 = await repo.listSets(we1!.id)
+    // Fell short: only 8 reps, below the top of 10.
+    await repo.logSetValues(sets1[0]!.id, { weightKg: 100, reps: 8 })
+    await repo.logSetValues(sets1[1]!.id, { weightKg: 100, reps: 8 })
+    await repo.finishWorkout(w1)
+
+    const w2 = await repo.startWorkoutFromTemplate(templateId)
+    const [we2] = await repo.listWorkoutExercises(w2)
+    const sets2 = await repo.listSets(we2!.id)
+    const overrides = await repo.getPlaceholderOverrides(w2)
+    expect(overrides[sets2[0]!.id]).toMatchObject({ weightKg: 100 })
+  })
+
   it('editing a template never rewrites a workout already started from it', async () => {
     const templateId = await repo.createTemplate('Pull')
     await repo.addExerciseToTemplate(templateId, 'barbell_row')

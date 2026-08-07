@@ -255,6 +255,26 @@ export interface TemplateExercise extends SyncColumns {
   targetRpe: number | null
   restSeconds: number | null
   notes: string
+  /**
+   * Declarative progression (§7 Phase 4). null = manual, no auto-progression.
+   * When set, the target weight is nudged at instantiation based on how the last
+   * session against this template-exercise went. The deterministic version of
+   * programming automation — ships before any LLM.
+   */
+  progression: ProgressionRule | null
+}
+
+/**
+ * A double-progression rule: hold the weight until every working set reaches the
+ * top of the rep range (at or under an RPE cap), then add an increment and reset
+ * to the bottom of the range. The most common linear-progression scheme.
+ */
+export interface ProgressionRule {
+  kind: 'double'
+  /** kg to add when the advance condition is met. */
+  incrementKg: number
+  /** Only advance if the hardest logged set was at or below this RPE. null = ignore RPE. */
+  maxRpe: number | null
 }
 
 export const RECORD_TYPES = [
@@ -339,4 +359,7 @@ export interface PerformedSet {
   reps: number | null
   durationSeconds: number | null
   distanceM: number | null
+  /** Carried so progression rules can gate on RPE (§7 Phase 4). Optional — RPE
+   *  logging is off by default, and older cached rows won't have it. */
+  rpe?: number | null
 }
