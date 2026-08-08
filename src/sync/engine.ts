@@ -243,30 +243,84 @@ export class SyncEngine {
    * Dead-lettered rows are dropped from the drain and never retried on their own
    * — correct when the failure is truly permanent (a poison payload), but wrong
    * when the cause was external and since fixed (an out-of-date server schema
-   * that's now migrated). This is the user-driven "try again" after fixing the
-   * root cause. Returns how many were requeued.
+   * that's now migrated, or a row that has since been re-owned by an account
+   * upgrade). This is the user-driven "try again" after fixing the root cause.
+   *
+   * Two things make this more than a straight replay, both learned from real
+   * RLS failures after a device-only → account upgrade:
+   *
+   *   1. **Re-read the row, don't replay the payload.** A dead-lettered entry
+   *      froze the row as it was when it failed — for a workout that means
+   *      `user_id: 'local-user'`, which RLS rejects forever. Reading the current
+   *      row from Dexie picks up the claimed ownership instead.
+   *   2. **Requeue in dependency order.** A chained row (`workout_exercises`,
+   *      `sets`) only passes its RLS check once its parent exists server-side
+   *      under the caller's uid. Replaying in dead-letter order can put a child
+   *      ahead of its parent, which fails with exactly the RLS error it was
+   *      dead-lettered for. SYNCED_TABLES is already in dependency order, so
+   *      sorting by it makes the replay safe.
+   *
+   * A row that no longer exists locally is dropped rather than requeued — there
+   * is nothing left to push, and replaying a stale snapshot of it would be wrong.
+   * Returns how many were requeued.
    */
   async retryDeadLettered(): Promise<number> {
     const failed = await db.deadLetter.toArray()
     if (failed.length === 0) return 0
 
-    await db.transaction('rw', db.outbox, db.deadLetter, async () => {
-      for (const entry of failed) {
+    // Dependency order, then original queue order within a table.
+    const rank = (table: string) => {
+      const index = (SYNCED_TABLES as readonly string[]).indexOf(table)
+      return index === -1 ? SYNCED_TABLES.length : index
+    }
+    const ordered = [...failed].sort(
+      (a, b) => rank(a.table) - rank(b.table) || (a.seq ?? 0) - (b.seq ?? 0),
+    )
+
+    let requeued = 0
+    let dropped = 0
+
+    for (const entry of ordered) {
+      // Re-read the live row so the push carries current ownership and values.
+      const current = await currentRow(entry.table, entry.rowId)
+      if (current === undefined) {
+        // The row is gone locally; there's nothing to push.
+        await db.deadLetter.delete(entry.seq!)
+        dropped += 1
+        continue
+      }
+
+      await db.transaction('rw', db.outbox, db.deadLetter, async () => {
         await db.outbox.add({
           table: entry.table,
-          op: entry.op,
+          // Always an upsert on a known id — safe whether the server has it yet.
+          op: 'update',
           rowId: entry.rowId,
-          payload: entry.payload,
-          clientRev: entry.clientRev,
+          payload: current,
+          clientRev: Number((current as { clientRev?: unknown }).clientRev ?? 1),
           queuedAt: entry.queuedAt,
           attempts: 0,
         })
         await db.deadLetter.delete(entry.seq!)
-      }
-    })
-    syncLog.info(`requeued ${failed.length} dead-lettered writes for retry`)
-    return failed.length
+      })
+      requeued += 1
+    }
+
+    syncLog.info(
+      `requeued ${requeued} dead-lettered writes for retry` +
+        (dropped > 0 ? ` (dropped ${dropped} whose row no longer exists)` : ''),
+    )
+    return requeued
   }
+}
+
+/** The current row behind a dead-lettered entry, or undefined if it's gone. */
+async function currentRow(
+  table: string,
+  rowId: string,
+): Promise<Record<string, unknown> | undefined> {
+  if (!(SYNCED_TABLES as readonly string[]).includes(table)) return undefined
+  return tableStore(table as SyncedTable).get(rowId)
 }
 
 function toPushRow(entry: OutboxEntry): PushRow {
@@ -332,5 +386,6 @@ function tableStore(table: SyncedTable) {
   } as const
   return map[table] as unknown as {
     put: (row: Record<string, unknown>) => Promise<unknown>
+    get: (id: string) => Promise<Record<string, unknown> | undefined>
   }
 }

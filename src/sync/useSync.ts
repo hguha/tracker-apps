@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
+import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { getSupabase } from './supabaseClient'
 import { SupabaseBackend } from './supabaseBackend'
@@ -95,18 +96,27 @@ export function useSync(): SyncStatus {
   }, [active, engine])
 
   const retryFailed = useCallback(async () => {
-    if (!active || !engine) return 0
+    if (!active || !engine || !session || session.isLocal) return 0
     setPhase('syncing')
     try {
+      // Repair ownership first. Rows written before this account existed (or
+      // during a failed upgrade) can still be owned by 'local-user', which the
+      // server's RLS rejects forever — the "new row violates row-level security
+      // policy" failure. claimLocalData is idempotent, so this is a no-op once
+      // everything is owned correctly.
+      const claimed = await repo.claimLocalData(session.userId)
+      if (claimed > 0) {
+        console.info(`[sync] re-owned ${claimed} rows to ${session.userId} before retry`)
+      }
       const count = await engine.retryDeadLettered()
       const { drain } = await engine.sync()
       setPhase(drain.stoppedBecause === null ? 'idle' : 'error')
-      return count
+      return count + claimed
     } catch {
       setPhase('error')
       return 0
     }
-  }, [active, engine])
+  }, [active, engine, session])
 
   const pending = useLiveQuery(() => db.outbox.count(), [], 0)
   const deadLettered = useLiveQuery(() => db.deadLetter.count(), [], 0)

@@ -9,12 +9,15 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
-import { seedIfNeeded } from '@/db/seed'
+import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import * as repo from '@/data/repository'
 import { SyncEngine } from './engine'
 import { MockBackend } from './mockBackend'
 
 beforeEach(async () => {
+  // Reset the owner first, so a test that upgrades the account can't leak into
+  // the next one's seeding.
+  setActiveUserId(LOCAL_USER_ID)
   await db.delete()
   await db.open()
   await seedIfNeeded()
@@ -127,6 +130,50 @@ describe('failure classification (§5.5)', () => {
     expect(await db.outbox.count()).toBe(0)
     expect(
       backend.pushed.some((p) => p.table === 'workouts' && p.rowId === workoutId),
+    ).toBe(true)
+  })
+
+  it('retries with the CURRENT row, so an RLS failure fixed by re-owning succeeds', async () => {
+    // The real failure this guards: rows written as a device-only account are
+    // owned by 'local-user'. The server rejects them ("new row violates
+    // row-level security policy"), they dead-letter, and a naive replay of the
+    // frozen payload re-sends user_id: 'local-user' and fails forever.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+    const UID = '33333333-3333-3333-3333-333333333333'
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+
+    // Every push is rejected the way RLS rejects a mis-owned row.
+    backend.forceNext(
+      { status: 'permanent', error: 'new row violates row-level security policy' },
+      99,
+    )
+    await engine.drain()
+    expect(await db.deadLetter.count()).toBeGreaterThan(0)
+
+    // The account upgrade re-owns the local rows.
+    setActiveUserId(UID)
+    await repo.claimLocalData(UID)
+    await db.outbox.clear() // isolate: prove the retry alone requeues what's needed
+
+    // Retry now replays the *current* rows, which carry the new ownership.
+    const requeued = await engine.retryDeadLettered()
+    expect(requeued).toBeGreaterThan(0)
+    await engine.drain()
+
+    const pushedWorkout = backend.pushed
+      .filter((p) => p.table === 'workouts' && p.rowId === workoutId)
+      .pop()
+    expect(pushedWorkout?.payload.userId).toBe(UID)
+    // The chained row is queued after its parent, so its RLS check can pass.
+    const order = backend.pushed.map((p) => p.table)
+    expect(order.lastIndexOf('workouts')).toBeLessThan(
+      order.lastIndexOf('workoutExercises'),
+    )
+    expect(
+      backend.pushed.some((p) => p.table === 'workoutExercises' && p.rowId === weId),
     ).toBe(true)
   })
 
