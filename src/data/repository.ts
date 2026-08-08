@@ -2079,6 +2079,97 @@ export async function deleteMetricEntry(id: string): Promise<void> {
 // ------------------------------------------------------------- maintenance
 
 /**
+ * Soft-deletes every workout, template, custom exercise, and metric entry —
+ * *through the outbox*, so the deletions propagate to the server.
+ *
+ * The difference from `clearLocalData` matters. That one wipes IndexedDB and
+ * drops the queue, so on a synced account the next pull simply rehydrates
+ * everything from the server. This one issues a real tombstone per row, which is
+ * how a delete is represented in pull-based sync (§4.11) — so the data goes away
+ * on every device, permanently.
+ *
+ * Use it to clear test data before entering real data. The shared system library
+ * is untouched (it isn't user data); custom exercises are archived rather than
+ * tombstoned when history still references them, so old sessions stay readable.
+ *
+ * Returns per-kind counts, so the UI can report exactly what it removed.
+ */
+export async function deleteAllTrainingData(): Promise<{
+  workouts: number
+  templates: number
+  customExercises: number
+  metricEntries: number
+}> {
+  const counts = { workouts: 0, templates: 0, customExercises: 0, metricEntries: 0 }
+  const now = Date.now()
+
+  // Workouts. Tombstoning the parent is what hides the session everywhere; its
+  // exercises and sets are filtered by the parent on read, and the server's
+  // chained RLS means they don't each need their own tombstone.
+  for (const workout of await db.workouts.toArray()) {
+    if (workout.deletedAt !== null) continue
+    await patchRow(db.workouts, 'workouts', workout.id, { deletedAt: now })
+    counts.workouts += 1
+  }
+
+  for (const template of await db.templates.toArray()) {
+    if (template.deletedAt !== null) continue
+    await patchRow(db.templates, 'templates', template.id, { deletedAt: now })
+    counts.templates += 1
+  }
+
+  for (const entry of await db.metricEntries.toArray()) {
+    if (entry.deletedAt !== null) continue
+    await patchRow(db.metricEntries, 'metricEntries', entry.id, { deletedAt: now })
+    counts.metricEntries += 1
+  }
+
+  // Custom exercises only — never the system library (userId === null).
+  for (const exercise of await db.exercises.toArray()) {
+    if (exercise.userId === null || exercise.deletedAt !== null) continue
+    await patchRow(db.exercises, 'exercises', exercise.id, { deletedAt: now })
+    counts.customExercises += 1
+  }
+
+  // Derived caches are rebuilt from what's left, so they're safe to drop.
+  await db.personalRecords.clear()
+  await db.lastPerformance.clear()
+  await db.placeholderOverrides.clear()
+
+  return counts
+}
+
+/**
+ * Tombstones finished workouts that contain no completed set (§6.4.1).
+ *
+ * `finishWorkout` already discards an empty session, so these can't be created
+ * through the normal path — but they still turn up two ways: pulled from the
+ * server (written by an older build, or by a device whose sets failed to push),
+ * and left behind when a session is interrupted so `finishWorkout` never runs.
+ * Either way an empty session is noise in history and skews the counts, so this
+ * removes them through the outbox like any other delete.
+ *
+ * In-progress workouts (`endedAt === null`) are never touched — one may be open
+ * right now with sets about to be logged.
+ *
+ * Returns how many were removed.
+ */
+export async function purgeEmptyWorkouts(): Promise<number> {
+  const finished = (await db.workouts.toArray()).filter(
+    (w) => w.deletedAt === null && w.endedAt !== null,
+  )
+
+  let removed = 0
+  for (const workout of finished) {
+    if (await hasLoggedWork(workout.id)) continue
+    await deleteWorkout(workout.id)
+    await db.placeholderOverrides.delete(workout.id)
+    removed += 1
+  }
+  return removed
+}
+
+/**
  * Wipes all local training data and the sync queues, then re-seeds the shared
  * library and a fresh profile.
  *

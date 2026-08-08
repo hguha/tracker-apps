@@ -26,7 +26,7 @@ export class SupabaseBackend implements SyncBackend {
 
   async push(row: PushRow): Promise<PushOutcome> {
     const table = tableToPostgres(row.table)
-    const payload = toPostgresRow(row.payload)
+    const payload = toPostgresRow(row.payload, table)
 
     try {
       if (row.op === 'delete') {
@@ -78,14 +78,36 @@ export class SupabaseBackend implements SyncBackend {
   }
 }
 
-/** Domain row → Postgres row: snake_case keys, ISO timestamps. */
-function toPostgresRow(row: Record<string, unknown>): Record<string, unknown> {
+/**
+ * Domain fields that are NOT columns on their Postgres table, and so must be
+ * stripped from a push (§4.3).
+ *
+ * `exercises.secondaryMuscles` is the live case: the domain type carries it as an
+ * inline array (volume math needs it in one read), but Postgres normalizes it
+ * into the `exercise_secondary_muscles` join table. Sending it produced
+ * "Could not find the 'secondary_muscles' column of 'exercises' in the schema
+ * cache" — a permanent failure that dead-lettered every custom-exercise write.
+ *
+ * Keyed by Postgres table name, listing snake_case keys to drop.
+ */
+const NON_COLUMN_FIELDS: Record<string, readonly string[]> = {
+  exercises: ['secondary_muscles'],
+}
+
+/** Domain row → Postgres row: snake_case keys, ISO timestamps, no stray fields. */
+export function toPostgresRow(
+  row: Record<string, unknown>,
+  table: string,
+): Record<string, unknown> {
   const snake = keysToSnake(row)
   for (const column of TIMESTAMP_COLUMNS) {
     if (column in snake && typeof snake[column] === 'number') {
       snake[column] = msToIso(snake[column] as number)
     }
   }
+  // Drop anything the table has no column for, so one unmappable field can't
+  // dead-letter the whole row.
+  for (const field of NON_COLUMN_FIELDS[table] ?? []) delete snake[field]
   return snake
 }
 

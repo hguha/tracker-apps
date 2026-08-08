@@ -1212,6 +1212,79 @@ describe('active user id + local data reset', () => {
     expect(await repo.claimLocalData(LOCAL_USER_ID)).toBe(0)
   })
 
+  it('purgeEmptyWorkouts removes finished sessions with no completed set', async () => {
+    // A real session with logged work.
+    const realId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(realId, 'barbell_bench_press')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(realId)
+
+    // An empty finished session, as a pull from an older build would produce.
+    // (finishWorkout would have discarded it, so write the end directly.)
+    const emptyId = await repo.startWorkout()
+    await repo.addExerciseToWorkout(emptyId, 'deadlift')
+    await repo.updateWorkout(emptyId, { endedAt: Date.now() })
+
+    // An in-progress session must never be touched.
+    const activeId = await repo.startWorkout()
+
+    const removed = await repo.purgeEmptyWorkouts()
+    expect(removed).toBe(1)
+    expect((await db.workouts.get(emptyId))?.deletedAt).not.toBeNull()
+    expect((await db.workouts.get(realId))?.deletedAt).toBeNull()
+    expect((await db.workouts.get(activeId))?.deletedAt).toBeNull()
+  })
+
+  it('deleteAllTrainingData tombstones everything through the outbox so deletes sync', async () => {
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(workoutId)
+    const templateId = await repo.createTemplate('Test Push', null)
+    const customExId = await repo.createExercise({
+      name: 'Fake Lift',
+      primaryMuscleId: 'mid_chest',
+      equipment: 'barbell',
+      movementPattern: 'horizontal_push',
+      trackingType: 'weight_reps',
+    })
+
+    await db.outbox.clear() // isolate the deletes' own queue entries
+    const counts = await repo.deleteAllTrainingData()
+
+    expect(counts.workouts).toBe(1)
+    expect(counts.templates).toBe(1)
+    expect(counts.customExercises).toBe(1)
+
+    // Tombstoned, not hard-deleted — that's what lets the delete replicate.
+    expect((await db.workouts.get(workoutId))?.deletedAt).not.toBeNull()
+    expect((await db.templates.get(templateId))?.deletedAt).not.toBeNull()
+    expect((await db.exercises.get(customExId))?.deletedAt).not.toBeNull()
+    // Gone from the read paths.
+    expect(await repo.listTemplates()).toHaveLength(0)
+    expect((await repo.listWorkouts()).some((w) => w.id === workoutId)).toBe(false)
+
+    // Every deletion is queued for the server — the whole point.
+    const queued = await db.outbox.toArray()
+    expect(queued.some((e) => e.table === 'workouts' && e.rowId === workoutId)).toBe(true)
+    expect(queued.some((e) => e.table === 'templates' && e.rowId === templateId)).toBe(
+      true,
+    )
+    expect(queued.some((e) => e.table === 'exercises' && e.rowId === customExId)).toBe(
+      true,
+    )
+
+    // The system library survives — it isn't user data.
+    expect(await db.exercises.get('barbell_bench_press')).toBeDefined()
+    expect((await db.exercises.get('barbell_bench_press'))?.deletedAt).toBeNull()
+  })
+
   it('clearLocalData wipes training data and queues but keeps the system library', async () => {
     const workoutId = await repo.startWorkout()
     const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')

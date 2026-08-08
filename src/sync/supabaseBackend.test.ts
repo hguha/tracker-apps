@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { classify } from './supabaseBackend'
+import { classify, toPostgresRow } from './supabaseBackend'
 
 /** Minimal PostgrestError-shaped object for the classifier. */
 function err(code: string, message = 'x') {
@@ -36,8 +36,42 @@ describe('classify', () => {
 
   it('treats a missing/empty code as transient (retry)', () => {
     expect(classify(err('')).status).toBe('transient')
-    expect(classify({ name: 'e', message: 'network', details: '', hint: '' } as never).status).toBe(
-      'transient',
+    expect(
+      classify({ name: 'e', message: 'network', details: '', hint: '' } as never).status,
+    ).toBe('transient')
+  })
+})
+
+describe('toPostgresRow', () => {
+  it("strips exercises.secondaryMuscles, which has no column (it's a join table)", () => {
+    // The real failure: "Could not find the 'secondary_muscles' column of
+    // 'exercises' in the schema cache" — a permanent error that dead-lettered
+    // every custom-exercise write.
+    const row = toPostgresRow(
+      {
+        id: 'my_lift',
+        name: 'My Lift',
+        primaryMuscleId: 'mid_chest',
+        secondaryMuscles: [{ muscleId: 'front_delt', contribution: 0.5 }],
+        aliases: ['ml'],
+      },
+      'exercises',
     )
+    expect(row).not.toHaveProperty('secondary_muscles')
+    // Everything else still maps, snake_cased.
+    expect(row.primary_muscle_id).toBe('mid_chest')
+    expect(row.aliases).toEqual(['ml'])
+  })
+
+  it('leaves other tables untouched and converts timestamps to ISO', () => {
+    const at = Date.UTC(2026, 0, 2, 3, 4, 5)
+    const row = toPostgresRow(
+      { id: 'w1', userId: 'u1', startedAt: at, endedAt: null, deletedAt: null },
+      'workouts',
+    )
+    expect(row.user_id).toBe('u1')
+    expect(row.started_at).toBe(new Date(at).toISOString())
+    // A null timestamp stays null rather than becoming an epoch string.
+    expect(row.ended_at).toBeNull()
   })
 })

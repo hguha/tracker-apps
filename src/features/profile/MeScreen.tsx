@@ -600,6 +600,68 @@ export function MeScreen({
           measurements — or import one to restore or move devices.
         </p>
 
+        {/* Removes finished sessions that contain no completed set — pulled from
+            an older build, or left by an interrupted session. */}
+        <button
+          onClick={() => {
+            if (isClearing) return
+            setIsClearing(true)
+            void repo
+              .purgeEmptyWorkouts()
+              .then((removed) => {
+                setIsClearing(false)
+                toast.show(
+                  removed === 0
+                    ? 'No empty workouts found'
+                    : `Removed ${removed} empty ${removed === 1 ? 'workout' : 'workouts'}`,
+                )
+              })
+              .catch(() => {
+                setIsClearing(false)
+                toast.show('Could not remove empty workouts')
+              })
+          }}
+          disabled={isClearing}
+          className="mt-3 w-full py-2 text-[13px] font-semibold text-ink-secondary active:opacity-60 disabled:opacity-40"
+        >
+          Remove empty workouts
+        </button>
+
+        {/* The real reset: tombstones every row through the outbox, so the
+            deletions reach the server instead of being re-pulled. This is what
+            "clear my test data" actually needs. */}
+        <button
+          onClick={() => {
+            if (isClearing) return
+            const ok = window.confirm(
+              sync.enabled
+                ? 'Delete ALL workouts, templates, custom exercises, and measurements — on this device AND the server, on every device? This cannot be undone. Export first if you want a copy.'
+                : 'Delete ALL workouts, templates, custom exercises, and measurements? This cannot be undone. Export first if you want a copy.',
+            )
+            if (!ok) return
+            setIsClearing(true)
+            void repo
+              .deleteAllTrainingData()
+              .then((counts) => {
+                toast.show(
+                  `Deleted ${counts.workouts} workouts, ${counts.templates} templates, ` +
+                    `${counts.customExercises} custom exercises, ${counts.metricEntries} measurements`,
+                )
+                // Push the tombstones right away so the server matches.
+                return sync.enabled ? sync.syncNow() : undefined
+              })
+              .then(() => window.location.reload())
+              .catch(() => {
+                setIsClearing(false)
+                toast.show('Could not delete training data')
+              })
+          }}
+          disabled={isClearing}
+          className="mt-1 w-full py-2 text-[13px] font-semibold text-critical active:opacity-60 disabled:opacity-40"
+        >
+          {isClearing ? 'Working…' : 'Delete all my training data'}
+        </button>
+
         {/* Clears IndexedDB. On a synced account the next pull rehydrates from
             the server; on an offline account this is a genuine reset. */}
         <button
