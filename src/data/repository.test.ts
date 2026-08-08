@@ -1160,6 +1160,58 @@ describe('active user id + local data reset', () => {
     )
   })
 
+  it('claimLocalData re-owns local rows to the new uid and re-enqueues them', async () => {
+    const UID = '22222222-2222-2222-2222-222222222222'
+
+    // A device-only user logs a workout, a set, a template, and a custom lift.
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    await repo.logSetValues(setId, {})
+    const templateId = await repo.createTemplate('Push', null)
+    const customExId = await repo.createExercise({
+      name: 'My Lift',
+      primaryMuscleId: 'mid_chest',
+      equipment: 'barbell',
+      movementPattern: 'horizontal_push',
+      trackingType: 'weight_reps',
+    })
+
+    // Everything is owned by the local user.
+    expect((await db.workouts.get(workoutId))?.userId).toBe(LOCAL_USER_ID)
+    expect((await db.templates.get(templateId))?.userId).toBe(LOCAL_USER_ID)
+    expect((await db.exercises.get(customExId))?.userId).toBe(LOCAL_USER_ID)
+
+    // Simulate the upgrade: point the data layer at the new uid, then claim.
+    setActiveUserId(UID)
+    await db.outbox.clear() // ignore the pre-upgrade queue; test the claim's output
+    const claimed = await repo.claimLocalData(UID)
+    expect(claimed).toBeGreaterThan(0)
+
+    // Ownership moved.
+    expect((await db.workouts.get(workoutId))?.userId).toBe(UID)
+    expect((await db.templates.get(templateId))?.userId).toBe(UID)
+    expect((await db.exercises.get(customExId))?.userId).toBe(UID)
+    // The profile row is now keyed by the uid, and the local one is gone.
+    expect(await db.profiles.get(UID)).toBeDefined()
+    expect(await db.profiles.get(LOCAL_USER_ID)).toBeUndefined()
+
+    // The chained rows (set, workout_exercise) were re-enqueued for the server.
+    const queued = await db.outbox.toArray()
+    expect(queued.some((e) => e.table === 'workouts' && e.rowId === workoutId)).toBe(true)
+    expect(queued.some((e) => e.table === 'sets' && e.rowId === setId)).toBe(true)
+    expect(queued.some((e) => e.table === 'workoutExercises' && e.rowId === weId)).toBe(
+      true,
+    )
+    // A system library row is never re-owned.
+    const benchExists = queued.some((e) => e.rowId === 'barbell_bench_press')
+    expect(benchExists).toBe(false)
+  })
+
+  it('claimLocalData is a no-op for the local id and when there is nothing to claim', async () => {
+    expect(await repo.claimLocalData(LOCAL_USER_ID)).toBe(0)
+  })
+
   it('clearLocalData wipes training data and queues but keeps the system library', async () => {
     const workoutId = await repo.startWorkout()
     const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')

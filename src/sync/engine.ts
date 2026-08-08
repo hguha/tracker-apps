@@ -23,6 +23,7 @@
 
 import { db, type OutboxEntry } from '@/db/database'
 import type { PushRow, SyncBackend } from './backend'
+import { syncLog } from './log'
 
 /**
  * Tables that participate in sync, in dependency order for the initial pull.
@@ -105,14 +106,27 @@ export class SyncEngine {
         if (outcome.status === 'ok') {
           await db.outbox.delete(entry.seq!)
           pushed += 1
+          syncLog.info(`pushed ${entry.op} ${entry.table}/${entry.rowId}`)
           continue
         }
 
         if (outcome.status === 'auth') {
+          syncLog.warn(
+            `auth failure on ${entry.op} ${entry.table}/${entry.rowId} — pausing drain for re-auth`,
+            outcome.error,
+          )
           return { pushed, deadLettered, stoppedBecause: 'auth' }
         }
 
         if (outcome.status === 'permanent') {
+          // A permanent failure is the silent killer — the write is dropped to
+          // the dead-letter queue and never retried. Log loudly with the reason
+          // so "failed to sync" has an explanation (RLS 42501, missing column
+          // 42703, constraint 23xxx, …).
+          syncLog.warn(
+            `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
+            outcome.error,
+          )
           // Move the poison entry out of the drain path so it can't block the
           // queue, and surface it for the user rather than retrying forever.
           await db.transaction('rw', db.outbox, db.deadLetter, async () => {
@@ -135,17 +149,26 @@ export class SyncEngine {
         // Transient: record the attempt, schedule a backoff, and stop so order
         // is preserved. The next trigger resumes from this same head entry.
         const attempts = entry.attempts + 1
+        const nextAttemptAt = now + backoffMs(attempts, Math.random())
         await db.outbox.update(entry.seq!, {
           attempts,
           lastError: outcome.error,
-          nextAttemptAt: now + backoffMs(attempts, Math.random()),
+          nextAttemptAt,
         })
+        syncLog.warn(
+          `transient failure on ${entry.op} ${entry.table}/${entry.rowId} ` +
+            `(attempt ${attempts}) — retrying in ${Math.round((nextAttemptAt - now) / 1000)}s`,
+          outcome.error,
+        )
         return { pushed, deadLettered, stoppedBecause: 'transient' }
       }
     } finally {
       this.draining = false
     }
 
+    if (pushed > 0 || deadLettered > 0) {
+      syncLog.info(`drain done — pushed ${pushed}, dead-lettered ${deadLettered}`)
+    }
     return { pushed, deadLettered, stoppedBecause: null }
   }
 
@@ -165,7 +188,18 @@ export class SyncEngine {
     for (const table of SYNCED_TABLES) {
       const state = await db.syncState.get(table)
       const since = state?.lastPulledAt ?? 0
-      const rows = await this.backend.pull(table, since)
+
+      let rows
+      try {
+        rows = await this.backend.pull(table, since)
+      } catch (error) {
+        // One table failing to pull (e.g. a missing column on an out-of-date
+        // server) must not abort the pull for every other table — and it must
+        // not become an unhandled rejection. Log it and move on; the cursor is
+        // untouched, so the next pull retries this table from the same point.
+        syncLog.warn(`pull failed for ${table} — skipping this cycle`, String(error))
+        continue
+      }
       if (rows.length === 0) continue
 
       const store = tableStore(table)
@@ -189,6 +223,7 @@ export class SyncEngine {
       await db.syncState.put({ table, lastPulledAt: highWater })
     }
 
+    if (applied > 0) syncLog.info(`pull applied ${applied} rows`)
     return { applied }
   }
 
@@ -200,6 +235,37 @@ export class SyncEngine {
     // Only pull if we're not paused on auth — a pull would also fail auth.
     const pull = drain.stoppedBecause === 'auth' ? { applied: 0 } : await this.pull()
     return { drain, pull }
+  }
+
+  /**
+   * Requeue every dead-lettered write back onto the outbox for another attempt.
+   *
+   * Dead-lettered rows are dropped from the drain and never retried on their own
+   * — correct when the failure is truly permanent (a poison payload), but wrong
+   * when the cause was external and since fixed (an out-of-date server schema
+   * that's now migrated). This is the user-driven "try again" after fixing the
+   * root cause. Returns how many were requeued.
+   */
+  async retryDeadLettered(): Promise<number> {
+    const failed = await db.deadLetter.toArray()
+    if (failed.length === 0) return 0
+
+    await db.transaction('rw', db.outbox, db.deadLetter, async () => {
+      for (const entry of failed) {
+        await db.outbox.add({
+          table: entry.table,
+          op: entry.op,
+          rowId: entry.rowId,
+          payload: entry.payload,
+          clientRev: entry.clientRev,
+          queuedAt: entry.queuedAt,
+          attempts: 0,
+        })
+        await db.deadLetter.delete(entry.seq!)
+      }
+    })
+    syncLog.info(`requeued ${failed.length} dead-lettered writes for retry`)
+    return failed.length
   }
 }
 
@@ -242,6 +308,8 @@ function normalizeRow(
       ...row,
       weeklyWorkoutGoal: row.weeklyWorkoutGoal ?? 4,
       showAvatar: row.showAvatar ?? false,
+      heightCm: row.heightCm ?? null,
+      trainingGoal: row.trainingGoal ?? '',
     }
   }
   return row

@@ -12,9 +12,10 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, Check, ChevronLeft, LogOut, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, LogIn, LogOut, Trash2 } from 'lucide-react'
 import { db } from '@/db/database'
 import { useAuth } from '@/auth/AuthContext'
+import { isBackendConfigured } from '@/sync/supabaseClient'
 import { initialsOf } from '@/auth/types'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -22,7 +23,14 @@ import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
 import { formatRelativeDay } from '@/lib/dates'
 
-export function AccountScreen({ onBack }: { onBack: () => void }) {
+export function AccountScreen({
+  onBack,
+  onConnectAccount,
+}: {
+  onBack: () => void
+  /** Start the device-only → real-account upgrade (keeps local data). */
+  onConnectAccount?: () => void
+}) {
   const { session, signOut, updateDisplayName, deleteAccount } = useAuth()
   const toast = useToast()
 
@@ -122,10 +130,22 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
               />
               <span>
                 This account lives only in this browser. Clearing site data or switching
-                devices loses everything — sign in with email once the server is connected
-                to sync and back up.
+                devices loses everything.
+                {isBackendConfigured()
+                  ? ' Connect an email account to sync across devices, back up your data, and unlock the AI coach — everything you’ve logged here comes with you.'
+                  : ' Sign in with email once the server is connected to sync and back up.'}
               </span>
             </p>
+            {isBackendConfigured() && onConnectAccount && (
+              <Button
+                variant="secondary"
+                className="mt-3 w-full"
+                onClick={onConnectAccount}
+              >
+                <LogIn size={16} />
+                Connect an account &amp; sync
+              </Button>
+            )}
           </Card>
         )}
 

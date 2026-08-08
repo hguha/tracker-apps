@@ -19,9 +19,13 @@ function ex(partial: Partial<ExerciseAgg> & { name: string }): ExerciseAgg {
 
 function summary(partial: Partial<CoachSummary> = {}): CoachSummary {
   return {
-    version: 1,
+    version: 2,
     unitWeight: 'lb',
     weeklyWorkoutGoal: 4,
+    bodyweight: partial.bodyweight ?? null,
+    height: partial.height ?? null,
+    heightUnit: 'in',
+    trainingGoal: partial.trainingGoal ?? '',
     weeksCovered: 12,
     totalWorkouts: partial.totalWorkouts ?? 8,
     weeks: partial.weeks ?? [
@@ -98,6 +102,60 @@ describe('mockCoachProvider — plan', () => {
       .flatMap((s) => s.exercises)
       .find((e) => e.name === 'Barbell Bench Press')!
     expect(bench.weight).toBeCloseTo(198, 0)
+  })
+
+  it('honors a lower-body goal instead of reinforcing an upper-body history', async () => {
+    // The reported bug: a chest-heavy history made every plan upper-biased even
+    // when the user explicitly asked for lower body. The plan must follow the goal.
+    const r = await mockCoachProvider.respond(
+      summary({
+        regionSets: [
+          { region: 'chest', sets: 40 },
+          { region: 'back', sets: 30 },
+        ],
+        exercises: [
+          ex({ name: 'Barbell Bench Press', region: 'chest', recentTopSetKg: 90 }),
+          ex({ name: 'Barbell Row', region: 'back', recentTopSetKg: 80 }),
+        ],
+      }),
+      { kind: 'plan', goal: 'please give me a lower body split' },
+    )
+    if (r.kind !== 'plan') throw new Error('wrong kind')
+    const names = r.plan.sessions
+      .flatMap((s) => s.exercises.map((e) => e.name))
+      .join(' ')
+      .toLowerCase()
+    expect(names).toMatch(/squat|deadlift|leg|curl/)
+    expect(names).not.toContain('bench')
+    expect(r.plan.overview.toLowerCase()).toContain('lower')
+  })
+
+  it('reads a duration from the goal and makes it a program', async () => {
+    const r = await mockCoachProvider.respond(summary(), {
+      kind: 'plan',
+      goal: 'strength focused 12 week program',
+    })
+    if (r.kind !== 'plan') throw new Error('wrong kind')
+    expect(r.plan.durationWeeks).toBe(12)
+    expect(r.plan.programName).toBeTruthy()
+  })
+
+  it('falls back to the profile training goal when no per-request goal is given', async () => {
+    const r = await mockCoachProvider.respond(
+      summary({ trainingGoal: 'push pull legs' }),
+      { kind: 'plan', goal: '' },
+    )
+    if (r.kind !== 'plan') throw new Error('wrong kind')
+    const names = r.plan.sessions.map((s) => s.name.toLowerCase()).join(' ')
+    expect(names).toMatch(/push|pull|legs/)
+  })
+
+  it('answers a plan-shaped Ask with a plan', async () => {
+    const r = await mockCoachProvider.respond(summary(), {
+      kind: 'ask',
+      question: 'give me a lower body day',
+    })
+    expect(r.kind).toBe('plan')
   })
 
   it('proposes a starter week when there is no history', async () => {

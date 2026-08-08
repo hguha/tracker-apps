@@ -35,6 +35,9 @@ export interface SyncStatus {
   phase: SyncPhase
   /** Runs a reconcile now; resolves when it finishes. No-op when not enabled. */
   syncNow: () => Promise<void>
+  /** Requeues dead-lettered writes and drains, for the "retry failed" action.
+   *  Resolves to how many were requeued. */
+  retryFailed: () => Promise<number>
 }
 
 export function useSync(): SyncStatus {
@@ -57,7 +60,11 @@ export function useSync(): SyncStatus {
     const reconcile = () => {
       if (cancelled) return
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-      void engine.sync()
+      // Never let a background reconcile become an unhandled rejection — the
+      // engine already classifies and logs failures; this is the last guard.
+      engine.sync().catch((error) => {
+        console.warn('[sync] background reconcile threw', error)
+      })
     }
 
     reconcile()
@@ -87,8 +94,22 @@ export function useSync(): SyncStatus {
     }
   }, [active, engine])
 
+  const retryFailed = useCallback(async () => {
+    if (!active || !engine) return 0
+    setPhase('syncing')
+    try {
+      const count = await engine.retryDeadLettered()
+      const { drain } = await engine.sync()
+      setPhase(drain.stoppedBecause === null ? 'idle' : 'error')
+      return count
+    } catch {
+      setPhase('error')
+      return 0
+    }
+  }, [active, engine])
+
   const pending = useLiveQuery(() => db.outbox.count(), [], 0)
   const deadLettered = useLiveQuery(() => db.deadLetter.count(), [], 0)
 
-  return { pending, deadLettered, enabled: active, phase, syncNow }
+  return { pending, deadLettered, enabled: active, phase, syncNow, retryFailed }
 }

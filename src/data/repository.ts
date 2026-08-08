@@ -11,7 +11,7 @@
  */
 
 import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
-import { getActiveUserId } from '@/db/seed'
+import { getActiveUserId, LOCAL_USER_ID } from '@/db/seed'
 import { formatDistance, formatWeight, weightToKg } from '@/lib/units'
 import {
   bestOneRepMaxKg,
@@ -114,6 +114,145 @@ export async function getProfile(): Promise<Profile> {
 
 export async function updateProfile(patch: Partial<Profile>): Promise<void> {
   await patchRow(db.profiles, 'profiles', getActiveUserId(), patch)
+}
+
+/**
+ * Claim the on-device ("this device only") data into a real account (§11.1.3).
+ *
+ * A device-only account owns its rows under `LOCAL_USER_ID` ('local-user'). When
+ * that user signs in for real, their history must move with them — otherwise the
+ * signed-in account starts empty and every local row is stranded (and, worse,
+ * silently rejected by the server's RLS because its `user_id` is 'local-user',
+ * not the caller's uid — the "failed to sync" flood).
+ *
+ * This re-owns everything to the new uid and re-enqueues it so the next drain
+ * pushes it under the correct identity:
+ *   - The profile row is keyed by user id, so it's *copied* to a new row keyed by
+ *     the uid (merging onto the account's server-seeded profile if one exists).
+ *   - `userId`-bearing rows (workouts, templates, metric entries, and any custom
+ *     library rows) are re-stamped to the uid.
+ *   - Chained-ownership rows (workout_exercises, sets, template_exercises) carry
+ *     no userId — they follow their parent — but still need re-enqueuing so the
+ *     server receives them.
+ *
+ * Idempotent and safe to no-op: if there's nothing under 'local-user', it does
+ * nothing. Runs in one transaction so a crash can't half-migrate ownership.
+ */
+export async function claimLocalData(newUserId: string): Promise<number> {
+  if (newUserId === LOCAL_USER_ID) return 0
+
+  // Tables that carry a `userId` we must re-stamp. Custom library rows
+  // (muscles/exercises/metricDefinitions) have `userId: string | null` — only
+  // the user-owned ones (non-null, === local) move; system rows (null) stay.
+  const owned = [
+    { table: 'workouts', store: db.workouts },
+    { table: 'templates', store: db.templates },
+    { table: 'metricEntries', store: db.metricEntries },
+    { table: 'muscles', store: db.muscles },
+    { table: 'exercises', store: db.exercises },
+    { table: 'metricDefinitions', store: db.metricDefinitions },
+  ] as const
+
+  // Chained-ownership tables: no userId, but their rows still must be pushed
+  // under the new identity. We re-enqueue every live row that belongs to a
+  // claimed parent. Simpler and correct: re-enqueue all live rows (the server
+  // upserts idempotently, and RLS accepts them once the parent is owned).
+  const chained = [
+    { table: 'workoutExercises', store: db.workoutExercises },
+    { table: 'sets', store: db.sets },
+    { table: 'templateExercises', store: db.templateExercises },
+  ] as const
+
+  let claimed = 0
+  const now = Date.now()
+
+  await db.transaction(
+    'rw',
+    [
+      db.profiles,
+      db.workouts,
+      db.templates,
+      db.metricEntries,
+      db.muscles,
+      db.exercises,
+      db.metricDefinitions,
+      db.workoutExercises,
+      db.sets,
+      db.templateExercises,
+      db.outbox,
+    ],
+    async () => {
+      // 1. Profile: copy the local row onto a row keyed by the new uid. Prefer an
+      //    already-present account profile's identity fields, but carry over the
+      //    local settings the user has been using on this device.
+      const localProfile = await db.profiles.get(LOCAL_USER_ID)
+      if (localProfile) {
+        const existing = await db.profiles.get(newUserId)
+        const merged: Profile = {
+          ...localProfile,
+          ...(existing ?? {}),
+          // Local preferences win — they're what the user set up on this device.
+          unitWeight: localProfile.unitWeight,
+          unitDistance: localProfile.unitDistance,
+          unitLength: localProfile.unitLength,
+          weekStartsOn: localProfile.weekStartsOn,
+          weeklyWorkoutGoal: localProfile.weeklyWorkoutGoal,
+          defaultRestSeconds: localProfile.defaultRestSeconds,
+          showRpe: localProfile.showRpe,
+          showAvatar: localProfile.showAvatar,
+          autoStartRest: localProfile.autoStartRest,
+          soundEnabled: localProfile.soundEnabled,
+          theme: localProfile.theme,
+          colorScheme: localProfile.colorScheme,
+          accentOverride: localProfile.accentOverride,
+          bodyweightCacheKg: localProfile.bodyweightCacheKg,
+          heightCm: localProfile.heightCm ?? null,
+          trainingGoal: localProfile.trainingGoal ?? '',
+          id: newUserId,
+          updatedAt: now,
+          deletedAt: null,
+          clientRev: (existing?.clientRev ?? localProfile.clientRev) + 1,
+        }
+        await db.profiles.put(merged)
+        await db.profiles.delete(LOCAL_USER_ID)
+        await enqueue('profiles', 'update', newUserId, merged, merged.clientRev)
+        claimed += 1
+      }
+
+      // 2. Re-stamp userId-bearing rows owned by the local account.
+      for (const { table, store } of owned) {
+        const rows = await (store as typeof db.workouts).toArray()
+        for (const row of rows) {
+          if ((row as { userId: string | null }).userId !== LOCAL_USER_ID) continue
+          const next = {
+            ...row,
+            userId: newUserId,
+            updatedAt: now,
+            clientRev: row.clientRev + 1,
+          }
+          await (store as typeof db.workouts).put(next as Workout)
+          await enqueue(table, 'update', row.id, next, next.clientRev)
+          claimed += 1
+        }
+      }
+
+      // 3. Re-enqueue chained rows so the server receives them under the new
+      //    identity. They aren't re-stamped (no userId) but their clientRev is
+      //    bumped so the push is a fresh upsert the server will accept.
+      for (const { table, store } of chained) {
+        const rows = await (store as typeof db.sets).toArray()
+        for (const row of rows) {
+          if (row.deletedAt !== null) continue
+          const next = { ...row, updatedAt: now, clientRev: row.clientRev + 1 }
+          await (store as typeof db.sets).put(next)
+          await enqueue(table, 'update', row.id, next, next.clientRev)
+          claimed += 1
+        }
+      }
+    },
+  )
+
+  return claimed
 }
 
 // ---------------------------------------------------------------- exercises
@@ -619,7 +758,11 @@ export async function getCoachSummary(): Promise<CoachSummary> {
   if (workouts.length === 0) {
     return buildCoachSummary({
       unitWeight: profile.unitWeight,
+      unitLength: profile.unitLength,
       weeklyWorkoutGoal: profile.weeklyWorkoutGoal || 4,
+      bodyweightKg: profile.bodyweightCacheKg,
+      heightCm: profile.heightCm ?? null,
+      trainingGoal: profile.trainingGoal ?? '',
       sessions: [],
     })
   }
@@ -688,7 +831,11 @@ export async function getCoachSummary(): Promise<CoachSummary> {
 
   return buildCoachSummary({
     unitWeight: profile.unitWeight,
+    unitLength: profile.unitLength,
     weeklyWorkoutGoal: profile.weeklyWorkoutGoal || 4,
+    bodyweightKg: profile.bodyweightCacheKg,
+    heightCm: profile.heightCm ?? null,
+    trainingGoal: profile.trainingGoal ?? '',
     sessions,
   })
 }

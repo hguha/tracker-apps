@@ -21,10 +21,13 @@ import {
   Eye,
   Lightbulb,
   ListChecks,
+  LogIn,
   MessageCircle,
   Sparkles,
 } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { useAuth } from '@/auth/AuthContext'
+import { isBackendConfigured } from '@/sync/supabaseClient'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { BottomSheet } from '@/components/BottomSheet'
@@ -37,12 +40,20 @@ import type { CoachSummary } from './summary'
 export function CoachScreen({
   onBack,
   onOpenTemplates,
+  onSignIn,
 }: {
   onBack: () => void
   onOpenTemplates: () => void
+  /** Take a local/offline user to the sign-in screen for the smarter live coach. */
+  onSignIn: () => void
 }) {
   const toast = useToast()
+  const { session } = useAuth()
   const summary = useLiveQuery(() => repo.getCoachSummary(), [])
+  // The live (Gemini) coach needs a real, server-backed session. With a backend
+  // configured but the user on the offline "this device only" account, say so —
+  // the coach still works (offline heuristics), just less cleverly.
+  const canUseLiveCoach = isBackendConfigured() && session != null && !session.isLocal
   const [response, setResponse] = useState<CoachResponse | null>(null)
   const [pending, setPending] = useState<'critique' | 'plan' | 'ask' | null>(null)
   // Which free-text composer is open (goal for plan, question for ask), and its
@@ -144,6 +155,28 @@ export function CoachScreen({
           Suggestions from {answeredBy}, based on a de-identified summary of your
           training. Always a starting point — never medical advice, never auto-applied.
         </p>
+
+        {/* The live coach needs a signed-in account. Offer the upgrade explicitly
+            rather than silently falling back, so it's clear why answers differ. */}
+        {isBackendConfigured() && !canUseLiveCoach && (
+          <button
+            onClick={onSignIn}
+            className="flex w-full items-start gap-3 rounded-2xl border border-accent/30 bg-accent-wash p-3.5 text-left active:opacity-80"
+          >
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+              <LogIn size={16} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold text-ink">
+                Sign in for the smarter AI coach
+              </span>
+              <span className="mt-0.5 block text-[12.5px] text-ink-secondary">
+                You're on the offline coach now — it still critiques and drafts plans.
+                Sign in with email to get AI-generated coaching tailored to your history.
+              </span>
+            </span>
+          </button>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           <ActionButton

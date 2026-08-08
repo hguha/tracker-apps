@@ -6,8 +6,8 @@
  * timer, a way back, and the code fallback for when the link opens in a different
  * browser than the one that asked for it.
  *
- * Invite-only is stated up front — a stranger should learn that here, not by
- * waiting for a link that will never arrive.
+ * Sign-up is open: any email works, and the same form both creates an account
+ * and signs an existing user back in.
  */
 
 import { useEffect, useState } from 'react'
@@ -25,8 +25,15 @@ const RESEND_SECONDS = 30
 // on-device-only account — so the dev-code note and the offline path are hidden.
 const HAS_BACKEND = isBackendConfigured()
 
-export function SignInScreen() {
+export function SignInScreen({
+  /** "Connect account" mode: shown to a signed-in device-only user upgrading to
+   *  a real account. Hides the offline path and offers a way back. */
+  onCancel,
+}: {
+  onCancel?: () => void
+} = {}) {
   const { signInWithEmail, verifyCode, continueOffline } = useAuth()
+  const isConnectMode = onCancel !== undefined
 
   const [panel, setPanel] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
@@ -83,13 +90,26 @@ export function SignInScreen() {
       <div className="mx-auto w-full max-w-sm">
         {panel === 'email' ? (
           <>
+            {isConnectMode && (
+              <button
+                onClick={onCancel}
+                className="mb-4 flex items-center gap-1.5 text-[14px] font-semibold text-accent"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+            )}
             <div className="mb-8 text-center">
               <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent text-white">
                 <Dumbbell size={28} />
               </span>
-              <h1 className="mt-4 text-[26px] font-bold tracking-tight">FitNote</h1>
+              <h1 className="mt-4 text-[26px] font-bold tracking-tight">
+                {isConnectMode ? 'Sync your account' : 'FitNote'}
+              </h1>
               <p className="mt-1.5 text-[14.5px] text-ink-secondary">
-                Log your lifts, watch the numbers move.
+                {isConnectMode
+                  ? 'Everything you logged on this device comes with you and syncs across your devices.'
+                  : 'Log your lifts, watch the numbers move.'}
               </p>
             </div>
 
@@ -129,21 +149,29 @@ export function SignInScreen() {
 
             {error && <ErrorNote>{error}</ErrorNote>}
 
-            <Divider />
+            {/* The offline path is only offered at first run. A signed-in
+                device-only user connecting an account is already past it. */}
+            {!isConnectMode && (
+              <>
+                <Divider />
 
-            <button
-              onClick={() => void useOffline()}
-              disabled={isBusy}
-              className="flex w-full items-center justify-center gap-2 py-2 text-[14px] font-semibold text-ink-secondary active:opacity-60"
-            >
-              <WifiOff size={15} />
-              Use this device only
-            </button>
+                <button
+                  onClick={() => void useOffline()}
+                  disabled={isBusy}
+                  className="flex w-full items-center justify-center gap-2 py-2 text-[14px] font-semibold text-ink-secondary active:opacity-60"
+                >
+                  <WifiOff size={15} />
+                  Use this device only
+                </button>
+              </>
+            )}
 
             <p className="mt-6 text-center text-[12.5px] leading-relaxed text-ink-muted">
-              {HAS_BACKEND
-                ? 'Email sign-in is invite only and syncs across your devices. “This device only” keeps everything in this browser — nothing is uploaded.'
-                : 'Sign-up is invite only. “This device only” keeps everything in this browser — nothing is uploaded and nothing syncs.'}
+              {isConnectMode
+                ? 'Enter your email and we’ll send a sign-in link. Your on-device history is preserved and uploaded once you’re signed in.'
+                : HAS_BACKEND
+                  ? 'New here? The same email creates your account and syncs across your devices. “This device only” keeps everything in this browser — nothing is uploaded.'
+                  : '“This device only” keeps everything in this browser — nothing is uploaded and nothing syncs.'}
             </p>
           </>
         ) : (
@@ -163,13 +191,21 @@ export function SignInScreen() {
             <h1 className="text-[24px] font-bold tracking-tight">Check your email</h1>
             <p className="mt-2 text-[14.5px] text-ink-secondary">
               We sent a sign-in link to <span className="font-semibold">{email}</span>.
-              Open it on this device, or enter the 6-digit code below.
+              Tap it on this device and you're in — no code needed.
             </p>
 
-            <label
-              htmlFor="signin-code"
-              className="mb-1.5 mt-6 block text-[12px] font-semibold uppercase tracking-wide text-ink-muted"
-            >
+            <div className="mt-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-line-strong" />
+              <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted">
+                or enter the code
+              </span>
+              <span className="h-px flex-1 bg-line-strong" />
+            </div>
+            <p className="mb-1.5 mt-4 text-[12.5px] text-ink-muted">
+              If the link opened in a different browser, type the 6-digit code from that
+              same email here.
+            </p>
+            <label htmlFor="signin-code" className="sr-only">
               Code
             </label>
             <input

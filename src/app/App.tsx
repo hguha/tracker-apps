@@ -42,6 +42,7 @@ type View =
   | { kind: 'tabs' }
   | { kind: 'start' }
   | { kind: 'account' }
+  | { kind: 'connect' }
   | { kind: 'badges' }
   | { kind: 'coach' }
   | { kind: 'templates' }
@@ -171,7 +172,20 @@ function SignedInApp() {
   }
 
   if (view.kind === 'account') {
-    return <AccountScreen onBack={() => setView({ kind: 'tabs' })} />
+    return (
+      <AccountScreen
+        onBack={() => setView({ kind: 'tabs' })}
+        onConnectAccount={() => setView({ kind: 'connect' })}
+      />
+    )
+  }
+
+  // "Connect account": a signed-in device-only user upgrading to a real account.
+  // On success the remote session arrives, the composite provider claims the
+  // local data, and the tree remounts under the new uid (keyed on userId) —
+  // which lands back on tabs automatically. Cancel returns here.
+  if (view.kind === 'connect') {
+    return <SignInScreen onCancel={() => setView({ kind: 'tabs' })} />
   }
 
   if (view.kind === 'badges') {
@@ -183,6 +197,7 @@ function SignedInApp() {
       <CoachScreen
         onBack={() => setView({ kind: 'tabs' })}
         onOpenTemplates={() => setView({ kind: 'templates' })}
+        onSignIn={() => setView({ kind: 'connect' })}
       />
     )
   }

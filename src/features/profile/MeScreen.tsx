@@ -38,8 +38,15 @@ import { playCue, setSoundEnabled } from '@/features/timer/sounds'
 import { AppearanceSection } from './AppearanceSection'
 import { cn } from '@/lib/cn'
 import { formatRelativeDay } from '@/lib/dates'
-import { lengthFromCm, lengthToCm, weightFromKg, weightToKg } from '@/lib/units'
-import type { DistanceUnit, LengthUnit, WeightUnit } from '@/domain/types'
+import { useDraftInput } from '@/lib/useDraftInput'
+import {
+  lengthFromCm,
+  lengthToCm,
+  parseNumber,
+  weightFromKg,
+  weightToKg,
+} from '@/lib/units'
+import type { DistanceUnit, LengthUnit, Profile, WeightUnit } from '@/domain/types'
 
 /** The handful worth logging often. The rest live behind "all metrics". */
 const QUICK_METRIC_KEYS = ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']
@@ -60,6 +67,12 @@ export function MeScreen({
   const toast = useToast()
   const { session } = useAuth()
   const sync = useSync()
+  // The reason the most recent write was rejected, so "Failed to sync" explains
+  // itself (e.g. an RLS or missing-column error) instead of being opaque.
+  const lastSyncError = useLiveQuery(async () => {
+    const last = await db.deadLetter.orderBy('seq').last()
+    return last?.error ?? null
+  }, [])
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [isClearing, setIsClearing] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -329,6 +342,8 @@ export function MeScreen({
         </div>
       </Card>
 
+      <CoachingCard profile={profile} />
+
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Logging</h2>
         <div className="mt-3 space-y-3">
@@ -469,15 +484,20 @@ export function MeScreen({
             <dd className="tabular font-semibold">{sync.pending}</dd>
           </div>
           {sync.deadLettered > 0 && (
-            <div className="flex justify-between">
-              <dt style={{ color: 'var(--status-serious)' }}>Failed to sync</dt>
-              <dd
-                className="tabular font-semibold"
-                style={{ color: 'var(--status-serious)' }}
-              >
-                {sync.deadLettered}
-              </dd>
-            </div>
+            <>
+              <div className="flex justify-between">
+                <dt style={{ color: 'var(--status-serious)' }}>Failed to sync</dt>
+                <dd
+                  className="tabular font-semibold"
+                  style={{ color: 'var(--status-serious)' }}
+                >
+                  {sync.deadLettered}
+                </dd>
+              </div>
+              {lastSyncError && (
+                <p className="text-[12px] text-ink-muted">Reason: {lastSyncError}</p>
+              )}
+            </>
           )}
           <div className="flex justify-between">
             <dt className="text-ink-secondary">Sync</dt>
@@ -511,9 +531,30 @@ export function MeScreen({
                   ? `Sync now (${sync.pending} pending)`
                   : 'Sync now'}
             </Button>
+            {sync.deadLettered > 0 && (
+              <Button
+                variant="secondary"
+                className="mt-2 w-full"
+                disabled={sync.phase === 'syncing'}
+                onClick={() => {
+                  void sync.retryFailed().then((count) => {
+                    toast.show(
+                      count > 0
+                        ? `Retrying ${count} failed ${count === 1 ? 'change' : 'changes'}…`
+                        : 'Nothing to retry',
+                    )
+                  })
+                }}
+              >
+                <RefreshCw size={16} />
+                Retry {sync.deadLettered} failed
+              </Button>
+            )}
             <p className="mt-2.5 text-[12px] text-ink-muted">
               Everything saves on this device instantly and syncs to your account in the
               background. Use “Sync now” to push right away.
+              {sync.deadLettered > 0 &&
+                ' “Retry failed” re-attempts changes that were rejected — use it after a connection or server issue is resolved.'}
             </p>
           </>
         ) : (
@@ -586,6 +627,79 @@ export function MeScreen({
         </button>
       </Card>
     </div>
+  )
+}
+
+/**
+ * Height + training goal — the profile fields the AI coach personalizes against
+ * (§13). Height is stored metric and shown in the user's length unit; the goal
+ * is free text. Both are optional. What's sent to the coach is always visible in
+ * the coach's "data sent" disclosure.
+ */
+function CoachingCard({ profile }: { profile: Profile }) {
+  const unit = profile.unitLength
+  // Height display value (in the user's unit), one decimal for cm-free inches.
+  const heightValue =
+    profile.heightCm === null ? '' : String(lengthFromCm(profile.heightCm, unit))
+
+  const height = useDraftInput({
+    value: heightValue,
+    onCommit: (draft) => {
+      const trimmed = draft.trim()
+      if (trimmed === '') return void repo.updateProfile({ heightCm: null })
+      const parsed = parseNumber(trimmed)
+      if (parsed !== null && parsed > 0) {
+        void repo.updateProfile({ heightCm: lengthToCm(parsed, unit) })
+      }
+    },
+  })
+
+  const goal = useDraftInput({
+    value: profile.trainingGoal ?? '',
+    onCommit: (draft) => void repo.updateProfile({ trainingGoal: draft.trim() }),
+  })
+
+  return (
+    <Card className="p-4">
+      <h2 className="flex items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+        <Sparkles size={15} className="text-accent" />
+        Coaching
+      </h2>
+      <p className="mt-0.5 text-[12px] text-ink-muted">
+        Helps the AI coach tailor advice. Shared with the coach only — you can see exactly
+        what's sent from the coach screen.
+      </p>
+
+      <div className="mt-3 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="me-height" className="text-[13.5px] font-medium">
+            Height
+          </label>
+          <div className="flex items-center gap-1.5">
+            <input
+              id="me-height"
+              inputMode="decimal"
+              placeholder="—"
+              {...height.inputProps}
+              className="h-10 w-24 rounded-lg border border-line bg-surface px-3 text-right text-[15px] outline-none focus:border-accent"
+            />
+            <span className="w-6 text-[13px] text-ink-muted">{unit}</span>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="me-goal" className="text-[13.5px] font-medium">
+            Training goal
+          </label>
+          <input
+            id="me-goal"
+            placeholder='e.g. "gain strength", "lean out for summer"'
+            {...goal.inputProps}
+            className="mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-[15px] outline-none focus:border-accent"
+          />
+        </div>
+      </div>
+    </Card>
   )
 }
 

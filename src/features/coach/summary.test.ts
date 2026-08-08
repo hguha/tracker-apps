@@ -32,7 +32,15 @@ function bench(sets: { weightKg: number; reps: number; rpe?: number }[]) {
 }
 
 function input(sessions: SummarySession[]): SummaryInput {
-  return { unitWeight: 'lb', weeklyWorkoutGoal: 4, sessions }
+  return {
+    unitWeight: 'lb',
+    unitLength: 'in',
+    weeklyWorkoutGoal: 4,
+    bodyweightKg: null,
+    heightCm: null,
+    trainingGoal: '',
+    sessions,
+  }
 }
 
 describe('buildCoachSummary — aggregation', () => {

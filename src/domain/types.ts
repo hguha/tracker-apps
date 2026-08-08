@@ -126,6 +126,13 @@ export interface Profile extends SyncColumns {
   showRpe: boolean
   /** Denormalized latest bodyweight, for bodyweight-exercise volume math. */
   bodyweightCacheKg: number | null
+  /** Height in cm, or null if unset. Storage is metric (§4.12); the Me screen
+   *  converts to the user's length unit. Fed to the coach for tailoring. */
+  heightCm: number | null
+  /** Free-text training goal ("gain strength", "lean out for summer"). Drives
+   *  the coach when no per-request goal is given, and is sent in the coach
+   *  summary (shown in the §13 "data sent" disclosure). Empty = unset. */
+  trainingGoal: string
 
   // Appearance and feedback (§10.8, §6.8).
   /** Named preset — `default`, `slate`, `forest`, `ocean`, `sunset`, … */

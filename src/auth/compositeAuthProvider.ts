@@ -7,10 +7,17 @@
  * email sign-in goes to Supabase, "continue offline" goes to the local
  * provider — while presenting one `AuthProvider` to the rest of the app.
  *
- * A local offline session wins over a remote one, because choosing "this device
- * only" is an explicit decision to stay off the network. Sync is gated on
- * `session.isLocal` (see useSync), so an offline account never pushes to a
- * server it isn't authenticated against.
+ * A local offline session normally wins over a remote one, because choosing
+ * "this device only" is an explicit decision to stay off the network. Sync is
+ * gated on `session.isLocal` (see useSync), so an offline account never pushes
+ * to a server it isn't authenticated against.
+ *
+ * The exception is the **upgrade**: a device-only user who then signs in with
+ * email is claiming their account. When a remote session arrives while a local
+ * one is active, we hand the local data to the new uid (`onUpgrade`), drop the
+ * local session, and let the remote session take over — so their history syncs
+ * up under the real account instead of being stranded. This is the only moment
+ * the local session yields to the remote one.
  *
  * Both underlying subscriptions are wired once, in the constructor, for the
  * provider's lifetime (it's a module singleton). An earlier version wired them
@@ -32,6 +39,16 @@ export class CompositeAuthProvider implements AuthProvider {
   private listeners = new Set<(session: Session | null) => void>()
   private localSession: Session | null = null
   private remoteSession: Session | null = null
+  /** Guards against re-entrant upgrades while one is already in flight. */
+  private upgrading = false
+
+  /**
+   * Called when a device-only session is upgraded to a real account, with the
+   * new uid, *before* the remote session is surfaced. Wired by AuthContext to
+   * claim the local data into the account. Awaited, so the claim completes
+   * before the app remounts under the new uid.
+   */
+  onUpgrade: ((newUserId: string) => Promise<void>) | null = null
 
   constructor(client: SupabaseClient) {
     this.remote = new SupabaseAuthProvider(client)
@@ -45,8 +62,35 @@ export class CompositeAuthProvider implements AuthProvider {
     })
     this.remote.onSessionChange((session) => {
       this.remoteSession = session
-      this.emit()
+      void this.handleRemoteChange()
     })
+  }
+
+  /**
+   * A remote session arriving while a local one is active is an upgrade: claim
+   * the on-device data into the new account, then drop the local session so the
+   * remote one becomes effective. Everything else just re-emits.
+   */
+  private async handleRemoteChange(): Promise<void> {
+    const isUpgrade =
+      this.remoteSession !== null && this.localSession !== null && !this.upgrading
+
+    if (isUpgrade) {
+      this.upgrading = true
+      try {
+        await this.onUpgrade?.(this.remoteSession!.userId)
+      } catch (error) {
+        // A failed claim must not strand the user signed-out. Log and continue;
+        // the remote session still takes over, and a manual sync can retry.
+        console.error('[auth] account upgrade claim failed', error)
+      } finally {
+        // Drop the local session so the remote one wins from here on.
+        await this.local.signOut()
+        this.localSession = null
+        this.upgrading = false
+      }
+    }
+    this.emit()
   }
 
   async getSession(): Promise<Session | null> {

@@ -24,7 +24,7 @@ import { estimatedOneRepMaxKg } from '@/lib/metrics'
 export const SUMMARY_WEEKS = 12
 
 /** Bump when the shape changes, so a server prompt can branch if needed. */
-export const SUMMARY_VERSION = 1
+export const SUMMARY_VERSION = 2
 
 /** One completed set, reduced to the fields aggregation needs. */
 export interface SummarySet {
@@ -55,7 +55,15 @@ export interface SummarySession {
 
 export interface SummaryInput {
   unitWeight: 'lb' | 'kg'
+  unitLength: 'in' | 'cm'
   weeklyWorkoutGoal: number
+  /** Current bodyweight in kg, or null if never logged. */
+  bodyweightKg: number | null
+  /** Height in cm, or null if unset. */
+  heightCm: number | null
+  /** Free-text training goal, or '' if unset. The one free-text field that
+   *  leaves the device — surfaced in the §13 disclosure. */
+  trainingGoal: string
   /** Sessions in the window, any order. */
   sessions: SummarySession[]
 }
@@ -90,6 +98,14 @@ export interface CoachSummary {
   version: number
   unitWeight: 'lb' | 'kg'
   weeklyWorkoutGoal: number
+  /** Current bodyweight in the user's unit, rounded, or null if never logged. */
+  bodyweight: number | null
+  /** Height in the user's length unit (in or cm), rounded, or null if unset. */
+  height: number | null
+  /** The length unit `height` is expressed in, so the prompt reads correctly. */
+  heightUnit: 'in' | 'cm'
+  /** Free-text goal, or '' if unset. Drives tailoring; shown in the disclosure. */
+  trainingGoal: string
   weeksCovered: number
   totalWorkouts: number
   /** Per-week rollup, most recent first. */
@@ -241,10 +257,28 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
     .map(([region, sets]) => ({ region, sets }))
     .sort((a, b) => b.sets - a.sets)
 
+  // Bodyweight and height are stored metric; express them in the user's units
+  // (lb/kg, in/cm) so the coach reads them the way the user does.
+  const lbPerKg = 2.20462262185
+  const bodyweight =
+    input.bodyweightKg === null
+      ? null
+      : Math.round(input.bodyweightKg * (input.unitWeight === 'lb' ? lbPerKg : 1))
+  const height =
+    input.heightCm === null
+      ? null
+      : input.unitLength === 'in'
+        ? Math.round((input.heightCm / 2.54) * 10) / 10
+        : Math.round(input.heightCm)
+
   return {
     version: SUMMARY_VERSION,
     unitWeight: input.unitWeight,
     weeklyWorkoutGoal: input.weeklyWorkoutGoal,
+    bodyweight,
+    height,
+    heightUnit: input.unitLength,
+    trainingGoal: input.trainingGoal.trim(),
     weeksCovered: SUMMARY_WEEKS,
     totalWorkouts: sessions.length,
     weeks,

@@ -117,6 +117,8 @@ async function seedProfile(): Promise<void> {
     const backfill: Partial<Profile> = {}
     if (existing.weeklyWorkoutGoal === undefined) backfill.weeklyWorkoutGoal = 4
     if (existing.showAvatar === undefined) backfill.showAvatar = false
+    if (existing.heightCm === undefined) backfill.heightCm = null
+    if (existing.trainingGoal === undefined) backfill.trainingGoal = ''
     if (Object.keys(backfill).length > 0) {
       await db.profiles.update(existing.id, backfill)
     }
@@ -135,6 +137,8 @@ async function seedProfile(): Promise<void> {
     defaultRestSeconds: 60,
     showRpe: false,
     bodyweightCacheKg: null,
+    heightCm: null,
+    trainingGoal: '',
     theme: 'default',
     colorScheme: 'system',
     accentOverride: null,

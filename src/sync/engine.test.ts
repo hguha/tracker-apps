@@ -104,6 +104,32 @@ describe('failure classification (§5.5)', () => {
     expect(dead[0]!.error).toBe('bad payload')
   })
 
+  it('retryDeadLettered requeues failed writes so a later drain can push them', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    // A write fails permanently (e.g. an out-of-date server) and is dead-lettered.
+    backend.forceNext({ status: 'permanent', error: 'column does not exist' })
+    const workoutId = await repo.startWorkout()
+    await engine.drain()
+    expect(await db.deadLetter.count()).toBe(1)
+    expect(await db.outbox.count()).toBe(0)
+
+    // The root cause is fixed; the user hits "retry". The entry moves back to the
+    // outbox and the next drain (server now healthy) pushes it.
+    const requeued = await engine.retryDeadLettered()
+    expect(requeued).toBe(1)
+    expect(await db.deadLetter.count()).toBe(0)
+    expect(await db.outbox.count()).toBe(1)
+
+    const result = await engine.drain()
+    expect(result.pushed).toBe(1)
+    expect(await db.outbox.count()).toBe(0)
+    expect(
+      backend.pushed.some((p) => p.table === 'workouts' && p.rowId === workoutId),
+    ).toBe(true)
+  })
+
   it('stops and backs off on a transient failure, preserving order', async () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
@@ -222,6 +248,10 @@ describe('delta pull (§5.5)', () => {
     // Home ring rendering "/NaN".
     expect(profile?.weeklyWorkoutGoal).toBe(4)
     expect(profile?.showAvatar).toBe(false)
+    // Coach-personalization columns default too, so getCoachSummary never reads
+    // undefined off a pre-migration server row.
+    expect(profile?.heightCm).toBeNull()
+    expect(profile?.trainingGoal).toBe('')
   })
 
   it('propagates a tombstone — a deleted row stays filtered out', async () => {

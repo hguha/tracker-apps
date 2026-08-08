@@ -21,3 +21,6 @@ npm-debug.log*
 
 # screenshots produced by the smoke scripts
 screenshots
+
+# Supabase CLI local state
+supabase/.temp/

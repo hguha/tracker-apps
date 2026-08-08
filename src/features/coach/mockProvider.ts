@@ -121,14 +121,234 @@ function critique(summary: CoachSummary): CoachCritique {
   return { observations, suggestions }
 }
 
-/** Build a next-week plan by continuing recent work and patching the biggest gap. */
-function plan(summary: CoachSummary): CoachPlan {
+/**
+ * A parsed reading of a free-text goal. The offline coach can't reason like the
+ * LLM, so it extracts the few things that change the shape of a plan — which
+ * split, what emphasis, how long — and builds toward *that* rather than toward
+ * whatever the user already does most (the "reinforces the imbalance" bug).
+ */
+interface GoalIntent {
+  /** Named split the user asked for, or null to continue their own training. */
+  split: 'lower' | 'upper' | 'push_pull_legs' | 'full_body' | null
+  /** Rep emphasis: strength (low reps, compounds) vs hypertrophy (moderate). */
+  emphasis: 'strength' | 'hypertrophy' | null
+  /** Program length in weeks if the goal named one (e.g. "12-week"), else null. */
+  weeks: number | null
+}
+
+function parseGoal(goal: string): GoalIntent {
+  const g = goal.toLowerCase()
+  const weekMatch = g.match(/(\d+)\s*[- ]?\s*week/)
+  const weeks = weekMatch ? Math.min(52, Math.max(2, Number(weekMatch[1]))) : null
+
+  let split: GoalIntent['split'] = null
+  if (/\b(ppl|push[/ ]?pull[/ ]?legs)\b/.test(g)) split = 'push_pull_legs'
+  else if (/\b(lower|legs?|leg day|glute|quad|hamstring)\b/.test(g)) split = 'lower'
+  else if (/\bupper\b/.test(g)) split = 'upper'
+  else if (/\b(full[- ]?body|total body)\b/.test(g)) split = 'full_body'
+
+  let emphasis: GoalIntent['emphasis'] = null
+  if (/\b(strength|powerlifting|1rm|heavy|power)\b/.test(g)) emphasis = 'strength'
+  else if (/\b(hypertrophy|muscle|size|bodybuilding|mass|bigger|tone)\b/.test(g))
+    emphasis = 'hypertrophy'
+
+  return { split, emphasis, weeks }
+}
+
+/** The library-backed movement each session slot draws from, by region. A named
+ *  split builds from these so the plan matches the goal even when the user's own
+ *  history doesn't cover those regions. Names match the seeded library. */
+const MOVEMENTS: Record<Exclude<Region, 'cardio'>, string[]> = {
+  legs: [
+    'Barbell Back Squat',
+    'Romanian Deadlift',
+    'Leg Press',
+    'Lying Leg Curl',
+    'Leg Extension',
+  ],
+  chest: ['Barbell Bench Press', 'Incline Dumbbell Bench Press', 'Cable Fly'],
+  back: ['Barbell Row', 'Lat Pulldown', 'Seated Cable Row'],
+  shoulders: ['Overhead Press', 'Dumbbell Lateral Raise', 'Face Pull'],
+  biceps: ['Barbell Curl', 'Dumbbell Curl'],
+  triceps: ['Cable Triceps Pushdown', 'Overhead Cable Triceps Extension'],
+  core: ['Plank', 'Hanging Leg Raise'],
+}
+
+/**
+ * Build a plan toward a stated goal (offline). When the goal names a split, the
+ * plan is built from that split's canonical movements — seeded at the user's
+ * recent weight where they've done a lift, null otherwise — rather than
+ * replaying whatever they train most. A blank goal falls back to continuing
+ * their own recent training, split upper/lower.
+ */
+function plan(summary: CoachSummary, goal = ''): CoachPlan {
+  const unit = summary.unitWeight
+  const toDisplay = (kg: number | null): number | null =>
+    kg === null ? null : Math.round(kg * (unit === 'lb' ? 2.20462262185 : 1))
+
+  // The user's recent top set per exercise name, to seed weights when the plan
+  // reuses a lift they've actually done.
+  const recentByName = new Map<string, ExerciseAgg>()
+  for (const e of summary.exercises) recentByName.set(e.name.toLowerCase(), e)
+
+  const intent = parseGoal(goal)
+  const strengthReps: [number, number] = [4, 6]
+  const hypertrophyReps: [number, number] = [8, 12]
+  const [repLow, repHigh] =
+    intent.emphasis === 'strength'
+      ? strengthReps
+      : intent.emphasis === 'hypertrophy'
+        ? hypertrophyReps
+        : [6, 10]
+
+  // Turn a movement name into a planned exercise, seeding from history if present.
+  const build = (name: string, isCompound: boolean) => {
+    const seen = recentByName.get(name.toLowerCase())
+    return {
+      name,
+      sets: isCompound && intent.emphasis === 'strength' ? 4 : 3,
+      repLow: isCompound ? repLow : Math.max(repLow, 8),
+      repHigh: isCompound ? repHigh : Math.max(repHigh, 12),
+      weight: seen ? toDisplay(seen.recentTopSetKg) : null,
+      note: seen
+        ? 'Seeded at your recent working weight; progress from there.'
+        : 'New to your log — start conservative and build up.',
+      // Compounds progress; isolation holds its rep range.
+      autoProgress: isCompound,
+    }
+  }
+
+  const sessionFromRegions = (
+    name: string,
+    regions: Exclude<Region, 'cardio'>[],
+    perRegion: number,
+    compoundRegions: Set<Region>,
+  ): PlanSession => ({
+    name,
+    exercises: regions.flatMap((r) =>
+      MOVEMENTS[r]
+        .slice(0, perRegion)
+        .map((m, i) => build(m, compoundRegions.has(r) && i === 0)),
+    ),
+  })
+
+  // A goal with no split, emphasis, or duration is uninformative — continue the
+  // user's own recent training instead of inventing a split.
+  if (intent.split === null && intent.emphasis === null && intent.weeks === null) {
+    return continuationPlan(summary)
+  }
+
+  // A goal that named an emphasis or duration but no split gets a balanced
+  // upper/lower split built toward that emphasis (rather than continuation).
+  const effectiveSplit = intent.split ?? 'upper_lower'
+
+  let sessions: PlanSession[]
+  let overview: string
+  let programName: string | null = null
+
+  switch (effectiveSplit) {
+    case 'lower':
+      sessions = [
+        sessionFromRegions('Lower A — Quads', ['legs'], 3, new Set(['legs'])),
+        {
+          name: 'Lower B — Posterior',
+          exercises: [
+            build('Romanian Deadlift', true),
+            build('Lying Leg Curl', false),
+            build('Leg Press', true),
+            build('Plank', false),
+          ],
+        },
+      ]
+      overview =
+        'A lower-body focus, as asked — two leg days built around squat and hinge patterns with quad and hamstring accessory work.'
+      break
+    case 'upper':
+      sessions = [
+        sessionFromRegions(
+          'Upper A — Push',
+          ['chest', 'shoulders', 'triceps'],
+          1,
+          new Set(['chest', 'shoulders']),
+        ),
+        sessionFromRegions('Upper B — Pull', ['back', 'biceps'], 2, new Set(['back'])),
+      ]
+      overview =
+        'An upper-body focus, as asked — a push day and a pull day covering chest, back, shoulders, and arms.'
+      break
+    case 'push_pull_legs':
+      sessions = [
+        sessionFromRegions(
+          'Push',
+          ['chest', 'shoulders', 'triceps'],
+          1,
+          new Set(['chest', 'shoulders']),
+        ),
+        sessionFromRegions('Pull', ['back', 'biceps'], 2, new Set(['back'])),
+        sessionFromRegions('Legs', ['legs', 'core'], 2, new Set(['legs'])),
+      ]
+      overview =
+        'A classic push / pull / legs split, as asked — each major pattern gets its own day.'
+      break
+    case 'full_body':
+      sessions = [
+        {
+          name: 'Full Body A',
+          exercises: [
+            build('Barbell Back Squat', true),
+            build('Barbell Bench Press', true),
+            build('Barbell Row', true),
+          ],
+        },
+        {
+          name: 'Full Body B',
+          exercises: [
+            build('Romanian Deadlift', true),
+            build('Overhead Press', true),
+            build('Lat Pulldown', true),
+          ],
+        },
+      ]
+      overview =
+        'A full-body split, as asked — two balanced sessions hitting every pattern.'
+      break
+    case 'upper_lower':
+    default:
+      sessions = [
+        sessionFromRegions(
+          'Upper',
+          ['chest', 'back', 'shoulders', 'biceps', 'triceps'],
+          1,
+          new Set(['chest', 'back', 'shoulders']),
+        ),
+        sessionFromRegions('Lower', ['legs', 'core'], 2, new Set(['legs'])),
+      ]
+      overview =
+        intent.emphasis === 'strength'
+          ? 'A strength-focused upper/lower split — heavy compounds up front, moderate accessories.'
+          : 'A balanced upper/lower split built toward your goal.'
+      break
+  }
+
+  // A named duration makes it a program; progression carries the weekly load.
+  if (intent.weeks) {
+    programName =
+      intent.emphasis === 'strength'
+        ? `${intent.weeks}-Week Strength Block`
+        : `${intent.weeks}-Week Program`
+    overview += ` Run it for ${intent.weeks} weeks, adding weight as the auto-progression lifts clear their rep range.`
+  }
+
+  return { overview, programName, durationWeeks: intent.weeks, sessions }
+}
+
+/** The blank-goal path: continue the user's recent lifts, split upper/lower. */
+function continuationPlan(summary: CoachSummary): CoachPlan {
   const unit = summary.unitWeight
   const toDisplay = (kg: number | null): number | null =>
     kg === null ? null : Math.round(kg * (unit === 'lb' ? 2.20462262185 : 1))
 
   if (summary.exercises.length === 0) {
-    // Nothing to continue from — propose a simple, balanced full-body starter.
     return {
       overview:
         'A simple full-body week to start building a history the coach can learn from.',
@@ -138,7 +358,6 @@ function plan(summary: CoachSummary): CoachPlan {
     }
   }
 
-  // Recent, still-active exercises grouped by region, most-trained first.
   const active = summary.exercises.filter((e) => e.lastWeekOffset >= -3)
   const byRegion = new Map<Region, ExerciseAgg[]>()
   for (const e of active) {
@@ -153,18 +372,14 @@ function plan(summary: CoachSummary): CoachPlan {
     sets: 3,
     repLow: e.repRange ? e.repRange[0] : 8,
     repHigh: e.repRange ? e.repRange[1] : 12,
-    // Seed at the recent top set — progression rules take it from there.
     weight: toDisplay(e.recentTopSetKg),
     note:
       e.lastWeekOffset <= -2
         ? 'Been a couple weeks — ease back to your recent working weight.'
         : 'Continue at your recent working weight; add reps toward the top of the range.',
-    // Compound-ish work (low rep floor) auto-progresses; higher-rep accessory holds.
     autoProgress: (e.repRange ? e.repRange[0] : 8) <= 6,
   })
 
-  // Two sessions: an upper day and a lower day, filled from what's active,
-  // then any untrained core region flagged as a suggested addition.
   const upperRegions: Region[] = ['chest', 'back', 'shoulders', 'biceps', 'triceps']
   const lowerRegions: Region[] = ['legs', 'core']
 
@@ -184,12 +399,8 @@ function plan(summary: CoachSummary): CoachPlan {
   const lower = pick(lowerRegions, 4)
   if (lower.length > 0) sessions.push({ name: 'Lower', exercises: lower })
 
-  // Fall back to a single "Full Body" day if the split came up thin.
   if (sessions.length === 0) {
-    sessions.push({
-      name: 'Full Body',
-      exercises: active.slice(0, 5).map(planned),
-    })
+    sessions.push({ name: 'Full Body', exercises: active.slice(0, 5).map(planned) })
   }
 
   return {
@@ -297,6 +508,15 @@ function answer(summary: CoachSummary, question: string): string {
   )
 }
 
+/** Whether an Ask question is really asking for a workout/program to be built,
+ *  so the offline coach can answer with a plan instead of prose. */
+function looksLikePlanRequest(question: string): boolean {
+  const q = question.toLowerCase()
+  return /\b(give me|make me|build|design|create|plan|program|split|routine|workout|day|week)\b/.test(
+    q,
+  )
+}
+
 /** A warm 1–2 sentence note for the Home greeting, grounded in the numbers. */
 function encouragement(summary: CoachSummary): string {
   if (summary.totalWorkouts === 0) {
@@ -325,13 +545,24 @@ function encouragement(summary: CoachSummary): string {
 export const mockCoachProvider: CoachProvider = {
   name: 'FitNote Coach (offline)',
   async respond(summary: CoachSummary, request: CoachRequest): Promise<CoachResponse> {
+    // A per-request goal wins; otherwise fall back to the standing profile goal
+    // so even a bare "Plan" builds toward what the user is training for.
     switch (request.kind) {
       case 'critique':
         return { kind: 'critique', critique: critique(summary) }
       case 'plan':
-        return { kind: 'plan', plan: plan(summary) }
-      case 'ask':
+        return {
+          kind: 'plan',
+          plan: plan(summary, request.goal || summary.trainingGoal),
+        }
+      case 'ask': {
+        // If the question reads like a plan request, answer with a plan built
+        // toward it — matching the live provider's unified Ask behavior.
+        if (looksLikePlanRequest(request.question)) {
+          return { kind: 'plan', plan: plan(summary, request.question) }
+        }
         return { kind: 'answer', text: answer(summary, request.question) }
+      }
       case 'encouragement':
         return { kind: 'answer', text: encouragement(summary) }
     }

@@ -19,6 +19,7 @@ import { LocalAuthProvider } from './localAuthProvider'
 import { CompositeAuthProvider } from './compositeAuthProvider'
 import { getSupabase } from '@/sync/supabaseClient'
 import { setActiveUserId, LOCAL_USER_ID } from '@/db/seed'
+import * as repo from '@/data/repository'
 import type { AuthProvider, Session, SignInResult } from './types'
 
 interface AuthState {
@@ -46,6 +47,18 @@ const provider: AuthProvider = supabase
   ? new CompositeAuthProvider(supabase)
   : new LocalAuthProvider()
 
+// When a device-only account signs in for real, claim its on-device data into
+// the new uid before the app remounts under it (§11.1.3). Pointing the data
+// layer at the new uid first means the re-stamped rows and their outbox entries
+// are all owned correctly; the next drain pushes them under the real identity.
+if (provider instanceof CompositeAuthProvider) {
+  provider.onUpgrade = async (newUserId: string) => {
+    setActiveUserId(newUserId)
+    const claimed = await repo.claimLocalData(newUserId)
+    console.info(`[auth] claimed ${claimed} local rows into ${newUserId}`)
+  }
+}
+
 export function AuthProviderScope({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
 
@@ -70,7 +83,10 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signInWithEmail = useCallback((email: string) => provider.signInWithEmail(email), [])
+  const signInWithEmail = useCallback(
+    (email: string) => provider.signInWithEmail(email),
+    [],
+  )
   const verifyCode = useCallback(
     (email: string, code: string) => provider.verifyCode(email, code),
     [],
@@ -80,7 +96,10 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     [],
   )
   const signOut = useCallback(() => provider.signOut(), [])
-  const updateDisplayName = useCallback((name: string) => provider.updateDisplayName(name), [])
+  const updateDisplayName = useCallback(
+    (name: string) => provider.updateDisplayName(name),
+    [],
+  )
   const deleteAccount = useCallback(() => provider.deleteAccount(), [])
 
   const value = useMemo<AuthState>(
