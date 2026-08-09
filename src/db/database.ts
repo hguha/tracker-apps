@@ -34,9 +34,11 @@ export interface OutboxEntry {
   op: 'insert' | 'update' | 'delete'
   rowId: string
   /**
-   * Changed fields only, so two edits to different columns of one row don't
-   * clobber each other. Typed loosely because it holds a partial of any table's
-   * row; the repository is what guarantees the shape matches `table`.
+   * The full row, not just the changed fields. The push is an upsert, which
+   * PostgREST issues as INSERT ... ON CONFLICT DO UPDATE, and Postgres checks
+   * the INSERT policy against the proposed tuple — so a partial payload is
+   * missing `user_id` and RLS rejects it. Typed loosely because it holds a row
+   * from any table; the repository guarantees the shape matches `table`.
    */
   payload: object
   clientRev: number
@@ -45,6 +47,13 @@ export interface OutboxEntry {
   lastError?: string
   /** Earliest time to retry after a transient failure. Set by the drain's backoff. */
   nextAttemptAt?: number
+  /**
+   * The workout this write belongs to, when it's part of a session that is still
+   * in progress (§5.5). The drain skips these until the workout is finished, so a
+   * half-logged session never reaches the server — which is what made two devices
+   * disagree about whether a workout was active or done. Cleared on finish.
+   */
+  deferredForWorkoutId?: string
 }
 
 /** Per-table high-water marks for delta pulls. */
@@ -118,7 +127,8 @@ export class WorkoutDatabase extends Dexie {
     this.version(2).stores({
       profiles: 'id',
       muscles: 'id, region, userId',
-      exercises: 'id, name, primaryMuscleId, movementPattern, equipment, userId, isKeyLift',
+      exercises:
+        'id, name, primaryMuscleId, movementPattern, equipment, userId, isKeyLift',
       workouts: 'id, startedAt, endedAt, templateId',
       workoutExercises: 'id, workoutId, exerciseId, [workoutId+position]',
       sets: 'id, workoutExerciseId, [workoutExerciseId+position], completedAt',
@@ -137,6 +147,13 @@ export class WorkoutDatabase extends Dexie {
     // untouched — Dexie carries every prior store forward automatically.
     this.version(3).stores({
       deadLetter: '++seq, table, rowId',
+    })
+
+    // v4 indexes the outbox's deferral marker, so the drain can select only the
+    // entries that are actually ready to push. Additive: existing entries simply
+    // have no value for it, which reads as "not deferred".
+    this.version(4).stores({
+      outbox: '++seq, table, rowId, deferredForWorkoutId',
     })
   }
 }

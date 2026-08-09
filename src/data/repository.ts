@@ -65,7 +65,69 @@ async function enqueue(
     clientRev,
     queuedAt: Date.now(),
     attempts: 0,
+    // Hold this write back if it belongs to a session still in progress (§5.5).
+    ...(await deferralFor(table, rowId, payload)),
   })
+}
+
+/**
+ * Whether a queued write belongs to an in-progress workout, and so should not be
+ * pushed yet.
+ *
+ * A half-logged session reaching the server is what made two devices disagree —
+ * one showing a workout in progress, the other showing it finished. Logging is
+ * also the hot path, so nothing should be sent mid-session anyway. The whole
+ * session pushes at once when `finishWorkout` releases it.
+ *
+ * Resolved here, at the single choke point every write passes through, rather
+ * than threaded through ~15 call sites where one omission would silently leak a
+ * partial session. Returns an empty object for everything unrelated to a live
+ * workout, so profiles/templates/metrics push immediately as before.
+ */
+async function deferralFor(
+  table: string,
+  rowId: string,
+  payload: object,
+): Promise<{ deferredForWorkoutId?: string }> {
+  // Only the three tables that make up a session can be deferred.
+  let workoutId: string | undefined
+
+  if (table === 'workouts') {
+    workoutId = rowId
+  } else if (table === 'workoutExercises') {
+    workoutId =
+      (payload as { workoutId?: string }).workoutId ??
+      (await db.workoutExercises.get(rowId))?.workoutId
+  } else if (table === 'sets') {
+    const workoutExerciseId =
+      (payload as { workoutExerciseId?: string }).workoutExerciseId ??
+      (await db.sets.get(rowId))?.workoutExerciseId
+    if (workoutExerciseId) {
+      workoutId = (await db.workoutExercises.get(workoutExerciseId))?.workoutId
+    }
+  }
+
+  if (!workoutId) return {}
+
+  // In progress means "exists and hasn't ended". A finished or deleted workout
+  // pushes normally — including the finish itself, which is what releases it.
+  const workout = await db.workouts.get(workoutId)
+  if (!workout || workout.endedAt !== null || workout.deletedAt !== null) return {}
+  return { deferredForWorkoutId: workoutId }
+}
+
+/**
+ * Releases a finished session's queued writes so the next drain pushes them.
+ *
+ * Called by `finishWorkout` (and by discard, so an abandoned session's tombstone
+ * isn't stranded behind its own deferral).
+ */
+async function releaseDeferredWrites(workoutId: string): Promise<number> {
+  const held = await db.outbox.where('deferredForWorkoutId').equals(workoutId).toArray()
+  for (const entry of held) {
+    await db.outbox.update(entry.seq!, { deferredForWorkoutId: undefined })
+  }
+  return held.length
 }
 
 /** The sync columns every user-owned row carries (§4.11). */
@@ -969,6 +1031,9 @@ export async function finishWorkout(id: string): Promise<'saved' | 'discarded-em
   if (!(await hasLoggedWork(id))) {
     await deleteWorkout(id)
     await db.placeholderOverrides.delete(id)
+    // Release even on discard: the tombstone must not sit behind its own
+    // deferral, or an abandoned session would never be cleaned up server-side.
+    await releaseDeferredWrites(id)
     return 'discarded-empty'
   }
 
@@ -976,6 +1041,10 @@ export async function finishWorkout(id: string): Promise<'saved' | 'discarded-em
   await rebuildLastPerformanceForWorkout(id)
   // Placeholder hints are per-repeat and meaningless once the session is done.
   await db.placeholderOverrides.delete(id)
+  // The session is complete: let everything it queued go to the server at once
+  // (§5.5). Until now these were held back so a partially-logged workout never
+  // reached another device.
+  await releaseDeferredWrites(id)
   return 'saved'
 }
 

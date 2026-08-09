@@ -483,6 +483,12 @@ export function MeScreen({
             <dt className="text-ink-secondary">Queued for sync</dt>
             <dd className="tabular font-semibold">{sync.pending}</dd>
           </div>
+          {sync.deferred > 0 && (
+            <div className="flex justify-between">
+              <dt className="text-ink-secondary">Held until you finish</dt>
+              <dd className="tabular font-semibold">{sync.deferred}</dd>
+            </div>
+          )}
           {sync.deadLettered > 0 && (
             <>
               <div className="flex justify-between">
@@ -550,9 +556,31 @@ export function MeScreen({
                 Retry {sync.deadLettered} failed
               </Button>
             )}
+            {/* The escape hatch for a diverged device: concede to the server
+                instead of insisting the local copy wins. */}
+            <button
+              onClick={() => {
+                if (sync.phase === 'syncing') return
+                const ok = window.confirm(
+                  `Discard ${sync.pending > 0 ? `${sync.pending} unsynced local change${sync.pending === 1 ? '' : 's'}` : 'unsynced local changes'} and load the server's version instead? Anything not yet synced from this device is lost.`,
+                )
+                if (!ok) return
+                void sync.discardLocalChanges().then(({ discarded, applied }) => {
+                  toast.show(
+                    `Discarded ${discarded} local change${discarded === 1 ? '' : 's'} · loaded ${applied} rows`,
+                  )
+                })
+              }}
+              disabled={sync.phase === 'syncing'}
+              className="mt-2 w-full py-2 text-[13px] font-semibold text-ink-secondary active:opacity-60 disabled:opacity-40"
+            >
+              Discard local changes &amp; use the server's copy
+            </button>
+
             <p className="mt-2.5 text-[12px] text-ink-muted">
-              Everything saves on this device instantly and syncs to your account in the
-              background. Use “Sync now” to push right away.
+              Changes save on this device instantly and upload as you make them — a
+              workout in progress is held back until you finish it. “Sync now” pushes and
+              re-checks the server immediately.
               {sync.deadLettered > 0 &&
                 ' “Retry failed” re-attempts changes that were rejected — use it after a connection or server issue is resolved.'}
             </p>

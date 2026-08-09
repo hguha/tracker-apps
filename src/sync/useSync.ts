@@ -1,19 +1,34 @@
 /**
- * Wires the sync engine to its drain triggers (§5.5).
+ * Wires the sync engine to its triggers (§5.5).
  *
- * Triggers: app foreground (`visibilitychange`), the `online` event, and a 30s
- * interval while online. Each just asks the engine to reconcile; the engine
- * itself is re-entrant-safe, so overlapping triggers are harmless.
+ * **Push is event-driven; pull is not continuous.** An earlier version reconciled
+ * on a 30-second interval, which caused three distinct problems:
  *
- * When no backend is configured this hook does nothing — the prototype path,
- * where IndexedDB is the whole story. It also stays idle for an offline
- * ("use this device only") session: that account has no server identity, so
- * pushing its writes would only produce auth failures. It returns live
+ *   - A background *pull* writes to IndexedDB, every `useLiveQuery` re-runs, and
+ *     the resulting re-render lands mid-touch on a phone — the button takes its
+ *     `:active` style but the tap never registers, and a form being filled in can
+ *     have its row replaced underneath it.
+ *   - It pushed half-logged workouts, so a second device saw a session as "in
+ *     progress" while the first had finished it.
+ *   - It burned requests on a timer whether or not anything had changed.
+ *
+ * So now:
+ *   - **Push** happens when a write is actually enqueued (observed on the outbox)
+ *     and on `online` — i.e. when there's something to send.
+ *   - **Pull** happens on app open and on foreground, plus whenever the user asks.
+ *     Never on a timer, so nothing rewrites the screen while it's being used.
+ *   - An **in-progress workout is not pushed at all** until Finish; the repository
+ *     defers those writes and releases them together (see `deferralFor`).
+ *
+ * With no backend configured this hook does nothing — the prototype path, where
+ * IndexedDB is the whole story. It also stays idle for an offline ("use this
+ * device only") session, which has no server identity to push to. It returns live
  * pending/dead-letter counts for the Settings surface either way.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { liveQuery } from 'dexie'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
@@ -21,13 +36,14 @@ import { getSupabase } from './supabaseClient'
 import { SupabaseBackend } from './supabaseBackend'
 import { SyncEngine } from './engine'
 
-const DRAIN_INTERVAL_MS = 30_000
-
 export type SyncPhase = 'idle' | 'syncing' | 'error'
 
 export interface SyncStatus {
-  /** Writes still queued for the server. */
+  /** Writes queued and ready to send. Excludes an in-progress workout's writes,
+   *  which are deliberately held until Finish and aren't actionable. */
   pending: number
+  /** Writes held back because their workout is still in progress. */
+  deferred: number
   /** Writes that failed permanently and need attention (§5.5). */
   deadLettered: number
   /** Whether sync is actively running for the current session. */
@@ -45,6 +61,11 @@ export interface SyncStatus {
    * caller can report a partial failure honestly. A no-op with no backend.
    */
   eraseServerData: () => Promise<{ failed: { table: string; error: string }[] }>
+  /**
+   * Throws away un-pushed local changes and adopts the server's version, for the
+   * "my local copy is wrong" escape hatch. Resolves to what it discarded/applied.
+   */
+  discardLocalChanges: () => Promise<{ discarded: number; applied: number }>
 }
 
 export function useSync(): SyncStatus {
@@ -64,19 +85,42 @@ export function useSync(): SyncStatus {
     if (!active || !engine) return
     let cancelled = false
 
-    const reconcile = () => {
-      if (cancelled) return
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-      // Never let a background reconcile become an unhandled rejection — the
-      // engine already classifies and logs failures; this is the last guard.
-      engine.sync().catch((error) => {
-        console.warn('[sync] background reconcile threw', error)
+    const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
+
+    // Push only. Safe to call often: the engine is re-entrant-safe and a drain
+    // with an empty (or fully deferred) queue costs nothing.
+    const push = () => {
+      if (cancelled || isOffline()) return
+      engine.drain().catch((error) => {
+        console.warn('[sync] drain threw', error)
       })
     }
 
+    // Pull + push. Only on open/foreground, never on a timer, so a background
+    // write can't re-render the screen while it's being used.
+    const reconcile = () => {
+      if (cancelled || isOffline()) return
+      engine.sync().catch((error) => {
+        console.warn('[sync] reconcile threw', error)
+      })
+    }
+
+    // Once on mount: this is the "app open" pull.
     reconcile()
-    const interval = window.setInterval(reconcile, DRAIN_INTERVAL_MS)
+
+    // Push whenever a write lands in the outbox. Dexie's observable fires on
+    // change, so this replaces polling with "send it when there's something to
+    // send". Deferred (in-progress-workout) entries are skipped by the drain, so
+    // logging a set costs a no-op drain rather than a request.
+    const subscription = liveQuery(() => db.outbox.count()).subscribe({
+      next: (count) => {
+        if (count > 0) push()
+      },
+      error: (error) => console.warn('[sync] outbox observer failed', error),
+    })
+
     const onVisible = () => {
+      // Foreground is the other moment another device's changes matter.
       if (document.visibilityState === 'visible') reconcile()
     }
     window.addEventListener('online', reconcile)
@@ -84,7 +128,7 @@ export function useSync(): SyncStatus {
 
     return () => {
       cancelled = true
-      clearInterval(interval)
+      subscription.unsubscribe()
       window.removeEventListener('online', reconcile)
       document.removeEventListener('visibilitychange', onVisible)
     }
@@ -137,16 +181,43 @@ export function useSync(): SyncStatus {
     }
   }, [active, engine])
 
-  const pending = useLiveQuery(() => db.outbox.count(), [], 0)
+  const discardLocalChanges = useCallback(async () => {
+    if (!active || !engine) return { discarded: 0, applied: 0 }
+    setPhase('syncing')
+    try {
+      const result = await engine.discardLocalChanges()
+      setPhase('idle')
+      return result
+    } catch {
+      setPhase('error')
+      return { discarded: 0, applied: 0 }
+    }
+  }, [active, engine])
+
+  // Split the queue: what's ready to send vs what's held for a live workout.
+  // Reporting held writes as "pending" would show a count the user can't clear.
+  const counts = useLiveQuery(
+    async () => {
+      const all = await db.outbox.toArray()
+      return {
+        pending: all.filter((e) => e.deferredForWorkoutId === undefined).length,
+        deferred: all.filter((e) => e.deferredForWorkoutId !== undefined).length,
+      }
+    },
+    [],
+    { pending: 0, deferred: 0 },
+  )
   const deadLettered = useLiveQuery(() => db.deadLetter.count(), [], 0)
 
   return {
-    pending,
+    pending: counts.pending,
+    deferred: counts.deferred,
     deadLettered,
     enabled: active,
     phase,
     syncNow,
     retryFailed,
     eraseServerData,
+    discardLocalChanges,
   }
 }

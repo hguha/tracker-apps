@@ -14,6 +14,23 @@ import * as repo from '@/data/repository'
 import { SyncEngine } from './engine'
 import { MockBackend } from './mockBackend'
 
+/**
+ * A logged, finished session — the shape most of these tests want.
+ *
+ * An in-progress workout's writes are deliberately deferred (§5.5) and won't
+ * drain, so a test that just calls `startWorkout` has nothing to push. Finishing
+ * releases them, which is what a real user's queue looks like by the time sync
+ * matters. Returns the ids so callers can assert on them.
+ */
+async function loggedWorkout(exerciseId = 'barbell_bench_press') {
+  const workoutId = await repo.startWorkout()
+  const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, exerciseId)
+  const setId = await repo.addSet({ workoutExerciseId, weightKg: 100, reps: 5 })
+  await repo.logSetValues(setId, {})
+  await repo.finishWorkout(workoutId)
+  return { workoutId, workoutExerciseId, setId }
+}
+
 beforeEach(async () => {
   // Reset the owner first, so a test that upgrades the account can't leak into
   // the next one's seeding.
@@ -32,10 +49,7 @@ describe('outbox drain', () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
-    await repo.logSetValues(setId, {})
+    const { workoutId } = await loggedWorkout()
 
     expect(await db.outbox.count()).toBeGreaterThan(0)
 
@@ -52,9 +66,7 @@ describe('outbox drain', () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
-    await repo.addSet({ workoutExerciseId: weId, weightKg: 200, reps: 3 })
+    await loggedWorkout('deadlift')
 
     await engine.drain()
 
@@ -67,7 +79,7 @@ describe('outbox drain', () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    const workoutId = await repo.startWorkout()
+    const { workoutId } = await loggedWorkout()
     await engine.drain()
 
     // Re-enqueue the same insert (as a replay would) and drain again.
@@ -94,8 +106,7 @@ describe('failure classification (§5.5)', () => {
     // First push is poison, the rest succeed.
     backend.forceNext({ status: 'permanent', error: 'bad payload' })
 
-    const workoutId = await repo.startWorkout()
-    await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    await loggedWorkout('deadlift')
 
     const result = await engine.drain()
 
@@ -113,7 +124,7 @@ describe('failure classification (§5.5)', () => {
 
     // A write fails permanently (e.g. an out-of-date server) and is dead-lettered.
     backend.forceNext({ status: 'permanent', error: 'column does not exist' })
-    const workoutId = await repo.startWorkout()
+    const { workoutId } = await loggedWorkout()
     await engine.drain()
     expect(await db.deadLetter.count()).toBe(1)
     expect(await db.outbox.count()).toBe(0)
@@ -142,8 +153,7 @@ describe('failure classification (§5.5)', () => {
     const engine = new SyncEngine(backend)
     const UID = '33333333-3333-3333-3333-333333333333'
 
-    const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const { workoutId, workoutExerciseId: weId } = await loggedWorkout()
 
     // Every push is rejected the way RLS rejects a mis-owned row.
     backend.forceNext(
@@ -181,12 +191,7 @@ describe('failure classification (§5.5)', () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    await repo.logSetValues(
-      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
-      {},
-    )
+    const { workoutId } = await loggedWorkout()
     const templateId = await repo.createTemplate('Test', null)
     await engine.drain()
 
@@ -212,10 +217,10 @@ describe('failure classification (§5.5)', () => {
 
     // A write is queued but never drained, plus one that dead-lettered.
     backend.forceNext({ status: 'permanent', error: 'poison' })
-    await repo.startWorkout()
+    await loggedWorkout()
     await engine.drain()
     expect(await db.deadLetter.count()).toBe(1)
-    const laterId = await repo.startWorkout()
+    const { workoutId: laterId } = await loggedWorkout('deadlift')
     expect(await db.outbox.count()).toBeGreaterThan(0)
 
     await engine.hardDeleteServerData()
@@ -230,12 +235,86 @@ describe('failure classification (§5.5)', () => {
     expect(await db.syncState.count()).toBe(0)
   })
 
+  it('does not push an in-progress workout, then pushes it all on finish', async () => {
+    // Why: a half-logged session reaching the server made two devices disagree —
+    // one showing the workout in progress, the other showing it finished.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    await repo.logSetValues(setId, {})
+
+    // A drain mid-session sends none of it.
+    await engine.drain()
+    expect(backend.count('workouts')).toBe(0)
+    expect(backend.count('sets')).toBe(0)
+
+    // Finishing releases the whole session at once.
+    await repo.finishWorkout(workoutId)
+    await engine.drain()
+    expect(backend.get('workouts', workoutId)).toBeDefined()
+    expect(backend.get('sets', setId)).toBeDefined()
+    // And it lands as a completed workout, never as an in-progress one.
+    expect(backend.get('workouts', workoutId)!.endedAt).not.toBeNull()
+  })
+
+  it('a deferred workout does not block unrelated writes behind it', async () => {
+    // The deferred entries sit at the head of the queue for the whole session, so
+    // stopping on one would stall everything else until the user finished.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const workoutId = await repo.startWorkout()
+    await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    // An unrelated write, queued after the workout's.
+    const templateId = await repo.createTemplate('Push', null)
+
+    await engine.drain()
+
+    expect(backend.get('templates', templateId)).toBeDefined()
+    expect(backend.count('workouts')).toBe(0)
+  })
+
+  it('discardLocalChanges throws away local edits and adopts the server version', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    // The server has a template; the local copy diverges without syncing.
+    backend.seed('templates', {
+      id: 't1',
+      userId: 'local-user',
+      name: 'Server Name',
+      folder: null,
+      description: '',
+      lastUsedAt: null,
+      timesUsed: 0,
+      isArchived: false,
+      createdAt: 1,
+      updatedAt: 5_000,
+      deletedAt: null,
+      clientRev: 1,
+    })
+    await engine.pull()
+    await repo.updateTemplate('t1', { name: 'Local Name' })
+    expect((await db.templates.get('t1'))?.name).toBe('Local Name')
+    expect(await db.outbox.count()).toBeGreaterThan(0)
+
+    const { discarded } = await engine.discardLocalChanges()
+
+    expect(discarded).toBeGreaterThan(0)
+    expect(await db.outbox.count()).toBe(0)
+    // The server's version won.
+    expect((await db.templates.get('t1'))?.name).toBe('Server Name')
+  })
+
   it('stops and backs off on a transient failure, preserving order', async () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
     backend.forceNext({ status: 'transient', error: '503' })
-    await repo.startWorkout()
+    await loggedWorkout()
     const before = await db.outbox.count()
 
     const result = await engine.drain()
@@ -253,11 +332,13 @@ describe('failure classification (§5.5)', () => {
     const engine = new SyncEngine(backend)
 
     backend.forceNext({ status: 'transient', error: 'network' })
-    await repo.startWorkout()
+    await loggedWorkout()
+    const queued = await db.outbox.count()
 
-    // First drain fails and schedules a retry in the future.
+    // First drain fails on the head entry and schedules a retry in the future,
+    // leaving the whole queue in place so order is preserved.
     await engine.drain()
-    expect(await db.outbox.count()).toBe(1)
+    expect(await db.outbox.count()).toBe(queued)
 
     // Simulate time passing well past the backoff; now it succeeds.
     const result = await engine.drain(Date.now() + 10 * 60_000)
@@ -270,12 +351,14 @@ describe('failure classification (§5.5)', () => {
     const engine = new SyncEngine(backend)
 
     backend.forceNext({ status: 'auth', error: '401' })
-    await repo.startWorkout()
+    await loggedWorkout()
+    const queued = await db.outbox.count()
 
     const result = await engine.drain()
     expect(result.stoppedBecause).toBe('auth')
     expect(await db.deadLetter.count()).toBe(0)
-    expect(await db.outbox.count()).toBe(1)
+    // Nothing was dropped — the queue waits for re-auth.
+    expect(await db.outbox.count()).toBe(queued)
   })
 })
 
@@ -358,9 +441,13 @@ describe('delta pull (§5.5)', () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    // A workout exists locally, then the server reports it deleted.
-    const workoutId = await repo.startWorkout()
+    // A workout exists locally and has synced, then the server reports it
+    // deleted. It must be finished (and drained) first: the pull deliberately
+    // skips any row with a local write still pending, so an unsynced workout
+    // would keep its local state and the tombstone would be ignored.
+    const { workoutId } = await loggedWorkout()
     await engine.drain()
+    expect(await db.outbox.count()).toBe(0)
 
     const stored = await db.workouts.get(workoutId)
     backend.seed('workouts', {

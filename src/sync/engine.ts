@@ -2,9 +2,14 @@
  * The sync engine (§5.5).
  *
  * IndexedDB is authoritative for the UI; this engine reconciles it with the
- * server in the background. It never blocks a read and never sits in the logging
- * path — a component writes locally and enqueues, and the drain happens whenever
- * a trigger fires (foreground, `online`, interval, post-auth).
+ * server. It never blocks a read and never sits in the logging path — a component
+ * writes locally and enqueues, and the engine sends later.
+ *
+ * Triggers live in `useSync`, and the split matters: a **push** fires when a write
+ * is enqueued or connectivity returns, while a **pull** only happens on app
+ * open/foreground or when the user asks. Pull writes to IndexedDB, which re-runs
+ * every live query, so doing it on a timer re-rendered the screen mid-use — on a
+ * phone that swallowed taps outright.
  *
  * The rules it enforces, each guarding a specific failure mode:
  *   - **Sequential drain by `seq`.** One entry at a time, in order. Parallel
@@ -88,11 +93,20 @@ export class SyncEngine {
 
     try {
       // Ordered by seq — the insertion order — so dependent writes replay in the
-      // order they were made. `.first()` re-reads each iteration so entries added
-      // mid-drain are still picked up.
+      // order they were made. Re-read each iteration so entries added mid-drain
+      // are still picked up.
+      //
+      // `deferredForWorkoutId` entries belong to a workout still in progress
+      // (§5.5) and are skipped rather than blocking: they sit at the head of the
+      // queue for the whole session, so stopping on one would stall every
+      // unrelated write (a profile edit, a template) behind it until the user
+      // finished their workout.
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const entry = await db.outbox.orderBy('seq').first()
+        const entry = await db.outbox
+          .orderBy('seq')
+          .filter((e) => e.deferredForWorkoutId === undefined)
+          .first()
         if (!entry) break
 
         // Respect backoff: if this entry failed recently, stop the whole drain.
@@ -294,6 +308,35 @@ export class SyncEngine {
     await db.syncState.clear()
 
     return { failed }
+  }
+
+  /**
+   * Discards every un-pushed local change and re-pulls the server's version.
+   *
+   * The deliberate counterpart to `drain()`: where that insists local wins, this
+   * concedes. For when a device has diverged — a stale edit, a botched offline
+   * session, writes that keep failing — and the server's copy is the one you
+   * trust.
+   *
+   * Drops the outbox and the dead-letter queue, resets the pull cursors so the
+   * next pull re-reads everything rather than only deltas, then pulls. Local rows
+   * the server also has are overwritten; local rows it has never seen remain
+   * (nothing can restore them, and deleting them would lose data the user never
+   * asked to lose).
+   *
+   * Returns what it discarded and re-applied, so the UI can be specific.
+   */
+  async discardLocalChanges(): Promise<{ discarded: number; applied: number }> {
+    const discarded = (await db.outbox.count()) + (await db.deadLetter.count())
+    await db.outbox.clear()
+    await db.deadLetter.clear()
+    // Full re-read, not a delta — the point is to adopt the server's state.
+    await db.syncState.clear()
+    const { applied } = await this.pull()
+    syncLog.info(
+      `discarded ${discarded} local changes, re-applied ${applied} server rows`,
+    )
+    return { discarded, applied }
   }
 
   /**

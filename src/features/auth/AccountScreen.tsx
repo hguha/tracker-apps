@@ -41,7 +41,12 @@ export function AccountScreen({
   const stats = useLiveQuery(async () => {
     const workouts = await db.workouts.toArray()
     return {
-      pendingWrites: await db.outbox.count(),
+      // Only writes that are actually ready to send. An in-progress workout's
+      // writes are deliberately held until Finish (§5.5), so counting them would
+      // warn about "unsynced changes" the user has no way to flush.
+      pendingWrites: (await db.outbox.toArray()).filter(
+        (e) => e.deferredForWorkoutId === undefined,
+      ).length,
       workoutCount: workouts.filter((w) => w.endedAt !== null && w.deletedAt === null)
         .length,
       setCount: await db.sets.count(),
