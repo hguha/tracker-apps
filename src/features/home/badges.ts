@@ -13,13 +13,10 @@
 import { distanceToM, formatDisplayWeight, weightToKg } from '@/lib/units'
 
 export interface LifetimeStats {
-  /** Finished workouts, all time. */
   totalWorkouts: number
-  /** Total working sets logged, all time. */
   totalSets: number
   /** Total volume lifted in kg, all time (converted for display by the caller). */
   totalVolumeKg: number
-  /** Longest run of consecutive weeks with a session. */
   bestWeekStreak: number
   /** Current run of consecutive weeks with a session. */
   currentWeekStreak: number
@@ -32,7 +29,6 @@ export interface LifetimeStats {
   /** Total cardio distance (meters) and time (seconds), all time. */
   totalCardioMeters: number
   totalCardioSeconds: number
-  /** Distinct exercises the user has logged, for a "variety" badge. */
   distinctExercises: number
 }
 
@@ -42,17 +38,13 @@ export function bigThreeTotalKg(s: LifetimeStats): number {
   return s.bestSquatE1rmKg + s.bestBenchE1rmKg + s.bestDeadliftE1rmKg
 }
 
-/** Themed sections for the full badge list. */
 export type BadgeGroup = 'Milestones' | 'Consistency' | 'Strength' | 'Volume' | 'Cardio'
 
 export interface Badge {
   key: string
   label: string
-  /** One-line description of the milestone — shown on tap. */
   caption: string
-  /** Emoji shown as the badge face. */
   icon: string
-  /** Section in the full list. */
   group: BadgeGroup
   /** 0–1; ≥ 1 is earned. */
   progress: (s: LifetimeStats) => number
@@ -396,7 +388,6 @@ export const BADGES: Badge[] = [
 export interface BadgeState extends Badge {
   earned: boolean
   fraction: number
-  /** `detail(stats)` resolved against the current stats, ready to render. */
   detailText: string
 }
 

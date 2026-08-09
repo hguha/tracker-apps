@@ -109,7 +109,6 @@ export function ExerciseCard(props: ExerciseCardProps) {
   const lastSession = lastPerformance?.sessions[0]
   const isCardio = exercise.movementPattern === 'cardio'
 
-  /** Sets from last time, lined up with this session's rows by index. */
   const previousSets = useMemo<PerformedSet[]>(
     () => lastSession?.sets ?? [],
     [lastSession],
@@ -134,7 +133,6 @@ export function ExerciseCard(props: ExerciseCardProps) {
     [sets, placeholderOverrides, previousSets],
   )
 
-  /** A placeholder with nothing in it shouldn't render as one. */
   function placeholderAt(index: number): PerformedSet | undefined {
     const candidate = placeholderFor[index]
     return candidate && hasValue(candidate) ? candidate : undefined
@@ -150,7 +148,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
       )}
     >
       <div className="flex items-start gap-1 px-2.5 pt-3 pb-1">
-        {/* Drag affordance. The whole card is draggable; this says so. */}
+        {/* The whole card is draggable. */}
         <span className="mt-0.5 shrink-0 text-ink-muted/60" aria-hidden>
           <GripVertical size={16} />
         </span>

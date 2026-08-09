@@ -25,6 +25,7 @@ import { regionVar, resolveRegionColor, resolveToken } from '@/lib/palette'
 import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS } from '@/domain/types'
 import { displayWeight, distanceFromM, formatDuration, weightFromKg } from '@/lib/units'
 import { weekKey } from '@/lib/dates'
+import { humanizeSlug } from '@/lib/labels'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -32,17 +33,13 @@ function weekLabels(weeks: string[]): string[] {
   return weeks.map((week) => format(new Date(week), 'MMM d'))
 }
 
-// ─────────────────────────────────────────────────────────── A-4 volume trend
+// A-4
 
-/** Total volume per week, with a moving average as the emphasis line. */
 export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
 
-  // One memo over the stable inputs: the derivations and the option are built
-  // together, so `option`'s identity is stable across re-renders that don't
-  // change the data (e.g. switching Insights sub-tabs) and setOption doesn't
-  // needlessly re-run. `appearance` is a dep because chrome() reads the theme.
+  // `appearance` is a dep because chrome() reads the theme.
   const { option, labels, points, movingAverage } = useMemo(() => {
     const labels = weekLabels(data.weeks)
     const points = data.weeks.map((week) =>
@@ -109,7 +106,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ────────────────────────────────────────────────────── C-20 share of work
+// C-20
 
 /**
  * Where training goes, as a 100% stacked bar rather than a pie.
@@ -178,7 +175,7 @@ export function RegionShareChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ──────────────────────────────────────────── C-21 region volume over time
+// C-21
 
 /** How emphasis has shifted. Categorical — the regions are the subject. */
 export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
@@ -246,9 +243,8 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ───────────────────────────────────────────────────── A-5 sets by body part
+// A-5
 
-/** Sets per body part in range, with a direct label per bar. */
 export function SetsByRegionChart({ data }: { data: InsightsData }) {
   const entries = REGIONS.map((region) => ({
     region,
@@ -293,7 +289,7 @@ export function SetsByRegionChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ───────────────────────────────────────────────── B-8 e1RM progression
+// B-8
 
 /**
  * Estimated 1RM over time for one lift, as **emphasis**: one lift in the accent
@@ -341,7 +337,6 @@ export function StrengthProgressionChart({
         },
       ],
     }
-    // `active` is derived from data+activeExerciseId; both are stable roots.
   }, [active, unit, appearance])
 
   if (!active) {
@@ -398,9 +393,8 @@ function PickExerciseCard({ title, subtitle }: { title: string; subtitle: string
   )
 }
 
-// ──────────────────────────────────────────────────── B-9 top-set weight
+// B-9
 
-/** The heaviest working set per session for one lift. */
 export function TopSetChart({
   data,
   activeExerciseId,
@@ -471,7 +465,7 @@ export function TopSetChart({
   )
 }
 
-// ────────────────────────────────────────── C-27 rep-range distribution
+// C-27
 
 /**
  * How the training is actually distributed across rep ranges.
@@ -535,7 +529,7 @@ export function RepRangeChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────── D-34 workouts per week
+// D-34
 
 export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
@@ -576,7 +570,7 @@ export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ──────────────────────────────────────────── D-35 day-of-week frequency
+// D-35
 
 export function DayOfWeekChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
@@ -619,9 +613,8 @@ export function DayOfWeekChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────── C-31 volume vs duration
+// C-31
 
-/** Session density — is a longer workout actually more work? */
 export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
@@ -680,7 +673,7 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ───────────────────────────────────────────────── E-42 bodyweight trend
+// E-42
 
 /**
  * Bodyweight as **emphasis**: raw daily readings recede to gray, the 7-day
@@ -753,7 +746,7 @@ export function BodyweightChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────────────── D-41 cardio volume
+// D-41
 
 /**
  * Cardio time and distance as **two separate charts**, never two y-axes — the
@@ -802,8 +795,7 @@ export function CardioChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ───────────────────────────────────────────────────── D-37 time of day
-/** When sessions start, over 24 hours. */
+// D-37
 export function TimeOfDayChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -844,8 +836,7 @@ export function TimeOfDayChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ──────────────────────────────────────────────────── D-40 duration trend
-/** Session length over time, with a moving average. */
+// D-40
 export function DurationTrendChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -913,7 +904,7 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ───────────────────────────────────────────────── C-30 sets per session
+// C-30
 /** Ranges of 5, so the histogram stays readable. */
 const SET_COUNT_BUCKETS = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
 
@@ -961,8 +952,7 @@ export function SetsPerSessionChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────────── C-33 exercise variety
-/** Distinct exercises trained per week. */
+// C-33
 export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -1017,8 +1007,7 @@ export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ──────────────────────────────────────────────────── B-17 per-exercise volume
-/** Volume per session for the filtered lift. */
+// B-17
 export function PerExerciseVolumeChart({
   data,
   activeExerciseId,
@@ -1078,8 +1067,7 @@ export function PerExerciseVolumeChart({
   )
 }
 
-// ─────────────────────────────────────────────── C-25 pattern coverage
-/** Working sets per movement pattern — surfaces a neglected pattern. */
+// C-25
 export function PatternCoverageChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -1088,7 +1076,7 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
       pattern,
       count: data.setsByPattern.get(pattern) ?? 0,
     })).filter((e) => e.count > 0)
-    const labels = entries.map((e) => titleCasePattern(e.pattern))
+    const labels = entries.map((e) => humanizeSlug(e.pattern))
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
@@ -1116,7 +1104,7 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
       emptyMessage="Log some sets to see which movement patterns you train."
       table={{
         columns: ['Pattern', 'Sets'],
-        rows: entries.map((e) => [titleCasePattern(e.pattern), e.count]),
+        rows: entries.map((e) => [humanizeSlug(e.pattern), e.count]),
       }}
     >
       <Chart
@@ -1128,8 +1116,7 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────────── C-26 equipment mix
-/** Where training happens — working sets per equipment type. */
+// C-26
 export function EquipmentMixChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -1137,7 +1124,7 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
     const entries = [...data.setsByEquipment.entries()]
       .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
-    const labels = entries.map(([eq]) => titleCasePattern(eq))
+    const labels = entries.map(([eq]) => humanizeSlug(eq))
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
@@ -1165,7 +1152,7 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
       emptyMessage="Log some sets to see your equipment mix."
       table={{
         columns: ['Equipment', 'Sets'],
-        rows: entries.map(([eq, count]) => [titleCasePattern(eq), count]),
+        rows: entries.map(([eq, count]) => [humanizeSlug(eq), count]),
       }}
     >
       <Chart
@@ -1177,8 +1164,7 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────────── D-39 gap distribution
-/** Days between sessions — how long the layoffs run. */
+// D-39
 export function GapDistributionChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const buckets = ['0-1', '2', '3', '4-6', '7+']
@@ -1228,7 +1214,7 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
   )
 }
 
-// ─────────────────────────────────────────────────── B-16 stalled lifts
+// B-16
 /**
  * Lifts whose estimated 1RM hasn't improved recently — what needs attention.
  * A table, not a chart: the useful output is a ranked list with numbers (§9).
@@ -1288,7 +1274,7 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
 }
 
 // ─────────────────────────────────────────────────── overview summary + body
-/** Headline numbers for the active filter scope. Stat tiles, not a chart. */
+/** Stat tiles, not a chart. */
 export function SummaryCard({
   data,
   rangeLabel,
@@ -1302,7 +1288,6 @@ export function SummaryCard({
       <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
         Last {rangeLabel.toLowerCase()}
       </p>
-      {/* A hero figure, not a one-bar chart. */}
       <p className="mt-1 text-[36px] font-bold leading-none tracking-tight">
         {displayWeight(data.totalVolumeKg, unit).toLocaleString()}
         <span className="ml-1.5 text-[15px] font-semibold text-ink-muted">
@@ -1329,7 +1314,6 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** Placeholder card for the Body sub-tab's not-yet-plottable measurements. */
 export function MoreBodyChartsCard() {
   return (
     <Card className="p-4">
@@ -1347,8 +1331,4 @@ function formatHour(hour: number): string {
   const period = hour < 12 ? 'a' : 'p'
   const twelve = hour % 12 === 0 ? 12 : hour % 12
   return `${twelve}${period}`
-}
-
-function titleCasePattern(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

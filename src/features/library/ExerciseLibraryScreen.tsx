@@ -24,9 +24,9 @@ import {
   REGIONS,
   type Region,
 } from '@/domain/types'
-import { titleCase } from '@/features/workout/ExerciseDetailSheet'
 import { NewExerciseForm } from '@/features/workout/NewExerciseForm'
 import { ExerciseDetailSheet } from '@/features/workout/ExerciseDetailSheet'
+import { humanizeSlug } from '@/lib/labels'
 
 type SortMode = 'name' | 'recent'
 
@@ -137,12 +137,12 @@ export function ExerciseLibraryScreen() {
             onClick={() => setOpenSheet('region')}
           />
           <FilterChip
-            label={summarize('Equipment', equipmentFilter, titleCase)}
+            label={summarize('Equipment', equipmentFilter, humanizeSlug)}
             isActive={equipmentFilter.length > 0}
             onClick={() => setOpenSheet('equipment')}
           />
           <FilterChip
-            label={summarize('Pattern', patternFilter, titleCase)}
+            label={summarize('Pattern', patternFilter, humanizeSlug)}
             isActive={patternFilter.length > 0}
             onClick={() => setOpenSheet('pattern')}
           />
@@ -212,7 +212,7 @@ export function ExerciseLibraryScreen() {
                     </span>
                   </span>
                   <span className="block truncate text-[12.5px] text-ink-muted">
-                    {muscle?.name} · {titleCase(exercise.equipment)}
+                    {muscle?.name} · {humanizeSlug(exercise.equipment)}
                     {lastAt ? ` · ${formatRelativeDay(lastAt)}` : ''}
                   </span>
                 </span>
@@ -251,7 +251,7 @@ export function ExerciseLibraryScreen() {
       {openSheet === 'equipment' && (
         <FilterSheet
           title="Equipment"
-          options={EQUIPMENT.map((value) => ({ value, label: titleCase(value) }))}
+          options={EQUIPMENT.map((value) => ({ value, label: humanizeSlug(value) }))}
           selected={equipmentFilter}
           onChange={setEquipmentFilter}
           onDismiss={() => setOpenSheet(null)}
@@ -262,7 +262,7 @@ export function ExerciseLibraryScreen() {
           title="Movement pattern"
           options={MOVEMENT_PATTERNS.map((value) => ({
             value,
-            label: titleCase(value),
+            label: humanizeSlug(value),
           }))}
           selected={patternFilter}
           onChange={setPatternFilter}

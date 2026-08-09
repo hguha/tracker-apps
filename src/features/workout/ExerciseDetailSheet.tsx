@@ -15,6 +15,7 @@ import { Button } from '@/components/Button'
 import { formatRelativeDay } from '@/lib/dates'
 import { displayWeight, formatDuration, distanceFromM, weightFromKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
+import { humanizeSlug } from '@/lib/labels'
 import {
   REGION_LABELS,
   type DistanceUnit,
@@ -169,9 +170,9 @@ export function ExerciseDetailSheet({
         {/* Taxonomy — the same fields the create form captures (§7.3). */}
         <Section title="Details">
           <dl className="space-y-1.5 text-[13.5px]">
-            <Row label="Equipment" value={titleCase(exercise.equipment)} />
-            <Row label="Pattern" value={titleCase(exercise.movementPattern)} />
-            <Row label="Tracked as" value={titleCase(exercise.trackingType)} />
+            <Row label="Equipment" value={humanizeSlug(exercise.equipment)} />
+            <Row label="Pattern" value={humanizeSlug(exercise.movementPattern)} />
+            <Row label="Tracked as" value={humanizeSlug(exercise.trackingType)} />
             {exercise.isUnilateral && <Row label="Per side" value="Yes" />}
             {exercise.bodyweightFactor !== null && (
               <Row
@@ -294,10 +295,4 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-[11.5px] text-ink-muted">{label}</p>
     </div>
   )
-}
-
-/** `horizontal_push` → `Horizontal push`. */
-export function titleCase(value: string): string {
-  const spaced = value.replace(/_/g, ' ')
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }

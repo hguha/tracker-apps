@@ -16,12 +16,9 @@ import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'
 import { EQUIPMENT, REGION_LABELS, REGIONS } from '@/domain/types'
 import { NewExerciseForm } from './NewExerciseForm'
+import { humanizeSlug } from '@/lib/labels'
 
 /** Title-cases an equipment/pattern enum value: `smith` → `Smith`. */
-function titleCase(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
 export function ExercisePicker({
   onPick,
   onDismiss,
@@ -175,7 +172,7 @@ export function ExercisePicker({
                   : 'border-line text-ink-secondary',
               )}
             >
-              {titleCase(equipment)}
+              {humanizeSlug(equipment)}
             </button>
           )
         })}

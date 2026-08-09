@@ -9,7 +9,6 @@
 
 import type { Exercise, PerformedSet, Region, WorkoutSet } from '@/domain/types'
 
-/** Set shapes that carry enough to compute volume. Accepts stored or cached rows. */
 type VolumeInput = Pick<
   WorkoutSet,
   'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'
@@ -74,7 +73,6 @@ export function effectiveWeightKg(
     case 'reps_only':
     case 'time':
     case 'distance_time':
-      // No external load to speak of — these contribute no volume load.
       return null
   }
 }
@@ -127,7 +125,6 @@ export function weightForRepsKg(oneRepMaxKg: number, reps: number): number | nul
   return oneRepMaxKg / (1 + reps / 30)
 }
 
-/** Rep counts the PR estimator projects a working weight for. */
 export const PROJECTION_REPS = [1, 2, 3, 5, 8, 10, 12] as const
 
 /** Best e1RM across a group of sets, ignoring sets outside the valid window. */
@@ -175,7 +172,6 @@ export function attributeVolumeToMuscles(
   return byMuscle
 }
 
-/** Roll muscle-level numbers up to the 7 regions the palette is built for. */
 export function rollUpToRegions(
   byMuscle: Map<string, number>,
   regionOf: (muscleId: string) => Region | undefined,

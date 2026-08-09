@@ -13,7 +13,6 @@ export const LB_PER_KG = 2.20462262185
 const KM_PER_MI = 1.609344
 const CM_PER_IN = 2.54
 
-/** Smallest weight change you can actually make, per unit. */
 const DEFAULT_INCREMENT: Record<WeightUnit, number> = {
   lb: 2.5, // a pair of 1.25 lb plates
   kg: 1.25, // a pair of 0.625 kg plates
@@ -70,8 +69,7 @@ export function formatWeight(
   opts: { withUnit?: boolean } = {},
 ): string {
   if (kg === null) return '—'
-  // weightFromKg already returns a cleaned number (e.g. 65, 12.5), so String()
-  // gives "65" / "12.5" with no trailing zeros — no extra formatting needed.
+  // weightFromKg is pre-cleaned, so String() has no trailing zeros.
   const text = String(weightFromKg(kg, unit))
   return opts.withUnit === false ? text : `${text} ${unit}`
 }
@@ -90,13 +88,9 @@ export function convertWeight(kg: number, to: WeightUnit): number {
 }
 
 /**
- * A derived or aggregate weight — a volume total, an estimated 1RM, a projected
- * max — converted to the user's unit and rounded to a whole number for display.
- *
- * This is the one function to reach for whenever a *computed* weight is shown.
- * `weightFromKg` snaps to a loadable plate (wrong for a sum); raw `convertWeight`
- * returns exact floats like 250.8333 (wrong for the screen). Everything derived
- * that a person reads goes through here so no long decimal ever leaks to the UI.
+ * Any *computed* weight shown to a person — a volume total, an e1RM, a projection.
+ * Not `weightFromKg`, which snaps to a loadable plate and is wrong for a sum; not
+ * raw `convertWeight`, which leaks floats like 250.8333 to the screen.
  */
 export function displayWeight(kg: number, unit: WeightUnit): number {
   return Math.round(convertWeight(kg, unit))
