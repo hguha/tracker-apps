@@ -30,7 +30,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Barbell Bench Press',
     primary: 'mid_chest',
-    secondary: [['front_delt', 0.5], ['triceps', 0.5]],
+    secondary: [
+      ['front_delt', 0.5],
+      ['triceps', 0.5],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_push',
     aliases: ['bench', 'flat bench', 'bb bench'],
@@ -38,7 +41,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Incline Barbell Bench Press',
     primary: 'upper_chest',
-    secondary: [['front_delt', 0.6], ['triceps', 0.4]],
+    secondary: [
+      ['front_delt', 0.6],
+      ['triceps', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_push',
     aliases: ['incline bench'],
@@ -53,7 +59,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Dumbbell Bench Press',
     primary: 'mid_chest',
-    secondary: [['front_delt', 0.5], ['triceps', 0.5]],
+    secondary: [
+      ['front_delt', 0.5],
+      ['triceps', 0.5],
+    ],
     equipment: 'dumbbell',
     pattern: 'horizontal_push',
     aliases: ['db bench'],
@@ -61,7 +70,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Incline Dumbbell Bench Press',
     primary: 'upper_chest',
-    secondary: [['front_delt', 0.6], ['triceps', 0.4]],
+    secondary: [
+      ['front_delt', 0.6],
+      ['triceps', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'horizontal_push',
     aliases: ['incline db press'],
@@ -98,21 +110,31 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Chest Press Machine',
     primary: 'mid_chest',
-    secondary: [['front_delt', 0.4], ['triceps', 0.4]],
+    secondary: [
+      ['front_delt', 0.4],
+      ['triceps', 0.4],
+    ],
     equipment: 'machine',
     pattern: 'horizontal_push',
   },
   {
     name: 'Smith Machine Bench Press',
     primary: 'mid_chest',
-    secondary: [['front_delt', 0.4], ['triceps', 0.5]],
+    secondary: [
+      ['front_delt', 0.4],
+      ['triceps', 0.5],
+    ],
     equipment: 'smith',
     pattern: 'horizontal_push',
   },
   {
     name: 'Push-up',
     primary: 'mid_chest',
-    secondary: [['front_delt', 0.4], ['triceps', 0.5], ['rectus_abdominis', 0.2]],
+    secondary: [
+      ['front_delt', 0.4],
+      ['triceps', 0.5],
+      ['rectus_abdominis', 0.2],
+    ],
     equipment: 'bodyweight',
     pattern: 'horizontal_push',
     tracking: 'bodyweight_reps',
@@ -122,7 +144,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Dip',
     primary: 'lower_chest',
-    secondary: [['triceps', 0.7], ['front_delt', 0.4]],
+    secondary: [
+      ['triceps', 0.7],
+      ['front_delt', 0.4],
+    ],
     equipment: 'bodyweight',
     pattern: 'horizontal_push',
     tracking: 'weighted_bodyweight',
@@ -132,7 +157,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Assisted Dip',
     primary: 'lower_chest',
-    secondary: [['triceps', 0.7], ['front_delt', 0.4]],
+    secondary: [
+      ['triceps', 0.7],
+      ['front_delt', 0.4],
+    ],
     equipment: 'machine',
     pattern: 'horizontal_push',
     tracking: 'assisted_bodyweight',
@@ -143,7 +171,13 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Deadlift',
     primary: 'erectors',
-    secondary: [['glutes', 0.8], ['hamstrings', 0.8], ['lats', 0.4], ['upper_traps', 0.4], ['forearms', 0.3]],
+    secondary: [
+      ['glutes', 0.8],
+      ['hamstrings', 0.8],
+      ['lats', 0.4],
+      ['upper_traps', 0.4],
+      ['forearms', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
     aliases: ['conventional deadlift', 'dl'],
@@ -151,21 +185,33 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Sumo Deadlift',
     primary: 'glutes',
-    secondary: [['quads', 0.6], ['erectors', 0.7], ['adductors', 0.5], ['upper_traps', 0.3]],
+    secondary: [
+      ['quads', 0.6],
+      ['erectors', 0.7],
+      ['adductors', 0.5],
+      ['upper_traps', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Trap Bar Deadlift',
     primary: 'quads',
-    secondary: [['glutes', 0.7], ['erectors', 0.6], ['upper_traps', 0.4]],
+    secondary: [
+      ['glutes', 0.7],
+      ['erectors', 0.6],
+      ['upper_traps', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Romanian Deadlift',
     primary: 'hamstrings',
-    secondary: [['glutes', 0.7], ['erectors', 0.5]],
+    secondary: [
+      ['glutes', 0.7],
+      ['erectors', 0.5],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
     aliases: ['rdl'],
@@ -173,7 +219,12 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Barbell Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.6], ['mid_traps', 0.6], ['biceps', 0.4], ['rear_delt', 0.4]],
+    secondary: [
+      ['rhomboids', 0.6],
+      ['mid_traps', 0.6],
+      ['biceps', 0.4],
+      ['rear_delt', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_pull',
     aliases: ['bent over row', 'bb row'],
@@ -181,14 +232,22 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Pendlay Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.6], ['mid_traps', 0.6], ['biceps', 0.4]],
+    secondary: [
+      ['rhomboids', 0.6],
+      ['mid_traps', 0.6],
+      ['biceps', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_pull',
   },
   {
     name: 'Dumbbell Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.5], ['biceps', 0.4], ['rear_delt', 0.3]],
+    secondary: [
+      ['rhomboids', 0.5],
+      ['biceps', 0.4],
+      ['rear_delt', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'horizontal_pull',
     unilateral: true,
@@ -197,7 +256,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Seated Cable Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.6], ['mid_traps', 0.5], ['biceps', 0.4]],
+    secondary: [
+      ['rhomboids', 0.6],
+      ['mid_traps', 0.5],
+      ['biceps', 0.4],
+    ],
     equipment: 'cable',
     pattern: 'horizontal_pull',
     aliases: ['cable row'],
@@ -205,21 +268,34 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Chest-Supported Row',
     primary: 'rhomboids',
-    secondary: [['lats', 0.7], ['mid_traps', 0.6], ['rear_delt', 0.4], ['biceps', 0.3]],
+    secondary: [
+      ['lats', 0.7],
+      ['mid_traps', 0.6],
+      ['rear_delt', 0.4],
+      ['biceps', 0.3],
+    ],
     equipment: 'machine',
     pattern: 'horizontal_pull',
   },
   {
     name: 'T-Bar Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.6], ['mid_traps', 0.5], ['biceps', 0.4]],
+    secondary: [
+      ['rhomboids', 0.6],
+      ['mid_traps', 0.5],
+      ['biceps', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_pull',
   },
   {
     name: 'Inverted Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.6], ['biceps', 0.4], ['rear_delt', 0.3]],
+    secondary: [
+      ['rhomboids', 0.6],
+      ['biceps', 0.4],
+      ['rear_delt', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'horizontal_pull',
     tracking: 'weighted_bodyweight',
@@ -228,7 +304,12 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Pull-up',
     primary: 'lats',
-    secondary: [['biceps', 0.5], ['rhomboids', 0.4], ['teres', 0.4], ['lower_traps', 0.3]],
+    secondary: [
+      ['biceps', 0.5],
+      ['rhomboids', 0.4],
+      ['teres', 0.4],
+      ['lower_traps', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'vertical_pull',
     tracking: 'weighted_bodyweight',
@@ -238,7 +319,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Chin-up',
     primary: 'lats',
-    secondary: [['biceps', 0.7], ['brachialis', 0.4], ['rhomboids', 0.3]],
+    secondary: [
+      ['biceps', 0.7],
+      ['brachialis', 0.4],
+      ['rhomboids', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'vertical_pull',
     tracking: 'weighted_bodyweight',
@@ -248,7 +333,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Assisted Pull-up',
     primary: 'lats',
-    secondary: [['biceps', 0.5], ['rhomboids', 0.4]],
+    secondary: [
+      ['biceps', 0.5],
+      ['rhomboids', 0.4],
+    ],
     equipment: 'machine',
     pattern: 'vertical_pull',
     tracking: 'assisted_bodyweight',
@@ -257,7 +345,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Lat Pulldown',
     primary: 'lats',
-    secondary: [['biceps', 0.4], ['rhomboids', 0.4], ['teres', 0.3]],
+    secondary: [
+      ['biceps', 0.4],
+      ['rhomboids', 0.4],
+      ['teres', 0.3],
+    ],
     equipment: 'cable',
     pattern: 'vertical_pull',
     aliases: ['pulldown'],
@@ -265,7 +357,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Close-Grip Lat Pulldown',
     primary: 'lats',
-    secondary: [['biceps', 0.5], ['brachialis', 0.3]],
+    secondary: [
+      ['biceps', 0.5],
+      ['brachialis', 0.3],
+    ],
     equipment: 'cable',
     pattern: 'vertical_pull',
   },
@@ -293,7 +388,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Back Extension',
     primary: 'erectors',
-    secondary: [['glutes', 0.5], ['hamstrings', 0.4]],
+    secondary: [
+      ['glutes', 0.5],
+      ['hamstrings', 0.4],
+    ],
     equipment: 'bodyweight',
     pattern: 'hinge',
     tracking: 'weighted_bodyweight',
@@ -303,7 +401,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Rack Pull',
     primary: 'erectors',
-    secondary: [['glutes', 0.5], ['upper_traps', 0.5], ['lats', 0.3]],
+    secondary: [
+      ['glutes', 0.5],
+      ['upper_traps', 0.5],
+      ['lats', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
@@ -312,7 +414,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Overhead Press',
     primary: 'front_delt',
-    secondary: [['side_delt', 0.5], ['triceps', 0.6], ['upper_traps', 0.3]],
+    secondary: [
+      ['side_delt', 0.5],
+      ['triceps', 0.6],
+      ['upper_traps', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'vertical_push',
     aliases: ['ohp', 'military press', 'standing press'],
@@ -320,7 +426,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Seated Dumbbell Shoulder Press',
     primary: 'front_delt',
-    secondary: [['side_delt', 0.5], ['triceps', 0.5]],
+    secondary: [
+      ['side_delt', 0.5],
+      ['triceps', 0.5],
+    ],
     equipment: 'dumbbell',
     pattern: 'vertical_push',
     aliases: ['db shoulder press'],
@@ -328,14 +437,20 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Arnold Press',
     primary: 'front_delt',
-    secondary: [['side_delt', 0.6], ['triceps', 0.4]],
+    secondary: [
+      ['side_delt', 0.6],
+      ['triceps', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'vertical_push',
   },
   {
     name: 'Machine Shoulder Press',
     primary: 'front_delt',
-    secondary: [['side_delt', 0.4], ['triceps', 0.5]],
+    secondary: [
+      ['side_delt', 0.4],
+      ['triceps', 0.5],
+    ],
     equipment: 'machine',
     pattern: 'vertical_push',
   },
@@ -363,7 +478,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Reverse Dumbbell Fly',
     primary: 'rear_delt',
-    secondary: [['rhomboids', 0.5], ['mid_traps', 0.4]],
+    secondary: [
+      ['rhomboids', 0.5],
+      ['mid_traps', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'isolation',
     aliases: ['rear delt fly', 'reverse chest fly', 'bent over fly'],
@@ -371,7 +489,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Reverse Pec Deck',
     primary: 'rear_delt',
-    secondary: [['rhomboids', 0.5], ['mid_traps', 0.4]],
+    secondary: [
+      ['rhomboids', 0.5],
+      ['mid_traps', 0.4],
+    ],
     equipment: 'machine',
     pattern: 'isolation',
     aliases: ['reverse fly machine'],
@@ -379,7 +500,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Face Pull',
     primary: 'rear_delt',
-    secondary: [['mid_traps', 0.5], ['rhomboids', 0.5], ['lower_traps', 0.4]],
+    secondary: [
+      ['mid_traps', 0.5],
+      ['rhomboids', 0.5],
+      ['lower_traps', 0.4],
+    ],
     equipment: 'cable',
     pattern: 'horizontal_pull',
   },
@@ -392,7 +517,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Upright Row',
     primary: 'side_delt',
-    secondary: [['upper_traps', 0.6], ['biceps', 0.3]],
+    secondary: [
+      ['upper_traps', 0.6],
+      ['biceps', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'vertical_pull',
   },
@@ -401,7 +529,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Barbell Curl',
     primary: 'biceps',
-    secondary: [['brachialis', 0.4], ['forearms', 0.3]],
+    secondary: [
+      ['brachialis', 0.4],
+      ['forearms', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'isolation',
     aliases: ['bb curl'],
@@ -409,7 +540,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Dumbbell Curl',
     primary: 'biceps',
-    secondary: [['brachialis', 0.4], ['forearms', 0.3]],
+    secondary: [
+      ['brachialis', 0.4],
+      ['forearms', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'isolation',
     aliases: ['db curl'],
@@ -424,7 +558,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Hammer Curl',
     primary: 'brachialis',
-    secondary: [['biceps', 0.7], ['forearms', 0.4]],
+    secondary: [
+      ['biceps', 0.7],
+      ['forearms', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'isolation',
   },
@@ -438,7 +575,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Cable Curl',
     primary: 'biceps',
-    secondary: [['brachialis', 0.3], ['forearms', 0.3]],
+    secondary: [
+      ['brachialis', 0.3],
+      ['forearms', 0.3],
+    ],
     equipment: 'cable',
     pattern: 'isolation',
   },
@@ -452,7 +592,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Close-Grip Bench Press',
     primary: 'triceps',
-    secondary: [['mid_chest', 0.6], ['front_delt', 0.4]],
+    secondary: [
+      ['mid_chest', 0.6],
+      ['front_delt', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_push',
   },
@@ -485,7 +628,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Triceps Dip',
     primary: 'triceps',
-    secondary: [['lower_chest', 0.5], ['front_delt', 0.3]],
+    secondary: [
+      ['lower_chest', 0.5],
+      ['front_delt', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'horizontal_push',
     tracking: 'weighted_bodyweight',
@@ -506,7 +652,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Farmer Carry',
     primary: 'forearms',
-    secondary: [['upper_traps', 0.6], ['rectus_abdominis', 0.4], ['obliques', 0.4]],
+    secondary: [
+      ['upper_traps', 0.6],
+      ['rectus_abdominis', 0.4],
+      ['obliques', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'carry',
     tracking: 'weight_time',
@@ -516,7 +666,12 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Barbell Back Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.7], ['erectors', 0.5], ['adductors', 0.4], ['hamstrings', 0.3]],
+    secondary: [
+      ['glutes', 0.7],
+      ['erectors', 0.5],
+      ['adductors', 0.4],
+      ['hamstrings', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'squat',
     aliases: ['squat', 'back squat'],
@@ -524,7 +679,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Front Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.5], ['erectors', 0.5], ['rectus_abdominis', 0.3]],
+    secondary: [
+      ['glutes', 0.5],
+      ['erectors', 0.5],
+      ['rectus_abdominis', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'squat',
   },
@@ -538,21 +697,31 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Leg Press',
     primary: 'quads',
-    secondary: [['glutes', 0.6], ['hamstrings', 0.3]],
+    secondary: [
+      ['glutes', 0.6],
+      ['hamstrings', 0.3],
+    ],
     equipment: 'machine',
     pattern: 'squat',
   },
   {
     name: 'Goblet Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.5], ['rectus_abdominis', 0.3]],
+    secondary: [
+      ['glutes', 0.5],
+      ['rectus_abdominis', 0.3],
+    ],
     equipment: 'kettlebell',
     pattern: 'squat',
   },
   {
     name: 'Bulgarian Split Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.8], ['adductors', 0.4], ['hamstrings', 0.3]],
+    secondary: [
+      ['glutes', 0.8],
+      ['adductors', 0.4],
+      ['hamstrings', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'lunge',
     unilateral: true,
@@ -561,14 +730,21 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Walking Lunge',
     primary: 'quads',
-    secondary: [['glutes', 0.7], ['hamstrings', 0.3], ['adductors', 0.3]],
+    secondary: [
+      ['glutes', 0.7],
+      ['hamstrings', 0.3],
+      ['adductors', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'lunge',
   },
   {
     name: 'Reverse Lunge',
     primary: 'glutes',
-    secondary: [['quads', 0.7], ['hamstrings', 0.4]],
+    secondary: [
+      ['quads', 0.7],
+      ['hamstrings', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'lunge',
     unilateral: true,
@@ -612,7 +788,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Hip Thrust',
     primary: 'glutes',
-    secondary: [['hamstrings', 0.5], ['erectors', 0.3]],
+    secondary: [
+      ['hamstrings', 0.5],
+      ['erectors', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
@@ -660,7 +839,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Kettlebell Swing',
     primary: 'glutes',
-    secondary: [['hamstrings', 0.7], ['erectors', 0.5], ['side_delt', 0.2]],
+    secondary: [
+      ['hamstrings', 0.7],
+      ['erectors', 0.5],
+      ['side_delt', 0.2],
+    ],
     equipment: 'kettlebell',
     pattern: 'hinge',
   },
@@ -669,7 +852,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Plank',
     primary: 'transverse_abdominis',
-    secondary: [['rectus_abdominis', 0.7], ['obliques', 0.5]],
+    secondary: [
+      ['rectus_abdominis', 0.7],
+      ['obliques', 0.5],
+    ],
     equipment: 'bodyweight',
     pattern: 'isolation',
     tracking: 'time',
@@ -686,7 +872,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Hanging Leg Raise',
     primary: 'rectus_abdominis',
-    secondary: [['obliques', 0.4], ['forearms', 0.3]],
+    secondary: [
+      ['obliques', 0.4],
+      ['forearms', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'isolation',
     tracking: 'weighted_bodyweight',
@@ -716,7 +905,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Cable Woodchop',
     primary: 'obliques',
-    secondary: [['rectus_abdominis', 0.4], ['transverse_abdominis', 0.3]],
+    secondary: [
+      ['rectus_abdominis', 0.4],
+      ['transverse_abdominis', 0.3],
+    ],
     equipment: 'cable',
     pattern: 'rotation',
     unilateral: true,
@@ -724,7 +916,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Ab Wheel Rollout',
     primary: 'rectus_abdominis',
-    secondary: [['transverse_abdominis', 0.7], ['lats', 0.3]],
+    secondary: [
+      ['transverse_abdominis', 0.7],
+      ['lats', 0.3],
+    ],
     equipment: 'other',
     pattern: 'isolation',
     tracking: 'reps_only',
@@ -774,7 +969,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Incline Walk',
     primary: 'cardiovascular',
-    secondary: [['calves', 0.3], ['glutes', 0.3]],
+    secondary: [
+      ['calves', 0.3],
+      ['glutes', 0.3],
+    ],
     equipment: 'machine',
     pattern: 'cardio',
     tracking: 'distance_time',
@@ -791,7 +989,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Rowing Machine',
     primary: 'cardiovascular',
-    secondary: [['lats', 0.3], ['quads', 0.3], ['erectors', 0.2]],
+    secondary: [
+      ['lats', 0.3],
+      ['quads', 0.3],
+      ['erectors', 0.2],
+    ],
     equipment: 'machine',
     pattern: 'cardio',
     tracking: 'distance_time',
@@ -807,7 +1009,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Stair Climber',
     primary: 'cardiovascular',
-    secondary: [['glutes', 0.3], ['calves', 0.3]],
+    secondary: [
+      ['glutes', 0.3],
+      ['calves', 0.3],
+    ],
     equipment: 'machine',
     pattern: 'cardio',
     tracking: 'time',
@@ -816,7 +1021,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Swimming',
     primary: 'cardiovascular',
-    secondary: [['lats', 0.3], ['front_delt', 0.2]],
+    secondary: [
+      ['lats', 0.3],
+      ['front_delt', 0.2],
+    ],
     equipment: 'other',
     pattern: 'cardio',
     tracking: 'distance_time',
@@ -832,7 +1040,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Ruck',
     primary: 'cardiovascular',
-    secondary: [['erectors', 0.3], ['upper_traps', 0.3]],
+    secondary: [
+      ['erectors', 0.3],
+      ['upper_traps', 0.3],
+    ],
     equipment: 'other',
     pattern: 'cardio',
     tracking: 'distance_time',
@@ -863,7 +1074,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Incline Machine Press',
     primary: 'upper_chest',
-    secondary: [['front_delt', 0.5], ['triceps', 0.4]],
+    secondary: [
+      ['front_delt', 0.5],
+      ['triceps', 0.4],
+    ],
     equipment: 'machine',
     pattern: 'horizontal_push',
   },
@@ -878,7 +1092,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Wide-Grip Pull-up',
     primary: 'lats',
-    secondary: [['biceps', 0.4], ['teres', 0.4]],
+    secondary: [
+      ['biceps', 0.4],
+      ['teres', 0.4],
+    ],
     equipment: 'bodyweight',
     pattern: 'vertical_pull',
     tracking: 'bodyweight_reps',
@@ -896,7 +1113,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Single-Arm Dumbbell Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.4], ['biceps', 0.3]],
+    secondary: [
+      ['rhomboids', 0.4],
+      ['biceps', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'horizontal_pull',
     unilateral: true,
@@ -905,7 +1125,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Meadows Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.4], ['rear_delt', 0.3]],
+    secondary: [
+      ['rhomboids', 0.4],
+      ['rear_delt', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_pull',
     unilateral: true,
@@ -913,14 +1136,20 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Seal Row',
     primary: 'mid_traps',
-    secondary: [['lats', 0.5], ['rhomboids', 0.5]],
+    secondary: [
+      ['lats', 0.5],
+      ['rhomboids', 0.5],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_pull',
   },
   {
     name: 'Machine Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.5], ['biceps', 0.3]],
+    secondary: [
+      ['rhomboids', 0.5],
+      ['biceps', 0.3],
+    ],
     equipment: 'machine',
     pattern: 'horizontal_pull',
   },
@@ -933,7 +1162,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Good Morning',
     primary: 'hamstrings',
-    secondary: [['erectors', 0.6], ['glutes', 0.4]],
+    secondary: [
+      ['erectors', 0.6],
+      ['glutes', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
@@ -942,14 +1174,20 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Push Press',
     primary: 'front_delt',
-    secondary: [['triceps', 0.4], ['side_delt', 0.3]],
+    secondary: [
+      ['triceps', 0.4],
+      ['side_delt', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'vertical_push',
   },
   {
     name: 'Seated Barbell Overhead Press',
     primary: 'front_delt',
-    secondary: [['triceps', 0.4], ['side_delt', 0.3]],
+    secondary: [
+      ['triceps', 0.4],
+      ['side_delt', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'vertical_push',
     aliases: ['seated ohp'],
@@ -957,7 +1195,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Landmine Press',
     primary: 'front_delt',
-    secondary: [['upper_chest', 0.4], ['triceps', 0.3]],
+    secondary: [
+      ['upper_chest', 0.4],
+      ['triceps', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'vertical_push',
     unilateral: true,
@@ -1001,7 +1242,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Cable Rope Hammer Curl',
     primary: 'brachialis',
-    secondary: [['biceps', 0.5], ['forearms', 0.3]],
+    secondary: [
+      ['biceps', 0.5],
+      ['forearms', 0.3],
+    ],
     equipment: 'cable',
     pattern: 'isolation',
   },
@@ -1052,14 +1296,20 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Pause Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.5], ['adductors', 0.3]],
+    secondary: [
+      ['glutes', 0.5],
+      ['adductors', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'squat',
   },
   {
     name: 'Box Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.6], ['hamstrings', 0.3]],
+    secondary: [
+      ['glutes', 0.6],
+      ['hamstrings', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'squat',
   },
@@ -1089,7 +1339,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Stiff-Leg Deadlift',
     primary: 'hamstrings',
-    secondary: [['glutes', 0.5], ['erectors', 0.4]],
+    secondary: [
+      ['glutes', 0.5],
+      ['erectors', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
     aliases: ['sldl'],
@@ -1120,7 +1373,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Curtsy Lunge',
     primary: 'glutes',
-    secondary: [['quads', 0.4], ['abductors', 0.3]],
+    secondary: [
+      ['quads', 0.4],
+      ['abductors', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'lunge',
     unilateral: true,
@@ -1201,7 +1457,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Sled Push',
     primary: 'cardiovascular',
-    secondary: [['quads', 0.4], ['glutes', 0.3]],
+    secondary: [
+      ['quads', 0.4],
+      ['glutes', 0.3],
+    ],
     equipment: 'other',
     pattern: 'cardio',
     tracking: 'time',
@@ -1217,7 +1476,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Box Jump',
     primary: 'cardiovascular',
-    secondary: [['quads', 0.4], ['calves', 0.3]],
+    secondary: [
+      ['quads', 0.4],
+      ['calves', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'cardio',
     tracking: 'reps_only',
@@ -1234,7 +1496,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Power Clean',
     primary: 'glutes',
-    secondary: [['hamstrings', 0.5], ['upper_traps', 0.5], ['quads', 0.4]],
+    secondary: [
+      ['hamstrings', 0.5],
+      ['upper_traps', 0.5],
+      ['quads', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
     aliases: ['clean'],
@@ -1242,49 +1508,73 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Hang Clean',
     primary: 'glutes',
-    secondary: [['upper_traps', 0.5], ['hamstrings', 0.4]],
+    secondary: [
+      ['upper_traps', 0.5],
+      ['hamstrings', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Clean and Jerk',
     primary: 'glutes',
-    secondary: [['front_delt', 0.5], ['quads', 0.4], ['upper_traps', 0.4]],
+    secondary: [
+      ['front_delt', 0.5],
+      ['quads', 0.4],
+      ['upper_traps', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Snatch',
     primary: 'glutes',
-    secondary: [['upper_traps', 0.5], ['side_delt', 0.4], ['hamstrings', 0.4]],
+    secondary: [
+      ['upper_traps', 0.5],
+      ['side_delt', 0.4],
+      ['hamstrings', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Power Snatch',
     primary: 'upper_traps',
-    secondary: [['glutes', 0.5], ['side_delt', 0.4]],
+    secondary: [
+      ['glutes', 0.5],
+      ['side_delt', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Clean Pull',
     primary: 'upper_traps',
-    secondary: [['glutes', 0.5], ['erectors', 0.4]],
+    secondary: [
+      ['glutes', 0.5],
+      ['erectors', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
   {
     name: 'Thruster',
     primary: 'quads',
-    secondary: [['front_delt', 0.6], ['glutes', 0.4], ['triceps', 0.3]],
+    secondary: [
+      ['front_delt', 0.6],
+      ['glutes', 0.4],
+      ['triceps', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'squat',
   },
   {
     name: 'Wall Ball',
     primary: 'quads',
-    secondary: [['front_delt', 0.4], ['glutes', 0.4]],
+    secondary: [
+      ['front_delt', 0.4],
+      ['glutes', 0.4],
+    ],
     equipment: 'other',
     pattern: 'squat',
     tracking: 'reps_only',
@@ -1294,14 +1584,22 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Atlas Stone Lift',
     primary: 'erectors',
-    secondary: [['glutes', 0.5], ['biceps', 0.4], ['quads', 0.4]],
+    secondary: [
+      ['glutes', 0.5],
+      ['biceps', 0.4],
+      ['quads', 0.4],
+    ],
     equipment: 'other',
     pattern: 'hinge',
   },
   {
     name: 'Yoke Carry',
     primary: 'erectors',
-    secondary: [['upper_traps', 0.5], ['quads', 0.4], ['transverse_abdominis', 0.4]],
+    secondary: [
+      ['upper_traps', 0.5],
+      ['quads', 0.4],
+      ['transverse_abdominis', 0.4],
+    ],
     equipment: 'other',
     pattern: 'carry',
     tracking: 'weight_time',
@@ -1309,14 +1607,20 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Log Press',
     primary: 'front_delt',
-    secondary: [['triceps', 0.5], ['upper_chest', 0.3]],
+    secondary: [
+      ['triceps', 0.5],
+      ['upper_chest', 0.3],
+    ],
     equipment: 'other',
     pattern: 'vertical_push',
   },
   {
     name: 'Sandbag Carry',
     primary: 'transverse_abdominis',
-    secondary: [['erectors', 0.5], ['biceps', 0.3]],
+    secondary: [
+      ['erectors', 0.5],
+      ['biceps', 0.3],
+    ],
     equipment: 'other',
     pattern: 'carry',
     tracking: 'weight_time',
@@ -1324,7 +1628,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Suitcase Carry',
     primary: 'obliques',
-    secondary: [['forearms', 0.5], ['upper_traps', 0.3]],
+    secondary: [
+      ['forearms', 0.5],
+      ['upper_traps', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'carry',
     tracking: 'weight_time',
@@ -1333,7 +1640,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Tire Flip',
     primary: 'glutes',
-    secondary: [['erectors', 0.5], ['quads', 0.4], ['upper_chest', 0.3]],
+    secondary: [
+      ['erectors', 0.5],
+      ['quads', 0.4],
+      ['upper_chest', 0.3],
+    ],
     equipment: 'other',
     pattern: 'hinge',
     tracking: 'reps_only',
@@ -1357,7 +1668,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Deficit Push-up',
     primary: 'mid_chest',
-    secondary: [['front_delt', 0.4], ['triceps', 0.4]],
+    secondary: [
+      ['front_delt', 0.4],
+      ['triceps', 0.4],
+    ],
     equipment: 'bodyweight',
     pattern: 'horizontal_push',
     tracking: 'bodyweight_reps',
@@ -1368,14 +1682,21 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Pendlay Deficit Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.5], ['erectors', 0.3]],
+    secondary: [
+      ['rhomboids', 0.5],
+      ['erectors', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'horizontal_pull',
   },
   {
     name: 'Kroc Row',
     primary: 'lats',
-    secondary: [['rhomboids', 0.4], ['biceps', 0.4], ['forearms', 0.3]],
+    secondary: [
+      ['rhomboids', 0.4],
+      ['biceps', 0.4],
+      ['forearms', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'horizontal_pull',
     unilateral: true,
@@ -1391,7 +1712,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Rope Face Pull',
     primary: 'rear_delt',
-    secondary: [['mid_traps', 0.5], ['rhomboids', 0.3]],
+    secondary: [
+      ['mid_traps', 0.5],
+      ['rhomboids', 0.3],
+    ],
     equipment: 'cable',
     pattern: 'horizontal_pull',
   },
@@ -1405,7 +1729,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Deadlift (Snatch Grip)',
     primary: 'erectors',
-    secondary: [['upper_traps', 0.5], ['hamstrings', 0.5], ['glutes', 0.4]],
+    secondary: [
+      ['upper_traps', 0.5],
+      ['hamstrings', 0.5],
+      ['glutes', 0.4],
+    ],
     equipment: 'barbell',
     pattern: 'hinge',
   },
@@ -1414,7 +1742,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Z Press',
     primary: 'front_delt',
-    secondary: [['triceps', 0.4], ['transverse_abdominis', 0.3]],
+    secondary: [
+      ['triceps', 0.4],
+      ['transverse_abdominis', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'vertical_push',
   },
@@ -1450,7 +1781,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Zottman Curl',
     primary: 'biceps',
-    secondary: [['forearms', 0.5], ['brachialis', 0.4]],
+    secondary: [
+      ['forearms', 0.5],
+      ['brachialis', 0.4],
+    ],
     equipment: 'dumbbell',
     pattern: 'isolation',
   },
@@ -1463,7 +1797,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Cross-Body Hammer Curl',
     primary: 'brachialis',
-    secondary: [['biceps', 0.4], ['forearms', 0.3]],
+    secondary: [
+      ['biceps', 0.4],
+      ['forearms', 0.3],
+    ],
     equipment: 'dumbbell',
     pattern: 'isolation',
     unilateral: true,
@@ -1484,7 +1821,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Diamond Push-up',
     primary: 'triceps',
-    secondary: [['mid_chest', 0.4], ['front_delt', 0.3]],
+    secondary: [
+      ['mid_chest', 0.4],
+      ['front_delt', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'horizontal_push',
     tracking: 'bodyweight_reps',
@@ -1502,7 +1842,11 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Zercher Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.5], ['erectors', 0.4], ['transverse_abdominis', 0.3]],
+    secondary: [
+      ['glutes', 0.5],
+      ['erectors', 0.4],
+      ['transverse_abdominis', 0.3],
+    ],
     equipment: 'barbell',
     pattern: 'squat',
   },
@@ -1526,7 +1870,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Cossack Squat',
     primary: 'adductors',
-    secondary: [['quads', 0.5], ['glutes', 0.4]],
+    secondary: [
+      ['quads', 0.5],
+      ['glutes', 0.4],
+    ],
     equipment: 'bodyweight',
     pattern: 'lunge',
     tracking: 'bodyweight_reps',
@@ -1550,7 +1897,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'ATG Split Squat',
     primary: 'quads',
-    secondary: [['glutes', 0.4], ['adductors', 0.3]],
+    secondary: [
+      ['glutes', 0.4],
+      ['adductors', 0.3],
+    ],
     equipment: 'bodyweight',
     pattern: 'lunge',
     tracking: 'bodyweight_reps',
@@ -1626,7 +1976,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Ski Erg',
     primary: 'cardiovascular',
-    secondary: [['lats', 0.3], ['triceps', 0.3]],
+    secondary: [
+      ['lats', 0.3],
+      ['triceps', 0.3],
+    ],
     equipment: 'machine',
     pattern: 'cardio',
     tracking: 'distance_time',
@@ -1634,7 +1987,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   {
     name: 'Sled Drag',
     primary: 'cardiovascular',
-    secondary: [['hamstrings', 0.4], ['calves', 0.3]],
+    secondary: [
+      ['hamstrings', 0.4],
+      ['calves', 0.3],
+    ],
     equipment: 'other',
     pattern: 'cardio',
     tracking: 'time',

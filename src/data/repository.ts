@@ -337,10 +337,6 @@ export async function listExercises(): Promise<Exercise[]> {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export async function getExercise(id: string): Promise<Exercise | undefined> {
-  return db.exercises.get(id)
-}
-
 export interface NewExerciseInput {
   name: string
   primaryMuscleId: string
@@ -487,27 +483,6 @@ export async function getLastTrainedMap(): Promise<Map<string, number>> {
     }
   }
   return lastTrained
-}
-
-/**
- * Copies a system exercise into a user-owned one so its taxonomy can be edited.
- * System rows are shared, so they're read-only; this is the escape hatch.
- */
-export async function duplicateExercise(exerciseId: string): Promise<string | null> {
-  const source = await db.exercises.get(exerciseId)
-  if (!source) return null
-  return createExercise({
-    name: `${source.name} (custom)`,
-    primaryMuscleId: source.primaryMuscleId,
-    equipment: source.equipment,
-    movementPattern: source.movementPattern,
-    trackingType: source.trackingType,
-    secondaryMuscles: source.secondaryMuscles,
-    isUnilateral: source.isUnilateral,
-    bodyweightFactor: source.bodyweightFactor,
-    notes: source.notes,
-    defaultRestSeconds: source.defaultRestSeconds,
-  })
 }
 
 // ----------------------------------------------------------------- workouts
@@ -2222,10 +2197,6 @@ export async function addMetricEntry(input: {
   return entry.id
 }
 
-export async function deleteMetricEntry(id: string): Promise<void> {
-  await patchRow(db.metricEntries, 'metricEntries', id, { deletedAt: Date.now() })
-}
-
 // ------------------------------------------------------------- maintenance
 
 /**
@@ -2324,15 +2295,11 @@ export async function purgeEmptyWorkouts(): Promise<number> {
 }
 
 /**
- * Wipes all local training data and the sync queues, then re-seeds the shared
- * library and a fresh profile.
+ * Wipes local training data and the sync queues. The caller must reload — the
+ * library and profile are re-seeded by `seedIfNeeded()` at boot, not here.
  *
- * For starting a clean sync test, or recovering from stale prototype data
- * stamped with the old `local-user` id. This clears IndexedDB only — it does
- * NOT delete anything already on the server. After a wipe the next pull rehydrates
- * whatever the server holds for the signed-in user, so on a synced account this
- * is a "resync from the server" rather than true deletion; on an offline account
- * it is a genuine reset.
+ * IndexedDB only: nothing on the server is deleted, so on a synced account the
+ * next pull rehydrates and this is a resync; offline, it's a genuine reset.
  */
 export async function clearLocalData(): Promise<void> {
   await db.transaction(
@@ -2347,6 +2314,8 @@ export async function clearLocalData(): Promise<void> {
       db.personalRecords,
       db.metricEntries,
       db.exercises,
+      db.muscles,
+      db.metricDefinitions,
       db.lastPerformance,
       db.placeholderOverrides,
       db.outbox,
@@ -2354,7 +2323,6 @@ export async function clearLocalData(): Promise<void> {
       db.syncState,
     ],
     async () => {
-      // User-owned data.
       await db.workouts.clear()
       await db.workoutExercises.clear()
       await db.sets.clear()
@@ -2365,10 +2333,13 @@ export async function clearLocalData(): Promise<void> {
       await db.lastPerformance.clear()
       await db.placeholderOverrides.clear()
       await db.profiles.clear()
-      // Custom exercises only — the system library is re-seeded below.
-      await db.exercises.filter((e) => e.userId !== null).delete()
-      // Sync bookkeeping: drop queued/failed writes and reset delta cursors so
-      // the next pull starts from zero.
+      // User-created library rows only — system rows (userId null) are shared and
+      // re-seeded at boot. All three tables are user-extensible, so all three
+      // need clearing; omitting muscles/metricDefinitions left a custom muscle
+      // alive across a wipe while a custom exercise was removed.
+      for (const store of [db.exercises, db.muscles, db.metricDefinitions]) {
+        await store.filter((row) => row.userId !== null).delete()
+      }
       await db.outbox.clear()
       await db.deadLetter.clear()
       await db.syncState.clear()

@@ -87,66 +87,67 @@ export function TemplatesScreen({
         {templates.length > 0 && (
           <Card className="overflow-visible">
             {templates.map(({ template, exerciseCount }, index) => (
-                <div
-                  key={template.id}
-                  className={
-                    'relative flex items-center ' +
-                    (index > 0 ? 'border-t border-line' : '')
-                  }
+              <div
+                key={template.id}
+                className={
+                  'relative flex items-center ' +
+                  (index > 0 ? 'border-t border-line' : '')
+                }
+              >
+                <button
+                  onClick={() => setPreviewFor(template.id)}
+                  className="min-w-0 flex-1 px-4 py-3.5 text-left active:bg-accent-wash"
                 >
-                  <button
-                    onClick={() => setPreviewFor(template.id)}
-                    className="min-w-0 flex-1 px-4 py-3.5 text-left active:bg-accent-wash"
-                  >
-                    <span className="block truncate text-[15px] font-semibold">
-                      {template.name}
-                    </span>
-                    <span className="block text-[12.5px] text-ink-muted">
-                      {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
-                      {template.lastUsedAt !== null &&
-                        ` · last used ${formatRelativeDay(template.lastUsedAt)}`}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setMenuFor(menuFor === template.id ? null : template.id)}
-                    aria-label={`Options for ${template.name}`}
-                    className="mr-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
+                  <span className="block truncate text-[15px] font-semibold">
+                    {template.name}
+                  </span>
+                  <span className="block text-[12.5px] text-ink-muted">
+                    {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
+                    {template.lastUsedAt !== null &&
+                      ` · last used ${formatRelativeDay(template.lastUsedAt)}`}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setMenuFor(menuFor === template.id ? null : template.id)}
+                  aria-label={`Options for ${template.name}`}
+                  className="mr-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+                >
+                  <MoreVertical size={18} />
+                </button>
 
-                  {menuFor === template.id && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setMenuFor(null)}
+                {menuFor === template.id && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setMenuFor(null)}
+                    />
+                    <div className="absolute right-2 top-12 z-50 w-48 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-xl">
+                      <RowItem
+                        icon={<Pencil size={15} />}
+                        label="Edit template"
+                        onClick={() => {
+                          setMenuFor(null)
+                          onEditTemplate(template.id)
+                        }}
                       />
-                      <div className="absolute right-2 top-12 z-50 w-48 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-xl">
-                        <RowItem
-                          icon={<Pencil size={15} />}
-                          label="Edit template"
-                          onClick={() => {
-                            setMenuFor(null)
-                            onEditTemplate(template.id)
-                          }}
-                        />
-                        <RowItem
-                          icon={<Trash2 size={15} />}
-                          label="Delete"
-                          destructive
-                          onClick={() => {
-                            setMenuFor(null)
-                            void repo.deleteTemplate(template.id)
-                            toast.show('Template deleted', () =>
-                              void repo.restoreTemplate(template.id),
-                            )
-                          }}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                      <RowItem
+                        icon={<Trash2 size={15} />}
+                        label="Delete"
+                        destructive
+                        onClick={() => {
+                          setMenuFor(null)
+                          void repo.deleteTemplate(template.id)
+                          toast.show(
+                            'Template deleted',
+                            () => void repo.restoreTemplate(template.id),
+                          )
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </Card>
         )}
       </div>

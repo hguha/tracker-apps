@@ -101,7 +101,6 @@ export class SyncEngine {
       // queue for the whole session, so stopping on one would stall every
       // unrelated write (a profile edit, a template) behind it until the user
       // finished their workout.
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const entry = await db.outbox
           .orderBy('seq')
@@ -482,7 +481,6 @@ function tableStore(table: SyncedTable) {
     workouts: db.workouts,
     workoutExercises: db.workoutExercises,
     sets: db.sets,
-    personalRecords: db.personalRecords,
     metricDefinitions: db.metricDefinitions,
     metricEntries: db.metricEntries,
   } as const

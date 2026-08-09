@@ -7,7 +7,7 @@
  * methods; the tests run it against an in-memory fake.
  */
 
-/** One row to push. Payload is the changed fields plus its primary key. */
+/** One row to push. Payload is the full row — see `OutboxEntry.payload` for why. */
 export interface PushRow {
   table: string
   op: 'insert' | 'update' | 'delete'
@@ -55,11 +55,7 @@ export interface SyncBackend {
    * because it's a deliberate, whole-table wipe rather than a per-row sync op —
    * after it, nothing remains for a peer to resurrect.
    *
-   * Returns the number of rows removed, or a failure the caller can surface.
-   * Child rows are expected to go via FK cascade.
+   * Returns a failure the caller can surface rather than throwing.
    */
   hardDeleteAll(table: string): Promise<{ ok: true } | { ok: false; error: string }>
-
-  /** Whether the backend is currently reachable and authenticated. */
-  isAvailable(): Promise<boolean>
 }

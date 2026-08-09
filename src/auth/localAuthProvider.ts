@@ -11,7 +11,7 @@
  * are testable without a mail server.
  */
 
-import { db, syncStamp } from '@/db/database'
+import { db } from '@/db/database'
 import type { AuthProvider, Session, SignInResult } from './types'
 import { isValidEmail } from './types'
 
@@ -91,7 +91,6 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'session', session }
   }
 
-
   async continueOffline(displayName = 'You'): Promise<SignInResult> {
     const session = await this.establish('local@device', displayName, false)
     return { kind: 'session', session }
@@ -132,8 +131,6 @@ export class LocalAuthProvider implements AuthProvider {
       }
       return
     }
-    // No profile yet — seeding creates it, so only stamp the name here.
-    void syncStamp
   }
 
   async signOut(): Promise<void> {

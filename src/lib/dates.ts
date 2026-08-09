@@ -54,9 +54,7 @@ export function formatRelativeDay(ts: number, now = Date.now()): string {
 export function formatDayHeading(ts: number, now = Date.now()): string {
   if (isSameDay(ts, now)) return 'Today'
   if (differenceInCalendarDays(now, ts) === 1) return 'Yesterday'
-  return isSameYear(ts, now)
-    ? format(ts, 'EEEE, MMM d')
-    : format(ts, 'EEEE, MMM d, yyyy')
+  return isSameYear(ts, now) ? format(ts, 'EEEE, MMM d') : format(ts, 'EEEE, MMM d, yyyy')
 }
 
 export function formatTimeOfDay(ts: number): string {

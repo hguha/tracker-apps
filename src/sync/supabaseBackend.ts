@@ -84,16 +84,6 @@ export class SupabaseBackend implements SyncBackend {
       return { ok: false, error: String(cause) }
     }
   }
-
-  async isAvailable(): Promise<boolean> {
-    try {
-      const { error } = await this.client.rpc('keep_alive')
-      // A missing RPC still proves reachability; only a network throw means down.
-      return error === null || error.code !== undefined
-    } catch {
-      return false
-    }
-  }
 }
 
 /**

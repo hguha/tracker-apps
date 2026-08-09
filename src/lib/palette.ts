@@ -51,11 +51,9 @@ export function resolveToken(name: string, fallback: string): string {
  * reader a visible direct label or the table view; color alone is not enough.
  * Flagged here so the obligation is visible at the call site.
  */
-export const LOW_CONTRAST_ON_LIGHT: Region[] = ['legs', 'shoulders', 'biceps']
 
 /**
  * Scatter, bubble, and small-multiple forms compare every pair of colors at
  * once, and only the first three slots clear that bar. Past three, facet or
  * fold into "Other" — never generate another hue.
  */
-export const ALL_PAIRS_SERIES_CAP = 3

@@ -3,7 +3,6 @@ import type { Exercise, WorkoutSet } from '@/domain/types'
 import {
   attributeVolumeToMuscles,
   bestOneRepMaxKg,
-  countsTowardVolume,
   effectiveWeightKg,
   estimatedOneRepMaxKg,
   isWorkingSet,
@@ -54,13 +53,13 @@ function exercise(partial: Partial<Exercise> = {}): Exercise {
   }
 }
 
-describe('countsTowardVolume', () => {
+describe('isWorkingSet', () => {
   it('counts a completed set', () => {
-    expect(countsTowardVolume(set())).toBe(true)
+    expect(isWorkingSet(set())).toBe(true)
   })
 
   it('excludes planned-but-not-performed sets', () => {
-    expect(countsTowardVolume(set({ isCompleted: false }))).toBe(false)
+    expect(isWorkingSet(set({ isCompleted: false }))).toBe(false)
   })
 })
 
@@ -90,8 +89,12 @@ describe('effectiveWeightKg', () => {
   })
 
   it('is null for cardio and rep-only work', () => {
-    expect(effectiveWeightKg(set(), exercise({ trackingType: 'distance_time' }), 80)).toBeNull()
-    expect(effectiveWeightKg(set(), exercise({ trackingType: 'reps_only' }), 80)).toBeNull()
+    expect(
+      effectiveWeightKg(set(), exercise({ trackingType: 'distance_time' }), 80),
+    ).toBeNull()
+    expect(
+      effectiveWeightKg(set(), exercise({ trackingType: 'reps_only' }), 80),
+    ).toBeNull()
     expect(effectiveWeightKg(set(), exercise({ trackingType: 'time' }), 80)).toBeNull()
   })
 
@@ -124,7 +127,9 @@ describe('volumeLoadKg', () => {
 
   it('contributes nothing for cardio, so a run never inflates lifting volume', () => {
     const treadmill = exercise({ trackingType: 'distance_time' })
-    const sets = [set({ weightKg: null, reps: null, durationSeconds: 1800, distanceM: 5000 })]
+    const sets = [
+      set({ weightKg: null, reps: null, durationSeconds: 1800, distanceM: 5000 }),
+    ]
     expect(volumeLoadKg(sets, treadmill, 80)).toBe(0)
   })
 })

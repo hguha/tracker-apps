@@ -13,7 +13,6 @@ type Store = Map<string, Map<string, Record<string, unknown>>>
 
 export class MockBackend implements SyncBackend {
   private store: Store = new Map()
-  private available = true
 
   /** Queue of forced outcomes; when empty, push succeeds. FIFO per call. */
   private forced: PushOutcome[] = []
@@ -23,10 +22,6 @@ export class MockBackend implements SyncBackend {
   /** Force the next N pushes to return this outcome, then resume succeeding. */
   forceNext(outcome: PushOutcome, times = 1): void {
     for (let i = 0; i < times; i += 1) this.forced.push(outcome)
-  }
-
-  setAvailable(available: boolean): void {
-    this.available = available
   }
 
   async push(row: PushRow): Promise<PushOutcome> {
@@ -61,10 +56,6 @@ export class MockBackend implements SyncBackend {
     this.store.delete(table)
     for (const child of CASCADES[table] ?? []) this.store.delete(child)
     return { ok: true }
-  }
-
-  async isAvailable(): Promise<boolean> {
-    return this.available
   }
 
   /** Test helper: seed a row directly as if another device had synced it. */

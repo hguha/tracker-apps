@@ -155,7 +155,9 @@ export function NewExerciseForm({
                   }}
                   className={cn(
                     'flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13.5px] font-medium',
-                    isActive ? 'border-transparent text-white' : 'border-line text-ink-secondary',
+                    isActive
+                      ? 'border-transparent text-white'
+                      : 'border-line text-ink-secondary',
                   )}
                   style={isActive ? { background: regionVar(option) } : undefined}
                 >
@@ -196,16 +198,16 @@ export function NewExerciseForm({
 
         <Field label="Equipment">
           <ChipGroup
-            options={EQUIPMENT.map((value) => ({ value, label: EQUIPMENT_LABELS[value] }))}
+            options={EQUIPMENT.map((value) => ({
+              value,
+              label: EQUIPMENT_LABELS[value],
+            }))}
             value={equipment}
             onChange={setEquipment}
           />
         </Field>
 
-        <Field
-          label="How it's tracked"
-          hint="Decides which inputs the set row shows."
-        >
+        <Field label="How it's tracked" hint="Decides which inputs the set row shows.">
           <ChipGroup
             options={TRACKING_TYPES.map((value) => ({
               value,

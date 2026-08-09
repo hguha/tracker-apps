@@ -128,7 +128,11 @@ export function ExerciseLibraryScreen() {
         {/* Summary chips. Fixed height regardless of how many options exist. */}
         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
           <FilterChip
-            label={summarize('Body part', regionFilter, (v) => REGION_LABELS[v as Region])}
+            label={summarize(
+              'Body part',
+              regionFilter,
+              (v) => REGION_LABELS[v as Region],
+            )}
             isActive={regionFilter.length > 0}
             onClick={() => setOpenSheet('region')}
           />

@@ -11,7 +11,13 @@ import {
 
 describe('column case conversion', () => {
   it('round-trips a key through camel↔snake', () => {
-    for (const key of ['weightKg', 'workoutExerciseId', 'restTakenSeconds', 'id', 'rpe']) {
+    for (const key of [
+      'weightKg',
+      'workoutExerciseId',
+      'restTakenSeconds',
+      'id',
+      'rpe',
+    ]) {
       expect(snakeToCamel(camelToSnake(key))).toBe(key)
     }
   })

@@ -71,7 +71,10 @@ export function DragList({
   onSuperset?: (draggedId: string, targetId: string) => void
   children: ReactNode
 }) {
-  const [state, setState] = useState<DragState>({ activeId: null, intent: { kind: 'none' } })
+  const [state, setState] = useState<DragState>({
+    activeId: null,
+    intent: { kind: 'none' },
+  })
   const elements = useRef(new Map<string, HTMLElement>())
   const pressTimer = useRef<number | null>(null)
   const isDragging = useRef(false)

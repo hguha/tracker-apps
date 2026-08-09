@@ -16,11 +16,11 @@ type VolumeInput = Pick<
 > & { isCompleted?: boolean }
 
 /**
- * Whether a set counts toward volume. Now simply "was it performed" — the set
- * types that used to exclude some sets (warmup) were removed, so every logged
- * set is real work.
+ * A set of real work — any logged set. Both the number shown to the user and the
+ * predicate volume load uses; the warmup/dropset types that once excluded some
+ * sets were removed.
  */
-export function countsTowardVolume(set: VolumeInput): boolean {
+export function isWorkingSet(set: VolumeInput): boolean {
   return set.isCompleted !== false
 }
 
@@ -50,7 +50,10 @@ export function loadUnitsMoved(
  */
 export function effectiveWeightKg(
   set: Pick<VolumeInput, 'weightKg'>,
-  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'>,
+  exercise: Pick<
+    Exercise,
+    'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'
+  >,
   bodyweightKg: number | null,
 ): number | null {
   const entered = set.weightKg ?? 0
@@ -79,26 +82,20 @@ export function effectiveWeightKg(
 /** Σ (effective weight × reps) over completed sets. */
 export function volumeLoadKg(
   sets: VolumeInput[],
-  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'>,
+  exercise: Pick<
+    Exercise,
+    'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'
+  >,
   bodyweightKg: number | null,
 ): number {
   let total = 0
   for (const set of sets) {
-    if (!countsTowardVolume(set)) continue
+    if (!isWorkingSet(set)) continue
     const weight = effectiveWeightKg(set, exercise, bodyweightKg)
     if (weight === null || set.reps === null) continue
     total += weight * set.reps
   }
   return total
-}
-
-/**
- * A set of real work — any logged set. This is the number shown to the user and
- * counted per body part. Kept as a named alias of `countsTowardVolume` so call
- * sites read clearly and there's one place to change if the definition evolves.
- */
-export function isWorkingSet(set: VolumeInput): boolean {
-  return countsTowardVolume(set)
 }
 
 /**
@@ -149,7 +146,7 @@ export function bestOneRepMaxKg(
 export function topSetWeightKg(sets: VolumeInput[]): number | null {
   let best: number | null = null
   for (const set of sets) {
-    if (!countsTowardVolume(set) || set.weightKg === null) continue
+    if (!isWorkingSet(set) || set.weightKg === null) continue
     if (best === null || set.weightKg > best) best = set.weightKg
   }
   return best

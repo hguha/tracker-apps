@@ -86,11 +86,7 @@ function scale(color: Rgb, factor: number): Rgb {
  * Nudges a color toward or away from a surface until it clears the contrast
  * floor, preserving hue. Returns the original when it already passes.
  */
-export function ensureContrast(
-  color: Rgb,
-  surface: Rgb,
-  minRatio = MIN_CONTRAST,
-): Rgb {
+export function ensureContrast(color: Rgb, surface: Rgb, minRatio = MIN_CONTRAST): Rgb {
   if (contrastRatio(color, surface) >= minRatio) return color
 
   // Move away from the surface: darker on light surfaces, lighter on dark ones.
@@ -119,9 +115,7 @@ export function contrastingInk(hex: string): string {
   if (!rgb) return '#ffffff'
   const white = { r: 255, g: 255, b: 255 }
   const black = { r: 11, g: 11, b: 11 }
-  return contrastRatio(rgb, white) >= contrastRatio(rgb, black)
-    ? '#ffffff'
-    : '#0b0b0b'
+  return contrastRatio(rgb, white) >= contrastRatio(rgb, black) ? '#ffffff' : '#0b0b0b'
 }
 
 // ---------------------------------------------------------------- apply
@@ -178,10 +172,14 @@ export function applyAppearance(settings: AppearanceSettings): void {
     if (rgb) {
       // The same stored accent is used in both schemes, so hold it to the
       // contrast floor of whichever surface is currently showing.
-      const surface = scheme === 'dark' ? { r: 26, g: 26, b: 25 } : { r: 252, g: 252, b: 251 }
+      const surface =
+        scheme === 'dark' ? { r: 26, g: 26, b: 25 } : { r: 252, g: 252, b: 251 }
       const safe = toHex(ensureContrast(rgb, surface))
       root.style.setProperty('--accent', safe)
-      root.style.setProperty('--accent-wash', accentWash(safe, scheme === 'dark' ? 0.18 : 0.1))
+      root.style.setProperty(
+        '--accent-wash',
+        accentWash(safe, scheme === 'dark' ? 0.18 : 0.1),
+      )
       root.style.setProperty('--accent-contrast', contrastingInk(safe))
       return
     }

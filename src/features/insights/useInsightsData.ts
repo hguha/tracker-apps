@@ -94,225 +94,218 @@ function repBucket(reps: number): string {
 }
 
 export function useInsightsData(filters: InsightsFilters): InsightsData | undefined {
-  return useLiveQuery(
-    async () => {
-      const profile = await repo.getProfile()
-      const muscles = await db.muscles.toArray()
-      const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
+  return useLiveQuery(async () => {
+    const profile = await repo.getProfile()
+    const muscles = await db.muscles.toArray()
+    const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
 
-      const cutoff = Date.now() - filters.weeks * 7 * 24 * 3600 * 1000
-      const allWorkouts = (await repo.listWorkouts(500)).filter(
-        (w) => w.endedAt !== null,
-      )
-      const workouts = allWorkouts.filter((w) => w.startedAt >= cutoff)
+    const cutoff = Date.now() - filters.weeks * 7 * 24 * 3600 * 1000
+    const allWorkouts = (await repo.listWorkouts(500)).filter((w) => w.endedAt !== null)
+    const workouts = allWorkouts.filter((w) => w.startedAt >= cutoff)
 
-      const regionFilter = new Set(filters.regions)
-      const exerciseFilter = new Set(filters.exerciseIds)
+    const regionFilter = new Set(filters.regions)
+    const exerciseFilter = new Set(filters.exerciseIds)
 
-      const volumeByWeek = new Map<string, number>()
-      const setsByWeek = new Map<string, number>()
-      const workoutsByWeek = new Map<string, number>()
-      const volumeByRegion = new Map<Region, number>()
-      const setsByRegion = new Map<Region, number>()
-      const setsByPattern = new Map<string, number>()
-      const setsByEquipment = new Map<string, number>()
-      const regionVolumeByWeek = new Map<string, Map<Region, number>>()
-      const repBuckets = new Map<string, number>()
-      const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
-      const hourCounts = new Array<number>(24).fill(0)
-      const volumeByDay = new Map<string, number>()
-      const sessions: SessionPoint[] = []
-      const seriesByExercise = new Map<string, ExerciseSeries>()
-      const exerciseOptions = new Map<
-        string,
-        { id: string; name: string; region: Region | undefined }
-      >()
+    const volumeByWeek = new Map<string, number>()
+    const setsByWeek = new Map<string, number>()
+    const workoutsByWeek = new Map<string, number>()
+    const volumeByRegion = new Map<Region, number>()
+    const setsByRegion = new Map<Region, number>()
+    const setsByPattern = new Map<string, number>()
+    const setsByEquipment = new Map<string, number>()
+    const regionVolumeByWeek = new Map<string, Map<Region, number>>()
+    const repBuckets = new Map<string, number>()
+    const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
+    const hourCounts = new Array<number>(24).fill(0)
+    const volumeByDay = new Map<string, number>()
+    const sessions: SessionPoint[] = []
+    const seriesByExercise = new Map<string, ExerciseSeries>()
+    const exerciseOptions = new Map<
+      string,
+      { id: string; name: string; region: Region | undefined }
+    >()
 
-      let totalVolumeKg = 0
-      let totalSets = 0
-      let cardioSeconds = 0
-      let cardioMeters = 0
+    let totalVolumeKg = 0
+    let totalSets = 0
+    let cardioSeconds = 0
+    let cardioMeters = 0
 
-      // Filter options come from all history, not the filtered range — otherwise
-      // narrowing the range would hide the very filter needed to widen it again.
-      for (const workout of allWorkouts) {
-        for (const we of await repo.listWorkoutExercises(workout.id)) {
-          if (exerciseOptions.has(we.exerciseId)) continue
-          const exercise = await db.exercises.get(we.exerciseId)
-          if (!exercise) continue
-          exerciseOptions.set(we.exerciseId, {
-            id: exercise.id,
-            name: exercise.name,
-            region: regionOf.get(exercise.primaryMuscleId),
-          })
-        }
-      }
-
-      for (const workout of workouts) {
-        const key = weekKey(workout.startedAt, profile.weekStartsOn)
-        const workoutExercises = await repo.listWorkoutExercises(workout.id)
-
-        let sessionVolume = 0
-        let sessionSets = 0
-        const sessionRegions = new Set<Region>()
-        let matchedFilter = false
-
-        for (const we of workoutExercises) {
-          const exercise = await db.exercises.get(we.exerciseId)
-          if (!exercise) continue
-
-          const region = regionOf.get(exercise.primaryMuscleId)
-          if (regionFilter.size > 0 && (!region || !regionFilter.has(region))) continue
-          if (exerciseFilter.size > 0 && !exerciseFilter.has(exercise.id)) continue
-          matchedFilter = true
-
-          const sets = (await repo.listSets(we.id)).filter((s) => s.isCompleted)
-          if (sets.length === 0) continue
-
-          const working = sets.filter((s) => isWorkingSet(s))
-          const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
-
-          sessionVolume += exerciseVolume
-          sessionSets += working.length
-          totalVolumeKg += exerciseVolume
-          totalSets += working.length
-
-          volumeByWeek.set(key, (volumeByWeek.get(key) ?? 0) + exerciseVolume)
-          setsByWeek.set(key, (setsByWeek.get(key) ?? 0) + working.length)
-
-          if (exercise.movementPattern === 'cardio') {
-            cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
-            cardioMeters += sets.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
-          }
-
-          for (const set of working) {
-            if (set.reps !== null) {
-              const bucket = repBucket(set.reps)
-              repBuckets.set(bucket, (repBuckets.get(bucket) ?? 0) + 1)
-            }
-          }
-
-          // Region-level views attribute to the exercise's *single primary*
-          // region, not spread across secondaries. Crediting "back" for a back
-          // squat (via the erectors it works secondarily) is technically true
-          // but reads as noise on a body-part chart. Secondary-muscle spreading
-          // is kept for the muscle-level volume analysis, where partial credit
-          // is the point (§4.3); here, one lift → one body part.
-          if (region) {
-            volumeByRegion.set(region, (volumeByRegion.get(region) ?? 0) + exerciseVolume)
-            const weekMap = regionVolumeByWeek.get(key) ?? new Map<Region, number>()
-            weekMap.set(region, (weekMap.get(region) ?? 0) + exerciseVolume)
-            regionVolumeByWeek.set(key, weekMap)
-          }
-
-          if (region) {
-            sessionRegions.add(region)
-            setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
-          }
-
-          // Pattern and equipment coverage, counted in working sets.
-          setsByPattern.set(
-            exercise.movementPattern,
-            (setsByPattern.get(exercise.movementPattern) ?? 0) + working.length,
-          )
-          setsByEquipment.set(
-            exercise.equipment,
-            (setsByEquipment.get(exercise.equipment) ?? 0) + working.length,
-          )
-
-          const series =
-            seriesByExercise.get(exercise.id) ??
-            ({ exerciseId: exercise.id, name: exercise.name, points: [] } as ExerciseSeries)
-          series.points.push({
-            at: workout.startedAt,
-            e1rmKg: bestOneRepMaxKg(sets),
-            topSetKg: topSetWeightKg(sets),
-            volumeKg: exerciseVolume,
-            repRange: computeRepRange(working),
-          })
-          seriesByExercise.set(exercise.id, series)
-        }
-
-        if (!matchedFilter) continue
-
-        workoutsByWeek.set(key, (workoutsByWeek.get(key) ?? 0) + 1)
-        const started = new Date(workout.startedAt)
-        dayOfWeekCounts[started.getDay()]! += 1
-        hourCounts[started.getHours()]! += 1
-        const dayKey = format(workout.startedAt, 'yyyy-MM-dd')
-        volumeByDay.set(dayKey, (volumeByDay.get(dayKey) ?? 0) + sessionVolume)
-        sessions.push({
-          workoutId: workout.id,
-          at: workout.startedAt,
-          volumeKg: sessionVolume,
-          setCount: sessionSets,
-          durationSeconds:
-            workout.endedAt !== null
-              ? (workout.endedAt - workout.startedAt) / 1000
-              : null,
-          regions: [...sessionRegions],
+    // Filter options come from all history, not the filtered range — otherwise
+    // narrowing the range would hide the very filter needed to widen it again.
+    for (const workout of allWorkouts) {
+      for (const we of await repo.listWorkoutExercises(workout.id)) {
+        if (exerciseOptions.has(we.exerciseId)) continue
+        const exercise = await db.exercises.get(we.exerciseId)
+        if (!exercise) continue
+        exerciseOptions.set(we.exerciseId, {
+          id: exercise.id,
+          name: exercise.name,
+          region: regionOf.get(exercise.primaryMuscleId),
         })
       }
+    }
 
-      // Contiguous weeks, so a missing week reads as a gap rather than vanishing.
-      const weeks: string[] = []
-      if (sessions.length > 0) {
-        const earliest = Math.min(...sessions.map((s) => s.at))
-        let cursor = weekStart(earliest, profile.weekStartsOn)
-        const end = weekStart(Date.now(), profile.weekStartsOn)
-        while (cursor <= end) {
-          weeks.push(format(cursor, 'yyyy-MM-dd'))
-          cursor += 7 * 24 * 3600 * 1000
+    for (const workout of workouts) {
+      const key = weekKey(workout.startedAt, profile.weekStartsOn)
+      const workoutExercises = await repo.listWorkoutExercises(workout.id)
+
+      let sessionVolume = 0
+      let sessionSets = 0
+      const sessionRegions = new Set<Region>()
+      let matchedFilter = false
+
+      for (const we of workoutExercises) {
+        const exercise = await db.exercises.get(we.exerciseId)
+        if (!exercise) continue
+
+        const region = regionOf.get(exercise.primaryMuscleId)
+        if (regionFilter.size > 0 && (!region || !regionFilter.has(region))) continue
+        if (exerciseFilter.size > 0 && !exerciseFilter.has(exercise.id)) continue
+        matchedFilter = true
+
+        const sets = (await repo.listSets(we.id)).filter((s) => s.isCompleted)
+        if (sets.length === 0) continue
+
+        const working = sets.filter((s) => isWorkingSet(s))
+        const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
+
+        sessionVolume += exerciseVolume
+        sessionSets += working.length
+        totalVolumeKg += exerciseVolume
+        totalSets += working.length
+
+        volumeByWeek.set(key, (volumeByWeek.get(key) ?? 0) + exerciseVolume)
+        setsByWeek.set(key, (setsByWeek.get(key) ?? 0) + working.length)
+
+        if (exercise.movementPattern === 'cardio') {
+          cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
+          cardioMeters += sets.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
         }
+
+        for (const set of working) {
+          if (set.reps !== null) {
+            const bucket = repBucket(set.reps)
+            repBuckets.set(bucket, (repBuckets.get(bucket) ?? 0) + 1)
+          }
+        }
+
+        // Region-level views attribute to the exercise's *single primary*
+        // region, not spread across secondaries. Crediting "back" for a back
+        // squat (via the erectors it works secondarily) is technically true
+        // but reads as noise on a body-part chart. Secondary-muscle spreading
+        // is kept for the muscle-level volume analysis, where partial credit
+        // is the point (§4.3); here, one lift → one body part.
+        if (region) {
+          volumeByRegion.set(region, (volumeByRegion.get(region) ?? 0) + exerciseVolume)
+          const weekMap = regionVolumeByWeek.get(key) ?? new Map<Region, number>()
+          weekMap.set(region, (weekMap.get(region) ?? 0) + exerciseVolume)
+          regionVolumeByWeek.set(key, weekMap)
+        }
+
+        if (region) {
+          sessionRegions.add(region)
+          setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
+        }
+
+        // Pattern and equipment coverage, counted in working sets.
+        setsByPattern.set(
+          exercise.movementPattern,
+          (setsByPattern.get(exercise.movementPattern) ?? 0) + working.length,
+        )
+        setsByEquipment.set(
+          exercise.equipment,
+          (setsByEquipment.get(exercise.equipment) ?? 0) + working.length,
+        )
+
+        const series =
+          seriesByExercise.get(exercise.id) ??
+          ({ exerciseId: exercise.id, name: exercise.name, points: [] } as ExerciseSeries)
+        series.points.push({
+          at: workout.startedAt,
+          e1rmKg: bestOneRepMaxKg(sets),
+          topSetKg: topSetWeightKg(sets),
+          volumeKg: exerciseVolume,
+          repRange: computeRepRange(working),
+        })
+        seriesByExercise.set(exercise.id, series)
       }
 
-      const bodyMetrics = new Map<string, { at: number; value: number }[]>()
-      for (const key of ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']) {
-        const entries = await repo.listMetricEntries(key, 400)
-        const inRange = entries
-          .filter((e) => e.measuredAt >= cutoff)
-          .map((e) => ({ at: e.measuredAt, value: e.value }))
-          .sort((a, b) => a.at - b.at)
-        if (inRange.length > 0) bodyMetrics.set(key, inRange)
-      }
+      if (!matchedFilter) continue
 
-      const exerciseSeries = [...seriesByExercise.values()]
-        .map((series) => ({
-          ...series,
-          points: [...series.points].sort((a, b) => a.at - b.at),
-        }))
-        .sort((a, b) => b.points.length - a.points.length)
+      workoutsByWeek.set(key, (workoutsByWeek.get(key) ?? 0) + 1)
+      const started = new Date(workout.startedAt)
+      dayOfWeekCounts[started.getDay()]! += 1
+      hourCounts[started.getHours()]! += 1
+      const dayKey = format(workout.startedAt, 'yyyy-MM-dd')
+      volumeByDay.set(dayKey, (volumeByDay.get(dayKey) ?? 0) + sessionVolume)
+      sessions.push({
+        workoutId: workout.id,
+        at: workout.startedAt,
+        volumeKg: sessionVolume,
+        setCount: sessionSets,
+        durationSeconds:
+          workout.endedAt !== null ? (workout.endedAt - workout.startedAt) / 1000 : null,
+        regions: [...sessionRegions],
+      })
+    }
 
-      return {
-        profile,
-        weeks,
-        volumeByWeek,
-        setsByWeek,
-        workoutsByWeek,
-        volumeByRegion,
-        setsByRegion,
-        setsByPattern,
-        setsByEquipment,
-        regionVolumeByWeek,
-        exerciseSeries,
-        sessions: sessions.sort((a, b) => a.at - b.at),
-        repBuckets,
-        dayOfWeekCounts,
-        hourCounts,
-        volumeByDay,
-        exerciseOptions: [...exerciseOptions.values()].sort((a, b) =>
-          a.name.localeCompare(b.name),
-        ),
-        bodyMetrics,
-        workoutCount: sessions.length,
-        totalVolumeKg,
-        totalSets,
-        cardioSeconds,
-        cardioMeters,
+    // Contiguous weeks, so a missing week reads as a gap rather than vanishing.
+    const weeks: string[] = []
+    if (sessions.length > 0) {
+      const earliest = Math.min(...sessions.map((s) => s.at))
+      let cursor = weekStart(earliest, profile.weekStartsOn)
+      const end = weekStart(Date.now(), profile.weekStartsOn)
+      while (cursor <= end) {
+        weeks.push(format(cursor, 'yyyy-MM-dd'))
+        cursor += 7 * 24 * 3600 * 1000
       }
-    },
-    [filters.weeks, filters.regions.join(), filters.exerciseIds.join()],
-  )
+    }
+
+    const bodyMetrics = new Map<string, { at: number; value: number }[]>()
+    for (const key of ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']) {
+      const entries = await repo.listMetricEntries(key, 400)
+      const inRange = entries
+        .filter((e) => e.measuredAt >= cutoff)
+        .map((e) => ({ at: e.measuredAt, value: e.value }))
+        .sort((a, b) => a.at - b.at)
+      if (inRange.length > 0) bodyMetrics.set(key, inRange)
+    }
+
+    const exerciseSeries = [...seriesByExercise.values()]
+      .map((series) => ({
+        ...series,
+        points: [...series.points].sort((a, b) => a.at - b.at),
+      }))
+      .sort((a, b) => b.points.length - a.points.length)
+
+    return {
+      profile,
+      weeks,
+      volumeByWeek,
+      setsByWeek,
+      workoutsByWeek,
+      volumeByRegion,
+      setsByRegion,
+      setsByPattern,
+      setsByEquipment,
+      regionVolumeByWeek,
+      exerciseSeries,
+      sessions: sessions.sort((a, b) => a.at - b.at),
+      repBuckets,
+      dayOfWeekCounts,
+      hourCounts,
+      volumeByDay,
+      exerciseOptions: [...exerciseOptions.values()].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+      bodyMetrics,
+      workoutCount: sessions.length,
+      totalVolumeKg,
+      totalSets,
+      cardioSeconds,
+      cardioMeters,
+    }
+  }, [filters.weeks, filters.regions.join(), filters.exerciseIds.join()])
 }
 
 function computeRepRange(sets: WorkoutSet[]): [number, number] | null {

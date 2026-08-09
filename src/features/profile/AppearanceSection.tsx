@@ -164,8 +164,8 @@ export function AppearanceSection({
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Chart colors</h2>
         <p className="mt-1 text-[13px] text-ink-secondary">
-          Body-part colors stay fixed across every theme, so a color always means
-          the same body part and the charts stay readable for colorblind viewers.
+          Body-part colors stay fixed across every theme, so a color always means the same
+          body part and the charts stay readable for colorblind viewers.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-3.5 gap-y-2">
           {REGIONS.map((region) => (
@@ -210,9 +210,8 @@ function AccentNotice({ hex }: { hex: string }) {
 
   return (
     <p className="mt-2.5 text-[12px] text-ink-muted">
-      This color measures {ratio.toFixed(1)}:1 against one of the backgrounds, below
-      the 3:1 minimum, so it's darkened or lightened slightly where needed to stay
-      legible.
+      This color measures {ratio.toFixed(1)}:1 against one of the backgrounds, below the
+      3:1 minimum, so it's darkened or lightened slightly where needed to stay legible.
     </p>
   )
 }

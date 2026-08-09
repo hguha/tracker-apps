@@ -59,7 +59,3 @@ export const MUSCLE_SEEDS: MuscleSeed[] = [
   // cardio
   { id: 'cardiovascular', name: 'Cardiovascular', region: 'cardio' },
 ]
-
-export const REGION_OF_MUSCLE: Record<string, Region> = Object.fromEntries(
-  MUSCLE_SEEDS.map((m) => [m.id, m.region]),
-)

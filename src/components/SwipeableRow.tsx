@@ -80,12 +80,12 @@ export function SwipeableRow({
     if (decided.current !== 'horizontal') return
 
     // Don't let the row slide in a direction with nothing behind it.
-    const clamped =
-      dx < 0 ? (leftAction ? dx : 0) : rightAction ? dx : 0
+    const clamped = dx < 0 ? (leftAction ? dx : 0) : rightAction ? dx : 0
     // Resist past the commit point so the threshold is felt, not guessed.
     const resisted =
       Math.abs(clamped) > COMMIT_THRESHOLD
-        ? Math.sign(clamped) * (COMMIT_THRESHOLD + (Math.abs(clamped) - COMMIT_THRESHOLD) * 0.35)
+        ? Math.sign(clamped) *
+          (COMMIT_THRESHOLD + (Math.abs(clamped) - COMMIT_THRESHOLD) * 0.35)
         : clamped
     setOffset(resisted)
   }

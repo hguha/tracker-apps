@@ -58,7 +58,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       // Cap the stack: three stale toasts covering the screen is worse than
       // dropping the oldest.
       setMessages((current) => [...current.slice(-2), { id, text, onUndo }])
-      timers.current.set(id, window.setTimeout(() => dismiss(id), VISIBLE_MS))
+      timers.current.set(
+        id,
+        window.setTimeout(() => dismiss(id), VISIBLE_MS),
+      )
     },
     [dismiss],
   )
@@ -75,20 +78,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       */}
       <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center px-4 pt-safe">
         {messages.map((message) => (
-          <Toast key={message.id} message={message} onDismiss={() => dismiss(message.id)} />
+          <Toast
+            key={message.id}
+            message={message}
+            onDismiss={() => dismiss(message.id)}
+          />
         ))}
       </div>
     </ToastContext.Provider>
   )
 }
 
-function Toast({
-  message,
-  onDismiss,
-}: {
-  message: ToastMessage
-  onDismiss: () => void
-}) {
+function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss: () => void }) {
   const [offset, setOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)

@@ -141,7 +141,9 @@ export function ExercisePicker({
               onClick={() => setRegionFilter(isActive ? null : region)}
               className={cn(
                 'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium',
-                isActive ? 'border-transparent text-white' : 'border-line text-ink-secondary',
+                isActive
+                  ? 'border-transparent text-white'
+                  : 'border-line text-ink-secondary',
               )}
               style={isActive ? { background: regionVar(region) } : undefined}
             >

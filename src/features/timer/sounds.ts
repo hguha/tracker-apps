@@ -14,11 +14,7 @@
  */
 
 export type SoundCue =
-  | 'set-logged'
-  | 'pr'
-  | 'rest-warning'
-  | 'rest-complete'
-  | 'workout-complete'
+  'set-logged' | 'pr' | 'rest-warning' | 'rest-complete' | 'workout-complete'
 
 let context: AudioContext | null = null
 let isEnabled = true

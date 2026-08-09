@@ -917,24 +917,24 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
 }
 
 // ───────────────────────────────────────────────── C-30 sets per session
-/** Distribution of working-set counts per session. */
+/** Ranges of 5, so the histogram stays readable. */
+const SET_COUNT_BUCKETS = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
+
 export function SetsPerSessionChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  // Bucket into ranges of 5 so the histogram stays readable.
-  const buckets = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
 
   const { option, tally, counts } = useMemo(() => {
     const counts = data.sessions.map((s) => s.setCount).filter((n) => n > 0)
-    const tally = new Array<number>(buckets.length).fill(0)
+    const tally = new Array<number>(SET_COUNT_BUCKETS.length).fill(0)
     for (const count of counts) {
-      const index = Math.min(buckets.length - 1, Math.floor((count - 1) / 5))
+      const index = Math.min(SET_COUNT_BUCKETS.length - 1, Math.floor((count - 1) / 5))
       tally[index]! += 1
     }
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
-      xAxis: categoryAxis(c, buckets),
+      xAxis: categoryAxis(c, SET_COUNT_BUCKETS),
       yAxis: valueAxis(c, { name: 'sessions' }),
       series: [
         {
@@ -946,7 +946,6 @@ export function SetsPerSessionChart({ data }: { data: InsightsData }) {
       ],
     }
     return { option, tally, counts }
-    // buckets is a module-stable literal; data and appearance are the real roots.
   }, [data, appearance])
 
   return (
@@ -957,7 +956,7 @@ export function SetsPerSessionChart({ data }: { data: InsightsData }) {
       emptyMessage="Log a couple of sessions to see the spread."
       table={{
         columns: ['Sets', 'Sessions'],
-        rows: buckets.map((bucket, i) => [bucket, tally[i]!]),
+        rows: SET_COUNT_BUCKETS.map((bucket, i) => [bucket, tally[i]!]),
       }}
     >
       <Chart option={option} ariaLabel="Histogram of working sets per session" />
@@ -1193,7 +1192,7 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
     for (let i = 1; i < times.length; i += 1) {
       gaps.push(Math.round((times[i]! - times[i - 1]!) / 86_400_000))
     }
-    const tally = new Array<number>(buckets.length).fill(0)
+    const tally = new Array<number>(SET_COUNT_BUCKETS.length).fill(0)
     for (const g of gaps) {
       const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
       tally[i]! += 1

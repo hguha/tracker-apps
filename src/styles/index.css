@@ -44,7 +44,11 @@ body {
   margin: 0;
   background: var(--surface-page);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   /* Stop the whole page bouncing when a set list is scrolled to its end. */
   overscroll-behavior-y: none;
