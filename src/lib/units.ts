@@ -9,7 +9,7 @@
 
 import type { DistanceUnit, LengthUnit, WeightUnit } from '@/domain/types'
 
-const LB_PER_KG = 2.20462262185
+export const LB_PER_KG = 2.20462262185
 const KM_PER_MI = 1.609344
 const CM_PER_IN = 2.54
 
@@ -100,6 +100,11 @@ export function convertWeight(kg: number, to: WeightUnit): number {
  */
 export function displayWeight(kg: number, unit: WeightUnit): number {
   return Math.round(convertWeight(kg, unit))
+}
+
+/** `displayWeight` passing null through, for optional weights. */
+export function displayWeightOrNull(kg: number | null, unit: WeightUnit): number | null {
+  return kg === null ? null : displayWeight(kg, unit)
 }
 
 /** `displayWeight` as a localized string, e.g. "1,240 lb". */

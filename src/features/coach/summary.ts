@@ -19,6 +19,7 @@
 
 import type { Equipment, MovementPattern, Region } from '@/domain/types'
 import { estimatedOneRepMaxKg } from '@/lib/metrics'
+import { displayWeightOrNull } from '@/lib/units'
 
 /** How many weeks of history the summary spans. Keeps the prompt bounded. */
 export const SUMMARY_WEEKS = 12
@@ -259,11 +260,7 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
 
   // Bodyweight and height are stored metric; express them in the user's units
   // (lb/kg, in/cm) so the coach reads them the way the user does.
-  const lbPerKg = 2.20462262185
-  const bodyweight =
-    input.bodyweightKg === null
-      ? null
-      : Math.round(input.bodyweightKg * (input.unitWeight === 'lb' ? lbPerKg : 1))
+  const bodyweight = displayWeightOrNull(input.bodyweightKg, input.unitWeight)
   const height =
     input.heightCm === null
       ? null

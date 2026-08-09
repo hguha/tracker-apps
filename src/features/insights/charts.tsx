@@ -23,7 +23,7 @@ import { REP_BUCKETS, type InsightsData } from './useInsightsData'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { regionVar, resolveRegionColor, resolveToken } from '@/lib/palette'
 import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS } from '@/domain/types'
-import { convertWeight, displayWeight, formatDuration, weightFromKg } from '@/lib/units'
+import { displayWeight, distanceFromM, formatDuration, weightFromKg } from '@/lib/units'
 import { weekKey } from '@/lib/dates'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -46,7 +46,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   const { option, labels, points, movingAverage } = useMemo(() => {
     const labels = weekLabels(data.weeks)
     const points = data.weeks.map((week) =>
-      Math.round(convertWeight(data.volumeByWeek.get(week) ?? 0, unit)),
+      displayWeight(data.volumeByWeek.get(week) ?? 0, unit),
     )
     const movingAverage = points.map((_, index) => {
       const window = points.slice(Math.max(0, index - 3), index + 1)
@@ -138,7 +138,7 @@ export function RegionShareChart({ data }: { data: InsightsData }) {
         rows: entries.map((entry) => [
           REGION_LABELS[entry.region],
           `${((entry.value / total) * 100).toFixed(1)}%`,
-          Math.round(convertWeight(entry.value, unit)).toLocaleString(),
+          displayWeight(entry.value, unit).toLocaleString(),
         ]),
       }}
     >
@@ -193,9 +193,7 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
     const seriesData = activeRegions.map((region) => ({
       region,
       values: data.weeks.map((week) =>
-        Math.round(
-          convertWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit),
-        ),
+        displayWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit),
       ),
     }))
     const c = chrome()
@@ -335,7 +333,7 @@ export function StrengthProgressionChart({
         {
           name: `e1RM (${unit})`,
           type: 'line',
-          data: points.map((p) => Math.round(convertWeight(p.e1rmKg!, unit))),
+          data: points.map((p) => displayWeight(p.e1rmKg!, unit)),
           symbol: 'circle',
           symbolSize: 7,
           lineStyle: { width: 2, color: c.plot },
@@ -368,7 +366,7 @@ export function StrengthProgressionChart({
           .reverse()
           .map((p) => [
             format(p.at, 'MMM d, yyyy'),
-            Math.round(convertWeight(p.e1rmKg!, unit)).toLocaleString(),
+            displayWeight(p.e1rmKg!, unit).toLocaleString(),
           ]),
       }}
     >
@@ -633,7 +631,7 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
       .filter((s) => s.durationSeconds !== null && s.volumeKg > 0)
       .map((s) => [
         Math.round(s.durationSeconds! / 60),
-        Math.round(convertWeight(s.volumeKg, unit)),
+        displayWeight(s.volumeKg, unit),
         s.at,
       ])
     const c = chrome()
@@ -765,8 +763,7 @@ export function CardioChart({ data }: { data: InsightsData }) {
   const unit = data.profile.unitDistance
   const hasCardio = data.cardioSeconds > 0 || data.cardioMeters > 0
 
-  const totalDistance =
-    unit === 'km' ? data.cardioMeters / 1000 : data.cardioMeters / 1609.344
+  const totalDistance = distanceFromM(data.cardioMeters, unit)
 
   return (
     <ChartCard
@@ -1038,7 +1035,7 @@ export function PerExerciseVolumeChart({
   const { option, labels, values, points } = useMemo(() => {
     const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
     const labels = points.map((p) => format(p.at, 'MMM d'))
-    const values = points.map((p) => Math.round(convertWeight(p.volumeKg, unit)))
+    const values = points.map((p) => displayWeight(p.volumeKg, unit))
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
@@ -1263,7 +1260,7 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
         rows: rows.map((r) => [
           r.name,
           r.weeksStalled,
-          Math.round(convertWeight(r.best, unit)).toLocaleString(),
+          displayWeight(r.best, unit).toLocaleString(),
         ]),
       }}
     >
@@ -1275,7 +1272,7 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
           >
             <span className="min-w-0 flex-1 truncate">{r.name}</span>
             <span className="tabular shrink-0 text-ink-muted">
-              {Math.round(convertWeight(r.best, unit))} {unit}
+              {displayWeight(r.best, unit)} {unit}
             </span>
             <span
               className="tabular w-16 shrink-0 text-right font-semibold"

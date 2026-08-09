@@ -12,6 +12,7 @@
  */
 
 import { REGION_LABELS, type Region } from '@/domain/types'
+import { displayWeight, displayWeightOrNull } from '@/lib/units'
 import type { CoachSummary, ExerciseAgg } from './summary'
 import type {
   CoachCritique,
@@ -108,7 +109,7 @@ function critique(summary: CoachSummary): CoachCritique {
     .filter((e) => e.bestE1rmKg !== null)
     .sort((a, b) => (b.bestE1rmKg ?? 0) - (a.bestE1rmKg ?? 0))[0]
   if (strongest && strongest.bestE1rmKg !== null) {
-    const shown = Math.round(strongest.bestE1rmKg * (unit === 'lb' ? 2.20462262185 : 1))
+    const shown = displayWeight(strongest.bestE1rmKg, unit)
     observations.push(
       `Your strongest estimated lift is ${strongest.name} at ~${shown} ${unit}.`,
     )
@@ -183,8 +184,7 @@ const MOVEMENTS: Record<Exclude<Region, 'cardio'>, string[]> = {
  */
 function plan(summary: CoachSummary, goal = ''): CoachPlan {
   const unit = summary.unitWeight
-  const toDisplay = (kg: number | null): number | null =>
-    kg === null ? null : Math.round(kg * (unit === 'lb' ? 2.20462262185 : 1))
+  const toDisplay = (kg: number | null) => displayWeightOrNull(kg, unit)
 
   // The user's recent top set per exercise name, to seed weights when the plan
   // reuses a lift they've actually done.
@@ -345,8 +345,7 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
 /** The blank-goal path: continue the user's recent lifts, split upper/lower. */
 function continuationPlan(summary: CoachSummary): CoachPlan {
   const unit = summary.unitWeight
-  const toDisplay = (kg: number | null): number | null =>
-    kg === null ? null : Math.round(kg * (unit === 'lb' ? 2.20462262185 : 1))
+  const toDisplay = (kg: number | null) => displayWeightOrNull(kg, unit)
 
   if (summary.exercises.length === 0) {
     return {

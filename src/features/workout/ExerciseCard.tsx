@@ -16,7 +16,7 @@ import { Card } from '@/components/Card'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { formatRelativeDay } from '@/lib/dates'
-import { displayWeight, formatDuration, weightFromKg } from '@/lib/units'
+import { displayWeight, distanceFromM, formatDuration, weightFromKg } from '@/lib/units'
 import type {
   DistanceUnit,
   Exercise,
@@ -326,7 +326,7 @@ function summarizeLastSession(
     const totalMeters = working.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
     const parts = [formatDuration(totalSeconds)]
     if (totalMeters > 0) {
-      const distance = distanceUnit === 'km' ? totalMeters / 1000 : totalMeters / 1609.344
+      const distance = distanceFromM(totalMeters, distanceUnit)
       parts.push(`${distance.toFixed(2)} ${distanceUnit}`)
     }
     return `Last: ${when} · ${parts.join(' · ')}`

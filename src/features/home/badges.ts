@@ -10,6 +10,8 @@
  * `≥ 1` means earned. `detail` renders the concrete state ("82%", "620 / 1,000 lb").
  */
 
+import { distanceToM, formatDisplayWeight, weightToKg } from '@/lib/units'
+
 export interface LifetimeStats {
   /** Finished workouts, all time. */
   totalWorkouts: number
@@ -58,12 +60,12 @@ export interface Badge {
   detail: (s: LifetimeStats) => string
 }
 
-const LB_PER_KG = 2.20462262185
+/** One mile in metres, for the distance badges. */
+const METERS_PER_MILE = distanceToM(1, 'mi')
 /** Convert a pound target to the kg our data is stored in. */
-const lbToKg = (lb: number) => lb / LB_PER_KG
+const lbToKg = (lb: number) => weightToKg(lb, 'lb')
 /** kg in a million pounds — the "1M Club" is total volume, in lb. */
 const MILLION_LB_IN_KG = lbToKg(1_000_000)
-const METERS_PER_MILE = 1609.344
 
 function ratio(current: number, target: number): number {
   if (target <= 0) return 0
@@ -93,7 +95,7 @@ function sanitizeStats(s: LifetimeStats): LifetimeStats {
 
 /** "620 / 1,000 lb" — a kg value shown against a pound target. */
 function lbDetail(valueKg: number, targetLb: number): string {
-  return `${Math.round(valueKg * LB_PER_KG).toLocaleString()} / ${targetLb.toLocaleString()} lb`
+  return `${formatDisplayWeight(valueKg, 'lb', { withUnit: false })} / ${targetLb.toLocaleString()} lb`
 }
 
 /**
