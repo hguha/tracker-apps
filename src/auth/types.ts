@@ -45,6 +45,30 @@ export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)
 }
 
+/**
+ * Bounds on an emailed sign-in token.
+ *
+ * The length is a *server* setting (Supabase's `mailer_otp_length`, which ranges
+ * 6–10) while the local provider's dev code is 6 — so the client must accept a
+ * range rather than one number. The sign-in screen previously hardcoded 6: with
+ * the project configured for 8, the input truncated the token and the submit
+ * button never enabled, so entering a valid code did nothing at all.
+ */
+export const CODE_MIN_LENGTH = 6
+export const CODE_MAX_LENGTH = 10
+
+/**
+ * Whether a typed sign-in code is worth submitting.
+ *
+ * Deliberately permissive — the server is the authority on whether a code is
+ * correct. This only guards against submitting something obviously incomplete.
+ * Tokens are not guaranteed numeric, so this must not require digits.
+ */
+export function isSubmittableCode(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length >= CODE_MIN_LENGTH && trimmed.length <= CODE_MAX_LENGTH
+}
+
 /** "Harsh Guha" → "HG". Used for the avatar when there's no image. */
 export function initialsOf(displayName: string): string {
   const parts = displayName.trim().split(/\s+/).filter(Boolean)

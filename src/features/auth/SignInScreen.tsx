@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Dumbbell, Mail, WifiOff } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useAuth } from '@/auth/AuthContext'
-import { isValidEmail } from '@/auth/types'
+import { CODE_MAX_LENGTH, isSubmittableCode, isValidEmail } from '@/auth/types'
 import { LOCAL_DEV_CODE } from '@/auth/localAuthProvider'
 import { isBackendConfigured } from '@/sync/supabaseClient'
 import { cn } from '@/lib/cn'
@@ -48,6 +48,9 @@ export function SignInScreen({
     return () => clearInterval(id)
   }, [resendIn])
 
+  // Long enough to be a real token; the server is the authority on correctness.
+  const isCodeSubmittable = isSubmittableCode(code)
+
   async function sendLink() {
     setError(null)
     setIsBusy(true)
@@ -58,6 +61,8 @@ export function SignInScreen({
         setPanel('code')
         setResendIn(RESEND_SECONDS)
       }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not send that email.')
     } finally {
       setIsBusy(false)
     }
@@ -67,9 +72,14 @@ export function SignInScreen({
     setError(null)
     setIsBusy(true)
     try {
-      const result = await verifyCode(email, code)
+      const result = await verifyCode(email, code.trim())
       // On success the session change propagates and this screen unmounts.
       if (result.kind === 'error') setError(result.message)
+    } catch (cause) {
+      // A thrown failure (network down, unexpected server response) used to be
+      // swallowed by a bare finally, leaving the button to re-enable with no
+      // explanation — indistinguishable from "nothing happened".
+      setError(cause instanceof Error ? cause.message : 'Could not verify that code.')
     } finally {
       setIsBusy(false)
     }
@@ -80,6 +90,8 @@ export function SignInScreen({
     setIsBusy(true)
     try {
       await continueOffline()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not continue offline.')
     } finally {
       setIsBusy(false)
     }
@@ -202,36 +214,43 @@ export function SignInScreen({
               <span className="h-px flex-1 bg-line-strong" />
             </div>
             <p className="mb-1.5 mt-4 text-[12.5px] text-ink-muted">
-              If the link opened in a different browser, type the 6-digit code from that
-              same email here.
+              If the link opened in a different browser, paste the code from that same
+              email here.
             </p>
             <label htmlFor="signin-code" className="sr-only">
               Code
             </label>
             <input
               id="signin-code"
-              inputMode="numeric"
+              // Not `numeric`: an emailed token may contain letters, and a
+              // numeric keypad would make those untypable on a phone.
+              inputMode="text"
               autoComplete="one-time-code"
-              maxLength={6}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={CODE_MAX_LENGTH}
               value={code}
               onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, ''))
+                // Only strip whitespace — the token isn't guaranteed numeric, so
+                // digit-filtering silently ate valid characters.
+                setCode(event.target.value.replace(/\s+/g, ''))
                 setError(null)
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && code.length === 6) void submitCode()
+                if (event.key === 'Enter' && isCodeSubmittable) void submitCode()
               }}
-              placeholder="000000"
-              className="tabular h-14 w-full rounded-xl border border-line bg-surface text-center text-[26px] font-bold tracking-[0.3em] outline-none focus:border-accent"
+              placeholder="Paste your code"
+              className="tabular h-14 w-full rounded-xl border border-line bg-surface text-center text-[22px] font-bold tracking-[0.2em] outline-none focus:border-accent"
             />
 
             <Button
               size="lg"
               className="mt-3 w-full"
-              disabled={code.length !== 6 || isBusy}
+              disabled={!isCodeSubmittable || isBusy}
               onClick={() => void submitCode()}
             >
-              Sign in
+              {isBusy ? 'Signing in…' : 'Sign in'}
             </Button>
 
             {error && <ErrorNote>{error}</ErrorNote>}

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
 import { seedIfNeeded } from '@/db/seed'
 import { LOCAL_DEV_CODE, LocalAuthProvider, deriveName } from './localAuthProvider'
-import { initialsOf, isValidEmail } from './types'
+import { initialsOf, isSubmittableCode, isValidEmail } from './types'
 
 beforeEach(async () => {
   localStorage.clear()
@@ -26,6 +26,35 @@ describe('isValidEmail', () => {
 
   it('tolerates surrounding whitespace, since a paste often includes it', () => {
     expect(isValidEmail('  a@b.co  ')).toBe(true)
+  })
+})
+
+describe('isSubmittableCode', () => {
+  it('accepts a token longer than 6, which the old 6-only gate rejected', () => {
+    // The bug: mailer_otp_length is a server setting (6–10) and this project is
+    // configured for 8, but the screen required exactly 6 — so the submit button
+    // never enabled and entering a valid code did nothing.
+    expect(isSubmittableCode('12345678')).toBe(true)
+    expect(isSubmittableCode('1234567890')).toBe(true)
+  })
+
+  it('accepts the 6-character local dev code', () => {
+    expect(isSubmittableCode(LOCAL_DEV_CODE)).toBe(true)
+  })
+
+  it('accepts alphanumeric tokens — they are not guaranteed to be digits', () => {
+    expect(isSubmittableCode('A1B2C3')).toBe(true)
+    expect(isSubmittableCode('abc12345')).toBe(true)
+  })
+
+  it('rejects an obviously incomplete or oversized entry', () => {
+    expect(isSubmittableCode('')).toBe(false)
+    expect(isSubmittableCode('123')).toBe(false)
+    expect(isSubmittableCode('1'.repeat(11))).toBe(false)
+  })
+
+  it('tolerates surrounding whitespace, since a paste often includes it', () => {
+    expect(isSubmittableCode('  12345678  ')).toBe(true)
   })
 })
 
