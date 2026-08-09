@@ -13,7 +13,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, Check, ChevronLeft, LogIn, LogOut, Trash2 } from 'lucide-react'
-import { db } from '@/db/database'
+import { db, isReadyToPush } from '@/db/database'
 import { useAuth } from '@/auth/AuthContext'
 import { isBackendConfigured } from '@/sync/supabaseClient'
 import { initialsOf } from '@/auth/types'
@@ -41,12 +41,8 @@ export function AccountScreen({
   const stats = useLiveQuery(async () => {
     const workouts = await db.workouts.toArray()
     return {
-      // Only writes that are actually ready to send. An in-progress workout's
-      // writes are deliberately held until Finish (§5.5), so counting them would
-      // warn about "unsynced changes" the user has no way to flush.
-      pendingWrites: (await db.outbox.toArray()).filter(
-        (e) => e.deferredForWorkoutId === undefined,
-      ).length,
+      // Held writes aren't counted: the user can't flush them until Finish.
+      pendingWrites: (await db.outbox.toArray()).filter(isReadyToPush).length,
       workoutCount: workouts.filter((w) => w.endedAt !== null && w.deletedAt === null)
         .length,
       setCount: await db.sets.count(),

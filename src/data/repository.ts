@@ -35,6 +35,7 @@ import type {
   Region,
   MetricEntry,
   PerformedSession,
+  PerformedSet,
   PersonalRecord,
   Profile,
   RecordType,
@@ -74,22 +75,16 @@ async function enqueue(
  * Whether a queued write belongs to an in-progress workout, and so should not be
  * pushed yet.
  *
- * A half-logged session reaching the server is what made two devices disagree —
- * one showing a workout in progress, the other showing it finished. Logging is
- * also the hot path, so nothing should be sent mid-session anyway. The whole
- * session pushes at once when `finishWorkout` releases it.
- *
- * Resolved here, at the single choke point every write passes through, rather
- * than threaded through ~15 call sites where one omission would silently leak a
- * partial session. Returns an empty object for everything unrelated to a live
- * workout, so profiles/templates/metrics push immediately as before.
+ * A half-logged session reaching the server made two devices disagree — one
+ * showing a workout in progress, the other finished. The whole session pushes at
+ * once when `finishWorkout` releases it. Resolved at this single choke point
+ * rather than ~15 call sites, where one omission would leak a partial session.
  */
 async function deferralFor(
   table: string,
   rowId: string,
   payload: object,
 ): Promise<{ deferredForWorkoutId?: string }> {
-  // Only the three tables that make up a session can be deferred.
   let workoutId: string | undefined
 
   if (table === 'workouts') {
@@ -144,14 +139,9 @@ type SyncedStore<T extends SyncFields> = {
 }
 
 /**
- * The one place a row is patched, stamped, and enqueued.
- *
- * Every field edit, soft-delete, and restore in this module funnels through here
- * — previously ~17 functions repeated the same read/touch/update/enqueue block,
- * which meant the `clientRev + 1` sent to the outbox had to stay in lockstep with
- * `touch()` by hand in every copy. One helper removes that whole class of drift.
- * A missing row is a no-op (a deleted row can't be patched), matching the old
- * behavior.
+ * The one place a row is patched, stamped, and enqueued. Centralized so the
+ * `clientRev + 1` sent to the outbox can't drift from `touch()`. A missing row is
+ * a no-op — a deleted row can't be patched.
  */
 async function patchRow<T extends SyncFields>(
   store: SyncedStore<T>,
@@ -163,17 +153,11 @@ async function patchRow<T extends SyncFields>(
   if (!current) return
   const next = { ...patch, ...touch(current.clientRev) } as Partial<T>
   await store.update(id, next)
-  // Enqueue the FULL row, not just the changed fields.
-  //
-  // The push is an upsert, which PostgREST issues as
-  // `INSERT ... ON CONFLICT (id) DO UPDATE`. Postgres evaluates the INSERT
-  // policy's WITH CHECK against the *proposed* tuple — so a partial payload
-  // arrives with `user_id` absent (NULL), `user_id = auth.uid()` is false, and
-  // the write is rejected with "new row violates row-level security policy".
-  // That failed for every update, not just for rows the server hadn't seen:
-  // chained tables broke identically, since a missing `workout_id` makes their
-  // ownership walk fail too. Sending the whole row keeps the upsert valid under
-  // RLS and stays idempotent (same id, last-write-wins on clientRev).
+  // The FULL row, not just changed fields. The push is an upsert
+  // (`INSERT ... ON CONFLICT DO UPDATE`), and Postgres checks the INSERT policy's
+  // WITH CHECK against the *proposed* tuple — a partial payload arrives with
+  // `user_id` NULL and is rejected ("new row violates row-level security
+  // policy"). Chained tables fail the same way on a missing parent id.
   await enqueue(table, 'update', id, { ...current, ...next }, current.clientRev + 1)
 }
 
@@ -421,25 +405,15 @@ export async function getExerciseDetail(
     }),
   )
 
-  const workoutExercises = (
-    await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
-  ).filter((we) => we.deletedAt === null)
-
-  const sessions: ExerciseDetail['sessions'] = []
-  for (const we of workoutExercises) {
-    const workout = await db.workouts.get(we.workoutId)
-    if (!workout || workout.deletedAt !== null) continue
-    const sets = (await listSets(we.id)).filter((s) => s.isCompleted)
-    if (sets.length === 0) continue
-    sessions.push({
-      workoutId: workout.id,
-      performedAt: workout.startedAt,
-      sets,
-      volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
-      bestE1rmKg: bestOneRepMaxKg(sets),
-    })
-  }
-  sessions.sort((a, b) => b.performedAt - a.performedAt)
+  const sessions: ExerciseDetail['sessions'] = (
+    await completedSessionsForExercise(exerciseId)
+  ).map(({ workout, sets }) => ({
+    workoutId: workout.id,
+    performedAt: workout.startedAt,
+    sets,
+    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
+    bestE1rmKg: bestOneRepMaxKg(sets),
+  }))
 
   return {
     exercise,
@@ -1389,12 +1363,9 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
  * Powers the row glow (§6.2) — the row has to light up as the number is typed,
  * before any decision to persist has been made.
  *
- * `setId` matters more than it looks. Records are recomputed the moment a set is
- * logged, so a set that just *set* a record is then compared against its own
- * value — and `180 > 180` is false, so the row stopped glowing the instant it
- * was saved (the "toast said record but the row never went green" bug). Passing
- * the set's id excludes its own contribution, so the comparison is against the
- * best of every *other* set, which is what "is this a record" actually means.
+ * `setId` excludes the set's own contribution. Records are recomputed the moment
+ * a set is logged, so without it a set that just *set* a record is compared
+ * against itself (`180 > 180` is false) and stops glowing.
  */
 export async function previewRecords(
   exerciseId: string,
@@ -1423,58 +1394,101 @@ export async function previewRecords(
   }
 
   const broken: RecordType[] = []
-  const check = (type: RecordType, value: number | null) => {
-    if (value === null || !Number.isFinite(value) || value <= 0) return
+  for (const [type, value] of perSetRecordValues(candidate)) {
+    if (!isRecordValue(value)) continue
     const previous = best.get(type)
     // Only a genuine improvement counts. A first-ever value never glows.
     if (previous !== undefined && value > previous) broken.push(type)
   }
 
-  check('max_weight', candidate.weightKg)
-  check('max_reps_any_weight', candidate.reps)
-  check('max_est_1rm', estimatedOneRepMaxKg(candidate.weightKg, candidate.reps))
-  check('max_duration', candidate.durationSeconds)
-  check('max_distance', candidate.distanceM)
-
   return broken
+}
+
+/** A value can hold a record only if it's a real, positive number. */
+function isRecordValue(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && value > 0
+}
+
+/**
+ * The record types a single set can hold, with this set's value for each.
+ *
+ * The one place this list lives. It was spelled out three times — in
+ * `previewRecords`, `bestExcludingSet`, and `refreshPersonalRecords` — so adding
+ * a sixth type meant finding all three, and missing one produced a record that
+ * was tracked but never glowed (or the reverse).
+ *
+ * `max_volume_session` is absent by design: it's a session aggregate, not a
+ * property of one set.
+ */
+function perSetRecordValues(
+  set: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>,
+): [RecordType, number | null][] {
+  return [
+    ['max_weight', set.weightKg],
+    ['max_reps_any_weight', set.reps],
+    ['max_est_1rm', estimatedOneRepMaxKg(set.weightKg, set.reps)],
+    ['max_duration', set.durationSeconds],
+    ['max_distance', set.distanceM],
+  ]
 }
 
 /**
  * The best per-set value for each record type across every completed set of an
  * exercise *except* the given one — i.e. what that set has to beat.
- *
- * Only the per-set types; `max_volume_session` is a session aggregate and isn't
- * meaningful for a single row.
  */
 async function bestExcludingSet(
   exerciseId: string,
   excludeSetId: string,
 ): Promise<Map<RecordType, number>> {
   const best = new Map<RecordType, number>()
-  const consider = (type: RecordType, value: number | null) => {
-    if (value === null || !Number.isFinite(value) || value <= 0) return
-    const previous = best.get(type)
-    if (previous === undefined || value > previous) best.set(type, value)
-  }
 
-  const workoutExercises = (
-    await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
-  ).filter((we) => we.deletedAt === null)
-
-  for (const we of workoutExercises) {
-    const workout = await db.workouts.get(we.workoutId)
-    if (!workout || workout.deletedAt !== null) continue
-    for (const set of await listSets(we.id)) {
-      if (!set.isCompleted || set.id === excludeSetId) continue
-      consider('max_weight', set.weightKg)
-      consider('max_reps_any_weight', set.reps)
-      consider('max_est_1rm', estimatedOneRepMaxKg(set.weightKg, set.reps))
-      consider('max_duration', set.durationSeconds)
-      consider('max_distance', set.distanceM)
+  for (const { sets } of await completedSessionsForExercise(exerciseId)) {
+    for (const set of sets) {
+      if (set.id === excludeSetId) continue
+      for (const [type, value] of perSetRecordValues(set)) {
+        if (!isRecordValue(value)) continue
+        const previous = best.get(type)
+        if (previous === undefined || value > previous) best.set(type, value)
+      }
     }
   }
 
   return best
+}
+
+/**
+ * Live sessions containing one exercise, newest first, with their completed sets.
+ *
+ * Four call sites hand-rolled this walk (query workout_exercises by exerciseId →
+ * load each parent workout → skip deleted → load completed sets), and they had
+ * already drifted: one filtered `isCompleted` inline while the others pre-filtered.
+ */
+async function completedSessionsForExercise(exerciseId: string): Promise<
+  {
+    workout: Workout
+    workoutExercise: WorkoutExercise
+    sets: WorkoutSet[]
+  }[]
+> {
+  const workoutExercises = (
+    await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
+  ).filter((we) => we.deletedAt === null)
+
+  const sessions: {
+    workout: Workout
+    workoutExercise: WorkoutExercise
+    sets: WorkoutSet[]
+  }[] = []
+
+  for (const workoutExercise of workoutExercises) {
+    const workout = await db.workouts.get(workoutExercise.workoutId)
+    if (!workout || workout.deletedAt !== null) continue
+    const sets = (await listSets(workoutExercise.id)).filter((s) => s.isCompleted)
+    if (sets.length === 0) continue
+    sessions.push({ workout, workoutExercise, sets })
+  }
+
+  return sessions.sort((a, b) => b.workout.startedAt - a.workout.startedAt)
 }
 
 // -------------------------------------------------------- personal records
@@ -1492,10 +1506,6 @@ export async function refreshPersonalRecords(exerciseId: string): Promise<Record
   const exercise = await db.exercises.get(exerciseId)
   if (!exercise) return []
 
-  const workoutExercises = (
-    await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
-  ).filter((we) => we.deletedAt === null)
-
   const before = new Map(
     (await db.personalRecords.where('exerciseId').equals(exerciseId).toArray()).map(
       (pr) => [pr.recordType, pr.value],
@@ -1505,25 +1515,18 @@ export async function refreshPersonalRecords(exerciseId: string): Promise<Record
   const candidates = new Map<RecordType, { value: number; at: number; setId: string }>()
 
   function consider(type: RecordType, value: number | null, at: number, setId: string) {
-    if (value === null || !Number.isFinite(value) || value <= 0) return
+    if (!isRecordValue(value)) return
     const existing = candidates.get(type)
     if (!existing || value > existing.value) candidates.set(type, { value, at, setId })
   }
 
-  for (const we of workoutExercises) {
-    const workout = await db.workouts.get(we.workoutId)
-    if (!workout || workout.deletedAt !== null) continue
-    const sets = (await listSets(we.id)).filter((s) => s.isCompleted)
-    if (sets.length === 0) continue
-
+  for (const { workout, sets } of await completedSessionsForExercise(exerciseId)) {
     const at = workout.startedAt
 
     for (const set of sets) {
-      consider('max_weight', set.weightKg, at, set.id)
-      consider('max_reps_any_weight', set.reps, at, set.id)
-      consider('max_est_1rm', estimatedOneRepMaxKg(set.weightKg, set.reps), at, set.id)
-      consider('max_duration', set.durationSeconds, at, set.id)
-      consider('max_distance', set.distanceM, at, set.id)
+      for (const [type, value] of perSetRecordValues(set)) {
+        consider(type, value, at, set.id)
+      }
     }
 
     const sessionVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
@@ -1583,39 +1586,32 @@ export async function rebuildLastPerformance(exerciseId: string): Promise<void> 
   const exercise = await db.exercises.get(exerciseId)
   if (!exercise) return
 
-  const workoutExercises = (
-    await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
-  ).filter((we) => we.deletedAt === null)
-
-  const sessions: PerformedSession[] = []
-  for (const we of workoutExercises) {
-    const workout = await db.workouts.get(we.workoutId)
-    if (!workout || workout.deletedAt !== null) continue
-    const sets = (await listSets(we.id)).filter((s) => s.isCompleted)
-    if (sets.length === 0) continue
-
-    sessions.push({
-      workoutId: workout.id,
-      performedAt: workout.startedAt,
-      sets: sets.map((s) => ({
-        weightKg: s.weightKg,
-        reps: s.reps,
-        durationSeconds: s.durationSeconds,
-        distanceM: s.distanceM,
-        rpe: s.rpe,
-      })),
-      bestE1rmKg: bestOneRepMaxKg(sets),
-      volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
-    })
-  }
-
-  sessions.sort((a, b) => b.performedAt - a.performedAt)
+  const sessions: PerformedSession[] = (
+    await completedSessionsForExercise(exerciseId)
+  ).map(({ workout, sets }) => ({
+    workoutId: workout.id,
+    performedAt: workout.startedAt,
+    sets: sets.map(toPlaceholderSet),
+    bestE1rmKg: bestOneRepMaxKg(sets),
+    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
+  }))
 
   await db.lastPerformance.put({
     exerciseId,
     sessions: sessions.slice(0, 3),
     updatedAt: Date.now(),
   })
+}
+
+/** The four placeholder fields plus RPE, projected off a stored set. */
+function toPlaceholderSet(s: WorkoutSet): PerformedSet {
+  return {
+    weightKg: s.weightKg,
+    reps: s.reps,
+    durationSeconds: s.durationSeconds,
+    distanceM: s.distanceM,
+    rpe: s.rpe,
+  }
 }
 
 /** Called on finish and after editing a past workout, which invalidates the cache. */
@@ -2203,21 +2199,13 @@ export async function addMetricEntry(input: {
  * Soft-deletes every workout, template, custom exercise, and metric entry —
  * *through the outbox*, so the deletions propagate to the server.
  *
- * The difference from `clearLocalData` matters. That one wipes IndexedDB and
- * drops the queue, so on a synced account the next pull simply rehydrates
- * everything from the server. This one issues a real tombstone per row, which is
- * how a delete is represented in pull-based sync (§4.11) — so the data goes away
- * on every device, permanently.
+ * Unlike `clearLocalData` (which only wipes IndexedDB, so the next pull
+ * rehydrates), this writes a real tombstone per row, so the data goes away on
+ * every device. The shared system library is untouched.
  *
- * The shared system library is untouched (it isn't user data).
- *
- * **Not** what the "permanently erase" button uses. A tombstone leaves every row
- * in Postgres, which isn't what erasing your data should mean, so that path uses
- * `SyncEngine.hardDeleteServerData()` for a real DELETE. This remains the right
- * primitive for a *selective*, reversible, sync-correct bulk delete (and is what
- * you want if erasure ever needs to be undoable), so it's kept and tested.
- *
- * Returns per-kind counts, so a caller can report exactly what it removed.
+ * Not the "permanently erase" path — a tombstone leaves the row in Postgres, so
+ * that button uses `SyncEngine.hardDeleteServerData()`. This is the primitive for
+ * a selective, reversible, sync-correct bulk delete.
  */
 export async function deleteAllTrainingData(): Promise<{
   workouts: number
@@ -2267,17 +2255,9 @@ export async function deleteAllTrainingData(): Promise<{
 /**
  * Tombstones finished workouts that contain no completed set (§6.4.1).
  *
- * `finishWorkout` already discards an empty session, so these can't be created
- * through the normal path — but they still turn up two ways: pulled from the
- * server (written by an older build, or by a device whose sets failed to push),
- * and left behind when a session is interrupted so `finishWorkout` never runs.
- * Either way an empty session is noise in history and skews the counts, so this
- * removes them through the outbox like any other delete.
- *
- * In-progress workouts (`endedAt === null`) are never touched — one may be open
- * right now with sets about to be logged.
- *
- * Returns how many were removed.
+ * `finishWorkout` can't create these, but they arrive two ways: pulled from the
+ * server (an older build, or a device whose sets failed to push), and left behind
+ * when a session is interrupted. In-progress workouts are never touched.
  */
 export async function purgeEmptyWorkouts(): Promise<number> {
   const finished = (await db.workouts.toArray()).filter(

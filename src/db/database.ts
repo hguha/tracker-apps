@@ -56,6 +56,13 @@ export interface OutboxEntry {
   deferredForWorkoutId?: string
 }
 
+/**
+ * Ready to push now. A deferred entry belongs to a workout still in progress, so
+ * it's held back until Finish — see `deferredForWorkoutId`.
+ */
+export const isReadyToPush = (entry: OutboxEntry): boolean =>
+  entry.deferredForWorkoutId === undefined
+
 /** Per-table high-water marks for delta pulls. */
 export interface SyncState {
   table: string

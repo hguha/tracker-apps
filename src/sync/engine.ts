@@ -11,22 +11,14 @@
  * every live query, so doing it on a timer re-rendered the screen mid-use — on a
  * phone that swallowed taps outright.
  *
- * The rules it enforces, each guarding a specific failure mode:
- *   - **Sequential drain by `seq`.** One entry at a time, in order. Parallel
- *     drains reorder dependent writes (a set before its workout_exercise) and
- *     produce FK violations server-side.
- *   - **Failure classification.** Permanent (4xx≠401/429) → dead-letter and move
- *     on, so a poison entry never blocks the queue. Transient (5xx/network) →
- *     stop and back off, preserving order. Auth (401) → pause for re-auth.
- *   - **Delta pull with a local-pending guard.** A pulled server row wins unless
- *     a local outbox entry for that row is still pending, in which case local
- *     optimistic state holds until its write lands (§5.5).
+ * Drains sequentially by `seq`: parallel drains reorder dependent writes (a set
+ * before its workout_exercise) into FK violations. Failure classification and the
+ * pull's local-pending guard are documented at their implementations.
  *
- * The engine is backend-agnostic (§5.6): it talks only to `SyncBackend`, and the
- * table→Dexie mapping is the one place that knows the concrete stores.
+ * Backend-agnostic (§5.6): it talks only to `SyncBackend`.
  */
 
-import { db, type OutboxEntry } from '@/db/database'
+import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
 import type { PushRow, SyncBackend } from './backend'
 import { syncLog } from './log'
 
@@ -71,7 +63,6 @@ export function backoffMs(attempts: number, jitter = 0.5): number {
 export interface DrainResult {
   pushed: number
   deadLettered: number
-  /** Set when the drain stopped early: 'transient' backoff or 'auth' pause. */
   stoppedBecause: 'auth' | 'transient' | null
 }
 
@@ -96,16 +87,11 @@ export class SyncEngine {
       // order they were made. Re-read each iteration so entries added mid-drain
       // are still picked up.
       //
-      // `deferredForWorkoutId` entries belong to a workout still in progress
-      // (§5.5) and are skipped rather than blocking: they sit at the head of the
-      // queue for the whole session, so stopping on one would stall every
-      // unrelated write (a profile edit, a template) behind it until the user
-      // finished their workout.
+      // Deferred entries are skipped rather than blocking: they sit at the head
+      // of the queue for a whole session, so stopping on one would stall every
+      // unrelated write (a profile edit, a template) behind it.
       while (true) {
-        const entry = await db.outbox
-          .orderBy('seq')
-          .filter((e) => e.deferredForWorkoutId === undefined)
-          .first()
+        const entry = await db.outbox.orderBy('seq').filter(isReadyToPush).first()
         if (!entry) break
 
         // Respect backoff: if this entry failed recently, stop the whole drain.
@@ -140,8 +126,6 @@ export class SyncEngine {
             `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
             outcome.error,
           )
-          // Move the poison entry out of the drain path so it can't block the
-          // queue, and surface it for the user rather than retrying forever.
           await db.transaction('rw', db.outbox, db.deadLetter, async () => {
             await db.deadLetter.add({
               table: entry.table,
@@ -277,7 +261,6 @@ export class SyncEngine {
    * reported honestly instead of looking like success.
    */
   async hardDeleteServerData(): Promise<{ failed: { table: string; error: string }[] }> {
-    // Children first. Anything not listed is intentionally preserved.
     const ERASE_ORDER = [
       'sets',
       'workoutExercises',
@@ -288,7 +271,6 @@ export class SyncEngine {
       'exercises',
     ] as const
 
-    // 1. No queued write may outlive the delete.
     await db.outbox.clear()
     await db.deadLetter.clear()
 
@@ -303,7 +285,6 @@ export class SyncEngine {
       }
     }
 
-    // 3. Cursors reset, so the next pull reflects the server's real state.
     await db.syncState.clear()
 
     return { failed }
@@ -329,7 +310,6 @@ export class SyncEngine {
     const discarded = (await db.outbox.count()) + (await db.deadLetter.count())
     await db.outbox.clear()
     await db.deadLetter.clear()
-    // Full re-read, not a delta — the point is to adopt the server's state.
     await db.syncState.clear()
     const { applied } = await this.pull()
     syncLog.info(
@@ -369,7 +349,6 @@ export class SyncEngine {
     const failed = await db.deadLetter.toArray()
     if (failed.length === 0) return 0
 
-    // Dependency order, then original queue order within a table.
     const rank = (table: string) => {
       const index = (SYNCED_TABLES as readonly string[]).indexOf(table)
       return index === -1 ? SYNCED_TABLES.length : index
@@ -382,10 +361,8 @@ export class SyncEngine {
     let dropped = 0
 
     for (const entry of ordered) {
-      // Re-read the live row so the push carries current ownership and values.
       const current = await currentRow(entry.table, entry.rowId)
       if (current === undefined) {
-        // The row is gone locally; there's nothing to push.
         await db.deadLetter.delete(entry.seq!)
         dropped += 1
         continue
@@ -394,7 +371,6 @@ export class SyncEngine {
       await db.transaction('rw', db.outbox, db.deadLetter, async () => {
         await db.outbox.add({
           table: entry.table,
-          // Always an upsert on a known id — safe whether the server has it yet.
           op: 'update',
           rowId: entry.rowId,
           payload: current,

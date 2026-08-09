@@ -1,35 +1,20 @@
 /**
  * Wires the sync engine to its triggers (§5.5).
  *
- * **Push is event-driven; pull is not continuous.** An earlier version reconciled
- * on a 30-second interval, which caused three distinct problems:
+ * Push is event-driven (an enqueued write, or `online`); pull happens only on app
+ * open/foreground or on request. Never on a timer: a background pull writes to
+ * IndexedDB, every `useLiveQuery` re-runs, and that re-render lands mid-touch on a
+ * phone — the button takes its `:active` style but the tap never registers. An
+ * in-progress workout isn't pushed at all until Finish (see `deferralFor`).
  *
- *   - A background *pull* writes to IndexedDB, every `useLiveQuery` re-runs, and
- *     the resulting re-render lands mid-touch on a phone — the button takes its
- *     `:active` style but the tap never registers, and a form being filled in can
- *     have its row replaced underneath it.
- *   - It pushed half-logged workouts, so a second device saw a session as "in
- *     progress" while the first had finished it.
- *   - It burned requests on a timer whether or not anything had changed.
- *
- * So now:
- *   - **Push** happens when a write is actually enqueued (observed on the outbox)
- *     and on `online` — i.e. when there's something to send.
- *   - **Pull** happens on app open and on foreground, plus whenever the user asks.
- *     Never on a timer, so nothing rewrites the screen while it's being used.
- *   - An **in-progress workout is not pushed at all** until Finish; the repository
- *     defers those writes and releases them together (see `deferralFor`).
- *
- * With no backend configured this hook does nothing — the prototype path, where
- * IndexedDB is the whole story. It also stays idle for an offline ("use this
- * device only") session, which has no server identity to push to. It returns live
- * pending/dead-letter counts for the Settings surface either way.
+ * Idle with no backend configured, and idle for an offline ("this device only")
+ * session, which has no server identity. Returns live counts either way.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { liveQuery } from 'dexie'
-import { db } from '@/db/database'
+import { db, isReadyToPush } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { getSupabase } from './supabaseClient'
@@ -44,11 +29,8 @@ export interface SyncStatus {
   pending: number
   /** Writes held back because their workout is still in progress. */
   deferred: number
-  /** Writes that failed permanently and need attention (§5.5). */
   deadLettered: number
-  /** Whether sync is actively running for the current session. */
   enabled: boolean
-  /** Live state of the most recent reconcile, for the manual button. */
   phase: SyncPhase
   /** Runs a reconcile now; resolves when it finishes. No-op when not enabled. */
   syncNow: () => Promise<void>
@@ -76,9 +58,7 @@ export function useSync(): SyncStatus {
     return client ? new SyncEngine(new SupabaseBackend(client)) : null
   }, [])
 
-  // Sync runs only for a real, server-backed session. An offline local account
-  // (isLocal) stays entirely on-device — its data was a deliberate opt-out of
-  // the network, and it has no JWT to authenticate a push with anyway.
+  // An offline (isLocal) account has no JWT and opted out of the network.
   const active = engine !== null && session != null && !session.isLocal
 
   useEffect(() => {
@@ -105,7 +85,6 @@ export function useSync(): SyncStatus {
       })
     }
 
-    // Once on mount: this is the "app open" pull.
     reconcile()
 
     // Push whenever a write lands in the outbox. Dexie's observable fires on
@@ -120,7 +99,6 @@ export function useSync(): SyncStatus {
     })
 
     const onVisible = () => {
-      // Foreground is the other moment another device's changes matter.
       if (document.visibilityState === 'visible') reconcile()
     }
     window.addEventListener('online', reconcile)
@@ -200,8 +178,8 @@ export function useSync(): SyncStatus {
     async () => {
       const all = await db.outbox.toArray()
       return {
-        pending: all.filter((e) => e.deferredForWorkoutId === undefined).length,
-        deferred: all.filter((e) => e.deferredForWorkoutId !== undefined).length,
+        pending: all.filter(isReadyToPush).length,
+        deferred: all.filter((e) => !isReadyToPush(e)).length,
       }
     },
     [],
