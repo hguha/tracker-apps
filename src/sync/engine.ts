@@ -238,6 +238,65 @@ export class SyncEngine {
   }
 
   /**
+   * Physically erases the signed-in user's training data from the server.
+   *
+   * The soft-delete path (a `deleted_at` tombstone per row) is what sync
+   * requires — but it leaves every row in Postgres, which is not what a user
+   * asking to erase their data means. This is the deliberate hard delete.
+   *
+   * Order is load-bearing:
+   *   1. **Clear the queues first.** A pending push for a row we're about to
+   *      erase would recreate it after the delete — the classic resurrection
+   *      bug. Dropping the outbox and dead-letter first makes that impossible.
+   *   2. **Delete children before parents** (reverse dependency order). FK
+   *      cascades would handle it, but not every table is reachable by a
+   *      cascade, and explicit order keeps this correct if cascades change.
+   *   3. **Reset the pull cursors.** They're high-water marks; leaving them set
+   *      would make the next pull a no-op and mask a partial failure. Resetting
+   *      to zero means the next pull re-reads from scratch and reflects reality.
+   *
+   * `profiles`, `muscles`, and `metricDefinitions` are deliberately excluded:
+   * the profile is the account itself, and those two are shared-library tables
+   * whose system rows must survive. Custom exercises are covered by `exercises`,
+   * where RLS limits the delete to rows the user owns.
+   *
+   * Returns per-table failures rather than throwing, so a partial failure is
+   * reported honestly instead of looking like success.
+   */
+  async hardDeleteServerData(): Promise<{ failed: { table: string; error: string }[] }> {
+    // Children first. Anything not listed is intentionally preserved.
+    const ERASE_ORDER = [
+      'sets',
+      'workoutExercises',
+      'workouts',
+      'templateExercises',
+      'templates',
+      'metricEntries',
+      'exercises',
+    ] as const
+
+    // 1. No queued write may outlive the delete.
+    await db.outbox.clear()
+    await db.deadLetter.clear()
+
+    const failed: { table: string; error: string }[] = []
+    for (const table of ERASE_ORDER) {
+      const result = await this.backend.hardDeleteAll(table)
+      if (!result.ok) {
+        failed.push({ table, error: result.error })
+        syncLog.warn(`hard delete failed for ${table}`, result.error)
+      } else {
+        syncLog.info(`hard deleted all server rows in ${table}`)
+      }
+    }
+
+    // 3. Cursors reset, so the next pull reflects the server's real state.
+    await db.syncState.clear()
+
+    return { failed }
+  }
+
+  /**
    * Requeue every dead-lettered write back onto the outbox for another attempt.
    *
    * Dead-lettered rows are dropped from the drain and never retried on their own

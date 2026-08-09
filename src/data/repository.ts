@@ -2088,11 +2088,15 @@ export async function deleteMetricEntry(id: string): Promise<void> {
  * how a delete is represented in pull-based sync (§4.11) — so the data goes away
  * on every device, permanently.
  *
- * Use it to clear test data before entering real data. The shared system library
- * is untouched (it isn't user data); custom exercises are archived rather than
- * tombstoned when history still references them, so old sessions stay readable.
+ * The shared system library is untouched (it isn't user data).
  *
- * Returns per-kind counts, so the UI can report exactly what it removed.
+ * **Not** what the "permanently erase" button uses. A tombstone leaves every row
+ * in Postgres, which isn't what erasing your data should mean, so that path uses
+ * `SyncEngine.hardDeleteServerData()` for a real DELETE. This remains the right
+ * primitive for a *selective*, reversible, sync-correct bulk delete (and is what
+ * you want if erasure ever needs to be undoable), so it's kept and tested.
+ *
+ * Returns per-kind counts, so a caller can report exactly what it removed.
  */
 export async function deleteAllTrainingData(): Promise<{
   workouts: number

@@ -177,6 +177,59 @@ describe('failure classification (§5.5)', () => {
     ).toBe(true)
   })
 
+  it('hardDeleteServerData physically removes rows instead of tombstoning them', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
+      {},
+    )
+    const templateId = await repo.createTemplate('Test', null)
+    await engine.drain()
+
+    // The server holds the data.
+    expect(backend.count('workouts')).toBe(1)
+    expect(backend.count('sets')).toBe(1)
+    expect(backend.count('templates')).toBe(1)
+
+    const { failed } = await engine.hardDeleteServerData()
+    expect(failed).toEqual([])
+
+    // Gone outright — not present-with-a-tombstone.
+    expect(backend.count('workouts')).toBe(0)
+    expect(backend.count('sets')).toBe(0)
+    expect(backend.count('templates')).toBe(0)
+    expect(backend.get('workouts', workoutId)).toBeUndefined()
+    expect(backend.get('templates', templateId)).toBeUndefined()
+  })
+
+  it('hardDeleteServerData clears the queues first, so no pending write resurrects a row', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    // A write is queued but never drained, plus one that dead-lettered.
+    backend.forceNext({ status: 'permanent', error: 'poison' })
+    await repo.startWorkout()
+    await engine.drain()
+    expect(await db.deadLetter.count()).toBe(1)
+    const laterId = await repo.startWorkout()
+    expect(await db.outbox.count()).toBeGreaterThan(0)
+
+    await engine.hardDeleteServerData()
+
+    // Both queues are empty, so a later drain can't recreate what we erased.
+    expect(await db.outbox.count()).toBe(0)
+    expect(await db.deadLetter.count()).toBe(0)
+    await engine.drain()
+    expect(backend.get('workouts', laterId)).toBeUndefined()
+    expect(backend.count('workouts')).toBe(0)
+    // Cursors reset, so the next pull re-reads rather than no-oping.
+    expect(await db.syncState.count()).toBe(0)
+  })
+
   it('stops and backs off on a transient failure, preserving order', async () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)

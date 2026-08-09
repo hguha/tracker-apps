@@ -50,6 +50,19 @@ export class MockBackend implements SyncBackend {
       .map((row) => ({ table, row }))
   }
 
+  async hardDeleteAll(
+    table: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    // Model the FK cascade the real schema has, so a test sees children go too.
+    const CASCADES: Record<string, string[]> = {
+      workouts: ['workoutExercises', 'sets'],
+      templates: ['templateExercises'],
+    }
+    this.store.delete(table)
+    for (const child of CASCADES[table] ?? []) this.store.delete(child)
+    return { ok: true }
+  }
+
   async isAvailable(): Promise<boolean> {
     return this.available
   }

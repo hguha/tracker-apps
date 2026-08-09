@@ -45,6 +45,21 @@ export interface SyncBackend {
    */
   pull(table: string, since: number): Promise<PulledRow[]>
 
+  /**
+   * Physically removes every row the caller owns from `table` — a real DELETE,
+   * not the soft-delete `push` performs.
+   *
+   * Exists only for the user-initiated "erase my data" path (§11.3). Sync itself
+   * must never hard-delete: a row removed outright can't be represented in a
+   * delta pull, so another device would simply re-upload it. This is safe
+   * because it's a deliberate, whole-table wipe rather than a per-row sync op —
+   * after it, nothing remains for a peer to resurrect.
+   *
+   * Returns the number of rows removed, or a failure the caller can surface.
+   * Child rows are expected to go via FK cascade.
+   */
+  hardDeleteAll(table: string): Promise<{ ok: true } | { ok: false; error: string }>
+
   /** Whether the backend is currently reachable and authenticated. */
   isAvailable(): Promise<boolean>
 }

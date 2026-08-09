@@ -67,6 +67,24 @@ export class SupabaseBackend implements SyncBackend {
     }))
   }
 
+  async hardDeleteAll(
+    table: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const pgTable = tableToPostgres(table)
+    try {
+      // PostgREST refuses an unfiltered DELETE, so this needs a predicate that
+      // matches every row. `id` is non-null on every synced table, so
+      // "id is not null" is a total filter. RLS still scopes the statement to the
+      // caller's own rows, so this can only ever erase your own data — and for
+      // the shared library tables it can only touch rows you created (system
+      // rows have user_id null and no delete policy matches them).
+      const { error } = await this.client.from(pgTable).delete().not('id', 'is', null)
+      return error ? { ok: false, error: error.message } : { ok: true }
+    } catch (cause) {
+      return { ok: false, error: String(cause) }
+    }
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       const { error } = await this.client.rpc('keep_alive')

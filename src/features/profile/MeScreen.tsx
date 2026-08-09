@@ -627,39 +627,48 @@ export function MeScreen({
           Remove empty workouts
         </button>
 
-        {/* The real reset: tombstones every row through the outbox, so the
-            deletions reach the server instead of being re-pulled. This is what
-            "clear my test data" actually needs. */}
+        {/* The real reset. On a synced account this physically DELETEs the rows
+            server-side (a tombstone would leave every row in Postgres), then
+            wipes the local copy. Offline, the local wipe is the whole story. */}
         <button
           onClick={() => {
             if (isClearing) return
             const ok = window.confirm(
               sync.enabled
-                ? 'Delete ALL workouts, templates, custom exercises, and measurements — on this device AND the server, on every device? This cannot be undone. Export first if you want a copy.'
-                : 'Delete ALL workouts, templates, custom exercises, and measurements? This cannot be undone. Export first if you want a copy.',
+                ? 'Permanently erase ALL workouts, templates, custom exercises, and measurements — from this device AND the server, on every device? The rows are deleted outright, not hidden. This cannot be undone. Export first if you want a copy.'
+                : 'Permanently erase ALL workouts, templates, custom exercises, and measurements? This cannot be undone. Export first if you want a copy.',
             )
             if (!ok) return
             setIsClearing(true)
-            void repo
-              .deleteAllTrainingData()
-              .then((counts) => {
-                toast.show(
-                  `Deleted ${counts.workouts} workouts, ${counts.templates} templates, ` +
-                    `${counts.customExercises} custom exercises, ${counts.metricEntries} measurements`,
-                )
-                // Push the tombstones right away so the server matches.
-                return sync.enabled ? sync.syncNow() : undefined
-              })
-              .then(() => window.location.reload())
-              .catch(() => {
+            void (async () => {
+              try {
+                // Server first: erase the rows outright. Doing this before the
+                // local wipe means a failure here leaves local data intact to
+                // retry from, rather than losing it with the server still full.
+                if (sync.enabled) {
+                  const { failed } = await sync.eraseServerData()
+                  if (failed.length > 0) {
+                    setIsClearing(false)
+                    toast.show(
+                      `Could not erase ${failed.map((f) => f.table).join(', ')} on the server — nothing was deleted locally`,
+                    )
+                    return
+                  }
+                }
+                // Then the local copy. Cursors were reset above, so the next
+                // pull sees an empty server rather than rehydrating.
+                await repo.clearLocalData()
+                window.location.reload()
+              } catch {
                 setIsClearing(false)
-                toast.show('Could not delete training data')
-              })
+                toast.show('Could not erase training data')
+              }
+            })()
           }}
           disabled={isClearing}
           className="mt-1 w-full py-2 text-[13px] font-semibold text-critical active:opacity-60 disabled:opacity-40"
         >
-          {isClearing ? 'Working…' : 'Delete all my training data'}
+          {isClearing ? 'Erasing…' : 'Permanently erase all my training data'}
         </button>
 
         {/* Clears IndexedDB. On a synced account the next pull rehydrates from

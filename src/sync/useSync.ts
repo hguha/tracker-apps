@@ -39,6 +39,12 @@ export interface SyncStatus {
   /** Requeues dead-lettered writes and drains, for the "retry failed" action.
    *  Resolves to how many were requeued. */
   retryFailed: () => Promise<number>
+  /**
+   * Physically erases this user's training data from the server (§11.3), for the
+   * "delete everything" action. Resolves to any per-table failures, so the
+   * caller can report a partial failure honestly. A no-op with no backend.
+   */
+  eraseServerData: () => Promise<{ failed: { table: string; error: string }[] }>
 }
 
 export function useSync(): SyncStatus {
@@ -118,8 +124,29 @@ export function useSync(): SyncStatus {
     }
   }, [active, engine, session])
 
+  const eraseServerData = useCallback(async () => {
+    if (!active || !engine) return { failed: [] }
+    setPhase('syncing')
+    try {
+      const result = await engine.hardDeleteServerData()
+      setPhase(result.failed.length > 0 ? 'error' : 'idle')
+      return result
+    } catch (error) {
+      setPhase('error')
+      return { failed: [{ table: 'unknown', error: String(error) }] }
+    }
+  }, [active, engine])
+
   const pending = useLiveQuery(() => db.outbox.count(), [], 0)
   const deadLettered = useLiveQuery(() => db.deadLetter.count(), [], 0)
 
-  return { pending, deadLettered, enabled: active, phase, syncNow, retryFailed }
+  return {
+    pending,
+    deadLettered,
+    enabled: active,
+    phase,
+    syncNow,
+    retryFailed,
+    eraseServerData,
+  }
 }
