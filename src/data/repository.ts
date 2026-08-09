@@ -101,7 +101,18 @@ async function patchRow<T extends SyncFields>(
   if (!current) return
   const next = { ...patch, ...touch(current.clientRev) } as Partial<T>
   await store.update(id, next)
-  await enqueue(table, 'update', id, next, current.clientRev + 1)
+  // Enqueue the FULL row, not just the changed fields.
+  //
+  // The push is an upsert, which PostgREST issues as
+  // `INSERT ... ON CONFLICT (id) DO UPDATE`. Postgres evaluates the INSERT
+  // policy's WITH CHECK against the *proposed* tuple — so a partial payload
+  // arrives with `user_id` absent (NULL), `user_id = auth.uid()` is false, and
+  // the write is rejected with "new row violates row-level security policy".
+  // That failed for every update, not just for rows the server hadn't seen:
+  // chained tables broke identically, since a missing `workout_id` makes their
+  // ownership walk fail too. Sending the whole row keeps the upsert valid under
+  // RLS and stays idempotent (same id, last-write-wins on clientRev).
+  await enqueue(table, 'update', id, { ...current, ...next }, current.clientRev + 1)
 }
 
 // ------------------------------------------------------------------ profile
@@ -1333,14 +1344,39 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
  *
  * Powers the row glow (§6.2) — the row has to light up as the number is typed,
  * before any decision to persist has been made.
+ *
+ * `setId` matters more than it looks. Records are recomputed the moment a set is
+ * logged, so a set that just *set* a record is then compared against its own
+ * value — and `180 > 180` is false, so the row stopped glowing the instant it
+ * was saved (the "toast said record but the row never went green" bug). Passing
+ * the set's id excludes its own contribution, so the comparison is against the
+ * best of every *other* set, which is what "is this a record" actually means.
  */
 export async function previewRecords(
   exerciseId: string,
-  candidate: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>,
+  candidate: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'> & {
+    id?: string
+  },
 ): Promise<RecordType[]> {
   const existing = await listPersonalRecords(exerciseId)
   if (existing.length === 0) return []
   const best = new Map(existing.map((pr) => [pr.recordType, pr.value]))
+
+  // Where this set already holds the record, swap in the best of every *other*
+  // set — the value the candidate actually has to beat. Dropping the entry
+  // instead would leave `best` undefined, which the "nothing to beat" guard
+  // below reads as "no record yet" and suppresses the glow entirely.
+  const selfHeld = existing.filter(
+    (pr) => candidate.id !== undefined && pr.setId === candidate.id,
+  )
+  if (selfHeld.length > 0) {
+    const runnerUp = await bestExcludingSet(exerciseId, candidate.id!)
+    for (const pr of selfHeld) {
+      const other = runnerUp.get(pr.recordType)
+      if (other === undefined) best.delete(pr.recordType)
+      else best.set(pr.recordType, other)
+    }
+  }
 
   const broken: RecordType[] = []
   const check = (type: RecordType, value: number | null) => {
@@ -1357,6 +1393,44 @@ export async function previewRecords(
   check('max_distance', candidate.distanceM)
 
   return broken
+}
+
+/**
+ * The best per-set value for each record type across every completed set of an
+ * exercise *except* the given one — i.e. what that set has to beat.
+ *
+ * Only the per-set types; `max_volume_session` is a session aggregate and isn't
+ * meaningful for a single row.
+ */
+async function bestExcludingSet(
+  exerciseId: string,
+  excludeSetId: string,
+): Promise<Map<RecordType, number>> {
+  const best = new Map<RecordType, number>()
+  const consider = (type: RecordType, value: number | null) => {
+    if (value === null || !Number.isFinite(value) || value <= 0) return
+    const previous = best.get(type)
+    if (previous === undefined || value > previous) best.set(type, value)
+  }
+
+  const workoutExercises = (
+    await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
+  ).filter((we) => we.deletedAt === null)
+
+  for (const we of workoutExercises) {
+    const workout = await db.workouts.get(we.workoutId)
+    if (!workout || workout.deletedAt !== null) continue
+    for (const set of await listSets(we.id)) {
+      if (!set.isCompleted || set.id === excludeSetId) continue
+      consider('max_weight', set.weightKg)
+      consider('max_reps_any_weight', set.reps)
+      consider('max_est_1rm', estimatedOneRepMaxKg(set.weightKg, set.reps))
+      consider('max_duration', set.durationSeconds)
+      consider('max_distance', set.distanceM)
+    }
+  }
+
+  return best
 }
 
 // -------------------------------------------------------- personal records
@@ -1431,6 +1505,13 @@ export async function refreshPersonalRecords(exerciseId: string): Promise<Record
   // there was nothing to beat.
   return records
     .filter((pr) => {
+      // `max_volume_session` is a *session* total, so it necessarily grows with
+      // every set logged: set 2 beats set 1's running total, set 3 beats set 2,
+      // and so on. Announcing that as a personal record fired a "New personal
+      // record" toast on essentially every set of a normal workout, which is
+      // both wrong and drowns out real records. It's still tracked and shown on
+      // the exercise's detail sheet — it just isn't a live per-set event.
+      if (pr.recordType === 'max_volume_session') return false
       const previous = before.get(pr.recordType)
       return previous !== undefined && pr.value > previous
     })

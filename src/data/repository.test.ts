@@ -93,6 +93,36 @@ describe('the logging loop', () => {
     expect(tables.indexOf('workouts')).toBeLessThan(tables.indexOf('sets'))
   })
 
+  it('queues the FULL row on an update, so an upsert passes the server RLS check', async () => {
+    // The bug: patchRow enqueued only the changed fields. The push is an upsert,
+    // which PostgREST issues as INSERT ... ON CONFLICT DO UPDATE, and Postgres
+    // evaluates the INSERT policy's WITH CHECK against the proposed tuple — so a
+    // partial payload arrived with user_id absent and RLS rejected it with "new
+    // row violates row-level security policy". Editing a workout produced a pile
+    // of those; the retry button then succeeded because it re-reads the full row.
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    await db.outbox.clear()
+
+    // A plain field edit — the case that was failing.
+    await repo.updateWorkout(workoutId, { title: 'Renamed' })
+    const workoutEntry = (await db.outbox.toArray()).find((e) => e.table === 'workouts')!
+    const workoutPayload = workoutEntry.payload as Record<string, unknown>
+    expect(workoutPayload.title).toBe('Renamed')
+    // The ownership column RLS checks must be present.
+    expect(workoutPayload.userId).toBe(LOCAL_USER_ID)
+    expect(workoutPayload.id).toBe(workoutId)
+
+    // Chained rows carry the parent key their ownership walk depends on.
+    await db.outbox.clear()
+    await repo.logSetValues(setId, { reps: 6 })
+    const setPayload = (await db.outbox.toArray()).find((e) => e.table === 'sets')!
+      .payload as Record<string, unknown>
+    expect(setPayload.workoutExerciseId).toBe(weId)
+    expect(setPayload.reps).toBe(6)
+  })
+
   it('soft-deletes rather than removing rows, so deletes can sync', async () => {
     const workoutId = await repo.startWorkout()
     const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
@@ -271,6 +301,73 @@ describe('previewRecords — the PR glow (§6.2)', () => {
       distanceM: null,
     })
     expect(await db.personalRecords.count()).toBe(before)
+  })
+
+  it('keeps glowing for the set that holds the record, not comparing it to itself', async () => {
+    // The bug: records are recomputed the moment a set is logged, so the set that
+    // just set the record was then compared against its own value (180 > 180 is
+    // false) and the row stopped glowing — a toast with no green row.
+    const first = await repo.startWorkout()
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(first)
+
+    // A heavier set: a genuine record.
+    const second = await repo.startWorkout()
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const prSetId = await repo.addSet({
+      workoutExerciseId: secondWe,
+      weightKg: 180,
+      reps: 5,
+    })
+    await repo.logSetValues(prSetId, {})
+
+    // Passing the set's own id excludes its own record, so it still glows.
+    const withId = await repo.previewRecords('deadlift', (await db.sets.get(prSetId))!)
+    expect(withId).toContain('max_weight')
+  })
+})
+
+describe('personal record reporting (§6.4)', () => {
+  it('never announces max_volume_session, which grows with every set', async () => {
+    // Session volume is a running total, so set 2 always beats set 1's total and
+    // set 3 beats set 2's. Reporting that fired a "New personal record" toast on
+    // essentially every set of a normal workout.
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown')
+
+    const reported: string[][] = []
+    for (let i = 0; i < 3; i += 1) {
+      const setId = await repo.addSet({ workoutExerciseId: we, weightKg: 81.6, reps: 8 })
+      reported.push(await repo.logSetValues(setId, {}))
+    }
+
+    // Three identical sets announce nothing at all — no record was beaten.
+    expect(reported).toEqual([[], [], []])
+    // It's still tracked for the detail sheet, just not announced.
+    const prs = await repo.listPersonalRecords('lat_pulldown')
+    expect(prs.some((pr) => pr.recordType === 'max_volume_session')).toBe(true)
+  })
+
+  it('still announces a genuine weight record', async () => {
+    const first = await repo.startWorkout()
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(first)
+
+    const second = await repo.startWorkout()
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const broken = await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: secondWe, weightKg: 180, reps: 5 }),
+      {},
+    )
+    expect(broken).toContain('max_weight')
   })
 })
 
