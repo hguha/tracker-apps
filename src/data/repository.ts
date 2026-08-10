@@ -264,8 +264,12 @@ export async function claimLocalData(newUserId: string): Promise<number> {
           colorScheme: localProfile.colorScheme,
           accentOverride: localProfile.accentOverride,
           bodyweightCacheKg: localProfile.bodyweightCacheKg,
-          heightCm: localProfile.heightCm ?? null,
-          trainingGoal: localProfile.trainingGoal ?? '',
+          // These three are "unset or set", not preferences, so a value already on
+          // the account must not be replaced by the local row's empty default —
+          // that erased a training goal the user had just entered.
+          heightCm: existing?.heightCm ?? localProfile.heightCm ?? null,
+          trainingGoal: localProfile.trainingGoal || (existing?.trainingGoal ?? ''),
+          onboardedAt: existing?.onboardedAt ?? localProfile.onboardedAt ?? null,
           id: newUserId,
           updatedAt: now,
           deletedAt: null,

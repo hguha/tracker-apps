@@ -1359,6 +1359,50 @@ describe('active user id + local data reset', () => {
     expect((await repo.listWorkouts()).length).toBe(1)
   })
 
+  it('claimLocalData does not erase a goal the account already has', async () => {
+    // The bug: a device-only profile's empty trainingGoal/heightCm overwrote the
+    // values the user had just entered during onboarding on the real account.
+    const UID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    setActiveUserId(UID)
+    await seedIfNeeded()
+    await repo.updateProfile({
+      trainingGoal: 'squat 405',
+      heightCm: 180,
+      onboardedAt: 1234,
+    })
+
+    // A leftover device-only profile exists with nothing set.
+    setActiveUserId(LOCAL_USER_ID)
+    await seedIfNeeded()
+
+    setActiveUserId(UID)
+    await repo.claimLocalData(UID)
+
+    const profile = await repo.getProfile()
+    expect(profile.trainingGoal).toBe('squat 405')
+    expect(profile.heightCm).toBe(180)
+    expect(profile.onboardedAt).toBe(1234)
+  })
+
+  it('onboardedAt lives on the profile, so it syncs instead of being per-device', async () => {
+    // Tracked in localStorage before, which meant signing in on a phone and then
+    // a laptop ran first-run setup twice.
+    const UID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+    setActiveUserId(UID)
+    await seedIfNeeded()
+    expect((await repo.getProfile()).onboardedAt).toBeNull()
+
+    await repo.updateProfile({ onboardedAt: Date.now() })
+    expect((await repo.getProfile()).onboardedAt).not.toBeNull()
+
+    // It's queued for the server like any other profile field, which is what
+    // carries it to the second device.
+    const queued = await db.outbox.toArray()
+    const payload = queued.find((e) => e.table === 'profiles')?.payload as
+      Record<string, unknown> | undefined
+    expect(payload?.onboardedAt).toEqual(expect.any(Number))
+  })
+
   it('claimLocalData is a no-op for the local id and when there is nothing to claim', async () => {
     expect(await repo.claimLocalData(LOCAL_USER_ID)).toBe(0)
   })

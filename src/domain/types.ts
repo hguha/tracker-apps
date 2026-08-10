@@ -133,6 +133,10 @@ export interface Profile extends SyncColumns {
    *  the coach when no per-request goal is given, and is sent in the coach
    *  summary (shown in the §13 "data sent" disclosure). Empty = unset. */
   trainingGoal: string
+  /** When first-run setup was completed, or null if it hasn't been. On the
+   *  profile rather than localStorage so it follows the account across devices —
+   *  otherwise signing in on a second device re-runs setup (§11.1.3). */
+  onboardedAt: number | null
 
   // Appearance and feedback (§10.8, §6.8).
   /** Named preset — `default`, `slate`, `forest`, `ocean`, `sunset`, … */

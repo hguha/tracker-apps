@@ -119,6 +119,9 @@ async function seedProfile(): Promise<void> {
     if (existing.showAvatar === undefined) backfill.showAvatar = false
     if (existing.heightCm === undefined) backfill.heightCm = null
     if (existing.trainingGoal === undefined) backfill.trainingGoal = ''
+    // An existing local profile predates onboarding; treat it as done rather
+    // than sending a returning user through setup.
+    if (existing.onboardedAt === undefined) backfill.onboardedAt = Date.now()
     if (Object.keys(backfill).length > 0) {
       await db.profiles.update(existing.id, backfill)
     }
@@ -139,6 +142,7 @@ async function seedProfile(): Promise<void> {
     bodyweightCacheKg: null,
     heightCm: null,
     trainingGoal: '',
+    onboardedAt: null,
     theme: 'default',
     colorScheme: 'system',
     accentOverride: null,

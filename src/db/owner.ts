@@ -44,28 +44,3 @@ export function clearDbOwner(): void {
     /* ignore */
   }
 }
-
-const ONBOARDED_KEY = 'fitnote.onboarded'
-
-/**
- * Whether this account has completed first-run setup (§11.1.3).
- *
- * Per-account rather than per-device, so signing in on a second device doesn't
- * re-ask, and a genuinely new account on a shared device still gets the flow.
- */
-export function hasOnboarded(userId: string): boolean {
-  try {
-    return localStorage.getItem(`${ONBOARDED_KEY}.${userId}`) === '1'
-  } catch {
-    // Can't tell — assume yes rather than trapping the user in setup.
-    return true
-  }
-}
-
-export function markOnboarded(userId: string): void {
-  try {
-    localStorage.setItem(`${ONBOARDED_KEY}.${userId}`, '1')
-  } catch {
-    /* ignore */
-  }
-}

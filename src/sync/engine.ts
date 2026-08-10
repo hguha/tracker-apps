@@ -516,6 +516,7 @@ function normalizeRow(
       showAvatar: row.showAvatar ?? false,
       heightCm: row.heightCm ?? null,
       trainingGoal: row.trainingGoal ?? '',
+      onboardedAt: row.onboardedAt ?? null,
     }
   }
   return row

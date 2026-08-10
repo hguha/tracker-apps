@@ -47,6 +47,7 @@ export const TIMESTAMP_COLUMNS = new Set([
   'measured_at',
   'achieved_at',
   'last_used_at',
+  'onboarded_at',
 ])
 
 export function msToIso(ms: number | null): string | null {

@@ -89,9 +89,6 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
       if (step === 'goal') {
         await repo.updateProfile({ trainingGoal: goal.trim() })
       }
-      if (step === 'look') {
-        await repo.updateProfile({ theme })
-      }
       setStep(next)
     } finally {
       setIsSaving(false)
@@ -222,7 +219,13 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                 {THEME_PRESETS.map((preset) => (
                   <button
                     key={preset.id}
-                    onClick={() => setTheme(preset.id)}
+                    // Written immediately rather than on Continue: the point of
+                    // this step is seeing the theme, and App's appearance
+                    // live-query repaints the app from the profile.
+                    onClick={() => {
+                      setTheme(preset.id)
+                      void repo.updateProfile({ theme: preset.id })
+                    }}
                     className={
                       'rounded-xl border p-3 text-left ' +
                       (theme === preset.id
@@ -234,6 +237,11 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                       <span className="text-[14px] font-semibold">{preset.label}</span>
                       {theme === preset.id && <Check size={15} className="text-accent" />}
                     </span>
+                    <span
+                      className="mt-2 block h-3.5 w-10 rounded-full"
+                      style={{ background: preset.swatch }}
+                      aria-hidden
+                    />
                   </button>
                 ))}
               </div>
