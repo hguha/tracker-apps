@@ -46,8 +46,8 @@ export function StartWorkoutScreen({
     )
     // Pull a deep list so search reaches real history; the unsearched view still
     // shows just the most recent handful (sliced below).
-    const recent = (await repo.listWorkoutSummaries(500)).filter(
-      (s) => s.workout.endedAt !== null && s.setCount > 0,
+    const recent = (await repo.listFinishedWorkoutSummaries(500)).filter(
+      (s) => s.setCount > 0,
     )
     return { profile, templates: withCounts, recent }
   }, [])

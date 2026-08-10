@@ -54,9 +54,13 @@ export function SwipeableRow({
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.pointerType === 'mouse') return
-    // Typing in a set field should never be interrupted by a stray drag.
+    // Never arm a drag from a control. Typing in a set field must not be
+    // interrupted, and a button has to stay tappable: arming the drag here let
+    // the row claim the gesture after DRAG_START_THRESHOLD, so a thumb that
+    // slid a few pixels on the way down highlighted the button and then
+    // swallowed its click — the button looked pressed but never fired.
     const target = event.target as HTMLElement
-    if (target.closest('input, textarea, select')) return
+    if (target.closest('input, textarea, select, button')) return
     start.current = { x: event.clientX, y: event.clientY }
     decided.current = 'none'
   }

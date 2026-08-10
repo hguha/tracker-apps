@@ -246,7 +246,10 @@ export function SetRow(props: SetRowProps) {
             <button
               onClick={onConfirmPlaceholder}
               aria-label="Log the same as last time"
-              className="flex size-8 items-center justify-center rounded-lg text-[10px] font-bold uppercase text-ink-muted active:bg-accent-wash"
+              // The visible chip is small, but the touch target is padded out to
+              // 44px and overhangs the row's right edge — at the screen border a
+              // thumb lands short as often as it lands square.
+              className="-my-1.5 -mr-2.5 flex h-11 w-[52px] items-center justify-center rounded-lg text-[10px] font-bold uppercase text-ink-muted active:bg-accent-wash"
             >
               Same
             </button>

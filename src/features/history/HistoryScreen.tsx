@@ -65,7 +65,7 @@ export function HistoryScreen({
   const data = useLiveQuery(
     async () => ({
       profile: await repo.getProfile(),
-      summaries: await repo.listWorkoutSummaries(500),
+      summaries: await repo.listFinishedWorkoutSummaries(500),
     }),
     [],
   )
@@ -249,7 +249,6 @@ export function HistoryScreen({
                 <p className="text-[12.5px] text-ink-muted">
                   {formatDayHeading(summary.workout.startedAt)} ·{' '}
                   {formatTimeOfDay(summary.workout.startedAt)}
-                  {summary.workout.endedAt === null && ' · in progress'}
                 </p>
 
                 {/* Region dots give the session a shape at a glance. */}

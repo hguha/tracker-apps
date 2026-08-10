@@ -11,6 +11,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, Play, X } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { useActiveWorkout } from '@/data/useActiveWorkout'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { regionVar } from '@/lib/palette'
@@ -30,6 +31,7 @@ export function TemplatePreviewSheet({
   onDismiss: () => void
 }) {
   const preview = useLiveQuery(() => repo.getTemplatePreview(templateId), [templateId])
+  const active = useActiveWorkout()
 
   async function start() {
     onStart(await repo.startWorkoutFromTemplate(templateId))
@@ -89,8 +91,9 @@ export function TemplatePreviewSheet({
 
       <div className="px-5 pt-3">
         <p className="text-[12px] text-ink-muted">
-          Starts a new workout from this plan. Editing the workout won't change the
-          template.
+          {active
+            ? 'Finish the workout you’re in before starting another one.'
+            : "Starts a new workout from this plan. Editing the workout won't change the template."}
         </p>
       </div>
 
@@ -105,15 +108,22 @@ export function TemplatePreviewSheet({
             <Pencil size={17} />
           </Button>
         )}
-        <Button
-          size="lg"
-          className="flex-1"
-          disabled={!preview || preview.exercises.length === 0}
-          onClick={() => void start()}
-        >
-          <Play size={17} />
-          Start workout
-        </Button>
+        {active ? (
+          <Button size="lg" className="flex-1" onClick={() => onStart(active.id)}>
+            <Play size={17} />
+            Resume your workout
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            className="flex-1"
+            disabled={!preview || preview.exercises.length === 0}
+            onClick={() => void start()}
+          >
+            <Play size={17} />
+            Start workout
+          </Button>
+        )}
       </div>
     </BottomSheet>
   )

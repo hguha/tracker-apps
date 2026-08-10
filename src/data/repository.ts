@@ -514,6 +514,23 @@ export async function listWorkouts(limit = 100): Promise<Workout[]> {
 }
 
 /**
+ * Finished sessions only — the default for anything that reads like a record of
+ * training (§5.2).
+ *
+ * An in-progress workout is a live editing surface, not history. Listing it
+ * alongside finished sessions let History open it in edit mode and the start
+ * screen offer it as something to repeat, both of which fought the session the
+ * user was actually in the middle of. Every caller previously re-filtered
+ * `endedAt !== null` by hand and History had simply forgotten to, so the guard
+ * lives here now instead.
+ */
+export async function listFinishedWorkoutSummaries(
+  limit = 100,
+): Promise<WorkoutSummary[]> {
+  return (await listWorkoutSummaries(limit)).filter((s) => s.workout.endedAt !== null)
+}
+
+/**
  * Everything needed to render a recognizable workout row (§5.2.1).
  *
  * Rows previously showed only "Workout" plus a date, which identified nothing.
@@ -1302,7 +1319,7 @@ export async function logSetValues(
     completedAt: isCompleted ? (current.completedAt ?? Date.now()) : null,
   })
 
-  return refreshPersonalRecords(workoutExercise.exerciseId)
+  return refreshPersonalRecords(workoutExercise.exerciseId, id)
 }
 
 /**
@@ -1366,11 +1383,9 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
  * Which record types the given values would beat, without writing anything.
  *
  * Powers the row glow (§6.2) — the row has to light up as the number is typed,
- * before any decision to persist has been made.
- *
- * `setId` excludes the set's own contribution. Records are recomputed the moment
- * a set is logged, so without it a set that just *set* a record is compared
- * against itself (`180 > 180` is false) and stops glowing.
+ * before any decision to persist has been made. Measured against previous
+ * sessions only, exactly like the announcement in `refreshPersonalRecords`, so
+ * the green row and the toast can never disagree.
  */
 export async function previewRecords(
   exerciseId: string,
@@ -1378,32 +1393,17 @@ export async function previewRecords(
     id?: string
   },
 ): Promise<RecordType[]> {
-  const existing = await listPersonalRecords(exerciseId)
-  if (existing.length === 0) return []
-  const best = new Map(existing.map((pr) => [pr.recordType, pr.value]))
-
-  // Where this set already holds the record, swap in the best of every *other*
-  // set — the value the candidate actually has to beat. Dropping the entry
-  // instead would leave `best` undefined, which the "nothing to beat" guard
-  // below reads as "no record yet" and suppresses the glow entirely.
-  const selfHeld = existing.filter(
-    (pr) => candidate.id !== undefined && pr.setId === candidate.id,
-  )
-  if (selfHeld.length > 0) {
-    const runnerUp = await bestExcludingSet(exerciseId, candidate.id!)
-    for (const pr of selfHeld) {
-      const other = runnerUp.get(pr.recordType)
-      if (other === undefined) best.delete(pr.recordType)
-      else best.set(pr.recordType, other)
-    }
-  }
+  const { history, siblings } = await recordBars(exerciseId, candidate.id)
 
   const broken: RecordType[] = []
   for (const [type, value] of perSetRecordValues(candidate)) {
     if (!isRecordValue(value)) continue
-    const previous = best.get(type)
-    // Only a genuine improvement counts. A first-ever value never glows.
-    if (previous !== undefined && value > previous) broken.push(type)
+    // Nothing in a previous session to beat means no record — that's what keeps
+    // a first-ever exercise quiet however its sets ramp.
+    const previous = history.get(type)
+    if (previous === undefined) continue
+    // Beat history *and* every sibling, so only the session's best row glows.
+    if (value > Math.max(previous, siblings.get(type) ?? 0)) broken.push(type)
   }
 
   return broken
@@ -1418,9 +1418,9 @@ function isRecordValue(value: number | null): value is number {
  * The record types a single set can hold, with this set's value for each.
  *
  * The one place this list lives. It was spelled out three times — in
- * `previewRecords`, `bestExcludingSet`, and `refreshPersonalRecords` — so adding
- * a sixth type meant finding all three, and missing one produced a record that
- * was tracked but never glowed (or the reverse).
+ * `previewRecords`, the old runner-up scan, and `refreshPersonalRecords` — so
+ * adding a sixth type meant finding all three, and missing one produced a record
+ * that was tracked but never glowed (or the reverse).
  *
  * `max_volume_session` is absent by design: it's a session aggregate, not a
  * property of one set.
@@ -1438,27 +1438,51 @@ function perSetRecordValues(
 }
 
 /**
- * The best per-set value for each record type across every completed set of an
- * exercise *except* the given one — i.e. what that set has to beat.
+ * The two bars a set has to clear to hold a record, from one pass over history.
+ *
+ * `history` is the best of every *other* session; `siblings` the best of the
+ * set's own session, excluding itself.
+ *
+ * **A PR is measured against previous sessions, never against earlier sets of
+ * the same session.** Comparing within the session made a normal ascending
+ * workout report several records at once: a 135 → 185 → 225 ramp beat itself
+ * twice, so on a brand-new exercise every rising set looked like a record while
+ * a flat or descending one looked like none. That's both halves of the report —
+ * "it marked a few different sets" and "it just didn't mark anything at all".
+ * Splitting the bars this way makes the answer independent of the order the sets
+ * were typed in: the session's best row is the only one that can glow, and only
+ * if the session as a whole beats what came before it.
+ *
+ * With no `setId` — a hypothetical set not attached to a session, as in the
+ * estimator — every session counts as history and there are no siblings.
  */
-async function bestExcludingSet(
+async function recordBars(
   exerciseId: string,
-  excludeSetId: string,
-): Promise<Map<RecordType, number>> {
-  const best = new Map<RecordType, number>()
+  setId: string | undefined,
+): Promise<{ history: Map<RecordType, number>; siblings: Map<RecordType, number> }> {
+  const set = setId === undefined ? undefined : await db.sets.get(setId)
+  const ownWorkoutId =
+    set === undefined
+      ? undefined
+      : (await db.workoutExercises.get(set.workoutExerciseId))?.workoutId
 
-  for (const { sets } of await completedSessionsForExercise(exerciseId)) {
-    for (const set of sets) {
-      if (set.id === excludeSetId) continue
-      for (const [type, value] of perSetRecordValues(set)) {
+  const history = new Map<RecordType, number>()
+  const siblings = new Map<RecordType, number>()
+
+  for (const { workout, sets } of await completedSessionsForExercise(exerciseId)) {
+    const isOwnSession = ownWorkoutId !== undefined && workout.id === ownWorkoutId
+    const into = isOwnSession ? siblings : history
+    for (const candidate of sets) {
+      if (candidate.id === setId) continue
+      for (const [type, value] of perSetRecordValues(candidate)) {
         if (!isRecordValue(value)) continue
-        const previous = best.get(type)
-        if (previous === undefined || value > previous) best.set(type, value)
+        const previous = into.get(type)
+        if (previous === undefined || value > previous) into.set(type, value)
       }
     }
   }
 
-  return best
+  return { history, siblings }
 }
 
 /**
@@ -1500,22 +1524,26 @@ async function completedSessionsForExercise(exerciseId: string): Promise<
 
 /**
  * Recomputes every record for one exercise from scratch and returns the types
- * that improved.
+ * that `triggeringSetId` just claimed.
  *
  * Full recomputation rather than incremental comparison, because editing a past
  * workout can *invalidate* a record — a weight corrected downward has to be
  * able to remove a PR, which an incremental "is this better?" check can't do
  * (§6.6).
+ *
+ * The announcement is scoped to one set because that's what a toast is about.
+ * Asking the weaker question — "does this exercise's record beat history?" — kept
+ * firing for every later set in the session, including lighter ones that claimed
+ * nothing, since the session's earlier record still cleared the bar. Without a
+ * triggering set nothing is announced: records are still rebuilt, but a bulk
+ * repair pass shouldn't fire toasts.
  */
-export async function refreshPersonalRecords(exerciseId: string): Promise<RecordType[]> {
+export async function refreshPersonalRecords(
+  exerciseId: string,
+  triggeringSetId?: string,
+): Promise<RecordType[]> {
   const exercise = await db.exercises.get(exerciseId)
   if (!exercise) return []
-
-  const before = new Map(
-    (await db.personalRecords.where('exerciseId').equals(exerciseId).toArray()).map(
-      (pr) => [pr.recordType, pr.value],
-    ),
-  )
 
   const candidates = new Map<RecordType, { value: number; at: number; setId: string }>()
 
@@ -1552,22 +1580,16 @@ export async function refreshPersonalRecords(exerciseId: string): Promise<Record
   }))
   if (records.length > 0) await db.personalRecords.bulkAdd(records)
 
-  // Only report records that beat a previous one. A first-ever set technically
-  // sets every record for that exercise, but calling that a PR is noise —
-  // there was nothing to beat.
-  return records
-    .filter((pr) => {
-      // `max_volume_session` is a *session* total, so it necessarily grows with
-      // every set logged: set 2 beats set 1's running total, set 3 beats set 2,
-      // and so on. Announcing that as a personal record fired a "New personal
-      // record" toast on essentially every set of a normal workout, which is
-      // both wrong and drowns out real records. It's still tracked and shown on
-      // the exercise's detail sheet — it just isn't a live per-set event.
-      if (pr.recordType === 'max_volume_session') return false
-      const previous = before.get(pr.recordType)
-      return previous !== undefined && pr.value > previous
-    })
-    .map((pr) => pr.recordType)
+  if (triggeringSetId === undefined) return []
+  const triggering = await db.sets.get(triggeringSetId)
+  if (!triggering || !triggering.isCompleted) return []
+
+  // Literally the glow rule, so the toast and the green row cannot disagree.
+  // `max_volume_session` never reaches this: it's a session total that grows
+  // with every set logged, so announcing it fired a "New personal record" on
+  // essentially every set. It stays tracked for the detail sheet — it just isn't
+  // a live per-set event, and `perSetRecordValues` leaves it out.
+  return previewRecords(exerciseId, triggering)
 }
 
 export async function listPersonalRecords(exerciseId: string): Promise<PersonalRecord[]> {

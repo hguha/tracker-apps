@@ -32,7 +32,7 @@ A local-first, installable PWA for logging resistance training and cardio, for a
 | Backend | Supabase (Postgres + RLS + Auth + Edge Functions) |
 | AI | Google Gemini via a Supabase Edge Function |
 | Hosting | Vercel, served at `hirshguha.com/workout-tracker` via proxy (see `DEPLOYING.md`) |
-| Tests | Vitest (313 tests) |
+| Tests | Vitest (325 tests) |
 
 **Deliberately not used**, despite earlier plans: TanStack Router and TanStack Query (navigation is simple enough that view state in one component is clearer, and Dexie's live queries removed the need for a server-state cache), shadcn/ui, react-hook-form, Zod.
 
@@ -268,9 +268,14 @@ Rule 3 matters because "add set" is used mid-workout: a blank row forces manual 
 
 **PR glow.** The moment a typed value would beat a stored record, the row is outlined in the status-good color. Computed locally — no round trip, so it appears in the same frame as the keystroke.
 
-Two subtleties, both learned from bugs:
-- The set that *holds* a record must still glow. Records are recomputed the instant a set is logged, so comparing a set against its own value (`180 > 180` is false) made the glow die the moment it saved. `previewRecords` takes the set's id and compares against the best of every **other** set.
-- Simply *excluding* the self-held record is wrong — an empty comparison map trips the "nothing to beat yet" guard and suppresses the glow entirely. The runner-up must be **substituted**, not removed.
+**A record is measured against previous *sessions*, and only the session's best row holds it.** `recordBars` returns two bars from one pass over history: `history` (the best of every other session) and `siblings` (the best of this session, excluding the row itself). A row glows only when it clears both.
+
+Both halves of that rule come from bugs, and both had the same cause — comparing a set against earlier sets of its own session:
+- A warmup ramp beat itself. 135 → 185 → 225 meant 185 cleared 135 and 225 cleared 185, so on a **brand-new exercise** several sets lit up while nothing had actually been beaten. Requiring a previous session is what keeps a first-ever exercise quiet however its sets ramp.
+- Against a previous best of 150, logging 160 → 170 → 180 lit up **all three** — each beats history, so each claimed a record only the last one holds. Hence the sibling bar.
+- The set that *holds* a record must still glow. Records are recomputed the instant a set is logged, so comparing a set against its own value (`180 > 180` is false) made the glow die the moment it saved. Both bars exclude the row being tested.
+
+**The toast is the glow.** `refreshPersonalRecords(exerciseId, triggeringSetId)` returns `previewRecords` for the set just logged, so a green row and a "New personal record" can't disagree — they're one code path. Asking the weaker question ("does this exercise's record beat history?") kept firing on later, *lighter* sets in the session, because the session's earlier record still cleared the bar. With no triggering set — a bulk repair pass — records are still rebuilt but nothing is announced.
 
 **`is_completed` is derived on write**, never toggled by the user: a set is complete when it has values. Planned-but-unperformed rows are deleted on finish.
 
@@ -297,9 +302,13 @@ A run is one continuous effort, not three sets of running. For a `cardio` patter
 ### 6.5 Other interactions
 
 - **Drag to reorder, drag onto to superset.** Dropping between cards reorders; dropping onto another card supersets, with the drop target captioning the outcome before release.
-- **Swipe** left on a set row deletes with undo; right copies the placeholder.
+- **Swipe** left on a set row deletes with undo; right copies the placeholder. `SwipeableRow` refuses to arm a drag from **any control** — `input, textarea, select, button`. Arming it let the row claim the gesture after 8px, so a thumb that slid slightly on the way down highlighted the "Same" button (`active:` fired) and then swallowed its click: a button that looked pressed but never ran. Its touch target is also padded to 44px and overhangs the row's right edge, since at the screen border a thumb lands short as often as square.
 - **Session menu** — rename, change date and time, save as template, add a note, discard. This is also how a backdated workout is created; there is no separate "log a past workout" entry point.
 - **Editing past workouts** opens the same component in edit mode. Everything is mutable. Editing a set re-runs PR detection, invalidates the `last_performance` cache, and uses the same outbox path, so it works offline.
+
+**An in-progress workout is not history.** It's a live logging surface, and it appears in exactly one place: Home's resume banner. `repo.listFinishedWorkoutSummaries` is the default for anything that reads like a record of training; the unfiltered `listWorkoutSummaries` exists only for Home, which needs the active row to offer *Resume*. Every caller used to re-filter `ended_at !== null` by hand and History had simply forgotten to, so the guard lives in the repository now. Left as it was, the session you were mid-way through was listed as history, openable in **edit mode**, and offerable as something to repeat — three ways to fight the workout you were actually in.
+
+**At most one workout is active (§4.4), enforced at every entry point.** Starting from a template or "do this again" bypassed the resume check the tab bar and Home did, so either could open a second concurrent session — the new one becomes active and the old is stranded, unfinishable from the UI (and now invisible, since history hides it). Both preview sheets read `useActiveWorkout` and offer **Resume your workout** instead of creating a duplicate.
 
 ### 6.6 Automatic session titles
 
@@ -320,7 +329,7 @@ Bottom tab bar: **Home · History · ( + ) · Insights · Me**. Sign-out lives i
 | **Home** | Coach greeting, resume banner, "Log a workout" CTA, weekly goal ring, volume + Δ vs last week, streak, badges strip, sets-by-body-part bars, next-up, recent 3 |
 | **Active workout** | §6 |
 | **Start workout** | Empty / from template / repeat a past session (a list, not one "repeat last" button — the likely next workout is one of the last several) |
-| **History** | List + calendar toggle, filters, pagination |
+| **History** | List + calendar toggle, filters, pagination. **Finished sessions only** |
 | **Insights** | 5 sub-tabs, one filter bar scoping the whole tab |
 | **Exercise library** | Search, filter, full taxonomy, per-exercise history |
 | **Templates** | List, folders, editor, preview-before-start |
@@ -476,7 +485,7 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 
 ## 13. What's built
 
-313 tests passing. Everything below is in the codebase and working.
+325 tests passing. Everything below is in the codebase and working.
 
 | Area | State |
 |---|---|
@@ -541,7 +550,7 @@ Recorded so they don't get "rediscovered".
 ## 16. Testing
 
 - **Unit:** `lib/units.ts` (round-trip), `lib/dates.ts` (DST, week starts, timezones), `lib/metrics.ts` (every tracking type, bodyweight math, the 12-rep e1RM cutoff, cardio kept out of volume), `lib/progression.ts`, `lib/sessionTitle.ts`, `lib/theme.ts`.
-- **Repository:** 78 tests — the logging loop, placeholder precedence, PR recomputation, outbox contents, the local→account claim, deletion semantics.
+- **Repository:** 88 tests — the logging loop, placeholder precedence, PR recomputation and announcement scoping, outbox contents, the local→account claim, deletion semantics.
 - **Sync:** against a mock backend — offline queueing, replay idempotency, permanent/transient/auth classification, dead-lettering, tombstones, deferred in-progress workouts, hard delete, discard-local.
 - **Security:** per table, user A cannot read or write user B's rows (`supabase/tests/rls.test.sql`).
 - **Not covered:** E2E (Playwright), and manual device passes for iOS install, audio unlock, and locked-screen push.

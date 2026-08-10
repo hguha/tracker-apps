@@ -66,8 +66,7 @@ export function HomeScreen({
     const active = await repo.getActiveWorkout()
     // Pull deep so lifetime badge stats (total workouts, volume, best streak)
     // reflect real history, not just the recent window.
-    const summaries = await repo.listWorkoutSummaries(1000)
-    const finished = summaries.filter((s) => s.workout.endedAt !== null)
+    const finished = await repo.listFinishedWorkoutSummaries(1000)
 
     const thisWeekStart = weekStart(Date.now(), profile.weekStartsOn)
     const lastWeekStart = thisWeekStart - WEEK_MS

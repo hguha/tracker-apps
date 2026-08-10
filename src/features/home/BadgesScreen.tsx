@@ -20,8 +20,7 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
   const [selected, setSelected] = useState<BadgeState | null>(null)
 
   const badges = useLiveQuery(async () => {
-    const summaries = await repo.listWorkoutSummaries(1000)
-    const finished = summaries.filter((s) => s.workout.endedAt !== null)
+    const finished = await repo.listFinishedWorkoutSummaries(1000)
     const stats = await repo.getBadgeStats()
     const profile = await repo.getProfile()
 

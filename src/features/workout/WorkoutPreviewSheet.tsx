@@ -11,6 +11,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Copy, X } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { useActiveWorkout } from '@/data/useActiveWorkout'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { formatRelativeDay } from '@/lib/dates'
@@ -28,6 +29,7 @@ export function WorkoutPreviewSheet({
   onDismiss: () => void
 }) {
   const preview = useLiveQuery(() => repo.getWorkoutPreview(workoutId), [workoutId])
+  const active = useActiveWorkout()
 
   async function start() {
     const result = await repo.repeatWorkout(workoutId)
@@ -87,19 +89,32 @@ export function WorkoutPreviewSheet({
         </div>
       )}
 
+      {active && (
+        <p className="px-5 pt-3 text-[12px] text-ink-muted">
+          Finish the workout you’re in before starting another one.
+        </p>
+      )}
+
       <div className="sticky bottom-0 flex gap-2 border-t border-line bg-surface px-4 py-3">
         <Button variant="secondary" size="lg" className="flex-1" onClick={onDismiss}>
           Cancel
         </Button>
-        <Button
-          size="lg"
-          className="flex-[2]"
-          disabled={!preview || preview.exercises.length === 0}
-          onClick={() => void start()}
-        >
-          <Copy size={17} />
-          Start workout
-        </Button>
+        {active ? (
+          <Button size="lg" className="flex-[2]" onClick={() => onStart(active.id)}>
+            <Copy size={17} />
+            Resume your workout
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            className="flex-[2]"
+            disabled={!preview || preview.exercises.length === 0}
+            onClick={() => void start()}
+          >
+            <Copy size={17} />
+            Start workout
+          </Button>
+        )}
       </div>
     </BottomSheet>
   )

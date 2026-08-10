@@ -331,6 +331,57 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     const withId = await repo.previewRecords('deadlift', (await db.sets.get(prSetId))!)
     expect(withId).toContain('max_weight')
   })
+
+  it('marks nothing on a first-ever exercise, however the sets ramp', async () => {
+    // The report: "some exercises that were my first time doing it, it marked a
+    // few different sets as PRs". A warmup ramp beat *itself* — 185 cleared 135,
+    // 225 cleared 185 — so each rung claimed a record on an exercise with no
+    // history at all. Nothing here should glow: there is nothing to beat.
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+
+    const setIds: string[] = []
+    for (const weightKg of [61, 84, 102]) {
+      const setId = await repo.addSet({ workoutExerciseId: we, weightKg, reps: 5 })
+      await repo.logSetValues(setId, {})
+      setIds.push(setId)
+    }
+
+    for (const setId of setIds) {
+      const set = (await db.sets.get(setId))!
+      expect(await repo.previewRecords('barbell_back_squat', set)).toEqual([])
+    }
+  })
+
+  it('glows only on the session’s best set, not every set that beats history', async () => {
+    // Against a previous best of 150, logging 160 → 170 → 180 lit up all three:
+    // each beats history, so each claimed the record while only 180 holds it.
+    const first = await repo.startWorkout()
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(first)
+
+    const second = await repo.startWorkout()
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const ids: string[] = []
+    for (const weightKg of [160, 170, 180]) {
+      const setId = await repo.addSet({ workoutExerciseId: secondWe, weightKg, reps: 5 })
+      await repo.logSetValues(setId, {})
+      ids.push(setId)
+    }
+
+    const glowing = await Promise.all(
+      ids.map(async (id) =>
+        (await repo.previewRecords('deadlift', (await db.sets.get(id))!)).includes(
+          'max_weight',
+        ),
+      ),
+    )
+    expect(glowing).toEqual([false, false, true])
+  })
 })
 
 describe('personal record reporting (§6.4)', () => {
@@ -352,6 +403,68 @@ describe('personal record reporting (§6.4)', () => {
     // It's still tracked for the detail sheet, just not announced.
     const prs = await repo.listPersonalRecords('lat_pulldown')
     expect(prs.some((pr) => pr.recordType === 'max_volume_session')).toBe(true)
+  })
+
+  it('announces nothing on a first-ever ascending exercise', async () => {
+    // The toast side of the same bug: an ascending ramp on a brand-new exercise
+    // announced a record per rung, because each set beat the running best that
+    // the set before it had just written.
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+
+    const reported: string[][] = []
+    for (const weightKg of [61, 84, 102]) {
+      const setId = await repo.addSet({ workoutExerciseId: we, weightKg, reps: 5 })
+      reported.push(await repo.logSetValues(setId, {}))
+    }
+
+    expect(reported).toEqual([[], [], []])
+  })
+
+  it('announces a session’s record once, not once per improving set', async () => {
+    const first = await repo.startWorkout()
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(first)
+
+    const second = await repo.startWorkout()
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const reported: string[][] = []
+    for (const weightKg of [160, 170, 180]) {
+      const setId = await repo.addSet({ workoutExerciseId: secondWe, weightKg, reps: 5 })
+      reported.push(await repo.logSetValues(setId, {}))
+    }
+
+    // Each set genuinely raises the session's best over history, so each is a
+    // real record moment as it happens — but the announcement is about weight
+    // only, never a repeat of the same type for a set that improved nothing.
+    expect(reported.map((types) => types.includes('max_weight'))).toEqual([
+      true,
+      true,
+      true,
+    ])
+    // A fourth, lighter set announces nothing.
+    const lighter = await repo.addSet({
+      workoutExerciseId: secondWe,
+      weightKg: 100,
+      reps: 5,
+    })
+    expect(await repo.logSetValues(lighter, {})).toEqual([])
+  })
+
+  it('does not announce during a bulk repair, which has no session', async () => {
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: we, weightKg: 200, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(workoutId)
+
+    expect(await repo.refreshPersonalRecords('deadlift')).toEqual([])
   })
 
   it('still announces a genuine weight record', async () => {
