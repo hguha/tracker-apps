@@ -12,9 +12,9 @@
 -- role to user A (set request.jwt.claim.sub) and assert visibility.
 
 begin;
-select plan(14);
+select plan(13);
 
--- Seed two users directly (bypassing the invite hook, which we test separately).
+-- Seed two users directly. Signup is open (0010), so there is no hook to bypass.
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'a@example.com'),
   ('22222222-2222-2222-2222-222222222222', 'b@example.com');
@@ -130,13 +130,6 @@ select is(
   (select count(*)::int from exercises where name = 'Hacked Bench'),
   0,
   'A cannot modify a system exercise (library is write-closed)'
-);
-
--- allowed_emails is invisible to clients entirely.
-select is(
-  (select count(*)::int from allowed_emails),
-  0,
-  'allowed_emails is not readable by an authenticated client'
 );
 
 -- Become user B; symmetric check that B sees only its own workout.

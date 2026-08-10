@@ -11,7 +11,8 @@ the sync engine (`src/sync/`) drains it and pulls deltas behind the
 ```
 migrations/
   0001_schema.sql       Full schema, mirrors src/domain/types.ts 1:1 (§4)
-  0002_triggers.sql     Server-clock updated_at, rebuild_prs(), invite hook, profile hook
+  0002_triggers.sql     Server-clock updated_at, rebuild_prs(), profile hook (the
+                        invite hook it also created was dropped by 0010)
   0003_rls.sql          Row-Level Security on every table (§4.13)
   0004_seed_library.sql System library: 27 muscles, 156 exercises, 27 metrics (user_id null)
   0005_fix_auth_trigger_search_path.sql
@@ -25,20 +26,21 @@ migrations/
   0010_open_signup_and_profile_coaching.sql
                         Drops the invite-only trigger (open signup) and adds
                         profiles.height_cm + profiles.training_goal (coach inputs)
+  0011_onboarded_at.sql             profiles.onboarded_at (first-run setup, per account)
+  0012_drop_unused_tables.sql       Drops allowed_emails + the two unused push tables
 tests/
   rls.test.sql          Asserts user A cannot read/write user B's rows (§4.13)
 ```
 
 **Signup is open** (as of 0010): any valid email creates an account. Earlier
-builds gated it on the `allowed_emails` table via the `enforce_invite_only`
-trigger; 0010 drops that trigger. The table remains (harmless; still referenced
-by the RLS suite) but no longer gates anyone.
+builds gated it on an `allowed_emails` table via the `enforce_invite_only`
+trigger; 0010 dropped the trigger and 0012 dropped the table.
 
 > **Applying newer migrations matters for sync.** A push of a row with a column
 > the remote schema lacks (e.g. `weekly_workout_goal`, `training_goal`,
 > `progression`) is classified *permanent* and **dead-lettered silently** — it
 > shows as "Failed to sync" in the app's Data card. If templates/profile changes
-> aren't syncing, confirm 0007–0010 are applied: `supabase db push`.
+> aren't syncing, confirm every migration is applied: `supabase db push`.
 
 ## Bring a project up
 

@@ -492,7 +492,7 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 | Themes + custom accent | ✅ |
 | Home — goal ring, streaks, 32 badges, avatar (opt-in), coach greeting | ✅ |
 | Auth — magic link, OTP fallback, device-only, composite provider, local→account upgrade | ✅ |
-| Supabase backend — schema, RLS + test suite, 10 migrations, live project | ✅ |
+| Supabase backend — schema, RLS + test suite, 12 migrations, live project | ✅ |
 | Sync — event-driven push, pull on open/foreground/manual, deferred in-progress workouts, dead-letter, retry, discard-local, hard erase | ✅ |
 | AI coach — mock + Gemini, critique/plan/ask/encouragement, data disclosure | ✅ |
 | Export / import JSON | ✅ |
@@ -531,7 +531,8 @@ Recorded so they don't get "rediscovered".
 | The confirm-circle set row | Communicated nothing, and recorded sets that were never performed. |
 | Separate select-then-group superset mode | Replaced by drag-onto. |
 | A separate "log a past workout" flow | The session menu's date control already does it. |
-| Invite-only signup | Product decision; trigger dropped in `0010`. |
+| Invite-only signup | Product decision; trigger dropped in `0010`, `allowed_emails` table dropped in `0012`. |
+| `push_subscriptions` / `scheduled_notifications` tables | Created in `0001` for push, which was never built. Dropped in `0012` — an empty table no code reads misreads as a working feature. If push ships it needs a Durable Object anyway, so the schema gets designed alongside that. |
 | Cloudflare Workers AI | Gemini shipped instead; see §2 for the trade. |
 | Cloudflare Pages | Deployed on Vercel behind a proxy from `hirshguha.com`. |
 
