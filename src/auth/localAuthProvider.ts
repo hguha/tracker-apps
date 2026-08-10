@@ -12,6 +12,7 @@
  */
 
 import { db } from '@/db/database'
+import { clearDbOwner } from '@/db/owner'
 import type { AuthProvider, Session, SignInResult } from './types'
 import { isValidEmail } from './types'
 
@@ -171,6 +172,9 @@ export class LocalAuthProvider implements AuthProvider {
     this.pendingEmail = null
     await db.delete()
     await db.open()
+    // The database is gone, so the ownership marker must go with it — a stale
+    // marker would make the next sign-in look like a foreign account.
+    clearDbOwner()
     this.emit(null)
   }
 }

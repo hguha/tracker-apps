@@ -41,8 +41,32 @@ export function getSupabase(): SupabaseClient | null {
       // detectSessionInUrl consumes on load with no extra round trip — more
       // robust under a subpath deploy than PKCE's code-exchange step.
       flowType: 'implicit',
+      // Persist under a fixed key so it's obvious which entry is ours, and so a
+      // key change is a deliberate act rather than a silent library default.
+      storageKey: 'fitnote.auth',
     },
   })
+
+  // Strip the consumed auth hash from the URL.
+  //
+  // Implicit flow lands with `#access_token=…` and supabase-js reads it once. If
+  // it stays in the address bar, the next reload hands `detectSessionInUrl` an
+  // already-used token; that fails, and the failure clears the session — which
+  // read as "it doesn't keep me logged in". The stored session is what should be
+  // authoritative after the first load, so remove the hash once it's consumed.
+  //
+  // Done on SIGNED_IN rather than immediately, so it can't race the read.
+  client.auth.onAuthStateChange((event) => {
+    if (event !== 'SIGNED_IN') return
+    if (typeof window === 'undefined') return
+    if (!window.location.hash.includes('access_token')) return
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + window.location.search,
+    )
+  })
+
   return client
 }
 

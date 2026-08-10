@@ -19,6 +19,8 @@ import { AccountScreen } from '@/features/auth/AccountScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
 import { BadgesScreen } from '@/features/home/BadgesScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
+import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen'
+import { hasOnboarded, markOnboarded } from '@/db/owner'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { MeScreen } from '@/features/profile/MeScreen'
 import { ExerciseLibraryScreen } from '@/features/library/ExerciseLibraryScreen'
@@ -89,7 +91,14 @@ function AuthGate() {
 }
 
 function SignedInApp() {
+  const { session } = useAuth()
   const [isReady, setIsReady] = useState(false)
+  // First-run setup for a real account: collects the coach's inputs and uploads
+  // anything logged on this device before signing in (§11.1.3). Local-only
+  // accounts skip it — there's no account to upload to and nothing to prime.
+  const [needsOnboarding, setNeedsOnboarding] = useState(
+    () => session != null && !session.isLocal && !hasOnboarded(session.userId),
+  )
   const [tab, setTab] = useState<TabKey>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
 
@@ -134,6 +143,18 @@ function SignedInApp() {
       <div className="flex h-full items-center justify-center text-ink-muted">
         Setting up…
       </div>
+    )
+  }
+
+  // After seeding, so the profile the setup screen writes to exists.
+  if (needsOnboarding && session) {
+    return (
+      <OnboardingScreen
+        onDone={() => {
+          markOnboarded(session.userId)
+          setNeedsOnboarding(false)
+        }}
+      />
     )
   }
 

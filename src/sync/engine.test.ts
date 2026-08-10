@@ -309,6 +309,46 @@ describe('failure classification (§5.5)', () => {
     expect((await db.templates.get('t1'))?.name).toBe('Server Name')
   })
 
+  it('drainUntilSettled clears a queue that needs several rounds, without manual retries', async () => {
+    // The reported experience: a user with existing local data hits sync, the
+    // whole thing "fails", a manual redrive pushes some, another redrive pushes a
+    // few more. `drain` stops at the first transient failure (to keep a child
+    // behind its parent), so one flaky row stalls everything after it.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    await loggedWorkout()
+    await loggedWorkout('deadlift')
+    const queued = await db.outbox.count()
+    expect(queued).toBeGreaterThan(4)
+
+    // Three separate transient failures, spread through the queue.
+    backend.forceNext({ status: 'transient', error: 'network' })
+    await engine.drain()
+    backend.forceNext({ status: 'transient', error: 'network' })
+
+    // One call, no user intervention — sleeps are stubbed so the test is instant.
+    const result = await engine.drainUntilSettled({ sleep: async () => {} })
+
+    expect(result.remaining).toBe(0)
+    expect(await db.outbox.count()).toBe(0)
+    expect(result.pushed).toBeGreaterThan(0)
+  })
+
+  it('drainUntilSettled gives up instead of spinning when the queue is stuck', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    await loggedWorkout()
+    // Every attempt fails on auth — nothing will succeed until re-auth.
+    backend.forceNext({ status: 'auth', error: '401' }, 99)
+
+    const result = await engine.drainUntilSettled({ sleep: async () => {} })
+
+    expect(result.pushed).toBe(0)
+    expect(result.remaining).toBeGreaterThan(0)
+  })
+
   it('stops and backs off on a transient failure, preserving order', async () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)

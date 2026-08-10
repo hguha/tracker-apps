@@ -12,6 +12,7 @@
 
 import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
 import { getActiveUserId, LOCAL_USER_ID } from '@/db/seed'
+import { getDbOwner, setDbOwner } from '@/db/owner'
 import { formatDistance, formatWeight, weightToKg } from '@/lib/units'
 import {
   bestOneRepMaxKg,
@@ -2272,6 +2273,41 @@ export async function purgeEmptyWorkouts(): Promise<number> {
     removed += 1
   }
   return removed
+}
+
+/**
+ * Enforces that the local database holds only the signed-in account's data
+ * (§11.1.3). Call before any screen can read a row.
+ *
+ * IndexedDB reads aren't scoped by user — they query whole tables, which is right
+ * for one account and much faster than filtering every row — so the guard has to
+ * be at the boundary instead. Signing in as a different account wipes what the
+ * previous one left behind. Without this, signing out and back in as someone else
+ * showed the first account's workouts under the second account's name, and no
+ * server policy can prevent that because reading a cached row never reaches the
+ * server.
+ *
+ * A claimed local-only account is exempt: `claimLocalData` has just re-owned
+ * those rows *to* this uid on purpose.
+ *
+ * Returns whether it wiped, so the caller can resync rather than show an empty app.
+ */
+export async function assertDbOwner(userId: string): Promise<boolean> {
+  const owner = getDbOwner()
+  if (owner === userId) return false
+
+  // An unowned database is either a fresh install or the pre-guard state. Only
+  // wipe when it demonstrably belongs to someone else; adopting an unowned one
+  // preserves a device-only history that's about to be claimed.
+  const belongsToSomeoneElse = owner !== null && owner !== LOCAL_USER_ID
+  if (belongsToSomeoneElse) {
+    await clearLocalData()
+    setDbOwner(userId)
+    return true
+  }
+
+  setDbOwner(userId)
+  return false
 }
 
 /**

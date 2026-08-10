@@ -19,6 +19,7 @@ import { LocalAuthProvider } from './localAuthProvider'
 import { CompositeAuthProvider } from './compositeAuthProvider'
 import { getSupabase } from '@/sync/supabaseClient'
 import { setActiveUserId, LOCAL_USER_ID } from '@/db/seed'
+import { setDbOwner } from '@/db/owner'
 import * as repo from '@/data/repository'
 import type { AuthProvider, Session, SignInResult } from './types'
 
@@ -55,6 +56,10 @@ if (provider instanceof CompositeAuthProvider) {
   provider.onUpgrade = async (newUserId: string) => {
     setActiveUserId(newUserId)
     const claimed = await repo.claimLocalData(newUserId)
+    // Record ownership here, before `apply` runs its guard — these rows were
+    // just deliberately re-owned to this uid, so they must not be wiped as
+    // "someone else's".
+    setDbOwner(newUserId)
     console.info(`[auth] claimed ${claimed} local rows into ${newUserId}`)
   }
 }
@@ -70,13 +75,22 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     // it syncs. An offline account keeps the local id; a real session uses its
     // UID. Because the tree is keyed on userId (App.tsx), this runs at the
     // signed-out↔signed-in boundary and the app remounts cleanly after it.
-    const apply = (next: Session | null) => {
-      setActiveUserId(next && !next.isLocal ? next.userId : LOCAL_USER_ID)
+    //
+    // The ownership guard runs here too, and it must complete *before* the
+    // session reaches React: once a screen mounts it reads whole IndexedDB
+    // tables, so a leftover account's rows would already be on screen (§11.1.3).
+    const apply = async (next: Session | null) => {
+      const ownerId = next && !next.isLocal ? next.userId : LOCAL_USER_ID
+      setActiveUserId(ownerId)
+      if (next) {
+        const wiped = await repo.assertDbOwner(ownerId)
+        if (wiped) console.info(`[auth] wiped another account's local data`)
+      }
       if (!cancelled) setSession(next)
     }
 
     void provider.getSession().then(apply)
-    const unsubscribe = provider.onSessionChange(apply)
+    const unsubscribe = provider.onSessionChange((next) => void apply(next))
     return () => {
       cancelled = true
       unsubscribe()

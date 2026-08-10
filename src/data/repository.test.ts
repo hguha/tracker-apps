@@ -13,8 +13,10 @@ import * as repo from '@/data/repository'
 
 beforeEach(async () => {
   // Reset the owner id first, so a test that switched it can't leak into the
-  // next one's seeding.
+  // next one's seeding. The persisted db-owner marker lives in localStorage and
+  // would otherwise survive the database wipe below.
   setActiveUserId(LOCAL_USER_ID)
+  localStorage.clear()
   // A clean database per test, so ordering can't leak state between them.
   await db.delete()
   await db.open()
@@ -1303,6 +1305,58 @@ describe('active user id + local data reset', () => {
     // A system library row is never re-owned.
     const benchExists = queued.some((e) => e.rowId === 'barbell_bench_press')
     expect(benchExists).toBe(false)
+  })
+
+  it('assertDbOwner wipes when a different account owned the local database', async () => {
+    // The reported bug: sign out, sign in as someone else, and the first
+    // account's workouts showed under the new account's name. IndexedDB reads
+    // aren't user-scoped, so nothing filtered them out — and no server policy can
+    // help, because reading a cached row never reaches the server.
+    const A = '44444444-4444-4444-4444-444444444444'
+    const B = '55555555-5555-5555-5555-555555555555'
+
+    setActiveUserId(A)
+    await seedIfNeeded()
+    expect(await repo.assertDbOwner(A)).toBe(false)
+    const workoutId = await repo.startWorkout()
+    await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    expect((await repo.listWorkouts()).length).toBe(1)
+
+    // Account B signs in on the same device.
+    setActiveUserId(B)
+    expect(await repo.assertDbOwner(B)).toBe(true)
+
+    // A's data is gone, not merely hidden.
+    expect(await repo.listWorkouts()).toHaveLength(0)
+    expect(await db.workouts.count()).toBe(0)
+    expect(await db.sets.count()).toBe(0)
+    // The shared library survives — it isn't anyone's data.
+    expect(await db.exercises.count()).toBeGreaterThan(90)
+  })
+
+  it('assertDbOwner keeps data when the same account signs back in', async () => {
+    const A = '66666666-6666-6666-6666-666666666666'
+    setActiveUserId(A)
+    await seedIfNeeded()
+    await repo.assertDbOwner(A)
+    await repo.startWorkout()
+
+    // Same account, second sign-in: nothing is wiped.
+    expect(await repo.assertDbOwner(A)).toBe(false)
+    expect((await repo.listWorkouts()).length).toBe(1)
+  })
+
+  it('assertDbOwner adopts an unclaimed device-only database instead of wiping it', async () => {
+    // A device-only user signing in for the first time must keep their history —
+    // claimLocalData is about to re-own it to them on purpose.
+    const A = '77777777-7777-7777-7777-777777777777'
+    setActiveUserId(LOCAL_USER_ID)
+    await seedIfNeeded()
+    await repo.startWorkout()
+
+    setActiveUserId(A)
+    expect(await repo.assertDbOwner(A)).toBe(false)
+    expect((await repo.listWorkouts()).length).toBe(1)
   })
 
   it('claimLocalData is a no-op for the local id and when there is nothing to claim', async () => {

@@ -145,6 +145,11 @@ export class SyncEngine {
 
         // Transient: record the attempt, schedule a backoff, and stop so order
         // is preserved. The next trigger resumes from this same head entry.
+        //
+        // Stopping is deliberate — a later row can depend on this one (a set on
+        // its workout_exercise), so pushing past a transient failure would put
+        // the child ahead of its parent. Retrying in-line instead of making the
+        // user press sync again is what `drainUntilSettled` is for.
         const attempts = entry.attempts + 1
         const nextAttemptAt = now + backoffMs(attempts, Math.random())
         await db.outbox.update(entry.seq!, {
@@ -232,6 +237,76 @@ export class SyncEngine {
     // Only pull if we're not paused on auth — a pull would also fail auth.
     const pull = drain.stoppedBecause === 'auth' ? { applied: 0 } : await this.pull()
     return { drain, pull }
+  }
+
+  /**
+   * Drains repeatedly until the queue settles, waiting out each backoff.
+   *
+   * `drain` stops at the first transient failure to preserve order, which is
+   * correct but means one flaky row leaves everything behind it queued. A user
+   * uploading an existing history saw exactly that: the first sync "failed", a
+   * manual retry pushed some, another retry pushed a few more. This does the
+   * retrying, so pressing sync once is enough.
+   *
+   * Stops early on `auth` (nothing will succeed until re-auth) and gives up after
+   * `maxRounds` so a permanently unreachable server can't spin forever. Reports
+   * progress per round, so a first-run screen can show real movement.
+   */
+  async drainUntilSettled(
+    opts: {
+      maxRounds?: number
+      onProgress?: (progress: { pushed: number; remaining: number }) => void
+      sleep?: (ms: number) => Promise<void>
+    } = {},
+  ): Promise<{ pushed: number; deadLettered: number; remaining: number }> {
+    const maxRounds = opts.maxRounds ?? 12
+    const sleep =
+      opts.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
+
+    let pushed = 0
+    let deadLettered = 0
+    // The clock the drain sees. Advanced past each backoff we wait out, so the
+    // next round treats the entry as due. Real waiting moves the wall clock too;
+    // carrying it explicitly is what lets a test stub `sleep` and stay instant.
+    let clock = Date.now()
+
+    for (let round = 0; round < maxRounds; round += 1) {
+      const result = await this.drain(clock)
+      pushed += result.pushed
+      deadLettered += result.deadLettered
+
+      const ready = (await db.outbox.toArray()).filter(isReadyToPush)
+      opts.onProgress?.({ pushed, remaining: ready.length })
+
+      if (ready.length === 0) break
+      // Nothing will succeed until the user re-authenticates.
+      if (result.stoppedBecause === 'auth') break
+
+      // Wait out the *head* entry's backoff specifically. It's the one blocking
+      // the drain, and it's the only one whose schedule matters — taking a min
+      // across every ready entry picks up the ones that have never failed (no
+      // `nextAttemptAt`, so 0), which reads as "due now" and exits immediately.
+      const head = ready.reduce((a, b) => ((a.seq ?? 0) <= (b.seq ?? 0) ? a : b))
+      const dueAt = head.nextAttemptAt ?? 0
+      const waitMs = Math.max(0, dueAt - clock)
+
+      // Nothing moved, and the head entry is already due — it's failing outright
+      // rather than backing off, so stop instead of spinning.
+      if (result.pushed === 0 && result.deadLettered === 0 && waitMs === 0) break
+
+      if (waitMs > 0) {
+        await sleep(Math.min(waitMs, 30_000))
+        clock = Math.max(Date.now(), dueAt)
+      } else {
+        clock = Date.now()
+      }
+    }
+
+    const remaining = (await db.outbox.toArray()).filter(isReadyToPush).length
+    syncLog.info(
+      `drainUntilSettled — pushed ${pushed}, dead-lettered ${deadLettered}, remaining ${remaining}`,
+    )
+    return { pushed, deadLettered, remaining }
   }
 
   /**

@@ -48,6 +48,14 @@ export interface SyncStatus {
    * "my local copy is wrong" escape hatch. Resolves to what it discarded/applied.
    */
   discardLocalChanges: () => Promise<{ discarded: number; applied: number }>
+  /**
+   * Pushes the whole queue, retrying through backoffs until it settles, for the
+   * first-run upload (§11.1.3). One call replaces the "sync failed, retry, retry"
+   * loop a user with existing local data used to hit.
+   */
+  uploadEverything: (
+    onProgress?: (progress: { pushed: number; remaining: number }) => void,
+  ) => Promise<{ pushed: number; deadLettered: number; remaining: number }>
 }
 
 export function useSync(): SyncStatus {
@@ -172,6 +180,25 @@ export function useSync(): SyncStatus {
     }
   }, [active, engine])
 
+  const uploadEverything = useCallback(
+    async (onProgress?: (p: { pushed: number; remaining: number }) => void) => {
+      if (!active || !engine) return { pushed: 0, deadLettered: 0, remaining: 0 }
+      setPhase('syncing')
+      try {
+        // Repair ownership first: rows logged before this account existed are
+        // still stamped 'local-user' and would be rejected by RLS forever.
+        if (session && !session.isLocal) await repo.claimLocalData(session.userId)
+        const result = await engine.drainUntilSettled({ onProgress })
+        setPhase(result.remaining > 0 ? 'error' : 'idle')
+        return result
+      } catch {
+        setPhase('error')
+        return { pushed: 0, deadLettered: 0, remaining: 0 }
+      }
+    },
+    [active, engine, session],
+  )
+
   // Split the queue: what's ready to send vs what's held for a live workout.
   // Reporting held writes as "pending" would show a count the user can't clear.
   const counts = useLiveQuery(
@@ -197,5 +224,6 @@ export function useSync(): SyncStatus {
     retryFailed,
     eraseServerData,
     discardLocalChanges,
+    uploadEverything,
   }
 }
