@@ -32,7 +32,7 @@ A local-first, installable PWA for logging resistance training and cardio, for a
 | Backend | Supabase (Postgres + RLS + Auth + Edge Functions) |
 | AI | Google Gemini via a Supabase Edge Function |
 | Hosting | Vercel, served at `hirshguha.com/workout-tracker` via proxy (see `DEPLOYING.md`) |
-| Tests | Vitest (325 tests) |
+| Tests | Vitest (346 tests) |
 
 **Deliberately not used**, despite earlier plans: TanStack Router and TanStack Query (navigation is simple enough that view state in one component is clearer, and Dexie's live queries removed the need for a server-state cache), shadcn/ui, react-hook-form, Zod.
 
@@ -333,10 +333,23 @@ Bottom tab bar: **Home · History · ( + ) · Insights · Me**. Sign-out lives i
 | **Insights** | 5 sub-tabs, one filter bar scoping the whole tab |
 | **Exercise library** | Search, filter, full taxonomy, per-exercise history |
 | **Templates** | List, folders, editor, preview-before-start |
-| **Me** | Units, coaching (height + goal), rest default, weekly goal, RPE, avatar toggle, sound, theme, body metrics, export/import, sync status and controls, badges, account |
+| **Me** | A hub of destinations only — account, library, templates, coach, badges, then settings / body / data |
+| **Settings** | Units, logging (rest default, weekly goal, RPE, auto-rest, sound, avatar), coaching (height + goal), appearance |
+| **Body** | Bodyweight, body fat, waist, resting HR — each entry dated |
+| **Data & sync** | Sync status and controls, export/import, and the destructive resets |
 | **Coach** | §9 |
 | **Badges** | Full grouped catalog |
 | **Account** | Name, email, stats, connect-account, sign out, delete |
+
+**Me is a menu, not a screen of settings.** It had grown to eleven unrelated
+groups in one scroll, ending in three destructive buttons — so reaching the
+rest-timer default meant scrolling past "Permanently erase all my training data".
+Each group is now its own screen, ordered by kind: things you *do* (library,
+templates, coach, badges), then things you *set* (settings, body), then things
+that are dangerous (data). Anything irreversible takes a deliberate navigation to
+reach. A menu row can also say what's behind it, which a wall of cards can't —
+the Data row doubles as the place a sync failure surfaces, since otherwise it's
+invisible until you go looking.
 
 ### 7.1 Home is one question
 
@@ -485,7 +498,7 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 
 ## 13. What's built
 
-325 tests passing. Everything below is in the codebase and working.
+346 tests passing. Everything below is in the codebase and working.
 
 | Area | State |
 |---|---|
@@ -550,7 +563,7 @@ Recorded so they don't get "rediscovered".
 ## 16. Testing
 
 - **Unit:** `lib/units.ts` (round-trip), `lib/dates.ts` (DST, week starts, timezones), `lib/metrics.ts` (every tracking type, bodyweight math, the 12-rep e1RM cutoff, cardio kept out of volume), `lib/progression.ts`, `lib/sessionTitle.ts`, `lib/theme.ts`.
-- **Repository:** 88 tests — the logging loop, placeholder precedence, PR recomputation and announcement scoping, outbox contents, the local→account claim, deletion semantics.
+- **Repository:** 107 tests — the logging loop, placeholder precedence, PR recomputation and announcement scoping, outbox contents, the local→account claim, deletion semantics.
 - **Sync:** against a mock backend — offline queueing, replay idempotency, permanent/transient/auth classification, dead-lettering, tombstones, deferred in-progress workouts, hard delete, discard-local.
 - **Security:** per table, user A cannot read or write user B's rows (`supabase/tests/rls.test.sql`).
 - **Not covered:** E2E (Playwright), and manual device passes for iOS install, audio unlock, and locked-screen push.
