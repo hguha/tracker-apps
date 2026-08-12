@@ -23,7 +23,13 @@ import { REP_BUCKETS, type InsightsData } from './useInsightsData'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { regionVar, resolveRegionColor, resolveToken } from '@/lib/palette'
 import { MOVEMENT_PATTERNS, REGION_LABELS, REGIONS } from '@/domain/types'
-import { displayWeight, distanceFromM, formatDuration, weightFromKg } from '@/lib/units'
+import {
+  bodyWeightFromKg,
+  displayWeight,
+  distanceFromM,
+  formatDuration,
+  weightFromKg,
+} from '@/lib/units'
 import { weekKey } from '@/lib/dates'
 import { humanizeSlug } from '@/lib/labels'
 
@@ -686,7 +692,7 @@ export function BodyweightChart({ data }: { data: InsightsData }) {
   const entries = data.bodyMetrics.get('bodyweight') ?? []
 
   const { option, labels, raw, average } = useMemo(() => {
-    const raw = entries.map((e) => weightFromKg(e.value, unit, 0.1))
+    const raw = entries.map((e) => bodyWeightFromKg(e.value, unit))
     const average = raw.map((_, index) => {
       const window = raw.slice(Math.max(0, index - 6), index + 1)
       return Number((window.reduce((a, b) => a + b, 0) / window.length).toFixed(1))

@@ -61,7 +61,9 @@ export function ActiveWorkoutScreen({
         workoutExercise: we,
         exercise: await db.exercises.get(we.exerciseId),
         sets: await repo.listSets(we.id),
-        lastPerformance: await repo.getLastPerformance(we.exerciseId),
+        // Relative to *this* workout, so editing an older session shows what
+        // came before it rather than the newest session overall.
+        previousSession: await repo.getPreviousSession(we.exerciseId, workoutId),
       })),
     )
 
@@ -296,7 +298,7 @@ export function ActiveWorkoutScreen({
                     exercise={row.exercise}
                     muscle={muscleById.get(row.exercise.primaryMuscleId)}
                     sets={row.sets}
-                    lastPerformance={row.lastPerformance}
+                    previousSession={row.previousSession}
                     weightUnit={profile.unitWeight}
                     distanceUnit={profile.unitDistance}
                     showRpe={profile.showRpe}
@@ -312,8 +314,8 @@ export function ActiveWorkoutScreen({
                       void handleSetChange(setId, patch, row.workoutExercise.exerciseId)
                     }
                     onDeleteSet={(setId) => void handleDeleteSet(setId)}
-                    onConfirmPlaceholder={(setId) => {
-                      void repo.confirmPlaceholder(setId).then((broken) => {
+                    onConfirmPlaceholder={(setId, shown) => {
+                      void repo.confirmPlaceholder(setId, shown).then((broken) => {
                         playCue(broken.length > 0 ? 'pr' : 'set-logged')
                         if (broken.length > 0) toast.show('New personal record')
                       })

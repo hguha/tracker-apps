@@ -20,8 +20,8 @@ import { displayWeight, distanceFromM, formatDuration, weightFromKg } from '@/li
 import type {
   DistanceUnit,
   Exercise,
-  LastPerformance,
   Muscle,
+  PerformedSession,
   PerformedSet,
   WeightUnit,
   WorkoutSet,
@@ -43,7 +43,12 @@ export interface ExerciseCardProps {
   exercise: Exercise
   muscle: Muscle | undefined
   sets: WorkoutSet[]
-  lastPerformance: LastPerformance | undefined
+  /**
+   * The session of this exercise immediately before the workout being viewed, or
+   * null if there isn't one. Drives both the header summary and the `Last`
+   * column, so an older workout never shows numbers from a newer one.
+   */
+  previousSession: PerformedSession | null
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   showRpe: boolean
@@ -58,7 +63,8 @@ export interface ExerciseCardProps {
   onAddSet: () => void
   onSetChange: (setId: string, patch: Partial<WorkoutSet>) => void
   onDeleteSet: (setId: string) => void
-  onConfirmPlaceholder: (setId: string) => void
+  /** `shown` is the ghost the row is displaying — see `repo.confirmPlaceholder`. */
+  onConfirmPlaceholder: (setId: string, shown: SetPlaceholderHint | undefined) => void
   onDuplicateSet: (setId: string) => void
   onOpenDetail: () => void
 }
@@ -68,7 +74,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
     exercise,
     muscle,
     sets,
-    lastPerformance,
+    previousSession,
     weightUnit,
     distanceUnit,
     showRpe,
@@ -106,12 +112,11 @@ export function ExerciseCard(props: ExerciseCardProps) {
     }
   }, [sets, exercise])
 
-  const lastSession = lastPerformance?.sessions[0]
   const isCardio = exercise.movementPattern === 'cardio'
 
   const previousSets = useMemo<PerformedSet[]>(
-    () => lastSession?.sets ?? [],
-    [lastSession],
+    () => previousSession?.sets ?? [],
+    [previousSession],
   )
 
   /**
@@ -172,7 +177,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
             )}
           </div>
           <p className="mt-0.5 text-[12.5px] text-ink-secondary">
-            {summarizeLastSession(lastPerformance, weightUnit, distanceUnit)}
+            {summarizeLastSession(previousSession, weightUnit, distanceUnit)}
           </p>
           {loggingHint(exercise, weightUnit) && (
             <p className="mt-0.5 text-[11.5px] text-ink-muted">
@@ -240,13 +245,16 @@ export function ExerciseCard(props: ExerciseCardProps) {
                 index={index}
                 exercise={exercise}
                 previous={placeholderAt(index)}
+                lastSession={previousSets[index]}
                 weightUnit={weightUnit}
                 distanceUnit={distanceUnit}
                 showRpe={showRpe}
                 isRecord={recordSetIds.has(set.id)}
                 onChange={(patch) => onSetChange(set.id, patch)}
                 onDelete={() => onDeleteSet(set.id)}
-                onConfirmPlaceholder={() => onConfirmPlaceholder(set.id)}
+                onConfirmPlaceholder={() =>
+                  onConfirmPlaceholder(set.id, placeholderAt(index))
+                }
                 onDuplicate={() => onDuplicateSet(set.id)}
               />
             ))}
@@ -305,11 +313,10 @@ function columnLabels(
 
 /** The one-line summary: date, sets × reps, best e1RM. */
 function summarizeLastSession(
-  lastPerformance: LastPerformance | undefined,
+  session: PerformedSession | null,
   weightUnit: WeightUnit,
   distanceUnit: DistanceUnit,
 ): string {
-  const session = lastPerformance?.sessions[0]
   if (!session) return 'First time — no history yet'
 
   const working = session.sets

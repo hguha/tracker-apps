@@ -1086,11 +1086,16 @@ export async function addExerciseToWorkout(
   exerciseId: string,
 ): Promise<string> {
   const existing = await listWorkoutExercises(workoutId)
+  // One past the highest position, not the row *count*. Counting live rows put a
+  // new exercise on top of an existing one whenever positions weren't contiguous
+  // — delete the 2nd of 3 and the next add lands at position 2, colliding with
+  // the row already there, so it appeared in the middle instead of at the end.
+  const lastPosition = existing.reduce((max, we) => Math.max(max, we.position), -1)
   const row: WorkoutExercise = {
     id: newId(),
     workoutId,
     exerciseId,
-    position: existing.length,
+    position: lastPosition + 1,
     supersetGroup: null,
     restSeconds: null,
     notes: '',
@@ -1109,7 +1114,25 @@ export async function updateWorkoutExercise(
 }
 
 export async function removeWorkoutExercise(id: string): Promise<void> {
+  const row = await db.workoutExercises.get(id)
   await patchRow(db.workoutExercises, 'workoutExercises', id, { deletedAt: Date.now() })
+  // Deleting one half of a pair left the other still flagged as a superset,
+  // showing the accent rule and the "Superset" badge on a lone exercise. Only
+  // `removeFromSuperset` used to collapse a group of one; deletion is the other
+  // way a group can shrink, so it has to do the same.
+  if (row?.supersetGroup !== null && row !== undefined) {
+    await collapseLoneSuperset(row.workoutId, row.supersetGroup!)
+  }
+}
+
+/** A "superset" of one is just an exercise, so clear the flag. */
+async function collapseLoneSuperset(workoutId: string, group: number): Promise<void> {
+  const remaining = (await listWorkoutExercises(workoutId)).filter(
+    (s) => s.supersetGroup === group,
+  )
+  if (remaining.length === 1) {
+    await updateWorkoutExercise(remaining[0]!.id, { supersetGroup: null })
+  }
 }
 
 /** Restores a swipe-deleted exercise. Backs the undo toast (§6.4). */
@@ -1178,14 +1201,7 @@ export async function removeFromSuperset(workoutExerciseId: string): Promise<voi
 
   const group = row.supersetGroup
   await updateWorkoutExercise(workoutExerciseId, { supersetGroup: null })
-
-  const remaining = (await listWorkoutExercises(row.workoutId)).filter(
-    (s) => s.supersetGroup === group,
-  )
-  // A "superset" of one is just an exercise.
-  if (remaining.length === 1) {
-    await updateWorkoutExercise(remaining[0]!.id, { supersetGroup: null })
-  }
+  await collapseLoneSuperset(row.workoutId, group)
 }
 
 /**
@@ -1244,7 +1260,9 @@ export async function addSet(input: NewSetInput): Promise<string> {
 
   let position: number
   if (input.afterPosition === undefined) {
-    position = siblings.length
+    // One past the highest, not the count — same collision as adding an
+    // exercise: delete set 2 of 3 and the next "Add set" would reuse position 2.
+    position = siblings.reduce((max, s) => Math.max(max, s.position), -1) + 1
   } else {
     position = input.afterPosition + 1
     // Shift everything after the insertion point down by one.
@@ -1348,28 +1366,47 @@ export function setHasValues(
 }
 
 /**
- * Copies last session's values into a set — the "same as last time" action.
+ * Copies the ghost values into a set — the "same as last time" action.
  * Distinct from typing them, but lands in the same state.
+ *
+ * **`shown` is what the row is displaying**, passed in by the caller. It used to
+ * re-derive the prefill here via `getPrefillForSet`, which is a *different*
+ * calculation from the `resolvePlaceholders` the card renders: that one also
+ * carries values forward from earlier rows in the same card. Where the two
+ * disagreed the re-derivation returned nothing and the action silently did
+ * nothing — the reported "Same as last does nothing". The row already knows the
+ * numbers the user is looking at, so it says so rather than having this guess
+ * again. Falling back to the derivation keeps callers without a rendered row
+ * (tests, the cardio block) working.
  */
-export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
+export async function confirmPlaceholder(
+  setId: string,
+  shown?: SetPlaceholder,
+): Promise<RecordType[]> {
   const set = await db.sets.get(setId)
   if (!set) return []
   const workoutExercise = await db.workoutExercises.get(set.workoutExerciseId)
   if (!workoutExercise) return []
 
-  // A repeated session stores per-set placeholder overrides that win over
-  // history (§7.2), and the row already shows them. "Same as last" must copy
-  // the numbers the user is looking at, not the most-recent session's — else
-  // the value logged silently contradicts the placeholder displayed.
-  const overrides = await getPlaceholderOverrides(workoutExercise.workoutId)
-  let prefill = overrides[setId] ?? null
+  let prefill = shown ?? null
+
+  if (!prefill) {
+    // A repeated session stores per-set placeholder overrides that win over
+    // history (§7.2), and the row already shows them.
+    const overrides = await getPlaceholderOverrides(workoutExercise.workoutId)
+    prefill = overrides[setId] ?? null
+  }
 
   if (!prefill) {
     const siblings = await listSets(set.workoutExerciseId)
     const index = siblings.findIndex((s) => s.id === setId)
-    prefill = await getPrefillForSet(workoutExercise.exerciseId, index < 0 ? 0 : index)
+    prefill = await getPrefillForSet(
+      workoutExercise.exerciseId,
+      index < 0 ? 0 : index,
+      siblings,
+    )
   }
-  if (!prefill) return []
+  if (!prefill || !hasAnyValue(prefill)) return []
 
   return logSetValues(setId, {
     weightKg: prefill.weightKg,
@@ -1377,6 +1414,16 @@ export async function confirmPlaceholder(setId: string): Promise<RecordType[]> {
     durationSeconds: prefill.durationSeconds,
     distanceM: prefill.distanceM,
   })
+}
+
+/** Whether a placeholder carries anything worth writing. */
+function hasAnyValue(v: SetPlaceholder): boolean {
+  return (
+    v.weightKg !== null ||
+    v.reps !== null ||
+    v.durationSeconds !== null ||
+    v.distanceM !== null
+  )
 }
 
 /**
@@ -1606,6 +1653,45 @@ export async function getLastPerformance(
   exerciseId: string,
 ): Promise<LastPerformance | undefined> {
   return db.lastPerformance.get(exerciseId)
+}
+
+/**
+ * The most recent session of an exercise **strictly before** the given workout —
+ * what the `Last` column means while that workout is open.
+ *
+ * `lastPerformance` can't answer this: it caches the three globally-newest
+ * sessions, so opening an older workout showed it numbers from a *later* one and
+ * "last time" pointed forward in time. Compared by `startedAt`, with the workout
+ * id as a tiebreak so two sessions stamped the same millisecond still order
+ * deterministically instead of flickering between renders.
+ */
+export async function getPreviousSession(
+  exerciseId: string,
+  beforeWorkoutId: string,
+): Promise<PerformedSession | null> {
+  const anchor = await db.workouts.get(beforeWorkoutId)
+  if (!anchor) return null
+
+  const exercise = await db.exercises.get(exerciseId)
+  if (!exercise) return null
+
+  const earlier = (await completedSessionsForExercise(exerciseId)).filter(
+    ({ workout }) =>
+      workout.id !== beforeWorkoutId &&
+      (workout.startedAt < anchor.startedAt ||
+        (workout.startedAt === anchor.startedAt && workout.id < anchor.id)),
+  )
+  // completedSessionsForExercise sorts newest-first, so the head is the answer.
+  const previous = earlier[0]
+  if (!previous) return null
+
+  return {
+    workoutId: previous.workout.id,
+    performedAt: previous.workout.startedAt,
+    sets: previous.sets.map(toPlaceholderSet),
+    bestE1rmKg: bestOneRepMaxKg(previous.sets),
+    volumeKg: volumeLoadKg(previous.sets, exercise, previous.workout.bodyweightKg),
+  }
 }
 
 /** Recomputes the cache for one exercise from the last 3 sessions containing it. */

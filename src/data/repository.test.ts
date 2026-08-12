@@ -159,6 +159,45 @@ describe('the logging loop', () => {
   })
 })
 
+describe('append order after a delete', () => {
+  it('adds an exercise at the end even when a middle one was removed', async () => {
+    // The reported "weirdness": position was the count of *live* rows, so after
+    // deleting one the next add reused a position already taken and the new
+    // exercise appeared mid-list instead of at the end.
+    const workoutId = await repo.startWorkout()
+    const first = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const middle = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+    const third = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+
+    await repo.removeWorkoutExercise(middle)
+    const added = await repo.addExerciseToWorkout(workoutId, 'dumbbell_curl')
+
+    const rows = await repo.listWorkoutExercises(workoutId)
+    expect(rows.map((r) => r.id)).toEqual([first, third, added])
+    // Positions must be distinct, or the order is decided by sort stability
+    // rather than by intent — the actual defect, which an id comparison alone
+    // can pass by luck.
+    const positions = rows.map((r) => r.position)
+    expect(new Set(positions).size).toBe(positions.length)
+  })
+
+  it('adds a set at the end even when a middle one was removed', async () => {
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const first = await repo.addSet({ workoutExerciseId: we, weightKg: 100, reps: 5 })
+    const middle = await repo.addSet({ workoutExerciseId: we, weightKg: 110, reps: 5 })
+    const third = await repo.addSet({ workoutExerciseId: we, weightKg: 120, reps: 5 })
+
+    await repo.deleteSet(middle)
+    const added = await repo.addSet({ workoutExerciseId: we, weightKg: 130, reps: 5 })
+
+    const sets = await repo.listSets(we)
+    expect(sets.map((s) => s.id)).toEqual([first, third, added])
+    const positions = sets.map((s) => s.position)
+    expect(new Set(positions).size).toBe(positions.length)
+  })
+})
+
 describe('placeholder logging semantics (§6.2)', () => {
   it('treats a set with values as performed, with no confirm step', async () => {
     const workoutId = await repo.startWorkout()
@@ -264,6 +303,119 @@ describe('placeholder logging semantics (§6.2)', () => {
     await repo.confirmPlaceholder(target!.id)
     const set = await db.sets.get(target!.id)
     expect(set).toMatchObject({ weightKg: 100, reps: 8, isCompleted: true })
+  })
+
+  it('confirmPlaceholder writes the ghost the row is showing', async () => {
+    // The reported bug: on a row whose ghost came from carry-forward, the swipe
+    // action did nothing. This re-derived the prefill with a *different* rule
+    // than the card renders (`resolvePlaceholders`, which carries values forward
+    // from earlier rows), so where the two disagreed it wrote nothing at all.
+    // The row now passes what it displays.
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const target = await repo.addSet({ workoutExerciseId: we })
+
+    await repo.confirmPlaceholder(target, {
+      weightKg: 84,
+      reps: 6,
+      durationSeconds: null,
+      distanceM: null,
+    })
+
+    expect(await db.sets.get(target)).toMatchObject({
+      weightKg: 84,
+      reps: 6,
+      isCompleted: true,
+    })
+  })
+
+  it('confirmPlaceholder carries forward within a card when there is no history', async () => {
+    // A brand-new exercise: set 1 logged by hand, set 2's ghost can only come
+    // from carry-forward. Tapping "Same" on set 2 must still fill it in.
+    const workoutId = await repo.startWorkout()
+    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+    const first = await repo.addSet({ workoutExerciseId: we })
+    await repo.logSetValues(first, { weightKg: 102, reps: 5 })
+
+    const second = await repo.addSet({ workoutExerciseId: we })
+    await repo.confirmPlaceholder(second)
+
+    expect(await db.sets.get(second)).toMatchObject({
+      weightKg: 102,
+      reps: 5,
+      isCompleted: true,
+    })
+  })
+})
+
+describe('getPreviousSession — what "Last" means (§6.3)', () => {
+  it('is the session before the one being viewed, never a later one', async () => {
+    // The reported bug: opening an older workout showed the *newer* session's
+    // numbers in the Last column, because lastPerformance caches the three
+    // globally-newest sessions regardless of which workout is open.
+    const older = await repo.startWorkout({ startedAt: Date.parse('2026-07-01T10:00Z') })
+    const olderWe = await repo.addExerciseToWorkout(older, 'deadlift')
+    await repo.logSetValues(await repo.addSet({ workoutExerciseId: olderWe }), {
+      weightKg: 100,
+      reps: 5,
+    })
+    await repo.finishWorkout(older)
+
+    const middle = await repo.startWorkout({ startedAt: Date.parse('2026-07-08T10:00Z') })
+    const middleWe = await repo.addExerciseToWorkout(middle, 'deadlift')
+    await repo.logSetValues(await repo.addSet({ workoutExerciseId: middleWe }), {
+      weightKg: 120,
+      reps: 5,
+    })
+    await repo.finishWorkout(middle)
+
+    const newest = await repo.startWorkout({ startedAt: Date.parse('2026-07-15T10:00Z') })
+    const newestWe = await repo.addExerciseToWorkout(newest, 'deadlift')
+    await repo.logSetValues(await repo.addSet({ workoutExerciseId: newestWe }), {
+      weightKg: 140,
+      reps: 5,
+    })
+    await repo.finishWorkout(newest)
+
+    // Viewing the middle session: "last" is the older one, not the newest.
+    const forMiddle = await repo.getPreviousSession('deadlift', middle)
+    expect(forMiddle?.workoutId).toBe(older)
+    expect(forMiddle?.sets[0]?.weightKg).toBe(100)
+
+    // Viewing the newest: "last" is the middle one.
+    const forNewest = await repo.getPreviousSession('deadlift', newest)
+    expect(forNewest?.workoutId).toBe(middle)
+    expect(forNewest?.sets[0]?.weightKg).toBe(120)
+
+    // The very first session has nothing before it.
+    expect(await repo.getPreviousSession('deadlift', older)).toBeNull()
+  })
+
+  it('never returns the workout being viewed, even mid-session', async () => {
+    // While logging, the current session is not its own "last time" — that's
+    // what made the column echo the row's own numbers back at the user.
+    const previous = await repo.startWorkout({
+      startedAt: Date.parse('2026-07-01T10:00Z'),
+    })
+    const previousWe = await repo.addExerciseToWorkout(previous, 'lat_pulldown')
+    await repo.logSetValues(await repo.addSet({ workoutExerciseId: previousWe }), {
+      weightKg: 60,
+      reps: 10,
+    })
+    await repo.finishWorkout(previous)
+
+    const current = await repo.startWorkout({
+      startedAt: Date.parse('2026-07-08T10:00Z'),
+    })
+    const currentWe = await repo.addExerciseToWorkout(current, 'lat_pulldown')
+    await repo.logSetValues(await repo.addSet({ workoutExerciseId: currentWe }), {
+      weightKg: 81.6,
+      reps: 8,
+    })
+
+    const session = await repo.getPreviousSession('lat_pulldown', current)
+    expect(session?.workoutId).toBe(previous)
+    expect(session?.sets[0]?.weightKg).toBe(60)
   })
 })
 
@@ -529,6 +681,38 @@ describe('supersets by drag (§6.4)', () => {
 
     const rows = await repo.listWorkoutExercises(workoutId)
     expect(rows.every((r) => r.supersetGroup === null)).toBe(true)
+  })
+
+  it('ungroups the partner when the other half is deleted', async () => {
+    // The reported bug: deleting one of two supersetted exercises left the other
+    // still flagged, so a lone exercise kept the accent rule and the "Superset"
+    // badge. Only removeFromSuperset collapsed a group of one; deletion is the
+    // other way a group can shrink.
+    const workoutId = await repo.startWorkout()
+    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+    await repo.supersetExercises(b, a)
+
+    await repo.removeWorkoutExercise(b)
+
+    const rows = await repo.listWorkoutExercises(workoutId)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.supersetGroup).toBeNull()
+  })
+
+  it('keeps a three-way group intact when one member is deleted', async () => {
+    const workoutId = await repo.startWorkout()
+    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+    const c = await repo.addExerciseToWorkout(workoutId, 'dumbbell_curl')
+    await repo.supersetExercises(b, a)
+    await repo.supersetExercises(c, b)
+
+    await repo.removeWorkoutExercise(c)
+
+    const rows = await repo.listWorkoutExercises(workoutId)
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.supersetGroup !== null)).toBe(true)
   })
 
   it('ignores a card dropped on itself', async () => {

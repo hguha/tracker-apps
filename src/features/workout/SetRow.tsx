@@ -25,7 +25,7 @@ import type {
   WeightUnit,
   WorkoutSet,
 } from '@/domain/types'
-import { SwipeableRow } from '@/components/SwipeableRow'
+import { SwipeableRow, useRowTap } from '@/components/SwipeableRow'
 import { cn } from '@/lib/cn'
 import { useDraftInput } from '@/lib/useDraftInput'
 import {
@@ -41,8 +41,22 @@ export interface SetRowProps {
   set: WorkoutSet
   index: number
   exercise: Exercise
-  /** Same set index from the last session — the placeholder source. */
+  /**
+   * The ghost values for this row's inputs. Resolved by `resolvePlaceholders`,
+   * so it may come from a template override or be carried forward from an
+   * earlier row in this same card — it is *not* necessarily last session.
+   */
   previous: PerformedSet | undefined
+  /**
+   * What this set index was in the previous session, for the `Last` column, or
+   * undefined if that session had no such set.
+   *
+   * Deliberately separate from `previous`: sharing one value made the column
+   * echo the row's own numbers, since carry-forward feeds a row its own
+   * neighbours' values. The column is a record of the past and must never
+   * reflect the current session.
+   */
+  lastSession: PerformedSet | undefined
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   showRpe: boolean
@@ -104,6 +118,7 @@ export function SetRow(props: SetRowProps) {
     index,
     exercise,
     previous,
+    lastSession,
     weightUnit,
     distanceUnit,
     showRpe,
@@ -154,9 +169,9 @@ export function SetRow(props: SetRowProps) {
           </span>
         </div>
 
-        {/* Last time, for this exact set index. */}
+        {/* Last time, for this exact set index. Never the current session. */}
         <div className="w-14 shrink-0 tabular text-[11.5px] leading-tight text-ink-muted">
-          {formatPrevious(previous, weightUnit, distanceUnit)}
+          {formatPrevious(lastSession, weightUnit, distanceUnit)}
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -243,20 +258,33 @@ export function SetRow(props: SetRowProps) {
               style={{ background: 'var(--status-good)' }}
             />
           ) : previous ? (
-            <button
-              onClick={onConfirmPlaceholder}
-              aria-label="Log the same as last time"
-              // The visible chip is small, but the touch target is padded out to
-              // 44px and overhangs the row's right edge — at the screen border a
-              // thumb lands short as often as it lands square.
-              className="-my-1.5 -mr-2.5 flex h-11 w-[52px] items-center justify-center rounded-lg text-[10px] font-bold uppercase text-ink-muted active:bg-accent-wash"
-            >
-              Same
-            </button>
+            <SameAsLastButton onTap={onConfirmPlaceholder} />
           ) : null}
         </div>
       </div>
     </SwipeableRow>
+  )
+}
+
+/**
+ * "Same" — copy the ghost values in as real ones.
+ *
+ * Its own component because `useRowTap` is a hook and this renders conditionally.
+ * The tap commits on `pointerup` (see `SwipeableRow`), since a plain `onClick`
+ * inside a row that also handles pointer events doesn't reliably fire on iOS —
+ * the button would highlight and do nothing. The visible chip is small but the
+ * target is 44px and overhangs the row's right edge, because at the screen
+ * border a thumb lands short as often as square.
+ */
+function SameAsLastButton({ onTap }: { onTap: () => void }) {
+  return (
+    <button
+      {...useRowTap(onTap)}
+      aria-label="Log the same as last time"
+      className="-my-1.5 -mr-2.5 flex h-11 w-[52px] items-center justify-center rounded-lg text-[10px] font-bold uppercase text-ink-muted active:bg-accent-wash"
+    >
+      Same
+    </button>
   )
 }
 

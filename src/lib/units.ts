@@ -3,8 +3,16 @@
  * everything the user sees passes through here.
  *
  * The subtle requirement: a lb user who enters 135 stores 61.235 kg and must
- * see exactly 135 again — never 134.9 or 135.0000001. So display conversion
- * snaps to the nearest increment that is actually loadable in the target unit.
+ * see exactly 135 again — never 134.9 or 135.0000001.
+ *
+ * That used to be done by snapping display values to a **loadable plate grid**
+ * (2.5 lb / 1.25 kg), which fixed the round-trip but silently changed numbers
+ * that weren't on the grid: 181 lb displayed as 180, 46 as 45, 132 as 132.5, a
+ * 12 lb dumbbell as 12.5. Plenty of real loads aren't multiples of 2.5 —
+ * machines, fixed dumbbells, cable stacks, plate-loaded pin settings. The app
+ * records what you did; it does not get to decide what you could have lifted.
+ * Rounding to 2 decimals kills the float dust on its own, which was the only
+ * thing the grid was actually needed for.
  */
 
 import type { DistanceUnit, LengthUnit, WeightUnit } from '@/domain/types'
@@ -12,15 +20,6 @@ import type { DistanceUnit, LengthUnit, WeightUnit } from '@/domain/types'
 export const LB_PER_KG = 2.20462262185
 const KM_PER_MI = 1.609344
 const CM_PER_IN = 2.54
-
-const DEFAULT_INCREMENT: Record<WeightUnit, number> = {
-  lb: 2.5, // a pair of 1.25 lb plates
-  kg: 1.25, // a pair of 0.625 kg plates
-}
-
-function roundToIncrement(value: number, increment: number): number {
-  return Math.round(value / increment) * increment
-}
 
 /**
  * Parse user-typed text into a finite number, or null.
@@ -49,18 +48,25 @@ export function weightToKg(value: number, from: WeightUnit): number {
 }
 
 /**
- * Canonical kg to the user's unit, snapped to a loadable increment.
+ * Canonical kg back to the user's unit, at the precision a person would write.
  *
- * `increment` is overridable per exercise for micro-plates or for machines
- * with unusual jumps.
+ * Two decimals: enough that a value entered in either unit round-trips exactly
+ * (135 lb → 61.235 kg → 135), without inventing precision or snapping to a
+ * plate grid the user never asked for.
  */
-export function weightFromKg(
-  kg: number,
-  to: WeightUnit,
-  increment = DEFAULT_INCREMENT[to],
-): number {
-  const raw = to === 'kg' ? kg : kg * LB_PER_KG
-  return clean(roundToIncrement(raw, increment), 2)
+export function weightFromKg(kg: number, to: WeightUnit): number {
+  return clean(to === 'kg' ? kg : kg * LB_PER_KG, 2)
+}
+
+/**
+ * A body measurement in the user's unit, to one decimal.
+ *
+ * Bodyweight is read off a scale rather than loaded on a bar, so it wants a
+ * tenth of a unit — `185.4 lb`, not `185.42`. Distinct from `weightFromKg` only
+ * in precision, but naming it stops the two from being confused at call sites.
+ */
+export function bodyWeightFromKg(kg: number, to: WeightUnit): number {
+  return clean(to === 'kg' ? kg : kg * LB_PER_KG, 1)
 }
 
 export function formatWeight(

@@ -43,7 +43,7 @@ import {
   lengthFromCm,
   lengthToCm,
   parseNumber,
-  weightFromKg,
+  bodyWeightFromKg,
   weightToKg,
 } from '@/lib/units'
 import type { DistanceUnit, LengthUnit, Profile, WeightUnit } from '@/domain/types'
@@ -161,7 +161,7 @@ export function MeScreen({
   }
 
   function toDisplay(unitType: string, value: number): number {
-    if (unitType === 'mass') return weightFromKg(value, profile.unitWeight, 0.1)
+    if (unitType === 'mass') return bodyWeightFromKg(value, profile.unitWeight)
     if (unitType === 'length') return lengthFromCm(value, profile.unitLength)
     return value
   }

@@ -8,9 +8,20 @@
  *
  * Swipe left reveals the destructive action, swipe right the duplicate action.
  * Releasing past the threshold commits; anything short springs back.
+ *
+ * **Buttons inside a row are draggable too.** An earlier version bailed out of
+ * `pointerdown` over any control so taps wouldn't be swallowed, which made the
+ * row un-swipeable wherever a button sat — with a 44px "Same" target on the
+ * right, most of the row's edge refused to swipe. Instead the gesture always
+ * arms, and a button asks `useRowGesture()` whether the finger ended up
+ * dragging. That also fixes the tap itself: `onClick` after a pointer sequence
+ * the row participated in is unreliable on iOS, so buttons commit on
+ * `pointerup` via `rowTapProps`.
  */
 
 import {
+  createContext,
+  useContext,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -32,6 +43,39 @@ export interface SwipeAction {
   onAction: () => void
 }
 
+/**
+ * Lets a control inside a row distinguish a tap from a swipe that happened to
+ * start on top of it. A ref, not state, so reading it costs no re-render and it
+ * is always current at the moment `pointerup` fires.
+ */
+const RowGestureContext = createContext<{ current: boolean } | null>(null)
+
+/**
+ * Tap handling for a button inside a `SwipeableRow`.
+ *
+ * Fires on `pointerup` rather than `click`, and only when the gesture stayed a
+ * tap. Spread onto the button; do not also pass `onClick`, or the action runs
+ * twice where `click` does fire.
+ */
+export function useRowTap(onTap: () => void) {
+  const didDrag = useContext(RowGestureContext)
+  return {
+    onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
+      if (didDrag?.current) return
+      // A mouse still reports a normal click; only synthesize for touch/pen so
+      // desktop doesn't double-fire.
+      if (event.pointerType === 'mouse') return
+      onTap()
+    },
+    onClick: (event: React.MouseEvent<HTMLElement>) => {
+      if (didDrag?.current) return
+      // Touch already committed on pointerup. Only a real mouse gets here.
+      if (event.detail === 0) return
+      onTap()
+    },
+  }
+}
+
 export function SwipeableRow({
   children,
   leftAction,
@@ -51,18 +95,16 @@ export function SwipeableRow({
   const [isDragging, setIsDragging] = useState(false)
   const start = useRef<{ x: number; y: number } | null>(null)
   const decided = useRef<'none' | 'horizontal' | 'vertical'>('none')
+  const didDrag = useRef(false)
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.pointerType === 'mouse') return
-    // Never arm a drag from a control. Typing in a set field must not be
-    // interrupted, and a button has to stay tappable: arming the drag here let
-    // the row claim the gesture after DRAG_START_THRESHOLD, so a thumb that
-    // slid a few pixels on the way down highlighted the button and then
-    // swallowed its click — the button looked pressed but never fired.
+    // Typing in a set field should never be interrupted by a stray drag.
     const target = event.target as HTMLElement
-    if (target.closest('input, textarea, select, button')) return
+    if (target.closest('input, textarea, select')) return
     start.current = { x: event.clientX, y: event.clientY }
     decided.current = 'none'
+    didDrag.current = false
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -78,6 +120,7 @@ export function SwipeableRow({
       }
       if (Math.abs(dx) < DRAG_START_THRESHOLD) return
       decided.current = 'horizontal'
+      didDrag.current = true
       setIsDragging(true)
     }
 
@@ -142,7 +185,9 @@ export function SwipeableRow({
         }}
         className="relative bg-surface"
       >
-        {children}
+        <RowGestureContext.Provider value={didDrag}>
+          {children}
+        </RowGestureContext.Provider>
       </div>
     </div>
   )

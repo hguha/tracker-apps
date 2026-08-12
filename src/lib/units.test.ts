@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bodyWeightFromKg,
   convertWeight,
   displayWeight,
   distanceFromM,
@@ -30,13 +31,26 @@ describe('weight round-trip', () => {
     }
   })
 
-  it('snaps a cross-unit value to a loadable increment', () => {
-    // 100 kg is 220.46 lb, which nobody can load. Nearest 2.5 lb is 220.
-    expect(weightFromKg(100, 'lb')).toBe(220)
+  it('round-trips values that are not on a plate grid', () => {
+    // The reported bug: display snapped to the nearest loadable 2.5 lb, which
+    // silently rewrote real machine and dumbbell loads — 181 showed as 180, 46
+    // as 45, 132 as 132.5, a 12 lb dumbbell as 12.5. Plenty of loads aren't
+    // multiples of 2.5, and the app records what happened rather than deciding
+    // what could have been loaded.
+    for (const lb of [12, 46, 47.5, 105, 130, 132, 181, 182.5, 365]) {
+      expect(weightFromKg(weightToKg(lb, 'lb'), 'lb')).toBe(lb)
+    }
   })
 
-  it('honors a micro-plate increment when given one', () => {
-    expect(weightFromKg(100, 'lb', 0.5)).toBe(220.5)
+  it('converts across units without inventing precision', () => {
+    // 100 kg really is 220.46 lb. Showing 220 would be a lie about the load.
+    expect(weightFromKg(100, 'lb')).toBe(220.46)
+  })
+
+  it('reads a body measurement to a tenth', () => {
+    // Bodyweight comes off a scale, so 185.4 lb — not 185.42.
+    expect(bodyWeightFromKg(84.1, 'lb')).toBe(185.4)
+    expect(bodyWeightFromKg(84.1, 'kg')).toBe(84.1)
   })
 })
 

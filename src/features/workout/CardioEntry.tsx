@@ -39,7 +39,8 @@ export interface CardioEntryProps {
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   onChange: (setId: string, patch: Partial<WorkoutSet>) => void
-  onConfirmPlaceholder: (setId: string) => void
+  /** `shown` is the ghost being displayed — see `repo.confirmPlaceholder`. */
+  onConfirmPlaceholder: (setId: string, shown: PerformedSet | undefined) => void
   onAddInterval: () => void
   onDeleteInterval: (setId: string) => void
 }
@@ -184,7 +185,7 @@ export function CardioEntry(props: CardioEntryProps) {
 
               {!hasValues && placeholder && (
                 <button
-                  onClick={() => onConfirmPlaceholder(set.id)}
+                  onClick={() => onConfirmPlaceholder(set.id, placeholder)}
                   className="rounded-lg px-2.5 py-1.5 text-[12.5px] font-bold uppercase tracking-wide text-accent active:bg-accent-wash"
                 >
                   Same as last

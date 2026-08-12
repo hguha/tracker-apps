@@ -32,6 +32,11 @@ const SUPERSET_BAND = 0.5
 /** Hold this long before a drag begins, so a tap or a scroll is never a drag. */
 const LONG_PRESS_MS = 260
 
+/** Within this many px of a scrollable edge, the list scrolls itself. */
+const EDGE_SCROLL_ZONE = 72
+/** Peak auto-scroll speed, px per frame, reached at the very edge. */
+const EDGE_SCROLL_MAX = 14
+
 export type DropIntent =
   | { kind: 'none' }
   | { kind: 'reorder'; index: number }
@@ -48,6 +53,29 @@ interface DragApi extends DragState {
 }
 
 const DragContext = createContext<DragApi | null>(null)
+
+/** Identity of a drop intent, for cheap change detection. */
+function intentTarget(intent: DropIntent): string | number | null {
+  if (intent.kind === 'superset') return intent.targetId
+  if (intent.kind === 'reorder') return intent.index
+  return null
+}
+
+/** The nearest ancestor that actually scrolls, for edge auto-scrolling. */
+function findScrollParent(node: HTMLElement | null): HTMLElement | null {
+  let current = node?.parentElement ?? null
+  while (current) {
+    const { overflowY } = getComputedStyle(current)
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      current.scrollHeight > current.clientHeight
+    ) {
+      return current
+    }
+    current = current.parentElement
+  }
+  return null
+}
 
 export function useDragList(): DragApi {
   const api = useContext(DragContext)
@@ -78,6 +106,17 @@ export function DragList({
   const elements = useRef(new Map<string, HTMLElement>())
   const pressTimer = useRef<number | null>(null)
   const isDragging = useRef(false)
+  /**
+   * The lifted card follows the finger by writing `transform` straight to the
+   * node, not through React state. At 60–120 Hz a setState per pointermove
+   * re-renders every card in the list (each of which runs its own liveQuery
+   * subscriptions), which is what made dragging feel heavy and laggy. Only the
+   * *drop intent* goes through state, and that changes a handful of times per
+   * drag rather than once per frame.
+   */
+  const liftedNode = useRef<HTMLElement | null>(null)
+  const scrollParent = useRef<HTMLElement | null>(null)
+  const autoScroll = useRef<number | null>(null)
 
   const registerItem = useCallback((id: string, element: HTMLElement | null) => {
     if (element) elements.current.set(id, element)
@@ -144,6 +183,47 @@ export function DragList({
       const startY = event.clientY
       const startX = event.clientX
       let currentIntent: DropIntent = { kind: 'none' }
+      let lastY = startY
+
+      /** Move the lifted card to follow the finger. Never via setState. */
+      const paint = (clientY: number) => {
+        const node = liftedNode.current
+        if (node) node.style.transform = `translateY(${clientY - startY}px) scale(1.02)`
+      }
+
+      const updateIntent = (clientY: number) => {
+        const next = resolveIntent(id, clientY)
+        // Only re-render when the outcome actually changes.
+        if (
+          next.kind !== currentIntent.kind ||
+          intentTarget(next) !== intentTarget(currentIntent)
+        ) {
+          currentIntent = next
+          setState({ activeId: id, intent: next })
+        }
+      }
+
+      /** Scroll the list when the finger nears an edge, so a long list is reachable. */
+      const stepAutoScroll = () => {
+        const container = scrollParent.current
+        if (!container || !isDragging.current) return
+        const { top, bottom } = container.getBoundingClientRect()
+        let delta = 0
+        if (lastY < top + EDGE_SCROLL_ZONE) {
+          delta = -EDGE_SCROLL_MAX * ((top + EDGE_SCROLL_ZONE - lastY) / EDGE_SCROLL_ZONE)
+        } else if (lastY > bottom - EDGE_SCROLL_ZONE) {
+          delta =
+            EDGE_SCROLL_MAX * ((lastY - (bottom - EDGE_SCROLL_ZONE)) / EDGE_SCROLL_ZONE)
+        }
+        if (delta !== 0) {
+          container.scrollTop += delta
+          // The card hasn't moved but the list under it has, so both the
+          // follow-transform and the drop target need recomputing.
+          paint(lastY)
+          updateIntent(lastY)
+        }
+        autoScroll.current = requestAnimationFrame(stepAutoScroll)
+      }
 
       const onMove = (moveEvent: PointerEvent) => {
         if (!isDragging.current) {
@@ -158,8 +238,9 @@ export function DragList({
           return
         }
         moveEvent.preventDefault()
-        currentIntent = resolveIntent(id, moveEvent.clientY)
-        setState({ activeId: id, intent: currentIntent })
+        lastY = moveEvent.clientY
+        paint(lastY)
+        updateIntent(lastY)
       }
 
       const onUp = () => {
@@ -173,6 +254,14 @@ export function DragList({
 
       const cleanup = () => {
         isDragging.current = false
+        if (autoScroll.current !== null) {
+          cancelAnimationFrame(autoScroll.current)
+          autoScroll.current = null
+        }
+        // Clear the inline transform so React owns the node's style again.
+        if (liftedNode.current) liftedNode.current.style.transform = ''
+        liftedNode.current = null
+        scrollParent.current = null
         setState({ activeId: null, intent: { kind: 'none' } })
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
@@ -181,7 +270,11 @@ export function DragList({
 
       pressTimer.current = window.setTimeout(() => {
         isDragging.current = true
+        liftedNode.current = elements.current.get(id) ?? null
+        scrollParent.current = findScrollParent(liftedNode.current)
         setState({ activeId: id, intent: { kind: 'none' } })
+        paint(lastY)
+        autoScroll.current = requestAnimationFrame(stepAutoScroll)
         // A short buzz confirms the card is lifted, since the visual change is subtle.
         if ('vibrate' in navigator) navigator.vibrate(18)
       }, LONG_PRESS_MS)
@@ -235,11 +328,18 @@ export function DragItem({
       onPointerDown={(event) => beginDrag(id, event)}
       className="relative"
       style={{
-        // Lift the dragged card without removing it from the flow, so the list
-        // doesn't jump at the moment the drag starts.
-        opacity: isActive ? 0.5 : 1,
-        transform: isActive ? 'scale(0.98)' : undefined,
-        transition: 'opacity 120ms, transform 120ms',
+        // The lifted card stays in the flow (so the list doesn't jump) but rides
+        // above its neighbours and follows the finger. `transform` is deliberately
+        // absent: while dragging, `DragList` writes it straight to this node every
+        // frame, and setting it here would fight that on each re-render.
+        opacity: isActive ? 0.92 : 1,
+        zIndex: isActive ? 40 : undefined,
+        boxShadow: isActive ? '0 12px 28px rgb(0 0 0 / 0.22)' : undefined,
+        // No transform transition while lifted — it would lag a frame behind the
+        // finger. The drop still animates, since the class returns on release.
+        transition: isActive
+          ? 'opacity 120ms, box-shadow 120ms'
+          : 'transform 160ms ease-out',
         touchAction: activeId === null ? 'pan-y' : 'none',
       }}
     >
