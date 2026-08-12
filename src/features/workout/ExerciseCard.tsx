@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { GripVertical, MoreHorizontal, Plus } from 'lucide-react'
+import { GripVertical, MoreHorizontal, Plus, StickyNote } from 'lucide-react'
 import { Card } from '@/components/Card'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
@@ -54,6 +54,8 @@ export interface ExerciseCardProps {
   showRpe: boolean
   /** Non-null marks this card as part of a superset group (§6.4). */
   supersetGroup: number | null
+  /** This exercise's note within this workout, distinct from the exercise's own. */
+  sessionNote: string
   /**
    * Per-set placeholder hints from a "do this again" copy (§7.2), keyed by set id.
    * These win over history, because repeating a specific session should suggest
@@ -79,6 +81,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
     distanceUnit,
     showRpe,
     supersetGroup,
+    sessionNote,
     placeholderOverrides,
     onAddSet,
     onSetChange,
@@ -183,6 +186,30 @@ export function ExerciseCard(props: ExerciseCardProps) {
             <p className="mt-0.5 text-[11.5px] text-ink-muted">
               {loggingHint(exercise, weightUnit)}
             </p>
+          )}
+          {/* Notes are visible on the card, not hidden behind the ⋯ — a note you
+              have to go looking for is a note you don't read mid-set. Tapping one
+              opens the sheet to edit it. The session note leads, since it's the
+              more urgent of the two. */}
+          {(sessionNote.trim() !== '' || exercise.notes.trim() !== '') && (
+            <button
+              onClick={onOpenDetail}
+              className="mt-1.5 block w-full text-left"
+              aria-label="Edit notes"
+            >
+              {sessionNote.trim() !== '' && (
+                <span className="flex gap-1.5 text-[12px] leading-snug text-ink-secondary">
+                  <StickyNote size={12} className="mt-0.5 shrink-0 text-accent" />
+                  <span className="min-w-0">{sessionNote}</span>
+                </span>
+              )}
+              {exercise.notes.trim() !== '' && (
+                <span className="mt-0.5 flex gap-1.5 text-[12px] leading-snug text-ink-muted">
+                  <StickyNote size={12} className="mt-0.5 shrink-0" />
+                  <span className="min-w-0">{exercise.notes}</span>
+                </span>
+              )}
+            </button>
           )}
         </div>
 

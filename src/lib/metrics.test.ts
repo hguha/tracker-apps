@@ -160,7 +160,11 @@ describe('estimatedOneRepMaxKg', () => {
   })
 
   it('returns the weight itself at 1 rep', () => {
-    expect(estimatedOneRepMaxKg(100, 1)).toBeCloseTo(103.333, 2)
+    // A single rep is already a 1RM, so there is nothing to estimate. Plain
+    // Epley scales by (1 + 1/30) even at one rep, which reported a real 365×1
+    // deadlift as a 377 max — a number the lifter has never touched, shown
+    // directly above the 365 they typed.
+    expect(estimatedOneRepMaxKg(100, 1)).toBe(100)
   })
 
   it('refuses to estimate past 12 reps rather than fabricate a number', () => {

@@ -327,6 +327,7 @@ export function ActiveWorkoutScreen({
                     distanceUnit={profile.unitDistance}
                     showRpe={profile.showRpe}
                     supersetGroup={row.workoutExercise.supersetGroup}
+                    sessionNote={row.workoutExercise.notes}
                     placeholderOverrides={placeholderOverrides}
                     onAddSet={() =>
                       void repo.addSetWithPlaceholder(

@@ -1416,6 +1416,26 @@ describe('editing a past workout', () => {
   })
 })
 
+describe('exercise notes', () => {
+  it('keeps a per-workout note separate from the exercise’s own note', async () => {
+    // Two different kinds of note: "felt heavy today" belongs to one session,
+    // "seat on 4" belongs to the exercise forever. Folding them together meant a
+    // one-off observation followed the exercise around.
+    const first = await repo.startWorkout()
+    const firstWe = await repo.addExerciseToWorkout(first, 'lat_pulldown')
+    await repo.updateWorkoutExercise(firstWe, { notes: 'Felt heavy' })
+    await repo.updateExercise('lat_pulldown', { notes: 'Seat on 4' })
+
+    expect((await repo.getWorkoutExercise(firstWe))?.notes).toBe('Felt heavy')
+
+    // A later session starts with no note of its own but keeps the global one.
+    const second = await repo.startWorkout()
+    const secondWe = await repo.addExerciseToWorkout(second, 'lat_pulldown')
+    expect((await repo.getWorkoutExercise(secondWe))?.notes).toBe('')
+    expect((await db.exercises.get('lat_pulldown'))?.notes).toBe('Seat on 4')
+  })
+})
+
 describe('cancelling an edit to a past workout (§6.6)', () => {
   /** A finished single-set workout, ready to edit. */
   async function loggedWorkout() {

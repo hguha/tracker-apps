@@ -110,6 +110,11 @@ export function estimatedOneRepMaxKg(
   if (weightKg === null || reps === null) return null
   if (reps < 1 || reps > 12) return null
   if (weightKg <= 0) return null
+  // A single rep IS a one-rep max — there is nothing to estimate. Plain Epley
+  // multiplies by (1 + 1/30) here, so a genuine 365×1 came back as 377: the app
+  // claiming a max the lifter has never touched, and contradicting the 365 in
+  // the field right above it.
+  if (reps === 1) return weightKg
   return weightKg * (1 + reps / 30)
 }
 

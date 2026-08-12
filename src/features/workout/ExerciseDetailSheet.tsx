@@ -58,10 +58,28 @@ export function ExerciseDetailSheet({
   const detail = useLiveQuery(() => repo.getExerciseDetail(exerciseId), [exerciseId])
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
 
+  // The note scoped to this exercise *in this workout* — "felt heavy today",
+  // "left shoulder tweaked" — as opposed to the standing note about the exercise
+  // itself. Kept separate because one is a diary entry and the other is a setup
+  // reminder, and folding them together meant a one-off observation followed the
+  // exercise around forever.
+  const sessionRow = useLiveQuery(
+    async () =>
+      workoutExerciseId === undefined
+        ? null
+        : ((await repo.getWorkoutExercise(workoutExerciseId)) ?? null),
+    [workoutExerciseId],
+  )
+  const [sessionNoteDraft, setSessionNoteDraft] = useState<string | null>(null)
+
   // Adopt the stored note once it loads, without stomping an in-progress edit.
   useEffect(() => {
     if (detail && noteDraft === null) setNoteDraft(detail.exercise.notes)
   }, [detail, noteDraft])
+
+  useEffect(() => {
+    if (sessionRow && sessionNoteDraft === null) setSessionNoteDraft(sessionRow.notes)
+  }, [sessionRow, sessionNoteDraft])
 
   if (!detail) return null
 
@@ -134,7 +152,29 @@ export function ExerciseDetailSheet({
 
       <div className="space-y-5 px-5 py-4">
         {/* Notes first — it's the thing most likely to be needed right now. */}
-        <Section title="Notes">
+        {workoutExerciseId !== undefined && (
+          <Section title="Note for this workout">
+            <textarea
+              value={sessionNoteDraft ?? ''}
+              onChange={(event) => setSessionNoteDraft(event.target.value)}
+              onBlur={() => {
+                if (sessionNoteDraft !== null && sessionNoteDraft !== sessionRow?.notes) {
+                  void repo.updateWorkoutExercise(workoutExerciseId, {
+                    notes: sessionNoteDraft,
+                  })
+                }
+              }}
+              rows={2}
+              placeholder="Felt heavy, shoulder tweaked, last set was a grind…"
+              className="w-full resize-none rounded-xl border border-line bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+            />
+            <p className="mt-1 text-[11.5px] text-ink-muted">
+              Stays with this workout only, and shows on the card.
+            </p>
+          </Section>
+        )}
+
+        <Section title={workoutExerciseId ? 'Note for every workout' : 'Notes'}>
           <textarea
             value={noteDraft ?? ''}
             onChange={(event) => setNoteDraft(event.target.value)}

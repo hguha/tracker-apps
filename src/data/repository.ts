@@ -1237,6 +1237,13 @@ export async function addExerciseToWorkout(
   return row.id
 }
 
+export async function getWorkoutExercise(
+  id: string,
+): Promise<WorkoutExercise | undefined> {
+  const row = await db.workoutExercises.get(id)
+  return row?.deletedAt === null ? row : undefined
+}
+
 export async function updateWorkoutExercise(
   id: string,
   patch: Partial<WorkoutExercise>,
