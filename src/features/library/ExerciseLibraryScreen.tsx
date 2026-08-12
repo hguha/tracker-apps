@@ -2,9 +2,14 @@
  * The exercise library (§7.3) — browsable any time, not only while adding an
  * exercise mid-workout.
  *
- * Search covers names and aliases; filters cover region, equipment, and pattern.
- * All three filters live behind summary chips rather than inline pill rows, which
- * is what keeps the header a fixed height as the library grows past 200 rows.
+ * Search covers names and aliases. Filtering uses the same inline pill rows as
+ * the add-exercise picker (`ExerciseFilterPills`): the summary-chip-plus-sheet
+ * version that used to be here cost three taps to answer "what chest exercises
+ * are there", and having two different filter UIs for the same list was its own
+ * problem. Sorting stays a toggle, since A–Z and recent answer different
+ * questions.
+ *
+ * The movement-pattern filter is gone with the concept (§4.3).
  */
 
 import { useMemo, useState } from 'react'
@@ -13,17 +18,11 @@ import { ChevronRight, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { FilterSheet } from '@/components/FilterSheet'
+import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
 import { cn } from '@/lib/cn'
 import { formatRelativeDay } from '@/lib/dates'
 import { regionVar } from '@/lib/palette'
-import {
-  EQUIPMENT,
-  MOVEMENT_PATTERNS,
-  REGION_LABELS,
-  REGIONS,
-  type Region,
-} from '@/domain/types'
+import { type Region } from '@/domain/types'
 import { NewExerciseForm } from '@/features/workout/NewExerciseForm'
 import { ExerciseDetailSheet } from '@/features/workout/ExerciseDetailSheet'
 import { humanizeSlug } from '@/lib/labels'
@@ -32,13 +31,9 @@ type SortMode = 'name' | 'recent'
 
 export function ExerciseLibraryScreen() {
   const [query, setQuery] = useState('')
-  const [regionFilter, setRegionFilter] = useState<string[]>([])
-  const [equipmentFilter, setEquipmentFilter] = useState<string[]>([])
-  const [patternFilter, setPatternFilter] = useState<string[]>([])
+  const [regionFilter, setRegionFilter] = useState<Region | null>(null)
+  const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null)
   const [sort, setSort] = useState<SortMode>('name')
-  const [openSheet, setOpenSheet] = useState<'region' | 'equipment' | 'pattern' | null>(
-    null,
-  )
   const [isCreating, setIsCreating] = useState(false)
   const [detailFor, setDetailFor] = useState<string | null>(null)
 
@@ -60,17 +55,13 @@ export function ExerciseLibraryScreen() {
 
     let list = data.exercises
 
-    if (regionFilter.length > 0) {
-      list = list.filter((e) => {
-        const region = data.muscleById.get(e.primaryMuscleId)?.region
-        return region !== undefined && regionFilter.includes(region)
-      })
+    if (regionFilter !== null) {
+      list = list.filter(
+        (e) => data.muscleById.get(e.primaryMuscleId)?.region === regionFilter,
+      )
     }
-    if (equipmentFilter.length > 0) {
-      list = list.filter((e) => equipmentFilter.includes(e.equipment))
-    }
-    if (patternFilter.length > 0) {
-      list = list.filter((e) => patternFilter.includes(e.movementPattern))
+    if (equipmentFilter !== null) {
+      list = list.filter((e) => e.equipment === equipmentFilter)
     }
 
     if (normalized) {
@@ -89,7 +80,7 @@ export function ExerciseLibraryScreen() {
       }
       return a.name.localeCompare(b.name)
     })
-  }, [data, query, regionFilter, equipmentFilter, patternFilter, sort])
+  }, [data, query, regionFilter, equipmentFilter, sort])
 
   if (isCreating) {
     return (
@@ -104,8 +95,7 @@ export function ExerciseLibraryScreen() {
     )
   }
 
-  const activeFilterCount =
-    regionFilter.length + equipmentFilter.length + patternFilter.length
+  const hasFilters = regionFilter !== null || equipmentFilter !== null
 
   return (
     <div className="flex h-full flex-col">
@@ -125,27 +115,7 @@ export function ExerciseLibraryScreen() {
           )}
         </div>
 
-        {/* Summary chips. Fixed height regardless of how many options exist. */}
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
-          <FilterChip
-            label={summarize(
-              'Body part',
-              regionFilter,
-              (v) => REGION_LABELS[v as Region],
-            )}
-            isActive={regionFilter.length > 0}
-            onClick={() => setOpenSheet('region')}
-          />
-          <FilterChip
-            label={summarize('Equipment', equipmentFilter, humanizeSlug)}
-            isActive={equipmentFilter.length > 0}
-            onClick={() => setOpenSheet('equipment')}
-          />
-          <FilterChip
-            label={summarize('Pattern', patternFilter, humanizeSlug)}
-            isActive={patternFilter.length > 0}
-            onClick={() => setOpenSheet('pattern')}
-          />
+        <div className="mt-2 flex items-center gap-1.5">
           <button
             onClick={() => setSort(sort === 'name' ? 'recent' : 'name')}
             className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] font-medium text-ink-secondary"
@@ -153,20 +123,27 @@ export function ExerciseLibraryScreen() {
             <SlidersHorizontal size={13} />
             {sort === 'name' ? 'A–Z' : 'Recent'}
           </button>
-          {activeFilterCount > 0 && (
+          {hasFilters && (
             <button
               onClick={() => {
-                setRegionFilter([])
-                setEquipmentFilter([])
-                setPatternFilter([])
+                setRegionFilter(null)
+                setEquipmentFilter(null)
               }}
               className="shrink-0 px-2 text-[13px] font-semibold text-accent"
             >
-              Clear
+              Clear filters
             </button>
           )}
         </div>
       </div>
+
+      <ExerciseFilterPills
+        region={regionFilter}
+        equipment={equipmentFilter}
+        onRegionChange={setRegionFilter}
+        onEquipmentChange={setEquipmentFilter}
+        className="border-b border-line bg-surface"
+      />
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <button
@@ -235,41 +212,6 @@ export function ExerciseLibraryScreen() {
         <div className="h-4" />
       </div>
 
-      {openSheet === 'region' && (
-        <FilterSheet
-          title="Body part"
-          options={REGIONS.map((region) => ({
-            value: region,
-            label: REGION_LABELS[region],
-            swatch: regionVar(region),
-          }))}
-          selected={regionFilter}
-          onChange={setRegionFilter}
-          onDismiss={() => setOpenSheet(null)}
-        />
-      )}
-      {openSheet === 'equipment' && (
-        <FilterSheet
-          title="Equipment"
-          options={EQUIPMENT.map((value) => ({ value, label: humanizeSlug(value) }))}
-          selected={equipmentFilter}
-          onChange={setEquipmentFilter}
-          onDismiss={() => setOpenSheet(null)}
-        />
-      )}
-      {openSheet === 'pattern' && (
-        <FilterSheet
-          title="Movement pattern"
-          options={MOVEMENT_PATTERNS.map((value) => ({
-            value,
-            label: humanizeSlug(value),
-          }))}
-          selected={patternFilter}
-          onChange={setPatternFilter}
-          onDismiss={() => setOpenSheet(null)}
-        />
-      )}
-
       {detailFor && data && (
         <ExerciseDetailSheet
           exerciseId={detailFor}
@@ -279,40 +221,5 @@ export function ExerciseLibraryScreen() {
         />
       )}
     </div>
-  )
-}
-
-/** "Body part" / "Chest" / "3 body parts" — the chip never grows with the data. */
-function summarize(
-  noun: string,
-  selected: string[],
-  labelOf: (value: string) => string,
-): string {
-  if (selected.length === 0) return noun
-  if (selected.length === 1) return labelOf(selected[0]!)
-  return `${selected.length} ${noun.toLowerCase()}s`
-}
-
-function FilterChip({
-  label,
-  isActive,
-  onClick,
-}: {
-  label: string
-  isActive: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium',
-        isActive
-          ? 'border-accent bg-accent-wash text-accent'
-          : 'border-line text-ink-secondary',
-      )}
-    >
-      {label} ▾
-    </button>
   )
 }

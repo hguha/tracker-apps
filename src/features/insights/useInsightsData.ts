@@ -18,6 +18,7 @@ import {
 import { weekKey, weekStart } from '@/lib/dates'
 import { format } from 'date-fns'
 import type { Profile, Region, WorkoutSet } from '@/domain/types'
+import { isCardioPattern } from '@/domain/movement'
 
 export interface InsightsFilters {
   /** Weeks of history to include. */
@@ -177,7 +178,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         volumeByWeek.set(key, (volumeByWeek.get(key) ?? 0) + exerciseVolume)
         setsByWeek.set(key, (setsByWeek.get(key) ?? 0) + working.length)
 
-        if (exercise.movementPattern === 'cardio') {
+        if (isCardioPattern(exercise.movementPattern)) {
           cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
           cardioMeters += sets.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
         }

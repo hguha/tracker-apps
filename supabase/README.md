@@ -28,6 +28,10 @@ migrations/
                         profiles.height_cm + profiles.training_goal (coach inputs)
   0011_onboarded_at.sql             profiles.onboarded_at (first-run setup, per account)
   0012_drop_unused_tables.sql       Drops allowed_emails + the two unused push tables
+  0013_simplify_exercise_taxonomy.sql
+                        Drops exercise_secondary_muscles; collapses
+                        movement_pattern to push/pull/other/cardio, derived from
+                        the primary muscle's region rather than hand-tagged
 tests/
   rls.test.sql          Asserts user A cannot read/write user B's rows (§4.13)
 ```

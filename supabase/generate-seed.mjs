@@ -6,7 +6,17 @@
  * are the same readable slugs the client uses, so the server row and every
  * device's IndexedDB row share a primary key and upsert cleanly.
  *
- * Run:  node supabase/generate-seed.mjs > supabase/migrations/0004_seed_library.sql
+ * **Do not overwrite 0004_seed_library.sql with this output.** That migration is
+ * already applied, and it runs *before* 0013 collapsed `movement_pattern` to four
+ * values — so replaying it with the new values would fail on an enum that doesn't
+ * have them yet. Migration history is append-only. Emit to a NEW migration when
+ * the library gains rows:
+ *
+ *   node --experimental-strip-types supabase/generate-seed.mjs \
+ *     > supabase/migrations/00NN_seed_library_additions.sql
+ *
+ * The output is idempotent (`on conflict do nothing`), so re-seeding the whole
+ * library in a later migration only inserts what's missing.
  *
  * Kept as a generator rather than hand-written SQL so the server library can
  * never drift from src/db/seed/ — there is one source of truth for the taxonomy.
@@ -15,6 +25,16 @@
 import { EXERCISE_SEEDS } from '../src/db/seed/exercises.ts'
 import { MUSCLE_SEEDS } from '../src/db/seed/muscles.ts'
 import { METRIC_SEEDS } from '../src/db/seed/metrics.ts'
+import { patternForRegion } from '../src/domain/movement.ts'
+
+/**
+ * Movement pattern is derived from the primary muscle's region, exactly as the
+ * client does it (`src/domain/movement.ts`), so the seeded rows and a locally
+ * created exercise can never disagree.
+ */
+const REGION_BY_MUSCLE = new Map(MUSCLE_SEEDS.map((m) => [m.id, m.region]))
+const patternFor = (muscleId) =>
+  patternForRegion(REGION_BY_MUSCLE.get(muscleId) ?? 'core')
 
 /** Must match slugify() in src/db/seed/index.ts exactly, or ids won't align. */
 function slugify(name) {
@@ -51,27 +71,11 @@ out.push(
     const id = slugify(e.name)
     return (
       `  (${q(id)}, null, ${q(e.name)}, ${q(e.primary)}, ` +
-      `${arr(e.aliases ?? [])}, ${q(e.equipment)}, ${q(e.pattern)}, ` +
+      `${arr(e.aliases ?? [])}, ${q(e.equipment)}, ${q(patternFor(e.primary))}, ` +
       `${q(e.tracking ?? 'weight_reps')}, ${e.unilateral ?? false}, ` +
       `${e.bodyweightFactor ?? 'null'})`
     )
   }).join(',\n') + '\non conflict (id) do nothing;',
-)
-out.push('')
-
-// Secondary muscles (one row per contribution) --------------------------------
-const secondaryRows = []
-for (const e of EXERCISE_SEEDS) {
-  const id = slugify(e.name)
-  for (const [muscleId, contribution] of e.secondary ?? []) {
-    secondaryRows.push(`  (${q(id)}, ${q(muscleId)}, ${contribution})`)
-  }
-}
-out.push(
-  'insert into exercise_secondary_muscles (exercise_id, muscle_id, contribution) values',
-)
-out.push(
-  secondaryRows.join(',\n') + '\non conflict (exercise_id, muscle_id) do nothing;',
 )
 out.push('')
 

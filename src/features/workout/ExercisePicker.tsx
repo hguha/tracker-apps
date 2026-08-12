@@ -12,13 +12,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, Search, X } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
+import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
 import { regionVar } from '@/lib/palette'
-import { EQUIPMENT, REGION_LABELS, REGIONS } from '@/domain/types'
+import type { Region } from '@/domain/types'
 import { NewExerciseForm } from './NewExerciseForm'
-import { humanizeSlug } from '@/lib/labels'
 
-/** Title-cases an equipment/pattern enum value: `smith` → `Smith`. */
 export function ExercisePicker({
   onPick,
   onDismiss,
@@ -27,7 +25,7 @@ export function ExercisePicker({
   onDismiss: () => void
 }) {
   const [query, setQuery] = useState('')
-  const [regionFilter, setRegionFilter] = useState<string | null>(null)
+  const [regionFilter, setRegionFilter] = useState<Region | null>(null)
   const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
@@ -128,55 +126,13 @@ export function ExercisePicker({
         </button>
       </div>
 
-      {/* Region filter chips, colored with the fixed region palette. */}
-      <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
-        {REGIONS.map((region) => {
-          const isActive = regionFilter === region
-          return (
-            <button
-              key={region}
-              onClick={() => setRegionFilter(isActive ? null : region)}
-              className={cn(
-                'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium',
-                isActive
-                  ? 'border-transparent text-white'
-                  : 'border-line text-ink-secondary',
-              )}
-              style={isActive ? { background: regionVar(region) } : undefined}
-            >
-              {!isActive && (
-                <span
-                  className="size-2 rounded-full"
-                  style={{ background: regionVar(region) }}
-                  aria-hidden
-                />
-              )}
-              {REGION_LABELS[region]}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Equipment filter chips — a second axis alongside body part. */}
-      <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
-        {EQUIPMENT.map((equipment) => {
-          const isActive = equipmentFilter === equipment
-          return (
-            <button
-              key={equipment}
-              onClick={() => setEquipmentFilter(isActive ? null : equipment)}
-              className={cn(
-                'shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium',
-                isActive
-                  ? 'border-accent bg-accent-wash text-accent'
-                  : 'border-line text-ink-secondary',
-              )}
-            >
-              {humanizeSlug(equipment)}
-            </button>
-          )
-        })}
-      </div>
+      <ExerciseFilterPills
+        region={regionFilter}
+        equipment={equipmentFilter}
+        onRegionChange={setRegionFilter}
+        onEquipmentChange={setEquipmentFilter}
+        className="border-b border-line bg-surface"
+      />
 
       <div className="flex-1 overflow-y-auto">
         <button

@@ -7,7 +7,7 @@
  * agree with it on a shared fixture (§8.3).
  */
 
-import type { Exercise, PerformedSet, Region, WorkoutSet } from '@/domain/types'
+import type { Exercise, PerformedSet, WorkoutSet } from '@/domain/types'
 
 type VolumeInput = Pick<
   WorkoutSet,
@@ -152,42 +152,6 @@ export function topSetWeightKg(sets: VolumeInput[]): number | null {
     if (best === null || set.weightKg > best) best = set.weightKg
   }
   return best
-}
-
-/**
- * Spread one exercise's volume across the muscles that did the work.
- *
- * Primary muscle takes full credit; each secondary takes its contribution
- * weight. This is what stops a reverse dumbbell fly from being counted as
- * chest work just because it looks like a chest movement.
- */
-export function attributeVolumeToMuscles(
-  volumeKg: number,
-  exercise: Pick<Exercise, 'primaryMuscleId' | 'secondaryMuscles'>,
-): Map<string, number> {
-  const byMuscle = new Map<string, number>()
-  byMuscle.set(exercise.primaryMuscleId, volumeKg)
-  // Tolerate a row missing its secondaries (e.g. one that arrived from a sync
-  // pull, where secondaries live in a separate table) — treat it as none rather
-  // than crashing the whole render.
-  for (const secondary of exercise.secondaryMuscles ?? []) {
-    const existing = byMuscle.get(secondary.muscleId) ?? 0
-    byMuscle.set(secondary.muscleId, existing + volumeKg * secondary.contribution)
-  }
-  return byMuscle
-}
-
-export function rollUpToRegions(
-  byMuscle: Map<string, number>,
-  regionOf: (muscleId: string) => Region | undefined,
-): Map<Region, number> {
-  const byRegion = new Map<Region, number>()
-  for (const [muscleId, value] of byMuscle) {
-    const region = regionOf(muscleId)
-    if (!region) continue
-    byRegion.set(region, (byRegion.get(region) ?? 0) + value)
-  }
-  return byRegion
 }
 
 /** Seconds per unit distance. Kept separate from volume load, always (§8.1). */

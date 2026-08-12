@@ -7,7 +7,9 @@
  */
 
 import { db, syncStamp } from '@/db/database'
+import { MOVEMENT_PATTERNS } from '@/domain/types'
 import type { Exercise, MetricDefinition, Muscle, Profile } from '@/domain/types'
+import { patternForRegion } from '@/domain/movement'
 import { EXERCISE_SEEDS } from './exercises'
 import { METRIC_SEEDS } from './metrics'
 import { MUSCLE_SEEDS } from './muscles'
@@ -87,25 +89,38 @@ async function repairArmsRegion(): Promise<void> {
 }
 
 /**
- * Heals exercise rows whose array fields went missing.
+ * Heals exercise rows written by an older build.
  *
- * A sync pull once wrote exercises straight from Postgres, where secondary
- * muscles live in a separate table and `aliases` may be absent — leaving those
- * fields undefined locally and throwing "secondaryMuscles is not iterable" on
- * render. Reads now tolerate that, and the pull now backfills, but rows already
- * written need fixing. Cheap and idempotent, so it can run on every launch.
+ * Two repairs, both idempotent and cheap enough to run on every launch:
+ *   - `aliases` can arrive undefined from a sync pull, which throws on render.
+ *   - `movementPattern` used to be an eleven-value hand-tagged taxonomy
+ *     (`horizontal_push`, `hinge`, …). It's now derived from the primary muscle,
+ *     so any row still carrying a retired value is remapped. Without this, a
+ *     stale `horizontal_push` would read as neither push nor cardio and the
+ *     session title would silently stop saying "Push".
  */
 async function repairExerciseRows(): Promise<void> {
+  const muscles = await db.muscles.toArray()
+  const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
+
   const broken = await db.exercises
-    .filter((e) => e.secondaryMuscles === undefined || e.aliases === undefined)
+    .filter(
+      (e) =>
+        e.aliases === undefined ||
+        !(MOVEMENT_PATTERNS as readonly string[]).includes(e.movementPattern),
+    )
     .toArray()
   if (broken.length === 0) return
+
   await db.exercises.bulkPut(
-    broken.map((e) => ({
-      ...e,
-      secondaryMuscles: e.secondaryMuscles ?? [],
-      aliases: e.aliases ?? [],
-    })),
+    broken.map((e) => {
+      const region = regionOf.get(e.primaryMuscleId)
+      return {
+        ...e,
+        aliases: e.aliases ?? [],
+        movementPattern: region ? patternForRegion(region) : 'other',
+      }
+    }),
   )
 }
 
@@ -173,6 +188,9 @@ async function seedMuscles(): Promise<void> {
 async function seedExercises(): Promise<void> {
   const existingIds = new Set(await db.exercises.toCollection().primaryKeys())
   const missing: Exercise[] = []
+  // Muscles are seeded first, so their regions are available to derive each
+  // exercise's movement pattern.
+  const regionOf = new Map((await db.muscles.toArray()).map((m) => [m.id, m.region]))
 
   for (const seed of EXERCISE_SEEDS) {
     const id = slugify(seed.name)
@@ -182,13 +200,10 @@ async function seedExercises(): Promise<void> {
       userId: null,
       name: seed.name,
       primaryMuscleId: seed.primary,
-      secondaryMuscles: (seed.secondary ?? []).map(([muscleId, contribution]) => ({
-        muscleId,
-        contribution,
-      })),
       aliases: seed.aliases ?? [],
       equipment: seed.equipment,
-      movementPattern: seed.pattern,
+      // Derived, not seeded — see `domain/movement.ts`.
+      movementPattern: patternForRegion(regionOf.get(seed.primary) ?? 'core'),
       trackingType: seed.tracking ?? 'weight_reps',
       isUnilateral: seed.unilateral ?? false,
       bodyweightFactor: seed.bodyweightFactor ?? null,

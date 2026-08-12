@@ -18,7 +18,7 @@ function bench(sets: { weightKg: number; reps: number; rpe?: number }[]) {
     exerciseId: 'barbell_bench_press',
     name: 'Barbell Bench Press',
     region: 'chest' as const,
-    pattern: 'horizontal_push' as const,
+    pattern: 'push' as const,
     equipment: 'barbell' as const,
     isCardio: false,
     sets: sets.map((s) => ({
@@ -92,7 +92,7 @@ describe('buildCoachSummary — aggregation', () => {
       exerciseId: 'barbell_back_squat',
       name: 'Barbell Back Squat',
       region: 'legs' as const,
-      pattern: 'squat' as const,
+      pattern: 'other' as const,
       equipment: 'barbell' as const,
       isCardio: false,
       sets: [

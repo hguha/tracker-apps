@@ -45,7 +45,6 @@ describe('buildBackup', () => {
       name: 'My Custom Curl',
       primaryMuscleId: 'biceps',
       equipment: 'dumbbell',
-      movementPattern: 'isolation',
       trackingType: 'weight_reps',
     })
     const backup = await buildBackup()

@@ -27,24 +27,24 @@ describe('partOfDay', () => {
 
 describe('inferSplit', () => {
   it('names a single dominant region', () => {
-    expect(inferSplit(signals([['legs', 'squat', 9]]))).toBe('Legs')
-    expect(inferSplit(signals([['back', 'horizontal_pull', 8]]))).toBe('Back')
+    expect(inferSplit(signals([['legs', 'other', 9]]))).toBe('Legs')
+    expect(inferSplit(signals([['back', 'pull', 8]]))).toBe('Back')
   })
 
   it('recognizes a push session', () => {
     const push = signals([
-      ['chest', 'horizontal_push', 6],
-      ['shoulders', 'vertical_push', 3],
-      ['triceps', 'isolation', 3],
+      ['chest', 'push', 6],
+      ['shoulders', 'push', 3],
+      ['triceps', 'other', 3],
     ])
     expect(inferSplit(push)).toBe('Push')
   })
 
   it('recognizes a pull session', () => {
     const pull = signals([
-      ['back', 'vertical_pull', 6],
-      ['back', 'horizontal_pull', 3],
-      ['biceps', 'isolation', 3],
+      ['back', 'pull', 6],
+      ['back', 'pull', 3],
+      ['biceps', 'other', 3],
     ])
     expect(inferSplit(pull)).toBe('Pull')
   })
@@ -53,12 +53,12 @@ describe('inferSplit', () => {
     // Same movement story, opposite patterns — triceps ride with pressing,
     // biceps with rowing.
     const mostlyPressing = signals([
-      ['chest', 'horizontal_push', 8],
-      ['triceps', 'isolation', 2],
+      ['chest', 'push', 8],
+      ['triceps', 'other', 2],
     ])
     const mostlyRowing = signals([
-      ['back', 'horizontal_pull', 8],
-      ['biceps', 'isolation', 2],
+      ['back', 'pull', 8],
+      ['biceps', 'other', 2],
     ])
     expect(inferSplit(mostlyPressing)).toBe('Push')
     expect(inferSplit(mostlyRowing)).toBe('Pull')
@@ -66,18 +66,18 @@ describe('inferSplit', () => {
 
   it('calls a mixed upper-body session Upper', () => {
     const upper = signals([
-      ['chest', 'horizontal_push', 4],
-      ['back', 'horizontal_pull', 4],
-      ['shoulders', 'vertical_push', 2],
+      ['chest', 'push', 4],
+      ['back', 'pull', 4],
+      ['shoulders', 'push', 2],
     ])
     expect(inferSplit(upper)).toBe('Upper')
   })
 
   it('calls a spread-out session Full Body', () => {
     const full = signals([
-      ['chest', 'horizontal_push', 3],
-      ['legs', 'squat', 3],
-      ['back', 'horizontal_pull', 3],
+      ['chest', 'push', 3],
+      ['legs', 'other', 3],
+      ['back', 'pull', 3],
     ])
     expect(inferSplit(full)).toBe('Full Body')
   })
@@ -92,8 +92,8 @@ describe('inferSplit', () => {
 
   it('returns null for two unrelated regions with no clear story', () => {
     const ambiguous = signals([
-      ['legs', 'squat', 3],
-      ['core', 'isolation', 3],
+      ['legs', 'other', 3],
+      ['core', 'other', 3],
     ])
     expect(inferSplit(ambiguous)).toBeNull()
   })
@@ -101,12 +101,12 @@ describe('inferSplit', () => {
 
 describe('sessionTitle', () => {
   it('prefers a user-supplied title', () => {
-    const title = sessionTitle('Pull A', atHour(18), signals([['legs', 'squat', 5]]))
+    const title = sessionTitle('Pull A', atHour(18), signals([['legs', 'other', 5]]))
     expect(title).toBe('Pull A')
   })
 
   it('ignores a whitespace-only title', () => {
-    const title = sessionTitle('   ', atHour(18), signals([['legs', 'squat', 5]]))
+    const title = sessionTitle('   ', atHour(18), signals([['legs', 'other', 5]]))
     expect(title).toBe('Jul 29 Evening · Legs')
   })
 
@@ -115,8 +115,8 @@ describe('sessionTitle', () => {
       '',
       atHour(19),
       signals([
-        ['chest', 'horizontal_push', 6],
-        ['triceps', 'isolation', 3],
+        ['chest', 'push', 6],
+        ['triceps', 'other', 3],
       ]),
     )
     expect(title).toBe('Jul 29 Evening · Push')

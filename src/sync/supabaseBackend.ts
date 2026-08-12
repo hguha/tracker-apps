@@ -90,11 +90,12 @@ export class SupabaseBackend implements SyncBackend {
  * Domain fields that are NOT columns on their Postgres table, and so must be
  * stripped from a push (§4.3).
  *
- * `exercises.secondaryMuscles` is the live case: the domain type carries it as an
- * inline array (volume math needs it in one read), but Postgres normalizes it
- * into the `exercise_secondary_muscles` join table. Sending it produced
- * "Could not find the 'secondary_muscles' column of 'exercises' in the schema
- * cache" — a permanent failure that dead-lettered every custom-exercise write.
+ * `secondary_muscles` is retained here even though the concept was removed from
+ * the domain model: rows written by an older build still carry the field
+ * locally, and sending it produced "Could not find the 'secondary_muscles'
+ * column of 'exercises' in the schema cache" — a permanent failure that
+ * dead-lettered every custom-exercise write. The guard costs nothing and
+ * removing it would resurrect that bug for anyone with pre-existing rows.
  *
  * Keyed by Postgres table name, listing snake_case keys to drop.
  */

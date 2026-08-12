@@ -26,6 +26,7 @@ import { ExerciseDetailSheet } from './ExerciseDetailSheet'
 import { ExercisePicker } from './ExercisePicker'
 import { FinishSheet } from './FinishSheet'
 import { SessionMenu } from './SessionMenu'
+import { isCardioPattern } from '@/domain/movement'
 
 export function ActiveWorkoutScreen({
   workoutId,
@@ -120,7 +121,7 @@ export function ActiveWorkoutScreen({
         const shouldAutoStart =
           (data?.profile.autoStartRest ?? false) &&
           !isEditMode &&
-          row?.exercise?.movementPattern !== 'cardio' &&
+          !(row?.exercise && isCardioPattern(row.exercise.movementPattern)) &&
           timer.targetAt === null
         if (shouldAutoStart) {
           const seconds =
@@ -255,7 +256,9 @@ export function ActiveWorkoutScreen({
    * since that's the one just trained; falls back to the profile default.
    */
   const restDefaultSeconds =
-    [...rows].reverse().find((r) => r.exercise && r.exercise.movementPattern !== 'cardio')
+    [...rows]
+      .reverse()
+      .find((r) => r.exercise && !isCardioPattern(r.exercise.movementPattern))
       ?.workoutExercise.restSeconds ??
     [...rows].reverse().find((r) => r.exercise?.defaultRestSeconds != null)?.exercise
       ?.defaultRestSeconds ??

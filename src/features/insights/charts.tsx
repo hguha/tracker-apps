@@ -1104,19 +1104,19 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
 
   return (
     <ChartCard
-      title="Pattern coverage"
-      subtitle="Working sets per movement pattern"
+      title="Push / pull balance"
+      subtitle="Working sets by movement type"
       isEmpty={entries.length === 0}
-      emptyMessage="Log some sets to see which movement patterns you train."
+      emptyMessage="Log some sets to see how your pushing and pulling compare."
       table={{
-        columns: ['Pattern', 'Sets'],
+        columns: ['Movement', 'Sets'],
         rows: entries.map((e) => [humanizeSlug(e.pattern), e.count]),
       }}
     >
       <Chart
         option={option}
         height={Math.max(160, entries.length * 30)}
-        ariaLabel="Bar chart of working sets per movement pattern"
+        ariaLabel="Bar chart of working sets by movement type"
       />
     </ChartCard>
   )

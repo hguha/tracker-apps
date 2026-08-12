@@ -487,24 +487,20 @@ function toPushRow(entry: OutboxEntry): PushRow {
 /**
  * Backfills domain fields a pulled row can't carry from Postgres.
  *
- * The `exercises` table stores its secondary muscles in a separate join table
- * (`exercise_secondary_muscles`) and has no `secondary_muscles` column, so a
- * pulled exercise arrives with `secondaryMuscles` undefined — which then throws
- * `not iterable` in the volume math and blanks the screen. Default the
- * array-typed fields to empty so a synced row is always shaped like a local one.
- * (Secondaries for a *custom* exercise are best re-fetched from the join table;
- * defaulting to none here is the safe floor that keeps the app rendering.)
+ * `aliases` may be absent on an exercise pulled from Postgres, and code that
+ * iterates it throws `not iterable` and blanks the screen. `movementPattern` is
+ * derived locally from the primary muscle rather than stored, so a pulled row can
+ * carry a value from the retired eleven-value taxonomy; leaving it would quietly
+ * break cardio detection and the "Push"/"Pull" session titles. The launch-time
+ * repair in `db/seed` fixes rows already written.
  */
 function normalizeRow(
   table: SyncedTable,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
   if (table === 'exercises') {
-    return {
-      ...row,
-      secondaryMuscles: row.secondaryMuscles ?? [],
-      aliases: row.aliases ?? [],
-    }
+    const { secondaryMuscles: _dropped, ...rest } = row
+    return { ...rest, aliases: row.aliases ?? [] }
   }
   if (table === 'profiles') {
     // A server profile from before a column existed arrives without it; backfill

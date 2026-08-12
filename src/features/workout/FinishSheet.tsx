@@ -17,6 +17,7 @@ import { REGION_LABELS, type Region } from '@/domain/types'
 import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
 import { formatDisplayWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
+import { isCardioPattern } from '@/domain/movement'
 
 export function FinishSheet({
   workoutId,
@@ -56,7 +57,7 @@ export function FinishSheet({
       workingSets += sets.filter((s) => isWorkingSet(s)).length
       // Only genuine cardio, not a weighted carry or a plank, both of which
       // also carry a duration.
-      if (exercise.movementPattern === 'cardio') {
+      if (isCardioPattern(exercise.movementPattern)) {
         cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
       }
 

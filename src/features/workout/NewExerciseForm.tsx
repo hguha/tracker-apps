@@ -18,12 +18,10 @@ import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'
 import {
   EQUIPMENT,
-  MOVEMENT_PATTERNS,
   REGION_LABELS,
   REGIONS,
   TRACKING_TYPES,
   type Equipment,
-  type MovementPattern,
   type TrackingType,
 } from '@/domain/types'
 
@@ -37,20 +35,6 @@ const TRACKING_LABELS: Record<TrackingType, string> = {
   time: 'Time only',
   distance_time: 'Distance & time',
   weight_time: 'Weight & time (carries)',
-}
-
-const PATTERN_LABELS: Record<MovementPattern, string> = {
-  squat: 'Squat',
-  hinge: 'Hinge',
-  lunge: 'Lunge',
-  horizontal_push: 'Horizontal push',
-  vertical_push: 'Vertical push',
-  horizontal_pull: 'Horizontal pull',
-  vertical_pull: 'Vertical pull',
-  carry: 'Carry',
-  rotation: 'Rotation',
-  isolation: 'Isolation',
-  cardio: 'Cardio',
 }
 
 const EQUIPMENT_LABELS: Record<Equipment, string> = {
@@ -78,7 +62,6 @@ export function NewExerciseForm({
   const [region, setRegion] = useState<string | null>(null)
   const [primaryMuscleId, setPrimaryMuscleId] = useState<string | null>(null)
   const [equipment, setEquipment] = useState<Equipment>('dumbbell')
-  const [pattern, setPattern] = useState<MovementPattern>('isolation')
   const [trackingType, setTrackingType] = useState<TrackingType>('weight_reps')
   const [isUnilateral, setIsUnilateral] = useState(false)
   const [notes, setNotes] = useState('')
@@ -104,7 +87,6 @@ export function NewExerciseForm({
         name,
         primaryMuscleId,
         equipment,
-        movementPattern: pattern,
         trackingType,
         isUnilateral,
         notes,
@@ -215,17 +197,6 @@ export function NewExerciseForm({
             }))}
             value={trackingType}
             onChange={setTrackingType}
-          />
-        </Field>
-
-        <Field label="Movement pattern">
-          <ChipGroup
-            options={MOVEMENT_PATTERNS.map((value) => ({
-              value,
-              label: PATTERN_LABELS[value],
-            }))}
-            value={pattern}
-            onChange={setPattern}
           />
         </Field>
 

@@ -24,7 +24,7 @@ insert into auth.users (id, email) values
 insert into muscles (id, user_id, name, region)
   values ('mid_chest', null, 'Mid Chest', 'chest');
 insert into exercises (id, user_id, name, primary_muscle_id, equipment, movement_pattern)
-  values ('bench', null, 'Bench', 'mid_chest', 'barbell', 'horizontal_push');
+  values ('bench', null, 'Bench', 'mid_chest', 'barbell', 'push');
 
 -- Each user logs a workout.
 insert into workouts (id, user_id, started_at) values

@@ -6,7 +6,7 @@ function ex(partial: Partial<ExerciseAgg> & { name: string }): ExerciseAgg {
   return {
     name: partial.name,
     region: partial.region ?? 'chest',
-    pattern: partial.pattern ?? 'horizontal_push',
+    pattern: partial.pattern ?? 'push',
     equipment: partial.equipment ?? 'barbell',
     sessions: partial.sessions ?? 3,
     totalSets: partial.totalSets ?? 9,

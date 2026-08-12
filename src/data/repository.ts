@@ -29,6 +29,7 @@ import {
   type SummarySession,
 } from '@/features/coach/summary'
 import { sessionTitle, type SetSignal } from '@/lib/sessionTitle'
+import { isCardioPattern, patternForRegion } from '@/domain/movement'
 import type {
   DistanceUnit,
   Exercise,
@@ -341,9 +342,7 @@ export interface NewExerciseInput {
   name: string
   primaryMuscleId: string
   equipment: Exercise['equipment']
-  movementPattern: Exercise['movementPattern']
   trackingType: Exercise['trackingType']
-  secondaryMuscles?: { muscleId: string; contribution: number }[]
   isUnilateral?: boolean
   bodyweightFactor?: number | null
   notes?: string
@@ -356,10 +355,12 @@ export async function createExercise(input: NewExerciseInput): Promise<string> {
     userId: getActiveUserId(),
     name: input.name.trim(),
     primaryMuscleId: input.primaryMuscleId,
-    secondaryMuscles: input.secondaryMuscles ?? [],
     aliases: [],
     equipment: input.equipment,
-    movementPattern: input.movementPattern,
+    // Derived from the muscle rather than asked for (§4.3).
+    movementPattern: patternForRegion(
+      (await db.muscles.get(input.primaryMuscleId))?.region ?? 'core',
+    ),
     trackingType: input.trackingType,
     isUnilateral: input.isUnilateral ?? false,
     bodyweightFactor: input.bodyweightFactor ?? null,
@@ -388,7 +389,6 @@ export async function updateExercise(
 export interface ExerciseDetail {
   exercise: Exercise
   primaryMuscle: { id: string; name: string; region: string } | undefined
-  secondaryMuscles: { id: string; name: string; region: string; contribution: number }[]
   records: PersonalRecord[]
   sessions: {
     workoutId: string
@@ -407,19 +407,6 @@ export async function getExerciseDetail(
   if (!exercise) return null
 
   const primary = await db.muscles.get(exercise.primaryMuscleId)
-  const secondaries = await Promise.all(
-    (exercise.secondaryMuscles ?? []).map(async (s) => {
-      const muscle = await db.muscles.get(s.muscleId)
-      return muscle
-        ? {
-            id: muscle.id,
-            name: muscle.name,
-            region: muscle.region as string,
-            contribution: s.contribution,
-          }
-        : null
-    }),
-  )
 
   const sessions: ExerciseDetail['sessions'] = (
     await completedSessionsForExercise(exerciseId)
@@ -436,7 +423,6 @@ export async function getExerciseDetail(
     primaryMuscle: primary
       ? { id: primary.id, name: primary.name, region: primary.region as string }
       : undefined,
-    secondaryMuscles: secondaries.filter((s): s is NonNullable<typeof s> => s !== null),
     records: await listPersonalRecords(exerciseId),
     sessions,
     lastTrainedAt: sessions[0]?.performedAt ?? null,
@@ -619,7 +605,7 @@ function buildWorkoutSummary(
     setCount += logged.length
     volumeKg += volumeLoadKg(logged, exercise, workout.bodyweightKg)
 
-    if (exercise.movementPattern === 'cardio') {
+    if (isCardioPattern(exercise.movementPattern)) {
       cardioSeconds += logged.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
     }
 
@@ -870,7 +856,7 @@ export async function getCoachSummary(): Promise<CoachSummary> {
           region: regionOf.get(exercise.primaryMuscleId),
           pattern: exercise.movementPattern,
           equipment: exercise.equipment,
-          isCardio: exercise.movementPattern === 'cardio',
+          isCardio: isCardioPattern(exercise.movementPattern),
           sets: (setsByWe.get(we.id) ?? []).map((s) => ({
             weightKg: s.weightKg,
             reps: s.reps,

@@ -28,8 +28,6 @@ export interface SetSignal {
   pattern: MovementPattern
 }
 
-const PUSH_PATTERNS: MovementPattern[] = ['horizontal_push', 'vertical_push']
-const PULL_PATTERNS: MovementPattern[] = ['horizontal_pull', 'vertical_pull']
 const UPPER_REGIONS: Region[] = ['chest', 'back', 'shoulders', 'biceps', 'triceps']
 
 /** Share of the session a predicate accounts for, 0–1. */
@@ -63,8 +61,8 @@ export function inferSplit(signals: SetSignal[]): string | null {
     return region === 'cardio' ? 'Cardio' : REGION_LABELS[region!]
   }
 
-  const pushShare = share(signals, (s) => PUSH_PATTERNS.includes(s.pattern))
-  const pullShare = share(signals, (s) => PULL_PATTERNS.includes(s.pattern))
+  const pushShare = share(signals, (s) => s.pattern === 'push')
+  const pullShare = share(signals, (s) => s.pattern === 'pull')
 
   // Triceps are push accessories; biceps are pull accessories. Splitting arms
   // lets each land with the movement it actually accompanies.

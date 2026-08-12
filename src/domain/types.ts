@@ -67,19 +67,23 @@ export const EQUIPMENT = [
 ] as const
 export type Equipment = (typeof EQUIPMENT)[number]
 
-export const MOVEMENT_PATTERNS = [
-  'squat',
-  'hinge',
-  'lunge',
-  'horizontal_push',
-  'vertical_push',
-  'horizontal_pull',
-  'vertical_pull',
-  'carry',
-  'rotation',
-  'isolation',
-  'cardio',
-] as const
+/**
+ * Movement pattern was removed as a user-facing concept: squat vs hinge, and
+ * horizontal vs vertical push, are distinctions nobody was using to answer a
+ * question, and they made creating an exercise a taxonomy quiz. The primary
+ * muscle group carries the information that actually drives the app.
+ *
+ * The column survives with two live values because two features genuinely need
+ * them, and both are inferable rather than asked for:
+ *   - `cardio` switches the whole logging UI to time/distance (§6.4). Derived
+ *     from the primary muscle's region, which is `cardio` for exactly the
+ *     exercises that want it.
+ *   - `push`/`pull` are what let a session title read "Push" rather than
+ *     "Chest" (§6.7). Inferred from the primary muscle group.
+ * Keeping the column rather than dropping it also means no data migration and no
+ * change to the sync schema.
+ */
+export const MOVEMENT_PATTERNS = ['push', 'pull', 'other', 'cardio'] as const
 export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number]
 
 /**
@@ -172,10 +176,9 @@ export interface Exercise extends SyncColumns {
   userId: string | null
   name: string
   primaryMuscleId: string
-  /** Partial credit for secondaries, e.g. bench press → front delt at 0.5. */
-  secondaryMuscles: { muscleId: string; contribution: number }[]
   aliases: string[]
   equipment: Equipment
+  /** Derived from the primary muscle, never asked for — see MOVEMENT_PATTERNS. */
   movementPattern: MovementPattern
   trackingType: TrackingType
   isUnilateral: boolean

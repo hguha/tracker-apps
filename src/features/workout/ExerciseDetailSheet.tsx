@@ -83,7 +83,7 @@ export function ExerciseDetailSheet({
 
   if (!detail) return null
 
-  const { exercise, primaryMuscle, secondaryMuscles, records, sessions } = detail
+  const { exercise, primaryMuscle, records, sessions } = detail
   // "This session" must be *this* workout, matched by id. Falling back to
   // sessions[0] (the most recent historical session) showed last workout's
   // numbers before anything was logged here. When opened from a session where
@@ -211,21 +211,12 @@ export function ExerciseDetailSheet({
         <Section title="Details">
           <dl className="space-y-1.5 text-[13.5px]">
             <Row label="Equipment" value={humanizeSlug(exercise.equipment)} />
-            <Row label="Pattern" value={humanizeSlug(exercise.movementPattern)} />
             <Row label="Tracked as" value={humanizeSlug(exercise.trackingType)} />
             {exercise.isUnilateral && <Row label="Per side" value="Yes" />}
             {exercise.bodyweightFactor !== null && (
               <Row
                 label="Bodyweight moved"
                 value={`${Math.round(exercise.bodyweightFactor * 100)}%`}
-              />
-            )}
-            {secondaryMuscles.length > 0 && (
-              <Row
-                label="Also works"
-                value={secondaryMuscles
-                  .map((m) => `${m.name} (${Math.round(m.contribution * 100)}%)`)
-                  .join(', ')}
               />
             )}
           </dl>

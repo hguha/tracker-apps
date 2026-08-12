@@ -45,6 +45,35 @@ describe('seeding', () => {
     expect(muscle?.region).toBe('shoulders')
   })
 
+  it('derives cardio for exactly the cardio exercises, and nothing else', async () => {
+    // Cardio switches the whole logging UI to time/distance (§6.4). It used to be
+    // a hand-tagged `pattern: 'cardio'` on each seed row; it's now derived from
+    // the primary muscle's region. If that derivation drifts, a treadmill row
+    // silently starts asking for weight and reps.
+    const exercises = await repo.listExercises()
+    const muscles = await db.muscles.toArray()
+    const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
+
+    for (const exercise of exercises) {
+      const isCardioRegion = regionOf.get(exercise.primaryMuscleId) === 'cardio'
+      expect(exercise.movementPattern === 'cardio').toBe(isCardioRegion)
+    }
+
+    // And the library really does contain cardio, so the assertion isn't vacuous.
+    expect(
+      exercises.filter((e) => e.movementPattern === 'cardio').length,
+    ).toBeGreaterThan(10)
+  })
+
+  it('derives push and pull, which the session title depends on (§6.7)', async () => {
+    const bench = await db.exercises.get('barbell_bench_press')
+    const row = await db.exercises.get('barbell_row')
+    const squat = await db.exercises.get('barbell_back_squat')
+    expect(bench?.movementPattern).toBe('push')
+    expect(row?.movementPattern).toBe('pull')
+    expect(squat?.movementPattern).toBe('other')
+  })
+
   it('finds exercises by alias', async () => {
     const exercises = await repo.listExercises()
     const ohp = exercises.find((e) => e.aliases.includes('ohp'))
@@ -737,7 +766,7 @@ describe('session title signals (§6.7)', () => {
     expect(signals).toHaveLength(2)
     expect(signals[0]).toMatchObject({
       region: 'chest',
-      pattern: 'horizontal_push',
+      pattern: 'push',
     })
   })
 })
@@ -1079,12 +1108,31 @@ describe('personal records', () => {
 })
 
 describe('custom exercises', () => {
+  it('derives the movement pattern from the chosen muscle', async () => {
+    // The create form no longer asks for a pattern (§4.3), so this is the only
+    // thing standing between a custom cardio exercise and a weight-and-reps UI.
+    const treadmill = await repo.createExercise({
+      name: 'Rower Intervals',
+      primaryMuscleId: 'cardiovascular',
+      equipment: 'machine',
+      trackingType: 'distance_time',
+    })
+    expect((await db.exercises.get(treadmill))?.movementPattern).toBe('cardio')
+
+    const press = await repo.createExercise({
+      name: 'Landmine Press',
+      primaryMuscleId: 'front_delt',
+      equipment: 'barbell',
+      trackingType: 'weight_reps',
+    })
+    expect((await db.exercises.get(press))?.movementPattern).toBe('push')
+  })
+
   it('creates one that flows into the library', async () => {
     const exerciseId = await repo.createExercise({
       name: 'Cable Rear Delt Row',
       primaryMuscleId: 'rear_delt',
       equipment: 'cable',
-      movementPattern: 'horizontal_pull',
       trackingType: 'weight_reps',
     })
 
@@ -1680,7 +1728,6 @@ describe('active user id + local data reset', () => {
       name: 'My Lift',
       primaryMuscleId: 'mid_chest',
       equipment: 'barbell',
-      movementPattern: 'horizontal_push',
       trackingType: 'weight_reps',
     })
     expect((await db.exercises.get(exId))?.userId).toBe(
@@ -1701,7 +1748,6 @@ describe('active user id + local data reset', () => {
       name: 'My Lift',
       primaryMuscleId: 'mid_chest',
       equipment: 'barbell',
-      movementPattern: 'horizontal_push',
       trackingType: 'weight_reps',
     })
 
@@ -1875,7 +1921,6 @@ describe('active user id + local data reset', () => {
       name: 'Fake Lift',
       primaryMuscleId: 'mid_chest',
       equipment: 'barbell',
-      movementPattern: 'horizontal_push',
       trackingType: 'weight_reps',
     })
 
@@ -1920,7 +1965,6 @@ describe('active user id + local data reset', () => {
       name: 'Custom Move',
       primaryMuscleId: 'mid_chest',
       equipment: 'dumbbell',
-      movementPattern: 'isolation',
       trackingType: 'weight_reps',
     })
 

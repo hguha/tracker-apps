@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Exercise, WorkoutSet } from '@/domain/types'
 import {
-  attributeVolumeToMuscles,
   bestOneRepMaxKg,
   effectiveWeightKg,
   estimatedOneRepMaxKg,
   isWorkingSet,
   paceSecondsPerM,
-  rollUpToRegions,
   tonnagePerMinute,
   topSetWeightKg,
   volumeLoadKg,
@@ -34,10 +32,9 @@ function exercise(partial: Partial<Exercise> = {}): Exercise {
     userId: null,
     name: 'Test',
     primaryMuscleId: 'm1',
-    secondaryMuscles: [],
     aliases: [],
     equipment: 'barbell',
-    movementPattern: 'horizontal_push',
+    movementPattern: 'push',
     trackingType: 'weight_reps',
     isUnilateral: false,
     bodyweightFactor: null,
@@ -197,57 +194,6 @@ describe('bestOneRepMaxKg', () => {
 describe('topSetWeightKg', () => {
   it('finds the heaviest working set', () => {
     expect(topSetWeightKg([set({ weightKg: 100 }), set({ weightKg: 120 })])).toBe(120)
-  })
-})
-
-describe('attributeVolumeToMuscles', () => {
-  it('gives the primary muscle full credit', () => {
-    const result = attributeVolumeToMuscles(1000, exercise())
-    expect(result.get('m1')).toBe(1000)
-  })
-
-  it('gives secondaries partial credit', () => {
-    const bench = exercise({
-      primaryMuscleId: 'mid_chest',
-      secondaryMuscles: [
-        { muscleId: 'front_delt', contribution: 0.5 },
-        { muscleId: 'triceps', contribution: 0.5 },
-      ],
-    })
-    const result = attributeVolumeToMuscles(1000, bench)
-    expect(result.get('mid_chest')).toBe(1000)
-    expect(result.get('front_delt')).toBe(500)
-    expect(result.get('triceps')).toBe(500)
-  })
-
-  it('survives a row whose secondaryMuscles is missing (a synced exercise)', () => {
-    // A pulled row can arrive without the field; it must not throw "not
-    // iterable" and blank the screen — just credit the primary.
-    const broken = { primaryMuscleId: 'm1' } as unknown as Parameters<
-      typeof attributeVolumeToMuscles
-    >[1]
-    const result = attributeVolumeToMuscles(1000, broken)
-    expect(result.get('m1')).toBe(1000)
-  })
-})
-
-describe('rollUpToRegions', () => {
-  it('sums muscles into their regions', () => {
-    const byMuscle = new Map([
-      ['mid_chest', 1000],
-      ['upper_chest', 500],
-      ['triceps', 250],
-    ])
-    const regions = rollUpToRegions(byMuscle, (id) =>
-      id === 'triceps' ? 'triceps' : 'chest',
-    )
-    expect(regions.get('chest')).toBe(1500)
-    expect(regions.get('triceps')).toBe(250)
-  })
-
-  it('drops muscles it cannot place rather than inventing a region', () => {
-    const regions = rollUpToRegions(new Map([['unknown', 100]]), () => undefined)
-    expect(regions.size).toBe(0)
   })
 })
 

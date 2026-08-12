@@ -30,6 +30,7 @@ import { regionVar } from '@/lib/palette'
 import { CardioEntry } from './CardioEntry'
 import { SetRow, hasLoggedValues } from './SetRow'
 import { hasValue, resolvePlaceholders } from './resolvePlaceholders'
+import { isCardioPattern } from '@/domain/movement'
 
 /** The subset of a performed set that can act as a placeholder. */
 export interface SetPlaceholderHint {
@@ -115,7 +116,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
     }
   }, [sets, exercise])
 
-  const isCardio = exercise.movementPattern === 'cardio'
+  const isCardio = isCardioPattern(exercise.movementPattern)
 
   const previousSets = useMemo<PerformedSet[]>(
     () => previousSession?.sets ?? [],

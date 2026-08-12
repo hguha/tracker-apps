@@ -52,7 +52,6 @@ describe('toPostgresRow', () => {
         id: 'my_lift',
         name: 'My Lift',
         primaryMuscleId: 'mid_chest',
-        secondaryMuscles: [{ muscleId: 'front_delt', contribution: 0.5 }],
         aliases: ['ml'],
       },
       'exercises',
