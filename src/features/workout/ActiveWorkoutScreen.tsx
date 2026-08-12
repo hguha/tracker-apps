@@ -206,6 +206,27 @@ export function ActiveWorkoutScreen({
     onExit()
   }, [workoutId, timer, toast, onExit])
 
+  /**
+   * Editing a past workout is a transaction (§6.6). The snapshot taken here backs
+   * Cancel and holds this workout's writes back until Done, so a cancelled edit
+   * never reaches the server.
+   */
+  useEffect(() => {
+    if (!isEditMode) return
+    void repo.beginWorkoutEdits(workoutId)
+  }, [isEditMode, workoutId])
+
+  const handleDoneEditing = useCallback(async () => {
+    await repo.commitWorkoutEdits(workoutId)
+    onExit()
+  }, [workoutId, onExit])
+
+  const handleCancelEditing = useCallback(async () => {
+    await repo.cancelWorkoutEdits(workoutId)
+    toast.show('Edits discarded')
+    onExit()
+  }, [workoutId, toast, onExit])
+
   const loggedSetCount = useMemo(
     () => data?.rows.flatMap((r) => r.sets).filter((s) => s.isCompleted).length ?? 0,
     [data?.rows],
@@ -244,7 +265,10 @@ export function ActiveWorkoutScreen({
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2">
         <button
-          onClick={onExit}
+          // Back keeps the edits, like leaving any other editable screen. It must
+          // not merely navigate: the snapshot is what defers this workout's
+          // writes, so an uncommitted exit would strand them unsent forever.
+          onClick={() => (isEditMode ? void handleDoneEditing() : onExit())}
           aria-label="Back"
           className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
         >
@@ -357,13 +381,32 @@ export function ActiveWorkoutScreen({
       {!isEditMode && <RestTimerBar defaultSeconds={restDefaultSeconds} />}
 
       <div className="border-t border-line bg-surface px-3 py-2.5 pb-safe">
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={() => (isEditMode ? onExit() : setIsFinishOpen(true))}
-        >
-          {isEditMode ? 'Done editing' : 'Finish workout'}
-        </Button>
+        {isEditMode ? (
+          // Cancel is a peer of Done, not hidden in a menu: an accidental tap on
+          // a set is exactly when it's needed, and without it the only way out
+          // was to undo the change by hand.
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={() => void handleCancelEditing()}
+            >
+              Cancel edits
+            </Button>
+            <Button
+              size="lg"
+              className="flex-[2]"
+              onClick={() => void handleDoneEditing()}
+            >
+              Done editing
+            </Button>
+          </div>
+        ) : (
+          <Button size="lg" className="w-full" onClick={() => setIsFinishOpen(true)}>
+            Finish workout
+          </Button>
+        )}
       </div>
 
       {isPickerOpen && (

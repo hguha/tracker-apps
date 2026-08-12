@@ -1416,6 +1416,118 @@ describe('editing a past workout', () => {
   })
 })
 
+describe('cancelling an edit to a past workout (§6.6)', () => {
+  /** A finished single-set workout, ready to edit. */
+  async function loggedWorkout() {
+    const workoutId = await repo.startWorkout({ title: 'Pull A' })
+    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 140, reps: 5 })
+    await repo.logSetValues(setId, {})
+    await repo.finishWorkout(workoutId)
+    return { workoutId, weId, setId }
+  }
+
+  it('restores values, added rows, and deletions', async () => {
+    const { workoutId, weId, setId } = await loggedWorkout()
+
+    await repo.beginWorkoutEdits(workoutId)
+    // The three kinds of damage an accidental tap can do.
+    await repo.logSetValues(setId, { weightKg: 999 })
+    const added = await repo.addSet({ workoutExerciseId: weId, weightKg: 5, reps: 1 })
+    const addedExercise = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown')
+    await repo.updateWorkout(workoutId, { title: 'Oops' })
+
+    await repo.cancelWorkoutEdits(workoutId)
+
+    expect((await db.sets.get(setId))?.weightKg).toBe(140)
+    expect(await db.sets.get(added)).toBeUndefined()
+    expect(await db.workoutExercises.get(addedExercise)).toBeUndefined()
+    expect((await repo.getWorkout(workoutId))?.title).toBe('Pull A')
+    expect(await repo.listWorkoutExercises(workoutId)).toHaveLength(1)
+  })
+
+  it('brings back a set deleted during the edit', async () => {
+    const { workoutId, weId, setId } = await loggedWorkout()
+
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.deleteSet(setId)
+    await repo.cancelWorkoutEdits(workoutId)
+
+    expect(await repo.listSets(weId)).toHaveLength(1)
+    expect((await db.sets.get(setId))?.deletedAt).toBeNull()
+  })
+
+  it('holds edits back from the server until Done, then releases them', async () => {
+    const { workoutId, setId } = await loggedWorkout()
+    await db.outbox.clear()
+
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.logSetValues(setId, { weightKg: 145 })
+
+    // Nothing may push mid-edit, or a cancelled edit would already be published.
+    const queued = await db.outbox.toArray()
+    expect(queued.length).toBeGreaterThan(0)
+    expect(queued.every((e) => e.deferredForWorkoutId === workoutId)).toBe(true)
+
+    await repo.commitWorkoutEdits(workoutId)
+    const released = await db.outbox.toArray()
+    expect(released.every((e) => e.deferredForWorkoutId === undefined)).toBe(true)
+  })
+
+  it('discards the queued writes on cancel, so nothing is ever sent', async () => {
+    const { workoutId, setId } = await loggedWorkout()
+    await db.outbox.clear()
+
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.logSetValues(setId, { weightKg: 145 })
+    await repo.cancelWorkoutEdits(workoutId)
+
+    // The server's copy still matches the snapshot, so there is nothing to say.
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('recomputes records after a cancel, so a reverted PR disappears', async () => {
+    const { workoutId, setId } = await loggedWorkout()
+
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.logSetValues(setId, { weightKg: 300 })
+    expect(
+      (await repo.listPersonalRecords('deadlift')).find(
+        (pr) => pr.recordType === 'max_weight',
+      )?.value,
+    ).toBe(300)
+
+    await repo.cancelWorkoutEdits(workoutId)
+
+    expect(
+      (await repo.listPersonalRecords('deadlift')).find(
+        (pr) => pr.recordType === 'max_weight',
+      )?.value,
+    ).toBe(140)
+  })
+
+  it('keeps the original snapshot if the edit is reopened', async () => {
+    const { workoutId, setId } = await loggedWorkout()
+
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.logSetValues(setId, { weightKg: 200 })
+    // A remount mid-edit must not adopt the half-edited state as the baseline.
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.cancelWorkoutEdits(workoutId)
+
+    expect((await db.sets.get(setId))?.weightKg).toBe(140)
+  })
+
+  it('reports whether an edit is open', async () => {
+    const { workoutId } = await loggedWorkout()
+    expect(await repo.isEditingWorkout(workoutId)).toBe(false)
+    await repo.beginWorkoutEdits(workoutId)
+    expect(await repo.isEditingWorkout(workoutId)).toBe(true)
+    await repo.commitWorkoutEdits(workoutId)
+    expect(await repo.isEditingWorkout(workoutId)).toBe(false)
+  })
+})
+
 describe('templates (§7)', () => {
   it('creates, edits, and previews a template without touching workouts', async () => {
     const templateId = await repo.createTemplate('Push A')

@@ -110,6 +110,26 @@ export interface PlaceholderOverrides {
   createdAt: number
 }
 
+/**
+ * A pre-edit copy of one past workout, so editing it can be cancelled (§6.6).
+ *
+ * Every mutation writes to IndexedDB immediately — that's what makes the app
+ * work offline — so "cancel" can't mean "don't save yet". It means "put back what
+ * was there", which requires having kept it.
+ *
+ * Its existence also marks the workout as *being edited*, which the outbox
+ * deferral reads: nothing is pushed to the server until Done, so a cancelled
+ * edit never reaches another device. Durable rather than in-memory precisely
+ * because a reload mid-edit must not silently publish half an edit.
+ */
+export interface EditSnapshot {
+  workoutId: string
+  workout: Workout
+  workoutExercises: WorkoutExercise[]
+  sets: WorkoutSet[]
+  createdAt: number
+}
+
 export class WorkoutDatabase extends Dexie {
   profiles!: EntityTable<Profile, 'id'>
   muscles!: EntityTable<Muscle, 'id'>
@@ -127,6 +147,7 @@ export class WorkoutDatabase extends Dexie {
   deadLetter!: EntityTable<DeadLetterEntry, 'seq'>
   syncState!: EntityTable<SyncState, 'table'>
   placeholderOverrides!: EntityTable<PlaceholderOverrides, 'workoutId'>
+  editSnapshots!: EntityTable<EditSnapshot, 'workoutId'>
 
   constructor(name = 'workout-tracker') {
     super(name)
@@ -161,6 +182,11 @@ export class WorkoutDatabase extends Dexie {
     // have no value for it, which reads as "not deferred".
     this.version(4).stores({
       outbox: '++seq, table, rowId, deferredForWorkoutId',
+    })
+
+    // v5 adds the pre-edit snapshot that backs "cancel edits" (§6.6). Additive.
+    this.version(5).stores({
+      editSnapshots: 'workoutId',
     })
   }
 }

@@ -105,6 +105,13 @@ async function deferralFor(
 
   if (!workoutId) return {}
 
+  // A workout open for editing holds its writes too, so a cancelled edit is
+  // never published. Released by `commitWorkoutEdits`, discarded by
+  // `cancelWorkoutEdits` (§6.6).
+  if ((await db.editSnapshots.get(workoutId)) !== undefined) {
+    return { deferredForWorkoutId: workoutId }
+  }
+
   // In progress means "exists and hasn't ended". A finished or deleted workout
   // pushes normally — including the finish itself, which is what releases it.
   const workout = await db.workouts.get(workoutId)
@@ -238,6 +245,10 @@ export async function claimLocalData(newUserId: string): Promise<number> {
       db.sets,
       db.templateExercises,
       db.outbox,
+      // `enqueue` consults the edit snapshots to decide whether a write is
+      // deferred, so anything that enqueues inside a transaction must hold this
+      // store in scope too — Dexie fails the whole transaction otherwise.
+      db.editSnapshots,
     ],
     async () => {
       // 1. Profile: copy the local row onto a row keyed by the new uid. Prefer an
@@ -1017,6 +1028,126 @@ export async function finishWorkout(id: string): Promise<'saved' | 'discarded-em
   // reached another device.
   await releaseDeferredWrites(id)
   return 'saved'
+}
+
+// -------------------------------------------------- editing a past workout
+
+/**
+ * Opens an edit session on a finished workout (§6.6).
+ *
+ * Copies the workout, its exercises, and its sets so `cancelWorkoutEdits` can put
+ * them back. Every mutation writes to IndexedDB the moment it happens — that's
+ * what makes the app work offline — so "cancel" can't mean "don't save yet"; it
+ * means "restore what was there".
+ *
+ * While the snapshot exists, `deferralFor` holds this workout's writes back, so
+ * an edit that's later cancelled never reaches the server.
+ *
+ * Idempotent: re-opening an already-open edit keeps the *original* snapshot,
+ * because that's the state Cancel should return to.
+ */
+export async function beginWorkoutEdits(workoutId: string): Promise<void> {
+  if (await db.editSnapshots.get(workoutId)) return
+
+  const workout = await db.workouts.get(workoutId)
+  if (!workout) return
+
+  const workoutExercises = await db.workoutExercises
+    .where('workoutId')
+    .equals(workoutId)
+    .toArray()
+  const sets = (
+    await Promise.all(
+      workoutExercises.map((we) =>
+        db.sets.where('workoutExerciseId').equals(we.id).toArray(),
+      ),
+    )
+  ).flat()
+
+  await db.editSnapshots.put({
+    workoutId,
+    workout,
+    // Tombstones included: a set deleted during the edit has to come back, and
+    // one already deleted before it must stay deleted.
+    workoutExercises,
+    sets,
+    createdAt: Date.now(),
+  })
+}
+
+/** Whether a workout currently has unsaved edits open. */
+export async function isEditingWorkout(workoutId: string): Promise<boolean> {
+  return (await db.editSnapshots.get(workoutId)) !== undefined
+}
+
+/**
+ * Keeps the edits and lets them sync — "Done editing".
+ *
+ * Dropping the snapshot is what un-defers the queued writes, so they push as one
+ * batch rather than trickling out mid-edit.
+ */
+export async function commitWorkoutEdits(workoutId: string): Promise<void> {
+  const snapshot = await db.editSnapshots.get(workoutId)
+  if (!snapshot) return
+
+  await db.editSnapshots.delete(workoutId)
+  // An edit can invalidate a record or the last-time cache — a weight corrected
+  // downward has to be able to remove a PR (§6.6).
+  await rebuildLastPerformanceForWorkout(workoutId)
+  await releaseDeferredWrites(workoutId)
+}
+
+/**
+ * Puts the workout back as it was and drops the queued writes — "Cancel".
+ *
+ * Rows added during the edit are removed outright rather than tombstoned: they
+ * were never pushed (their writes were deferred), so no other device has ever
+ * seen them and there is nothing to tell the server about. Tombstoning them
+ * would leave phantom deleted rows in history forever.
+ */
+export async function cancelWorkoutEdits(workoutId: string): Promise<void> {
+  const snapshot = await db.editSnapshots.get(workoutId)
+  if (!snapshot) return
+
+  await db.transaction(
+    'rw',
+    [db.workouts, db.workoutExercises, db.sets, db.outbox, db.editSnapshots],
+    async () => {
+      const keptExerciseIds = new Set(snapshot.workoutExercises.map((we) => we.id))
+      const keptSetIds = new Set(snapshot.sets.map((s) => s.id))
+
+      const currentExercises = await db.workoutExercises
+        .where('workoutId')
+        .equals(workoutId)
+        .toArray()
+      for (const we of currentExercises) {
+        const currentSets = await db.sets
+          .where('workoutExerciseId')
+          .equals(we.id)
+          .toArray()
+        for (const set of currentSets) {
+          if (!keptSetIds.has(set.id)) await db.sets.delete(set.id)
+        }
+        if (!keptExerciseIds.has(we.id)) await db.workoutExercises.delete(we.id)
+      }
+
+      await db.workouts.put(snapshot.workout)
+      await db.workoutExercises.bulkPut(snapshot.workoutExercises)
+      await db.sets.bulkPut(snapshot.sets)
+
+      // Discard the writes this edit queued. They were deferred, so nothing has
+      // been sent and the server's copy still matches the snapshot.
+      const queued = await db.outbox
+        .where('deferredForWorkoutId')
+        .equals(workoutId)
+        .toArray()
+      await db.outbox.bulkDelete(queued.map((entry) => entry.seq!))
+
+      await db.editSnapshots.delete(workoutId)
+    },
+  )
+
+  await rebuildLastPerformanceForWorkout(workoutId)
 }
 
 /** Whether a session has any completed set (§6.4.1 — empty workouts discard). */
@@ -2361,6 +2492,7 @@ export async function deleteAllTrainingData(): Promise<{
   await db.personalRecords.clear()
   await db.lastPerformance.clear()
   await db.placeholderOverrides.clear()
+  await db.editSnapshots.clear()
 
   return counts
 }
@@ -2446,6 +2578,7 @@ export async function clearLocalData(): Promise<void> {
       db.metricDefinitions,
       db.lastPerformance,
       db.placeholderOverrides,
+      db.editSnapshots,
       db.outbox,
       db.deadLetter,
       db.syncState,
@@ -2460,6 +2593,7 @@ export async function clearLocalData(): Promise<void> {
       await db.metricEntries.clear()
       await db.lastPerformance.clear()
       await db.placeholderOverrides.clear()
+      await db.editSnapshots.clear()
       await db.profiles.clear()
       // User-created library rows only — system rows (userId null) are shared and
       // re-seeded at boot. All three tables are user-extensible, so all three
