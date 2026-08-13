@@ -1994,6 +1994,39 @@ describe('active user id + local data reset', () => {
     expect(await repo.claimLocalData(LOCAL_USER_ID)).toBe(0)
   })
 
+  it('claimLocalData enqueues nothing when every local row already belongs to the caller', async () => {
+    // The bug: chained tables (workoutExercises, sets, templateExercises) carry
+    // no client-side userId, so the claim used to re-enqueue every one of them
+    // on every upgrade — including rows that had been on the server for months.
+    // A user who signed in normally saw "31 items to sync" for data that had
+    // already synced.
+    const UID = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+
+    // Sign in as the real account from the start, so every row is written under UID.
+    // Delete the LOCAL_USER_ID profile the beforeEach seeded — mirrors the state
+    // after a real first upgrade, where the local profile was merged and dropped.
+    await db.profiles.delete(LOCAL_USER_ID)
+    setActiveUserId(UID)
+    await seedIfNeeded()
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
+      {},
+    )
+    const templateId = await repo.createTemplate('Push', null)
+    await repo.addExerciseToTemplate(templateId, 'bench_press', 'barbell')
+
+    // The composite provider's upgrade path fires spuriously (e.g. a stale local
+    // session lingered in localStorage). Everything is already owned by UID, so
+    // the claim should touch nothing.
+    await db.outbox.clear()
+    const claimed = await repo.claimLocalData(UID)
+
+    expect(claimed).toBe(0)
+    expect(await db.outbox.count()).toBe(0)
+  })
+
   it('purgeEmptyWorkouts removes finished sessions with no completed set', async () => {
     // A real session with logged work.
     const realId = await repo.startWorkout()
