@@ -594,21 +594,44 @@ An App Store build would add the **$99/year** Apple Developer fee, the one unavo
 
 ---
 
-## 18. Shipping to the App Store
+## 18. Shipping to the App Store and Play Store
 
-FitNote is a PWA. Getting it onto the iOS App Store needs **no rewrite** — the front end runs unchanged in a native WebView. It needs a thin wrapper, an Apple Developer account, and a few review-guideline bars a pure PWA never faces.
+**Full design: `docs/design-native-app.md`.** Summary here; that doc is authoritative
+and grounded in the code as it stands.
 
-**Capacitor** is the right wrapper: it loads the existing `dist/` in a WebView, bridges to native APIs, and produces a standard Xcode project.
+Wrap the existing web build in **Capacitor** — it loads `dist/` in a native WebView
+and emits both an Xcode project (App Store) and a Gradle project (Play Store) from
+the same build. **No rewrite:** the data model, repository, sync, RLS, charts,
+metrics, coach, and every screen run unchanged. The web deploy keeps shipping in
+parallel.
 
-Two realities: iOS has **no "upload a PWA" path** (Android's TWA has no equivalent here), and Apple **rejects "just a website" apps** under Guideline 4.2. FitNote clears that bar because it's offline-first with real device integration — but the native integrations below are what make the case to a reviewer, so they aren't optional polish.
+The only build change is `BASE_PATH=/ npm run build` (the shell serves from the
+bundle root, not the `/workout-tracker/` subpath — `vite.config.ts` already supports
+the override).
 
-Setup: `npx cap init`, set `webDir` to `dist`, and build with `BASE_PATH=/ npm run build` — **the app must be served from the bundle root inside the shell**, not the `/workout-tracker/` subpath (`vite.config.ts` already makes `BASE_PATH` overridable for exactly this).
+The native work is a thin `isNativePlatform()` seam (`src/platform/*`), each adapter
+the current web behavior on web and a Capacitor plugin in the shell:
 
-What changes, all additive and all behind existing abstractions:
-- **Native push (APNs) instead of Web Push** — one implementation swap behind the `TimerService`/notification interface.
-- **Native file I/O for export/import** — same JSON, different boundary, behind one `isNativePlatform()` fork.
-- **Haptics** on set-logged and PR — improves feel *and* strengthens the not-just-a-website case.
-- **Drop the iOS "Add to Home Screen" card** when native.
+- **Haptics** — wrap the existing `sounds.ts` `vibrate()` helper; `navigator.vibrate`
+  is a no-op on iOS, so this is net-new feel there.
+- **Export/import** — fork `DataScreen`'s two handlers onto the native share sheet
+  and document picker; same JSON.
+- **Rest-timer local notification** — net-new (there is *no* Web Push today; the
+  timer is in-app only). `@capacitor/local-notifications` scheduled/cancelled around
+  `restTimerStore`'s `start`/`extend`/`cancel`. Local, no APNs/FCM.
+- **Service worker off in native**, status bar + splash from the theme.
+
+Auth is de-risked: the **OTP code path (§11.3) works in native with no deep-linking**,
+so sign-in works day one. Universal Links / App Links to round-trip the magic link
+are a later polish (Supabase redirect allowlist + `appUrlOpen`).
+
+Store bars: **Apple Developer $99/yr**, **Play Console $25 once**. Apple 4.2
+("not just a website") is cleared by the offline-first local DB + haptics +
+notifications — which is why those aren't optional. In-app account deletion
+(Guideline 5.1.1(v) / Play) is already built; privacy policy and the App
+Privacy / Data safety questionnaires are honest and easy (local-first, no tracking,
+no data sold). Budget it as **days, not weeks** — mostly accounts, assets, and one
+Apple review cycle.
 
 Explicitly unchanged: data model, repository, sync, charts, metrics, every screen's layout.
 
