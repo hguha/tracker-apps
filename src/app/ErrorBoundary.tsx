@@ -8,6 +8,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { clearLocalData } from '@/data/repository'
+import { reportError } from '@/lib/errorReporter'
 
 interface State {
   error: Error | null
@@ -21,8 +22,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // No third-party error SDK by design (§11.2) — the console is the log.
+    // §11.4: first-party log to Supabase (no third-party SDK).
     console.error('Render error caught by ErrorBoundary:', error, info)
+    void reportError('error-boundary', error)
   }
 
   render(): ReactNode {

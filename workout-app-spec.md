@@ -466,7 +466,9 @@ Custom email templates require custom SMTP; a Resend sender must be on a **verif
 
 ### 11.4 Privacy
 
-This app holds body weight, body-fat percentage, and years of behavioral data. Treat it as health data. RLS on every table, enforced by tests. No third-party analytics, no error-reporting SDK that captures request bodies, no ad tech. The coach sends only the §9.1 aggregate.
+This app holds body weight, body-fat percentage, and years of behavioral data. Treat it as health data. RLS on every table, enforced by tests. No third-party analytics, no third-party error-reporting SDK, no ad tech. The coach sends only the §9.1 aggregate.
+
+Error diagnostics are **first-party**. When a signed-in user hits a render crash, `window.onerror`, or an unhandled rejection, the client inserts a scrubbed record — message, stack, page URL, user agent, build stamp — into `client_errors` (migration 0020). No request bodies, no training data. The table has an INSERT-only policy: users cannot read their own errors; developer reads go through the service role. Device-only users report nothing (RLS would reject the insert). Records cascade away on account deletion. The public policy lives at `docs/privacy-policy.md`.
 
 ### 11.5 Export and import
 
@@ -517,6 +519,10 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 | Sync — event-driven push, pull on open/foreground/manual, deferred in-progress workouts, dead-letter, retry, discard-local, hard erase | ✅ |
 | AI coach — mock + Gemini, critique/plan/ask/encouragement, data disclosure | ✅ |
 | Account deletion Edge Function — cascades from `auth.users` | ✅ |
+| PWA — service worker (scoped), `navigator.storage.persist()` on load | ✅ |
+| First-party error logging — `client_errors` (INSERT-only RLS), no third-party SDK | ✅ |
+| Keep-alive — daily `pg_cron` heartbeat against the free-tier idle timer | ✅ |
+| Privacy policy — `docs/privacy-policy.md`, linked from Sign-in and Account | ✅ |
 | Export / import JSON | ✅ |
 
 ## 14. What's not built
@@ -525,15 +531,14 @@ Ordered by value, with the reason it hasn't happened.
 
 | Item | Why it's still open |
 |---|---|
-| **PWA shell** — Workbox service worker, `navigator.storage.persist()`, iOS install education | Already works offline (IndexedDB is the read path); this is the installable wrapper and eviction protection. `persist()` matters most — without it iOS may evict IndexedDB under pressure. |
+| **iOS install education** | The service worker + `navigator.storage.persist()` are wired (see DEPLOYING.md). What remains is the in-app card teaching Safari users to "Add to Home Screen" so the persistence prompt actually fires. |
 | **Remaining 18 charts** | Mostly the Body sub-tab, which needs logged biomarker history before it can draw anything. |
 | **Per-exercise charts on the library detail screen** | Data and chart components both exist; wiring only. |
 | **Pinned charts + URL filter state** | Needs `chart_prefs` and a router; deferred with routing itself. |
 | **Plate calculator** | Nice-to-have; the quick-adjust chips cover most of it. |
 | **Rest timer tiers 2 and 3** | Tier 3 needs a Cloudflare Durable Object. Only matters if the phone locks mid-rest. |
 | **Bootstrap pull with progress bar** | The delta pull handles `since = 0` already; this is the determinate-progress UI. |
-| **`keep_alive` cron** | Supabase pauses free-tier projects at 1 week idle (§2). Trivial scheduled function; matters at rest, not at use. |
-| **Error monitoring** | No Sentry / crash reporting wired. Production visibility gap. |
+| **API-level keep-alive** | `pg_cron` heartbeat is applied (migration 0020). A GH Actions HTTP cron would also cover the "API activity" interpretation of Supabase's idle policy; see DEPLOYING.md for the workflow. |
 | **Weekly R2 backup** | Manual JSON export covers it for now. |
 | **Progress photos** | Needs a private bucket, signed URLs, and mandatory client-side compression — uncompressed phone photos exhaust the 1 GB free tier in ~15 months. |
 | **E2E tests (Playwright)** | Unit and integration coverage is solid; the offline→force-quit→reconnect path is still manual. Old browser smoke scripts were removed after the equipment-as-dimension migration made their seeded exercise IDs invalid. |

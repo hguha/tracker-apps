@@ -158,6 +158,17 @@ export function AccountScreen({
           </button>
         </Card>
 
+        <p className="px-1 pt-2 text-center text-[12px] text-ink-muted">
+          <a
+            href="https://github.com/hguha/workoutTracker/blob/main/docs/privacy-policy.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-line-strong underline-offset-2 active:opacity-60"
+          >
+            Privacy policy
+          </a>
+        </p>
+
         <div className="h-4" />
       </div>
 

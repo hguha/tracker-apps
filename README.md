@@ -73,23 +73,34 @@ npm run build     # production bundle
 - JSON export + import
 - Units — lb/kg, mi/km, in/cm, exact round-trip; storage always metric
 
+### Production plumbing
+- **PWA** — service worker scoped to `/workout-tracker/`, `navigator.storage.persist()`
+  called on every load so iOS doesn't evict IndexedDB under pressure
+- **First-party error log** — signed-in crashes write a scrubbed record to
+  Supabase (`client_errors`, INSERT-only RLS); no third-party SDK
+- **Keep-alive** — daily `pg_cron` heartbeat against Supabase's free-tier idle timer
+- **Privacy policy** — [`docs/privacy-policy.md`](docs/privacy-policy.md), linked
+  from Sign-in and Account
+
 ## Not built yet
 
 Deliberately deferred, in spec order:
 
-- **PWA install + service worker** and `navigator.storage.persist()`. The app
-  already works offline (IndexedDB is the read path); this is the installable
-  wrapper and eviction protection. `persist()` matters most — without it iOS may
-  evict IndexedDB under storage pressure.
+- **iOS install-education card.** The service worker and
+  `navigator.storage.persist()` are already wired; what remains is the in-app
+  prompt teaching Safari users to "Add to Home Screen" so the persistence prompt
+  actually fires.
 - **Server-scheduled push** for the rest timer (spec §12.3). The in-app timer
   works; a notification with the app closed needs the Cloudflare Durable Object.
-- **Remaining charts** (spec §9). 22 built, covering every color job so the
+- **Remaining charts** (spec §9). 23 built, covering every color job so the
   system is proven; the rest are mostly the Body sub-tab and follow the same
   pattern.
 - **Per-exercise charts on the library detail screen** — data and chart
   components both exist; wiring only.
 - **Plate calculator**, **URL filter state**, **pinned charts**.
-- **`keep_alive` cron** — Supabase pauses free-tier projects at 1 week idle.
+- **API-level keep-alive.** The `pg_cron` heartbeat is applied; a GH Actions
+  HTTP cron would also cover the "API activity" interpretation of Supabase's
+  idle policy (workflow snippet in DEPLOYING.md).
 - **Weekly R2 backup** — manual JSON export covers it for now.
 - **Progress photos** (spec §4.9).
 - **E2E tests** (Playwright). Unit + repository + sync coverage is solid; the

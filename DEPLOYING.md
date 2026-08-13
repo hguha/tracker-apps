@@ -89,25 +89,81 @@ To host at a bare domain instead:
 BASE_PATH=/ npm run build
 ```
 
-## Before shipping the service worker
+## The service worker
 
-Not yet built (spec §5.8, Phase 4), but worth writing down now because it is the
-one part of this topology with a real trap.
+Shipped. Lives at `public/sw.js` — Vite copies it to `dist/sw.js` verbatim, so
+`hirshguha.com/workout-tracker/sw.js` is what the browser fetches. Registration
+happens in `src/lib/serviceWorker.ts`, gated on `import.meta.env.PROD` so `vite
+dev` never installs one (a stale cache during iteration is the worst debug loop).
 
-A service worker's scope is capped by the path it is served from, and scope is
-per **origin** — and under this setup the app shares an origin with the website.
-So the worker must be registered with an explicit scope:
+Two things to keep straight:
 
-```ts
-navigator.serviceWorker.register('/workout-tracker/sw.js', {
-  scope: '/workout-tracker/',
-})
+1. **Scope must be `/workout-tracker/`.** The origin is shared with the
+   marketing site, so a root-scope worker would intercept the marketing site's
+   requests too and serve a cached FitNote shell in place of it. Verify in
+   DevTools → Application → Service Workers that the scope reads
+   `/workout-tracker/` before shipping.
+2. **`navigator.storage.persist()` matters more than the SW.** Registration
+   calls it once. Without it, iOS (and desktop browsers under storage pressure)
+   may evict the IndexedDB store that holds every logged set. The prompt is
+   silent on most platforms; we call it every load and trust the browser to
+   decide.
+
+A subdomain would have been simpler for the PWA specifically; the subpath is a
+deliberate trade for the nicer URL.
+
+## Keeping the free-tier DB awake
+
+Supabase pauses free-tier projects at ~1 week of inactivity. Two defenses run
+in parallel:
+
+- **DB heartbeat** (migration `0020`): `pg_cron` updates the `keep_alive` row
+  daily at `03:17 UTC`. Guarantees DB activity even with zero users.
+- **API heartbeat** (recommended, not yet wired): a GitHub Actions cron that
+  hits the REST API every few days. This is what covers the case where
+  "inactivity" means HTTP traffic, not DB writes.
+
+The GH Actions half is a two-minute setup — add this to
+`.github/workflows/keep-alive.yml`, replacing the URL with your project's:
+
+```yaml
+name: keep-alive
+on:
+  schedule:
+    - cron: '11 4 */3 * *'   # every 3 days, 04:11 UTC
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -o /dev/null -w "%{http_code}\n" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "https://<project-ref>.supabase.co/rest/v1/" \
+            | grep -E '^(200|401)$'
 ```
 
-Registered at the root instead, it would intercept requests for
-`hirshguha.com` itself and start serving the workout tracker's cached shell in
-place of the website. Verify in DevTools → Application → Service Workers that the
-scope reads `/workout-tracker/` before shipping.
+The anon key is public by design (RLS is what protects data), so a repo secret
+is fine. A 401 is expected — it still counts as API traffic, which is the point.
 
-The same origin-sharing is why a subdomain would have been the simpler choice for
-the PWA specifically; the subpath is a deliberate trade for the nicer URL.
+## First-party error logging
+
+Signed-in users write to `client_errors` when the app hits a render error,
+`window.onerror`, or an unhandled promise rejection. **No third-party SDK** —
+§11.4 of the spec forbids it because the app holds health-adjacent data.
+Contents: message, stack, page URL, user agent, build stamp. No request bodies,
+no training data, no PII beyond what's already tied to the account.
+
+The client has INSERT-only access; reads happen through the service role in the
+dashboard:
+
+```
+select occurred_at, app_version, context, message, url
+  from client_errors
+ order by occurred_at desc
+ limit 50;
+```
+
+The build stamp lives in `VITE_APP_VERSION` and is `<pkg>.<version>+<git-sha>`,
+set at build time by `vite.config.ts` from `VERCEL_GIT_COMMIT_SHA` when Vercel
+provides it, or `git rev-parse HEAD` locally.
