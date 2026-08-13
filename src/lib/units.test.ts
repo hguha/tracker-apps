@@ -32,19 +32,20 @@ describe('weight round-trip', () => {
   })
 
   it('round-trips values that are not on a plate grid', () => {
-    // The reported bug: display snapped to the nearest loadable 2.5 lb, which
-    // silently rewrote real machine and dumbbell loads — 181 showed as 180, 46
-    // as 45, 132 as 132.5, a 12 lb dumbbell as 12.5. Plenty of loads aren't
-    // multiples of 2.5, and the app records what happened rather than deciding
-    // what could have been loaded.
+    // Display used to snap to the nearest loadable 2.5, rewriting real machine
+    // and dumbbell loads (181→180, 46→45, 12→12.5). Nearest-0.5 keeps them.
     for (const lb of [12, 46, 47.5, 105, 130, 132, 181, 182.5, 365]) {
       expect(weightFromKg(weightToKg(lb, 'lb'), 'lb')).toBe(lb)
     }
   })
 
-  it('converts across units without inventing precision', () => {
-    // 100 kg really is 220.46 lb. Showing 220 would be a lie about the load.
-    expect(weightFromKg(100, 'lb')).toBe(220.46)
+  it('rounds a converted weight to the nearest half, killing float dust', () => {
+    // The reported bug: conversion left 80.01 / 39.99 on screen. Nearest-0.5
+    // resolves those to 80 / 40 without snapping real values off their mark.
+    expect(weightFromKg(weightToKg(80, 'lb'), 'lb')).toBe(80)
+    expect(weightFromKg(weightToKg(40, 'lb'), 'lb')).toBe(40)
+    // 100 kg is 220.46 lb, which rounds to the nearest half a pound.
+    expect(weightFromKg(100, 'lb')).toBe(220.5)
   })
 
   it('reads a body measurement to a tenth', () => {

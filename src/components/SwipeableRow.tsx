@@ -1,23 +1,7 @@
-/**
- * Swipe-to-act row (§6.4).
- *
- * Hand-rolled on pointer events rather than pulled from a gesture library: the
- * behavior needed here is narrow, and the important part is what it *refuses*
- * to do — it must not steal vertical scrolling, and it must not fire while the
- * user is typing in a set field.
- *
- * Swipe left reveals the destructive action, swipe right the duplicate action.
- * Releasing past the threshold commits; anything short springs back.
- *
- * **Buttons inside a row are draggable too.** An earlier version bailed out of
- * `pointerdown` over any control so taps wouldn't be swallowed, which made the
- * row un-swipeable wherever a button sat — with a 44px "Same" target on the
- * right, most of the row's edge refused to swipe. Instead the gesture always
- * arms, and a button asks `useRowGesture()` whether the finger ended up
- * dragging. That also fixes the tap itself: `onClick` after a pointer sequence
- * the row participated in is unreliable on iOS, so buttons commit on
- * `pointerup` via `rowTapProps`.
- */
+// Swipe left/right on a row to reveal an action; release past the threshold to
+// commit. A swipe may start anywhere on the row, including over a set field or a
+// button — those still tap when the gesture stays a tap (see useRowTap and the
+// pendingFocus handling below).
 
 import {
   createContext,
@@ -30,47 +14,33 @@ import {
 import { cn } from '@/lib/cn'
 
 const COMMIT_THRESHOLD = 72
-/** Below this, treat the gesture as a tap and let it through untouched. */
 const DRAG_START_THRESHOLD = 8
-/** Past this much vertical movement it's a scroll, so bail out entirely. */
 const VERTICAL_CANCEL_THRESHOLD = 12
 
 export interface SwipeAction {
   label: string
   icon: ReactNode
-  /** Background behind the revealed action. */
   className: string
   onAction: () => void
 }
 
-/**
- * Lets a control inside a row distinguish a tap from a swipe that happened to
- * start on top of it. A ref, not state, so reading it costs no re-render and it
- * is always current at the moment `pointerup` fires.
- */
+// Whether the current gesture became a drag, so a control inside the row can
+// tell a tap from a swipe that happened to start on it.
 const RowGestureContext = createContext<{ current: boolean } | null>(null)
 
-/**
- * Tap handling for a button inside a `SwipeableRow`.
- *
- * Fires on `pointerup` rather than `click`, and only when the gesture stayed a
- * tap. Spread onto the button; do not also pass `onClick`, or the action runs
- * twice where `click` does fire.
- */
+// Tap handling for a button inside a row. Commits on pointerup because a plain
+// onClick after a row-handled pointer sequence is unreliable on iOS. Spread it
+// on; don't also pass onClick, or a real mouse click fires twice.
 export function useRowTap(onTap: () => void) {
   const didDrag = useContext(RowGestureContext)
   return {
     onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
-      if (didDrag?.current) return
-      // A mouse still reports a normal click; only synthesize for touch/pen so
-      // desktop doesn't double-fire.
-      if (event.pointerType === 'mouse') return
+      if (didDrag?.current || event.pointerType === 'mouse') return
       onTap()
     },
     onClick: (event: React.MouseEvent<HTMLElement>) => {
-      if (didDrag?.current) return
-      // Touch already committed on pointerup. Only a real mouse gets here.
-      if (event.detail === 0) return
+      // event.detail === 0 is a synthetic click (touch already handled it).
+      if (didDrag?.current || event.detail === 0) return
       onTap()
     },
   }
@@ -96,15 +66,25 @@ export function SwipeableRow({
   const start = useRef<{ x: number; y: number } | null>(null)
   const decided = useRef<'none' | 'horizontal' | 'vertical'>('none')
   const didDrag = useRef(false)
+  // Set when a gesture starts on a set field: focus is suppressed until we know
+  // it's a tap, so a swipe that begins over an input doesn't pop the keyboard.
+  const pendingFocus = useRef<HTMLElement | null>(null)
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.pointerType === 'mouse') return
-    // Typing in a set field should never be interrupted by a stray drag.
-    const target = event.target as HTMLElement
-    if (target.closest('input, textarea, select')) return
     start.current = { x: event.clientX, y: event.clientY }
     decided.current = 'none'
     didDrag.current = false
+
+    // Swiping is allowed to begin on a set field. Suppress the field's default
+    // focus for now; onPointerUp restores it if the gesture turns out to be a tap.
+    const field = (event.target as HTMLElement).closest<HTMLElement>('input, textarea')
+    if (field && field !== document.activeElement) {
+      pendingFocus.current = field
+      event.preventDefault()
+    } else {
+      pendingFocus.current = null
+    }
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -121,6 +101,8 @@ export function SwipeableRow({
       if (Math.abs(dx) < DRAG_START_THRESHOLD) return
       decided.current = 'horizontal'
       didDrag.current = true
+      // The gesture is a swipe, not a tap: the field stays unfocused.
+      pendingFocus.current = null
       setIsDragging(true)
     }
 
@@ -141,7 +123,21 @@ export function SwipeableRow({
     if (decided.current === 'horizontal') {
       if (offset <= -COMMIT_THRESHOLD && leftAction) leftAction.onAction()
       else if (offset >= COMMIT_THRESHOLD && rightAction) rightAction.onAction()
+    } else if (decided.current === 'none' && pendingFocus.current) {
+      // A tap on a set field whose default focus we suppressed — no drag and no
+      // scroll took over, so focus it now and let the keyboard open.
+      pendingFocus.current.focus()
     }
+    reset()
+  }
+
+  function onPointerCancel() {
+    // A scroll or system gesture took the pointer. Never focus on a cancel.
+    reset()
+  }
+
+  function reset() {
+    pendingFocus.current = null
     start.current = null
     decided.current = 'none'
     setIsDragging(false)
@@ -176,14 +172,15 @@ export function SwipeableRow({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerCancel={onPointerCancel}
         style={{
           transform: `translateX(${offset}px)`,
           transition: isDragging ? 'none' : 'transform 180ms ease-out',
-          // Let the browser own vertical scrolling; we only claim the x axis.
+          // We own the x axis (swipe), the browser owns the y (scroll). This
+          // applies over the set fields too, so a swipe can start on one.
           touchAction: 'pan-y',
         }}
-        className="relative bg-surface"
+        className="relative touch-pan-y bg-surface"
       >
         <RowGestureContext.Provider value={didDrag}>
           {children}

@@ -346,7 +346,7 @@ function NumericField({
       inputMode={integer ? 'numeric' : 'decimal'}
       aria-label={ariaLabel}
       className={cn(
-        'h-11 min-w-0 flex-1 rounded-xl border text-center tabular text-[16px] font-semibold',
+        'h-11 min-w-0 flex-1 touch-pan-y rounded-xl border text-center tabular text-[16px] font-semibold',
         'focus:border-accent focus:bg-surface focus:outline-none',
         // An empty field is visibly provisional; a filled one is committed.
         isEmpty
@@ -384,7 +384,7 @@ function DurationField({
       }
       aria-label="duration"
       className={cn(
-        'h-11 min-w-0 flex-1 rounded-xl border text-center tabular text-[16px] font-semibold',
+        'h-11 min-w-0 flex-1 touch-pan-y rounded-xl border text-center tabular text-[16px] font-semibold',
         'focus:border-accent focus:bg-surface focus:outline-none',
         isEmpty
           ? 'border-dashed border-line bg-transparent text-ink placeholder:text-ink-muted placeholder:font-normal'
