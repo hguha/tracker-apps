@@ -1,11 +1,4 @@
-/**
- * The local database. IndexedDB is the authoritative read path (§5.5) — the UI
- * never awaits the network, so this is where every screen reads from, whether
- * or not a server is attached.
- *
- * Table and index shapes match the Postgres schema so the eventual sync layer
- * moves rows without translating them.
- */
+// The local database: IndexedDB is the authoritative read path (§5.5); the UI never awaits the network.
 
 import Dexie, { type EntityTable } from 'dexie'
 import type {
@@ -23,43 +16,23 @@ import type {
   WorkoutSet,
 } from '@/domain/types'
 
-/**
- * Durable mutation queue (§5.5). Nothing drains it in the prototype — no
- * server exists yet — but every write goes through it, so turning on sync is
- * implementing the drain rather than rewriting every mutation.
- */
+// Durable mutation queue (§5.5): every write goes through it so turning on sync is implementing the drain.
 export interface OutboxEntry {
   seq?: number
   table: string
   op: 'insert' | 'update' | 'delete'
   rowId: string
-  /**
-   * The full row, not just the changed fields. The push is an upsert, which
-   * PostgREST issues as INSERT ... ON CONFLICT DO UPDATE, and Postgres checks
-   * the INSERT policy against the proposed tuple — so a partial payload is
-   * missing `user_id` and RLS rejects it. Typed loosely because it holds a row
-   * from any table; the repository guarantees the shape matches `table`.
-   */
+  // The full row, not a diff: the upsert re-checks the INSERT policy, so a partial payload lacks user_id and RLS rejects it.
   payload: object
   clientRev: number
   queuedAt: number
   attempts: number
   lastError?: string
-  /** Earliest time to retry after a transient failure. Set by the drain's backoff. */
   nextAttemptAt?: number
-  /**
-   * The workout this write belongs to, when it's part of a session that is still
-   * in progress (§5.5). The drain skips these until the workout is finished, so a
-   * half-logged session never reaches the server — which is what made two devices
-   * disagree about whether a workout was active or done. Cleared on finish.
-   */
+  // Set while its workout is in progress (§5.5); the drain skips these until Finish, cleared then.
   deferredForWorkoutId?: string
 }
 
-/**
- * Ready to push now. A deferred entry belongs to a workout still in progress, so
- * it's held back until Finish — see `deferredForWorkoutId`.
- */
 export const isReadyToPush = (entry: OutboxEntry): boolean =>
   entry.deferredForWorkoutId === undefined
 
@@ -69,14 +42,7 @@ export interface SyncState {
   lastPulledAt: number
 }
 
-/**
- * An outbox entry that failed permanently (§5.5).
- *
- * A 4xx (other than 401/429) means the write will never succeed as-is — a poison
- * entry left in the outbox would silently block every write behind it, the
- * classic hand-rolled-queue failure. So it moves here, out of the drain path,
- * and is surfaced in Settings for the user to see rather than retried forever.
- */
+// A permanently-failed entry (§5.5), moved off the drain path so a poison write can't block the queue.
 export interface DeadLetterEntry {
   seq?: number
   table: string
@@ -89,13 +55,7 @@ export interface DeadLetterEntry {
   error: string
 }
 
-/**
- * Per-set placeholder hints for a repeated session (§7.2).
- *
- * Local-only and never synced: these describe what the UI should *suggest* for a
- * specific repeat, not anything about the workout itself. Cleaned up when the
- * workout is finished.
- */
+// Per-set placeholder hints for a repeated session (§7.2); local-only and never synced.
 export interface PlaceholderOverrides {
   workoutId: string
   placeholders: Record<
@@ -110,18 +70,8 @@ export interface PlaceholderOverrides {
   createdAt: number
 }
 
-/**
- * A pre-edit copy of one past workout, so editing it can be cancelled (§6.6).
- *
- * Every mutation writes to IndexedDB immediately — that's what makes the app
- * work offline — so "cancel" can't mean "don't save yet". It means "put back what
- * was there", which requires having kept it.
- *
- * Its existence also marks the workout as *being edited*, which the outbox
- * deferral reads: nothing is pushed to the server until Done, so a cancelled
- * edit never reaches another device. Durable rather than in-memory precisely
- * because a reload mid-edit must not silently publish half an edit.
- */
+// A pre-edit copy of one past workout so editing can be cancelled (§6.6); its
+// existence also marks the workout as being edited, which the outbox deferral reads.
 export interface EditSnapshot {
   workoutId: string
   workout: Workout
@@ -171,20 +121,17 @@ export class WorkoutDatabase extends Dexie {
       placeholderOverrides: 'workoutId',
     })
 
-    // v3 adds the dead-letter table (§5.5). Additive, so existing data upgrades
-    // untouched — Dexie carries every prior store forward automatically.
+    // v3 adds the dead-letter table (§5.5).
     this.version(3).stores({
       deadLetter: '++seq, table, rowId',
     })
 
-    // v4 indexes the outbox's deferral marker, so the drain can select only the
-    // entries that are actually ready to push. Additive: existing entries simply
-    // have no value for it, which reads as "not deferred".
+    // v4 indexes the outbox's deferral marker so the drain selects only ready entries.
     this.version(4).stores({
       outbox: '++seq, table, rowId, deferredForWorkoutId',
     })
 
-    // v5 adds the pre-edit snapshot that backs "cancel edits" (§6.6). Additive.
+    // v5 adds the pre-edit snapshot that backs "cancel edits" (§6.6).
     this.version(5).stores({
       editSnapshots: 'workoutId',
     })
@@ -193,12 +140,10 @@ export class WorkoutDatabase extends Dexie {
 
 export const db = new WorkoutDatabase()
 
-/** Fresh sync metadata for a newly created row. */
 export function syncStamp(now = Date.now()) {
   return { createdAt: now, updatedAt: now, deletedAt: null, clientRev: 1 }
 }
 
-/** Metadata patch for an edit to an existing row. */
 export function touch(clientRev: number, now = Date.now()) {
   return { updatedAt: now, clientRev: clientRev + 1 }
 }

@@ -1,13 +1,3 @@
-/**
- * Preview a past session before starting a copy of it (§7.2, §7.4).
- *
- * Tapping a workout in the start screen or history used to start it on the first
- * tap, giving no chance to confirm it was the right one. This sheet shows the
- * structure — exercises, set counts, last numbers — and only starts the copy on
- * an explicit "Start workout". The same sheet also previews a template before
- * instantiating it, so both entry points read the same way.
- */
-
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Copy, X } from 'lucide-react'
 import * as repo from '@/data/repository'

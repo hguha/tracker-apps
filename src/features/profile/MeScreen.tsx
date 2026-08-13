@@ -1,17 +1,5 @@
-/**
- * The Me tab: a hub of destinations, and nothing else (§5.2 `/me`).
- *
- * It used to be the whole of settings — account, library, templates, coach,
- * badges, then stacked cards for body metrics, units, coaching, logging,
- * appearance, and a Data block ending in three destructive buttons. One scroll,
- * eleven unrelated groups, and "Permanently erase all my training data" sat a
- * few hundred pixels below the rest-timer default.
- *
- * Now every group is its own screen and this is a menu. The grouping rule: things
- * you *do* (library, templates, coach, badges) above things you *set* (settings,
- * body) above things that are dangerous (data). A menu also means each row can
- * say what's behind it, which a wall of cards can't.
- */
+// The Me tab: a menu of destinations (§5.2 /me), grouped as things you do, then
+// things you set, then things that are dangerous.
 
 import {
   ChevronRight,
@@ -124,8 +112,6 @@ export function MeScreen({
                 ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
                 : 'Backup, restore, and reset'
           }
-          // Surfaced here because a sync problem is otherwise invisible until you
-          // go looking for it, and this is the screen you'd look on.
           isWarning={sync.deadLettered > 0}
           onClick={onOpenData}
         />

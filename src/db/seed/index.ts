@@ -1,10 +1,4 @@
-/**
- * Populates the system library on first run.
- *
- * Idempotent and additive: it only inserts rows that are missing, so it can run
- * on every launch and can add new library entries in a later version without
- * touching anything the user has edited.
- */
+// Populates the system library on first run; idempotent and additive, safe to run every launch.
 
 import { db, syncStamp } from '@/db/database'
 import { MOVEMENT_PATTERNS } from '@/domain/types'
@@ -14,19 +8,10 @@ import { EXERCISE_SEEDS } from './exercises'
 import { METRIC_SEEDS } from './metrics'
 import { MUSCLE_SEEDS } from './muscles'
 
-/**
- * The offline account's owner id. A real signed-in session replaces this with
- * the authenticated user's UID via `setActiveUserId`, so rows are stamped with
- * an id RLS will accept when they sync.
- */
+// The offline owner id, replaced with the authenticated UID via setActiveUserId so RLS accepts synced rows.
 export const LOCAL_USER_ID = 'local-user'
 
-/**
- * The id every write is stamped with. Defaults to the offline account and is set
- * to the authenticated UID on sign-in (§11.1.3). Kept as module state rather than
- * threaded through every repository call, because it changes only at the
- * signed-out↔signed-in boundary and the tree remounts there anyway.
- */
+// The id every write is stamped with; module state, changes only at the signed-out↔signed-in boundary (§11.1.3).
 let activeUserId: string = LOCAL_USER_ID
 
 export function setActiveUserId(id: string): void {
@@ -45,11 +30,7 @@ function slugify(name: string): string {
     .replace(/^_|_$/g, '')
 }
 
-/**
- * Guards against concurrent runs. React StrictMode double-invokes effects, so
- * without this both calls see empty tables and both try to insert the library,
- * and the second one fails on a primary-key conflict.
- */
+// Guards against concurrent runs: StrictMode double-invokes effects, and two seeds collide on the primary key.
 let inFlight: Promise<void> | null = null
 
 export function seedIfNeeded(): Promise<void> {
@@ -68,15 +49,7 @@ async function runSeed(): Promise<void> {
   await repairArmsRegion()
 }
 
-/**
- * Migrates muscle rows off the retired 'arms' region (§10.2).
- *
- * 'Arms' was split into separate biceps and triceps regions. Rows seeded before
- * the split still carry `region: 'arms'`, which is no longer a valid Region and
- * would fall out of every chart and the region palette. Remap them: the triceps
- * muscle becomes 'triceps', everything else that was 'arms' (biceps, brachialis,
- * forearms) becomes 'biceps'. Idempotent — a no-op once no 'arms' rows remain.
- */
+// Remaps muscle rows off the retired 'arms' region into 'triceps'/'biceps' (§10.2).
 async function repairArmsRegion(): Promise<void> {
   const stale = await db.muscles.filter((m) => (m.region as string) === 'arms').toArray()
   if (stale.length === 0) return
@@ -88,17 +61,8 @@ async function repairArmsRegion(): Promise<void> {
   )
 }
 
-/**
- * Heals exercise rows written by an older build.
- *
- * Two repairs, both idempotent and cheap enough to run on every launch:
- *   - `aliases` can arrive undefined from a sync pull, which throws on render.
- *   - `movementPattern` used to be an eleven-value hand-tagged taxonomy
- *     (`horizontal_push`, `hinge`, …). It's now derived from the primary muscle,
- *     so any row still carrying a retired value is remapped. Without this, a
- *     stale `horizontal_push` would read as neither push nor cardio and the
- *     session title would silently stop saying "Push".
- */
+// Heals older exercise rows: backfills undefined `aliases`, and remaps any retired
+// `movementPattern` value to one derived from the primary muscle.
 async function repairExerciseRows(): Promise<void> {
   const muscles = await db.muscles.toArray()
   const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
@@ -127,15 +91,13 @@ async function repairExerciseRows(): Promise<void> {
 async function seedProfile(): Promise<void> {
   const existing = await db.profiles.get(getActiveUserId())
   if (existing) {
-    // Backfill fields added after this profile was first written, so an older
-    // local row doesn't render new UI against `undefined`.
+    // Backfill fields added after this profile was written, so new UI isn't rendered against `undefined`.
     const backfill: Partial<Profile> = {}
     if (existing.weeklyWorkoutGoal === undefined) backfill.weeklyWorkoutGoal = 4
     if (existing.showAvatar === undefined) backfill.showAvatar = false
     if (existing.heightCm === undefined) backfill.heightCm = null
     if (existing.trainingGoal === undefined) backfill.trainingGoal = ''
-    // An existing local profile predates onboarding; treat it as done rather
-    // than sending a returning user through setup.
+    // An existing local profile predates onboarding; treat it as done.
     if (existing.onboardedAt === undefined) backfill.onboardedAt = Date.now()
     if (Object.keys(backfill).length > 0) {
       await db.profiles.update(existing.id, backfill)
@@ -188,8 +150,7 @@ async function seedMuscles(): Promise<void> {
 async function seedExercises(): Promise<void> {
   const existingIds = new Set(await db.exercises.toCollection().primaryKeys())
   const missing: Exercise[] = []
-  // Muscles are seeded first, so their regions are available to derive each
-  // exercise's movement pattern.
+  // Muscles are seeded first, so their regions are available to derive movement patterns.
   const regionOf = new Map((await db.muscles.toArray()).map((m) => [m.id, m.region]))
 
   for (const seed of EXERCISE_SEEDS) {

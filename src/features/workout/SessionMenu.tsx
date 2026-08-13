@@ -1,12 +1,3 @@
-/**
- * The session menu (§6.4) — rename, change date and time, save as template,
- * discard.
- *
- * Changing the date is why there is no separate "log a past workout" entry
- * point: a backdated session is just a normal session with a different date, so
- * one control covers both instead of two flows that do the same thing.
- */
-
 import { useState } from 'react'
 import { CalendarClock, FileText, Pencil, Trash2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -20,7 +11,6 @@ type Panel = 'menu' | 'rename' | 'datetime' | 'template'
 
 export function SessionMenu({
   workout,
-  /** Absent when the session already came from a template. */
   canSaveAsTemplate,
   onDiscard,
   onDismiss,

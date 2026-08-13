@@ -1,15 +1,3 @@
-/**
- * Home (§5.2.1).
- *
- * One job: answer "what should I do right now", then get out of the way.
- * Everything here earns its place by serving that; anything that merely duplicates
- * another tab is gone.
- *
- * Two things changed after first use: recent rows now carry enough to identify a
- * session (they used to read "Workout"), and the week figure carries a delta —
- * a number with no comparison isn't an insight.
- */
-
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -64,8 +52,7 @@ export function HomeScreen({
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
     const active = await repo.getActiveWorkout()
-    // Pull deep so lifetime badge stats (total workouts, volume, best streak)
-    // reflect real history, not just the recent window.
+    // Pull deep so lifetime badge stats reflect full history, not just the recent window.
     const finished = await repo.listFinishedWorkoutSummaries(1000)
 
     const thisWeekStart = weekStart(Date.now(), profile.weekStartsOn)
@@ -79,10 +66,6 @@ export function HomeScreen({
     const sumVolume = (list: typeof finished) =>
       list.reduce((total, s) => total + s.volumeKg, 0)
 
-    // Working sets per region — this week (balance bars) and over the avatar's
-    // trailing window (§avatar). Both come straight from the summaries already
-    // loaded above: each carries its own per-region working-set counts, so this
-    // is in-memory bucketing rather than a second per-workout scan of the DB.
     const setsByRegion = new Map<Region, number>()
     const setsByRegionWindow = new Map<Region, number>()
 
@@ -98,8 +81,6 @@ export function HomeScreen({
       }
     }
 
-    // Which region has gone longest without work — also the avatar's "days
-    // since trained" per region.
     const lastTrainedByRegion = new Map<Region, number>()
     for (const summary of finished) {
       for (const region of summary.regions) {
@@ -109,8 +90,7 @@ export function HomeScreen({
       }
     }
 
-    // Assemble the avatar's per-region inputs (§avatar): work in the window plus
-    // days since last trained (from full history, so an old region still decays).
+    // Days since last trained comes from full history so an old region still decays.
     const avatarInputs = new Map<Region, RegionInput>()
     for (const region of REGIONS) {
       const lastAt = lastTrainedByRegion.get(region)
@@ -127,7 +107,6 @@ export function HomeScreen({
       .map((region) => ({ region, lastAt: lastTrainedByRegion.get(region) ?? 0 }))
       .sort((a, b) => a.lastAt - b.lastAt)[0]
 
-    // Current and best week streaks, from the one shared helper (§streaks).
     const { currentWeekStreak: streakWeeks, bestWeekStreak } = computeStreaks(
       finished.map((s) => s.workout.startedAt),
       profile.weekStartsOn,
@@ -136,7 +115,6 @@ export function HomeScreen({
     const totalVolumeKg = finished.reduce((total, s) => total + s.volumeKg, 0)
     const totalSets = finished.reduce((total, s) => total + s.setCount, 0)
 
-    // Extra lifetime figures the strength/cardio/variety badges need.
     const badgeStats = await repo.getBadgeStats()
 
     return {
@@ -159,9 +137,7 @@ export function HomeScreen({
     }
   }, [])
 
-  // The coach greeting refreshes only when the finished-workout count changes
-  // (i.e. after a new workout), not on every open — the caching lives in
-  // getHomeGreeting, keyed on that count.
+  // Greeting refreshes only when the workout count changes; getHomeGreeting caches on it.
   const finishedCount = data?.totalWorkouts ?? 0
   useEffect(() => {
     let cancelled = false
@@ -197,9 +173,7 @@ export function HomeScreen({
   const unit = profile.unitWeight
   const maxSets = Math.max(6, ...setsByRegion.values())
   const firstName = (session?.displayName ?? 'there').split(/\s+/)[0]
-  // A profile pulled from the server (or predating the goal column) can arrive
-  // without weeklyWorkoutGoal; Math.max(1, undefined) is NaN, which rendered the
-  // ring as "/NaN". Coalesce to the default before the floor.
+  // weeklyWorkoutGoal can be absent; coalesce before Math.max or the ring shows "/NaN".
   const goal = Math.max(1, profile.weeklyWorkoutGoal || 4)
 
   const badges = evaluateBadges({
@@ -211,8 +185,6 @@ export function HomeScreen({
     ...badgeStats,
   })
 
-  // Only compare when there is something to compare against — an invented
-  // baseline would present a first week as either a triumph or a collapse.
   const deltaPercent =
     lastWeekVolume > 0
       ? Math.round(((thisWeekVolume - lastWeekVolume) / lastWeekVolume) * 100)
@@ -226,8 +198,6 @@ export function HomeScreen({
         </h1>
       </div>
 
-      {/* Coach greeting — a stable note that refreshes only after a new workout.
-          Tap through to the full coach. */}
       {greeting && (
         <button
           onClick={onOpenCoach}
@@ -275,8 +245,6 @@ export function HomeScreen({
             {conditionLabel(overallCondition(avatar))}
           </p>
           <p className="text-[12px] text-ink-muted">
-            {/* Name the region that most needs work, so the figure suggests an
-                action rather than just judging. */}
             {(() => {
               const weakest = avatar
                 .filter((a) => a.region !== 'cardio')
@@ -292,8 +260,6 @@ export function HomeScreen({
       {totalWorkouts > 0 && (
         <Card className="p-4">
           <div className="flex items-center gap-4">
-            {/* The weekly goal ring — the day-to-day thing to close. Turns
-                green once the goal is met, for a clear completion signal. */}
             <ProgressRing
               value={weeklyWorkouts}
               max={goal}
@@ -383,7 +349,6 @@ export function HomeScreen({
                       }}
                     />
                   </div>
-                  {/* Direct label — the bar's color can't be the only carrier. */}
                   <span className="tabular w-6 shrink-0 text-right text-[13px] font-semibold">
                     {count}
                   </span>
@@ -473,12 +438,6 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-/**
- * The Home badges strip: a horizontal row of the badges in play (earned or
- * started), each tappable for its description. The untouched catalog is not
- * shown here — that would be a wall of locked tiles; "See all" opens the full
- * grouped list on the More screen.
- */
 function BadgeStrip({
   badges,
   onSeeAll,

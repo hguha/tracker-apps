@@ -1,17 +1,3 @@
-/**
- * The sticky rest bar (§6.4.2, §12.1).
- *
- * The timer has **one explicit control**. Earlier builds started rest implicitly
- * on every set that transitioned to logged, which was unpredictable — correcting a
- * typo or filling fields out of order produced a timer nobody asked for, and it
- * was never clear what had triggered one. Now the bar always shows either "start
- * rest" or a running countdown, so the state and its cause are visible.
- *
- * Remaining time is derived from a target timestamp each tick rather than
- * decremented, so a backgrounded tab shows the correct value the moment it
- * returns instead of resuming a stale count.
- */
-
 import { useEffect, useRef, useState } from 'react'
 import { Timer } from 'lucide-react'
 import { formatClock } from '@/lib/units'
@@ -19,18 +5,16 @@ import { parseDuration } from '@/features/workout/SetRow'
 import { remainingSeconds, useRestTimer } from './restTimerStore'
 import { playCue, signalRestComplete } from './sounds'
 
-/** Seconds remaining when the heads-up tick fires (§6.8). */
+// Seconds remaining when the heads-up tick fires (§6.8).
 const WARNING_AT = 10
-/** How long "Rest over" stays up before the bar returns to idle. */
 const EXPIRED_LINGER_MS = 8000
-/** The one-tap presets (§12.1). Custom covers anything else. */
+// The one-tap presets (§12.1).
 const REST_PRESETS = [60, 180, 300] as const
 
 export function RestTimerBar({
   defaultSeconds,
   onExpire,
 }: {
-  /** The resolved default for the current exercise, shown on the start button. */
   defaultSeconds: number
   onExpire?: () => void
 }) {
@@ -66,20 +50,13 @@ export function RestTimerBar({
       playCue('rest-warning')
     }
 
-    // Recompute from the target rather than trusting `remaining`: when a fresh
-    // timer starts, this effect and the reset effect run in the same commit, so
-    // `remaining` can still be the stale 0 from a previous expired timer. Reading
-    // the clock here avoids firing "rest over" the instant a preset is tapped.
+    // Recompute from the target, not `remaining`, which can still be a stale 0 in the same commit a fresh timer starts.
     if (!hasFired.current && remainingSeconds(targetAt) === 0) {
       hasFired.current = true
       setHasExpired(true)
       signalRestComplete()
       onExpire?.()
-      // Clear the timer state but hold the "rest over" message briefly, so the
-      // bar doesn't snap back to idle before it's been seen. Tracked so the
-      // effect cleanup can cancel it — otherwise finishing the workout (which
-      // unmounts the bar within this window) fires a setState on an unmounted
-      // component and a redundant cancel().
+      // Hold the "rest over" message briefly; tracked so cleanup can cancel it if the bar unmounts first.
       lingerTimeout.current = window.setTimeout(() => {
         setHasExpired(false)
         cancel()
@@ -87,8 +64,6 @@ export function RestTimerBar({
     }
   }, [remaining, targetAt, onExpire, cancel])
 
-  // Clear the linger timeout if the bar unmounts before it fires (e.g. finishing
-  // the workout), so it can't setState on an unmounted component.
   useEffect(() => {
     return () => {
       if (lingerTimeout.current !== null) clearTimeout(lingerTimeout.current)
@@ -98,9 +73,6 @@ export function RestTimerBar({
   const isRunning = targetAt !== null && remaining > 0
   const isEndingSoon = isRunning && remaining <= WARNING_AT
 
-  // Idle: explicit quick-start buttons for the common durations, plus a custom
-  // entry (§12.1). `defaultSeconds` — the resolved per-exercise default — is
-  // marked so the user can see which preset the exercise leans toward.
   if (!isRunning && !hasExpired) {
     return (
       <RestStartBar
@@ -183,12 +155,6 @@ export function RestTimerBar({
   )
 }
 
-/**
- * Idle bar: 1 / 3 / 5-minute quick starts plus a custom entry.
- *
- * The preset matching this exercise's resolved default is highlighted, so the
- * one-tap choice reflects the per-exercise rest override when one exists.
- */
 function RestStartBar({
   defaultSeconds,
   onStart,

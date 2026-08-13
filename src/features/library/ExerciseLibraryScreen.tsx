@@ -1,17 +1,3 @@
-/**
- * The exercise library (§7.3) — browsable any time, not only while adding an
- * exercise mid-workout.
- *
- * Search covers names and aliases. Filtering uses the same inline pill rows as
- * the add-exercise picker (`ExerciseFilterPills`): the summary-chip-plus-sheet
- * version that used to be here cost three taps to answer "what chest exercises
- * are there", and having two different filter UIs for the same list was its own
- * problem. Sorting stays a toggle, since A–Z and recent answer different
- * questions.
- *
- * The movement-pattern filter is gone with the concept (§4.3).
- */
-
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight, Plus, Search, SlidersHorizontal, X } from 'lucide-react'

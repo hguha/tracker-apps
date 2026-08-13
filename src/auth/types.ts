@@ -1,20 +1,9 @@
-/**
- * The auth boundary (§11.1.1).
- *
- * Everything above this interface — the sign-in screen, the account screen, the
- * greeting, the sign-out guard — is built and exercised against `LocalAuthProvider`
- * so it is real code rather than a stub. Swapping in Supabase in Phase 5 replaces
- * one module and touches nothing else.
- */
-
 export interface Session {
   userId: string
   email: string
   displayName: string
   createdAt: number
-  /** False until a magic link or OTP has been confirmed. */
   isVerified: boolean
-  /** True for the offline local account, so the UI can label it honestly. */
   isLocal: boolean
 }
 
@@ -39,37 +28,21 @@ export interface AuthProvider {
 }
 
 export function isValidEmail(value: string): boolean {
-  // Deliberately permissive: the server is the real authority, and an overly
-  // strict client regex rejects addresses that are actually valid.
+  // Deliberately permissive: the server is the real authority on validity.
   const trimmed = value.trim()
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)
 }
 
-/**
- * Bounds on an emailed sign-in token.
- *
- * The length is a *server* setting (Supabase's `mailer_otp_length`, which ranges
- * 6–10) while the local provider's dev code is 6 — so the client must accept a
- * range rather than one number. The sign-in screen previously hardcoded 6: with
- * the project configured for 8, the input truncated the token and the submit
- * button never enabled, so entering a valid code did nothing at all.
- */
+// Token length is a server setting (Supabase mailer_otp_length, 6–10), so accept a range.
 export const CODE_MIN_LENGTH = 6
 export const CODE_MAX_LENGTH = 10
 
-/**
- * Whether a typed sign-in code is worth submitting.
- *
- * Deliberately permissive — the server is the authority on whether a code is
- * correct. This only guards against submitting something obviously incomplete.
- * Tokens are not guaranteed numeric, so this must not require digits.
- */
+// Permissive; the server validates correctness. Tokens aren't guaranteed numeric.
 export function isSubmittableCode(value: string): boolean {
   const trimmed = value.trim()
   return trimmed.length >= CODE_MIN_LENGTH && trimmed.length <= CODE_MAX_LENGTH
 }
 
-/** "Harsh Guha" → "HG". Used for the avatar when there's no image. */
 export function initialsOf(displayName: string): string {
   const parts = displayName.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'

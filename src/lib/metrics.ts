@@ -1,11 +1,5 @@
-/**
- * Derived training metrics (§8.1). Pure functions — no I/O, no dates beyond
- * what's passed in — because these numbers appear both on the active workout
- * screen and in every chart, and the two must never disagree.
- *
- * When the Postgres side lands, each function here gets a SQL twin that must
- * agree with it on a shared fixture (§8.3).
- */
+// Derived training metrics (§8.1). Pure functions; each gets a SQL twin that must
+// agree with it on a shared fixture when the Postgres side lands (§8.3).
 
 import type { Exercise, PerformedSet, WorkoutSet } from '@/domain/types'
 
@@ -14,39 +8,21 @@ type VolumeInput = Pick<
   'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'
 > & { isCompleted?: boolean }
 
-/**
- * A set of real work — any logged set. Both the number shown to the user and the
- * predicate volume load uses; the warmup/dropset types that once excluded some
- * sets were removed.
- */
+// A set counts as work unless explicitly marked incomplete.
 export function isWorkingSet(set: VolumeInput): boolean {
   return set.isCompleted !== false
 }
 
-/**
- * How many implements are moved per rep, so entered weight becomes total load.
- *
- * A two-arm dumbbell lift moves a dumbbell in each hand every rep, so the total
- * lifted is twice the weight the user enters (they enter one dumbbell — §6). A
- * one-arm (unilateral) dumbbell lift moves a single dumbbell. Everything else —
- * barbells, machines, cables — is entered as its true total, so the factor is 1.
- */
+// Two-arm dumbbell lifts move a dumbbell per hand, so the entered weight counts
+// twice (§6); one-arm dumbbells and everything else are their true total (factor 1).
 export function loadUnitsMoved(
   exercise: Pick<Exercise, 'equipment' | 'isUnilateral'>,
 ): number {
   return exercise.equipment === 'dumbbell' && !exercise.isUnilateral ? 2 : 1
 }
 
-/**
- * The weight actually moved, which is not the number the user typed:
- *   - Two-arm dumbbell lifts move a pair, so double the entered weight (§6).
- *   - Bodyweight movements move a fraction of the lifter's mass — a weighted
- *     pull-up at +20 kg for an 80 kg lifter is 100 kg per rep, not 20.
- *
- * This drives volume load only. Max-weight and e1RM PRs deliberately use the raw
- * entered weight, because "the 100s" is the strength number a lifter thinks in,
- * not the 200 kg of total tonnage.
- */
+// Weight actually moved (doubles two-arm dumbbells, adds a bodyweight fraction).
+// Drives volume load only — max-weight and e1RM PRs deliberately use raw entered weight.
 export function effectiveWeightKg(
   set: Pick<VolumeInput, 'weightKg'>,
   exercise: Pick<
@@ -77,7 +53,6 @@ export function effectiveWeightKg(
   }
 }
 
-/** Σ (effective weight × reps) over completed sets. */
 export function volumeLoadKg(
   sets: VolumeInput[],
   exercise: Pick<
@@ -96,13 +71,8 @@ export function volumeLoadKg(
   return total
 }
 
-/**
- * Epley estimated one-rep max, deliberately capped at 12 reps.
- *
- * Above 12 the formula's error exceeds what it's measuring — a 20-rep set
- * would project an e1RM the lifter cannot come close to. Returning null is
- * more useful than a confident wrong number.
- */
+// Epley e1RM, capped at 12 reps — above that the formula's error exceeds what it
+// measures, so null beats a confident wrong number (§8.1).
 export function estimatedOneRepMaxKg(
   weightKg: number | null,
   reps: number | null,
@@ -110,21 +80,12 @@ export function estimatedOneRepMaxKg(
   if (weightKg === null || reps === null) return null
   if (reps < 1 || reps > 12) return null
   if (weightKg <= 0) return null
-  // A single rep IS a one-rep max — there is nothing to estimate. Plain Epley
-  // multiplies by (1 + 1/30) here, so a genuine 365×1 came back as 377: the app
-  // claiming a max the lifter has never touched, and contradicting the 365 in
-  // the field right above it.
+  // A single rep is already a 1RM; plain Epley would inflate it (365×1 → 377).
   if (reps === 1) return weightKg
   return weightKg * (1 + reps / 30)
 }
 
-/**
- * The weight you could expect to lift for a given rep count, from a known 1RM.
- *
- * The inverse of Epley: if `w × (1 + r/30)` estimates the 1RM, then a target
- * rep count `r` projects back to `oneRepMaxKg / (1 + r/30)`. Used by the PR
- * estimator to answer "what's my likely 5RM / 3RM?" from any logged set.
- */
+// Inverse Epley: the weight for a target rep count from a known 1RM.
 export function weightForRepsKg(oneRepMaxKg: number, reps: number): number | null {
   if (oneRepMaxKg <= 0 || reps < 1 || reps > 12) return null
   return oneRepMaxKg / (1 + reps / 30)
@@ -132,7 +93,6 @@ export function weightForRepsKg(oneRepMaxKg: number, reps: number): number | nul
 
 export const PROJECTION_REPS = [1, 2, 3, 5, 8, 10, 12] as const
 
-/** Best e1RM across a group of sets, ignoring sets outside the valid window. */
 export function bestOneRepMaxKg(
   sets: Pick<PerformedSet, 'weightKg' | 'reps'>[],
 ): number | null {
@@ -144,7 +104,7 @@ export function bestOneRepMaxKg(
   return best
 }
 
-/** The heaviest completed working set, for the top-set line chart (B-9). */
+/** Heaviest completed working set, for the top-set line chart (B-9). */
 export function topSetWeightKg(sets: VolumeInput[]): number | null {
   let best: number | null = null
   for (const set of sets) {

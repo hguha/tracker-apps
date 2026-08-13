@@ -1,11 +1,5 @@
-/**
- * App shell and navigation.
- *
- * Deliberately a small hand-rolled view state rather than TanStack Router for
- * now: there are a handful of screens and no URL-shareable state yet. The spec's
- * routing table (§5.2) is the target once chart filters need to live in search
- * params — mapping these view names onto routes is mechanical.
- */
+// App shell and navigation, as hand-rolled view state (§5.2) rather than a router
+// while there's no URL-shareable state.
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -34,8 +28,7 @@ import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
 import { useSync } from '@/sync/useSync'
 
-// The chart library is the biggest dependency in the app, so the logging path
-// must never download it. Loaded only when the Insights tab is opened.
+// ECharts is the biggest dependency; lazy so the logging path never downloads it.
 const InsightsScreen = lazy(() =>
   import('@/features/insights/InsightsScreen').then((m) => ({
     default: m.InsightsScreen,
@@ -57,9 +50,7 @@ type View =
   | { kind: 'workout'; workoutId: string; isEditMode: boolean }
 
 export function App() {
-  // Audio must be unlocked by a real interaction, and iOS re-suspends it on
-  // background. Installed at the root so cues work on every screen — an earlier
-  // version only did this on the workout screen, which left the rest silent.
+  // At the root so audio unlock covers every screen (iOS re-suspends on background).
   useEffect(() => installAudioUnlock(), [])
 
   return (
@@ -71,12 +62,7 @@ export function App() {
   )
 }
 
-/**
- * Decides between the sign-in screen and the app.
- *
- * A signed-out user gets the auth screen and nothing else — never a partially
- * populated shell (§11.1.3).
- */
+// A signed-out user gets the auth screen and nothing else (§11.1.3).
 function AuthGate() {
   const { session, isLoading } = useAuth()
 
@@ -90,8 +76,7 @@ function AuthGate() {
 
   if (!session) return <SignInScreen />
 
-  // Keyed on the user, so switching accounts remounts the tree and discards any
-  // in-memory state belonging to the previous session.
+  // Keyed on the user, so switching accounts remounts and discards prior state.
   return <SignedInApp key={session.userId} />
 }
 
@@ -102,8 +87,6 @@ function SignedInApp() {
   const [tab, setTab] = useState<TabKey>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
 
-  // Runs the outbox drain and delta pull on its own triggers when a backend is
-  // attached; a no-op in the local-only prototype (§5.5).
   useSync()
 
   useEffect(() => {
@@ -149,8 +132,7 @@ function SignedInApp() {
     )
   }
 
-  // After seeding, so the profile the setup screen writes to exists. Local-only
-  // accounts skip it: there's no account to upload to and nothing to prime.
+  // Local-only accounts skip onboarding — nothing to upload or prime.
   if (
     session &&
     !session.isLocal &&
@@ -164,10 +146,7 @@ function SignedInApp() {
     )
   }
 
-  /**
-   * Resumes an unfinished session if one exists rather than starting a second.
-   * Two concurrent workouts is never what the tap meant.
-   */
+  // Resume an unfinished session rather than starting a second (§4.4).
   async function handleStartWorkout() {
     const active = await repo.getActiveWorkout()
     if (active) {

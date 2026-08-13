@@ -1,16 +1,3 @@
-/**
- * The PR estimator (1RM calculator).
- *
- * Type a weight and reps you've hit; it estimates your one-rep max (Epley) and
- * projects the weight you'd expect for other rep counts. Two ways in:
- *   - Enter numbers by hand.
- *   - Tap a lift you've trained to prefill your best recent set for it.
- *
- * Deliberately capped at 12 reps like every other e1RM in the app (§8.1) — past
- * that the formula's error exceeds what it measures, so the estimate is hidden
- * rather than shown as a confident wrong number.
- */
-
 import { useMemo, useState } from 'react'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
@@ -22,13 +9,9 @@ export function PrEstimator({ data }: { data: InsightsData }) {
   const unit = data.profile.unitWeight
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
-
-  /** Which lift the numbers came from, when they were prefilled by a chip. */
   const [source, setSource] = useState<string | null>(null)
 
-  // Lifts the user has actually trained, best recent set first — for one-tap
-  // prefill so the estimate is grounded in their real numbers. `bestE1rmKg` is
-  // the best across the whole range, which is what the estimate gets compared to.
+  // Best recent set per trained lift; bestE1rmKg is the best across the range, used for comparison.
   const quickLifts = useMemo(() => {
     return data.exerciseSeries
       .map((series) => {
@@ -58,16 +41,7 @@ export function PrEstimator({ data }: { data: InsightsData }) {
     weightNum !== null && Number.isFinite(weightNum) ? weightToKg(weightNum, unit) : null
   const e1rmKg = estimatedOneRepMaxKg(weightKg, repsNum)
 
-  /**
-   * How this estimate relates to the lift's actual best, when the numbers came
-   * from a prefill chip.
-   *
-   * The confusing case, reported: prefilling a deadlift showed 365 × 1 in the
-   * fields and "377" as the estimate. That specific number came from Epley
-   * scaling a single rep, now fixed — but the general shape remains, because a
-   * heavy multi-rep set legitimately projects *above* a lighter true single. Say
-   * so rather than leaving two numbers to contradict each other.
-   */
+  // A heavy multi-rep set can legitimately project above a lighter true single, so say so.
   const comparison = useMemo(() => {
     const lift = quickLifts.find((l) => l.id === source)
     if (!lift || e1rmKg === null || lift.bestE1rmKg === null) return null
@@ -161,8 +135,6 @@ export function PrEstimator({ data }: { data: InsightsData }) {
                 {displayWeight(e1rmKg, unit).toLocaleString()}
                 <span className="ml-1 text-[15px] font-semibold">{unit}</span>
               </p>
-              {/* A single rep isn't estimated — it's what was lifted. Saying so
-                  stops the headline from looking like it disagrees with the input. */}
               {repsNum === 1 && (
                 <p className="mt-0.5 text-[11.5px] text-accent/80">
                   A single rep is your max — nothing to estimate.
@@ -176,7 +148,6 @@ export function PrEstimator({ data }: { data: InsightsData }) {
               </p>
             )}
 
-            {/* Projected working weights across the rep range. */}
             <div className="mt-3 grid grid-cols-4 gap-1.5">
               {PROJECTION_REPS.map((r) => {
                 const projected = weightForRepsKg(e1rmKg, r)

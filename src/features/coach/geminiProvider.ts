@@ -1,13 +1,5 @@
-/**
- * The live coach provider — calls the `coach` Edge Function, which holds the
- * Gemini key server-side (§13, §2). The client never sees the key; it sends the
- * de-identified summary and gets back the same typed CoachResponse the mock
- * produces, so nothing downstream changes.
- *
- * If the backend isn't configured, the function errors, or the network is down,
- * `respond` throws and the caller falls back to the offline mock — the coach is
- * always usable, just less clever.
- */
+// Live coach via the `coach` Edge Function, which holds the Gemini key server-side
+// (§13, §2); throws on any failure so the caller can fall back to the offline mock.
 
 import { getSupabase } from '@/sync/supabaseClient'
 import * as repo from '@/data/repository'
@@ -21,9 +13,7 @@ export const geminiCoachProvider: CoachProvider = {
     const supabase = getSupabase()
     if (!supabase) throw new Error('Backend not configured')
 
-    // Send the exercise-name allowlist so proposed plans use lifts the app can
-    // actually save (matched by name/alias in createTemplatesFromPlan). Names
-    // aren't identifying — the library is shared and mostly system rows.
+    // Send the exercise-name allowlist so plans use saveable lifts; names aren't identifying.
     const library = (await repo.listExercises()).map((e) => e.name)
 
     // invoke() attaches the signed-in user's JWT, which the function verifies.
@@ -32,7 +22,6 @@ export const geminiCoachProvider: CoachProvider = {
     })
     if (error) throw error
 
-    // Trust but verify the shape — a malformed response falls back to the mock.
     if (
       data &&
       (data.kind === 'critique' || data.kind === 'plan' || data.kind === 'answer')

@@ -1,15 +1,3 @@
-/**
- * Account settings (§11.1.2).
- *
- * Two pieces of deliberate friction here, both load-bearing:
- *
- *   - **Sign-out is blocked while the outbox has pending writes.** Signing out
- *     with unsynced sets would strand them, so the dialog says how many and
- *     offers to wait rather than silently losing a workout.
- *   - **Delete requires typing the word.** It is irreversible and takes years of
- *     data with it, so a mis-tap must not be sufficient.
- */
-
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, Check, ChevronLeft, LogIn, LogOut, Trash2 } from 'lucide-react'
@@ -28,7 +16,6 @@ export function AccountScreen({
   onConnectAccount,
 }: {
   onBack: () => void
-  /** Start the device-only → real-account upgrade (keeps local data). */
   onConnectAccount?: () => void
 }) {
   const { session, signOut, updateDisplayName, deleteAccount } = useAuth()
@@ -119,8 +106,6 @@ export function AccountScreen({
           </p>
         </Card>
 
-        {/* Shown while no server is attached, whichever way they signed in —
-            the data is local either way, and saying otherwise would mislead. */}
         {session.isLocal && (
           <Card className="p-4">
             <p className="flex items-start gap-2 text-[13px] text-ink-secondary">

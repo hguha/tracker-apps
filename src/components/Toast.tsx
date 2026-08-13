@@ -1,15 +1,3 @@
-/**
- * Undo toasts (§6.4).
- *
- * A swipe-delete is only safe because this exists — the gesture is fast enough to
- * fire by accident, so recovery has to be one tap and has to stay on screen long
- * enough to notice.
- *
- * Toasts are themselves swipe-dismissable, in any direction. A notification the
- * user can't get rid of is its own annoyance, and reaching for a tiny × is worse
- * than a flick.
- */
-
 import {
   createContext,
   useCallback,
@@ -55,8 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback(
     (text: string, onUndo?: () => void) => {
       const id = nextId.current++
-      // Cap the stack: three stale toasts covering the screen is worse than
-      // dropping the oldest.
+      // Cap the stack: stale toasts covering the screen is worse than dropping the oldest.
       setMessages((current) => [...current.slice(-2), { id, text, onUndo }])
       timers.current.set(
         id,
@@ -71,11 +58,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      {/*
-        Anchored to the top: the bottom of the screen is occupied by the rest
-        timer and the finish button during a session, and a toast covering either
-        is worse than no toast.
-      */}
+      {/* Anchored to the top: the session rest timer and finish button own the bottom. */}
       <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center px-4 pt-safe">
         {messages.map((message) => (
           <Toast

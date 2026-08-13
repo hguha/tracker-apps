@@ -1,13 +1,3 @@
-/**
- * Preview a template before starting a workout from it (§7.4).
- *
- * The distinction this sheet makes explicit: starting a workout from a template
- * creates a **fresh session** — a copy. Editing that session later changes the
- * session, not the template. The template is edited separately, from the
- * Templates screen. Stating this on the button that crosses the boundary is
- * what keeps "am I changing the plan or the workout?" from ever being unclear.
- */
-
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, Play, X } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -24,9 +14,7 @@ export function TemplatePreviewSheet({
   onDismiss,
 }: {
   templateId: string
-  /** Called with the id of the new workout once the user commits. */
   onStart: (newWorkoutId: string) => void
-  /** Optional — jump to editing the template instead of running it. */
   onEdit?: () => void
   onDismiss: () => void
 }) {

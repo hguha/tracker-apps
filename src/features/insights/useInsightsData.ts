@@ -1,11 +1,3 @@
-/**
- * The single aggregation pass behind every chart on the Insights tab (§9.0).
- *
- * One pass, one filter scope. Charts receive slices of this rather than querying
- * independently, which is what guarantees two charts on the same screen describe
- * the same data — the failure mode §9.0 forbids.
- */
-
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
@@ -21,11 +13,10 @@ import type { Profile, Region, WorkoutSet } from '@/domain/types'
 import { isCardioPattern } from '@/domain/movement'
 
 export interface InsightsFilters {
-  /** Weeks of history to include. */
   weeks: number
-  /** Empty means all regions. */
+  // Empty means all regions.
   regions: string[]
-  /** Empty means all exercises. */
+  // Empty means all exercises.
   exerciseIds: string[]
 }
 
@@ -52,28 +43,27 @@ export interface ExerciseSeries {
 
 export interface InsightsData {
   profile: Profile
-  /** Every week in range, including empty ones, so a gap reads as a gap. */
+  // Every week in range, including empty ones, so a gap reads as a gap.
   weeks: string[]
   volumeByWeek: Map<string, number>
   setsByWeek: Map<string, number>
   workoutsByWeek: Map<string, number>
   volumeByRegion: Map<Region, number>
   setsByRegion: Map<Region, number>
-  /** Working sets per movement pattern (C-25) and per equipment (C-26). */
+  // Working sets per movement pattern (C-25) and per equipment (C-26).
   setsByPattern: Map<string, number>
   setsByEquipment: Map<string, number>
   regionVolumeByWeek: Map<string, Map<Region, number>>
-  /** Per-exercise progression, only for exercises with data in range. */
+  // Only exercises with data in range.
   exerciseSeries: ExerciseSeries[]
   sessions: SessionPoint[]
-  /** Rep-bucket distribution: how the training is actually distributed. */
   repBuckets: Map<string, number>
   dayOfWeekCounts: number[]
-  /** Session start hour, 0–23, for the time-of-day histogram (D-37). */
+  // Session start hour, 0–23, for the time-of-day histogram (D-37).
   hourCounts: number[]
-  /** Volume per calendar day (yyyy-MM-dd), for the training-calendar heatmap (A-3). */
+  // Volume per calendar day (yyyy-MM-dd), for the training-calendar heatmap (A-3).
   volumeByDay: Map<string, number>
-  /** Every exercise trained ever, for the filter sheet. */
+  // Every exercise trained ever (not just in range), for the filter sheet.
   exerciseOptions: { id: string; name: string; region: Region | undefined }[]
   bodyMetrics: Map<string, { at: number; value: number }[]>
   workoutCount: number
@@ -83,7 +73,7 @@ export interface InsightsData {
   cardioMeters: number
 }
 
-/** Ordered buckets for the rep-range distribution. Ordinal, not categorical. */
+// Ordinal, not categorical.
 export const REP_BUCKETS = ['1-5', '6-8', '9-12', '13-20', '20+'] as const
 
 function repBucket(reps: number): string {
@@ -131,8 +121,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
     let cardioSeconds = 0
     let cardioMeters = 0
 
-    // Filter options come from all history, not the filtered range — otherwise
-    // narrowing the range would hide the very filter needed to widen it again.
+    // Filter options come from all history, not the filtered range, or narrowing the range would hide the filter needed to widen it again.
     for (const workout of allWorkouts) {
       for (const we of await repo.listWorkoutExercises(workout.id)) {
         if (exerciseOptions.has(we.exerciseId)) continue
@@ -190,12 +179,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
           }
         }
 
-        // Region-level views attribute to the exercise's *single primary*
-        // region, not spread across secondaries. Crediting "back" for a back
-        // squat (via the erectors it works secondarily) is technically true
-        // but reads as noise on a body-part chart. Secondary-muscle spreading
-        // is kept for the muscle-level volume analysis, where partial credit
-        // is the point (§4.3); here, one lift → one body part.
+        // Region-level views credit the exercise's single primary region only: one lift, one body part (§4.3).
         if (region) {
           volumeByRegion.set(region, (volumeByRegion.get(region) ?? 0) + exerciseVolume)
           const weekMap = regionVolumeByWeek.get(key) ?? new Map<Region, number>()
@@ -208,7 +192,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
           setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
         }
 
-        // Pattern and equipment coverage, counted in working sets.
         setsByPattern.set(
           exercise.movementPattern,
           (setsByPattern.get(exercise.movementPattern) ?? 0) + working.length,

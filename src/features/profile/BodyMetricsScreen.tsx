@@ -1,13 +1,5 @@
-/**
- * Body measurements (§5.2 `/body`).
- *
- * Its own screen now rather than a card wedged into the Me tab. The spec always
- * had it as a separate route; the prototype merged the two, and the merge is what
- * made Me a seven-section scroll.
- *
- * Storage is canonical (kg, cm) and display is in the user's units — conversion
- * happens only here, at the boundary (§4.12).
- */
+// Body measurements (§5.2 /body). Storage is canonical (kg, cm); conversion to
+// the user's units happens only here (§4.12).
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -20,7 +12,6 @@ import { useToast } from '@/components/Toast'
 import { formatRelativeDay } from '@/lib/dates'
 import { bodyWeightFromKg, lengthFromCm, lengthToCm, weightToKg } from '@/lib/units'
 
-/** The handful worth logging often, in the order they're usually taken. */
 const QUICK_METRIC_KEYS = ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']
 
 export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
@@ -49,7 +40,6 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
   if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
   const { profile, quick } = data
 
-  /** Converts a typed display value into canonical storage units. */
   function toCanonical(unitType: string, raw: number): number {
     if (unitType === 'mass') return weightToKg(raw, profile.unitWeight)
     if (unitType === 'length') return lengthToCm(raw, profile.unitLength)

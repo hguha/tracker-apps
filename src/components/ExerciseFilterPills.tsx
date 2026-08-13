@@ -1,16 +1,5 @@
-/**
- * The body-part and equipment filter rows (§7.3).
- *
- * Extracted from the add-exercise picker so the library uses the same control
- * rather than a second, differently-behaved one. The library previously hid these
- * behind summary chips that opened a multi-select sheet — three taps to answer
- * "what chest exercises are there", against one here. The pills also show the
- * region palette inline, which is the fastest way to scan the list.
- *
- * Single-select per row, deliberately: tapping the active pill clears it, and
- * "chest AND back" is not a question anyone asked of this screen. Multi-select
- * needed the sheet, and the sheet is what made it slow.
- */
+// Body-part and equipment filter rows (§7.3), shared by the picker and library.
+// Single-select per row; tapping the active pill clears it.
 
 import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'

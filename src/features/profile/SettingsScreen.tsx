@@ -1,15 +1,4 @@
-/**
- * Preferences: units, logging behavior, coaching inputs, appearance.
- *
- * Split out of the Me tab, which had grown to seven unrelated card stacks in one
- * scroll — account, library, templates, coach, badges, body metrics, units,
- * coaching, logging, appearance, and a Data block with three destructive buttons
- * in it. Finding the rest-timer default meant scrolling past a delete-everything
- * control.
- *
- * These four belong together because they're all "how the app behaves for me",
- * and none of them are things you look at — they're things you set once.
- */
+// Preferences: units, logging, coaching inputs, appearance.
 
 import { ChevronLeft, Sparkles } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -163,12 +152,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   )
 }
 
-/**
- * Height + training goal — the profile fields the AI coach personalizes against
- * (§13). Height is stored metric and shown in the user's length unit; the goal
- * is free text. Both are optional. What's sent to the coach is always visible in
- * the coach's "data sent" disclosure.
- */
+// Height + goal, the profile fields the coach personalizes against (§13).
 function CoachingCard({ profile }: { profile: Profile }) {
   const unit = profile.unitLength
   const heightValue =

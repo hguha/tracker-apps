@@ -1,18 +1,3 @@
-/**
- * The template editor (§7).
- *
- * This screen edits **the plan**, never a workout. That distinction is the whole
- * point of the design the user asked for, so it's stated in the header ("Editing
- * template") and the save note, and the surface looks deliberately unlike the
- * active-workout screen — targets and ranges, not logged sets, so there's no way
- * to confuse "I'm editing my program" with "I'm logging today's session".
- *
- * Reuse: it shares `ExercisePicker` and `DragList` with the workout screen. What
- * differs is the row model — a template row holds target *ranges* (3×8–10 @ RPE 8),
- * a workout row holds actual performed numbers — so the row editors are distinct
- * on purpose rather than a forked mega-component.
- */
-
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
@@ -85,12 +70,9 @@ export function TemplateEditorScreen({
           <ChevronLeft size={22} />
         </button>
         <div className="min-w-0 flex-1">
-          {/* The mode is stated, not implied — this is the plan, not a session. */}
           <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">
             Editing template
           </p>
-          {/* A local draft, so a keystroke isn't clobbered by the liveQuery
-              refetch that its own write triggers — the reason typing felt broken. */}
           <NameField
             value={template.name}
             onCommit={(name) => void repo.updateTemplate(templateId, { name })}
@@ -161,11 +143,7 @@ export function TemplateEditorScreen({
   )
 }
 
-/**
- * The template's name. Holds a local draft and writes on every change, but does
- * not adopt the external value while focused — otherwise the liveQuery refetch
- * that each keystroke triggers would race the input and drop characters.
- */
+// Local draft that ignores the external value while focused, so the liveQuery refetch each keystroke triggers can't drop characters.
 function NameField({
   value,
   onCommit,
@@ -189,11 +167,6 @@ function NameField({
   )
 }
 
-/**
- * One template exercise: name plus its target ranges. Deliberately shows target
- * *fields* (sets, rep range, weight, RPE) rather than a logged-set table, so it
- * never reads like a live session.
- */
 function TemplateExerciseRow({
   te,
   name,
@@ -284,14 +257,7 @@ function TemplateExerciseRow({
   )
 }
 
-/**
- * Auto-progression toggle for one template-exercise (§7 Phase 4).
- *
- * Off = manual (the target weight is whatever you set). On = double progression:
- * when the last session hit the top of the rep range at RPE ≤ 8, the next
- * instantiation seeds +increment and resets to the bottom of the range. The
- * increment defaults to the smallest sensible plate step for the unit.
- */
+// Double progression: clearing the rep range at RPE <= 8 seeds +increment next instantiation.
 function ProgressionControl({
   te,
   weightUnit,
@@ -359,7 +325,7 @@ function ProgressionControl({
   )
 }
 
-/** A single labelled numeric target. Blank means "no target", which is valid. */
+// Blank means "no target", which is valid.
 function TargetField({
   label,
   value,

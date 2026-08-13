@@ -1,9 +1,4 @@
-/**
- * Tree-shaken ECharts. Registering only what's used keeps the Insights chunk
- * small, and the Insights route is itself lazy-loaded so the logging path never
- * downloads any of this.
- */
-
+// Register only the ECharts pieces used, to keep the lazy-loaded Insights chunk small.
 import * as core from 'echarts/core'
 import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
 import {

@@ -1,23 +1,3 @@
-/**
- * Insights (§9, §9.0).
- *
- * Navigation is structured rather than flat, because 40+ charts and a
- * 200-exercise library cannot be driven from a row of pills:
- *
- *   - A fixed **sub-tab row** partitions the catalog into five areas.
- *   - A **filter bar** scopes every chart in the active sub-tab — but shows only
- *     the controls those charts actually use. A tab whose charts ignore body
- *     part (e.g. Habit) doesn't show a Body-part chip that changes nothing.
- *
- * The catalog (`catalog.tsx`) is the source of truth: each chart declares the
- * filters it consumes and how to render, and each sub-tab lists chart keys.
- * Adding or re-scoping a chart is a catalog edit, not a screen edit.
- *
- * Per-chart filters remain forbidden: two charts on one screen showing different
- * slices quietly lie about the comparison. The per-tab bar scopes all of them at
- * once.
- */
-
 import { useMemo, useState } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { FilterChipButton, FilterSheet } from '@/components/FilterSheet'
@@ -47,19 +27,14 @@ export function InsightsScreen() {
   const range = RANGES.find((r) => r.key === rangeKey)!
   const subTab = SUB_TABS.find((t) => t.key === subTabKey) ?? SUB_TABS[0]!
 
-  // Which non-range filters the visible tab's charts actually consume.
   const activeFilters = useMemo(() => filtersForSubTab(subTab), [subTab])
   const showRegion = activeFilters.has('region')
   const showExercise = activeFilters.has('exercise')
 
-  // Single-lift charts (strength progression, top set) follow the shared
-  // Exercise filter rather than a per-chart control (§9.0). One explicit pick
-  // is the subject; otherwise the chart shows a "pick one" prompt.
+  // Single-lift charts need exactly one pick as their subject (§9.0).
   const activeExerciseId = exerciseIds.length === 1 ? exerciseIds[0]! : null
 
-  // Only pass a filter to the aggregation when the tab uses it — so a stray
-  // body-part selection left over from another tab can't silently scope a tab
-  // whose bar doesn't even show that chip.
+  // Only pass a filter the tab uses, so a stray selection from another tab can't silently scope it.
   const filters: InsightsFilters = useMemo(
     () => ({
       weeks: range.weeks,
@@ -83,7 +58,6 @@ export function InsightsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Sub-tabs: fixed, never wraps, always visible. */}
       <div className="flex gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1.5">
         {SUB_TABS.map((tab) => (
           <button
@@ -101,8 +75,6 @@ export function InsightsScreen() {
         ))}
       </div>
 
-      {/* One filter bar, scoping every chart below it — only the chips this tab's
-          charts respond to. Range is universal, so it always shows. */}
       <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
         <FilterChipButton
           label={range.label}
@@ -199,8 +171,6 @@ export function InsightsScreen() {
       {openSheet === 'exercise' && (
         <FilterSheet
           title="Exercise"
-          // Grouped by body part and searchable — this is what keeps the control
-          // usable once there are 200 exercises in the library.
           options={groupExercisesByRegion(data.exerciseOptions)}
           selected={exerciseIds}
           onChange={setExerciseIds}
@@ -211,7 +181,6 @@ export function InsightsScreen() {
   )
 }
 
-/** "All exercises" / "Bench Press" / "Bench Press +2" — never grows with the data. */
 function summarize(
   noun: string,
   selected: string[],
@@ -225,8 +194,7 @@ function summarize(
 function groupExercisesByRegion(
   options: { id: string; name: string; region: Region | undefined }[],
 ) {
-  // Region order matches the palette's fixed slot order, so the sheet reads in
-  // the same sequence as every chart legend.
+  // Region order matches the palette's fixed slot order, so the sheet matches every chart legend.
   const ordered = [...options].sort((a, b) => {
     const aIndex = a.region ? REGIONS.indexOf(a.region) : REGIONS.length
     const bIndex = b.region ? REGIONS.indexOf(b.region) : REGIONS.length

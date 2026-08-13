@@ -1,13 +1,5 @@
-/**
- * The in-progress session, live. `undefined` while loading, `null` when none.
- *
- * Starting a workout is reachable from several places — the tab bar, Home,
- * Templates, and "do this again" in History — and only the first two went
- * through the resume check. The others could open a second concurrent session,
- * which §4.4 says cannot exist: the new one becomes the active workout and the
- * old one is stranded, unfinishable from the UI. Every start affordance reads
- * this so it can offer *resume* instead of a duplicate.
- */
+// The in-progress session, live (undefined while loading, null when none). Every
+// start affordance reads this to offer resume instead of a second session (§4.4).
 
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'

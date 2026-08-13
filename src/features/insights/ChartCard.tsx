@@ -1,14 +1,3 @@
-/**
- * The card every chart lives in.
- *
- * Owns two obligations from §10.5 so no individual chart can forget them:
- *   - A **table-view twin**, reachable from the card. Both an accessibility
- *     requirement and the relief for the three light-mode region colors measured
- *     below 3:1 contrast.
- *   - A **per-chart empty state** that says what's missing, rather than an empty
- *     axis that looks broken.
- */
-
 import { useState, type ReactNode } from 'react'
 import { Table2 } from 'lucide-react'
 import { Card } from '@/components/Card'
@@ -24,7 +13,6 @@ export function ChartCard({
   subtitle,
   children,
   table,
-  /** Rendered instead of the chart when there isn't enough data yet. */
   emptyMessage,
   isEmpty = false,
 }: {

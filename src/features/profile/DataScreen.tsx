@@ -1,12 +1,5 @@
-/**
- * Sync status, backups, and the destructive resets.
- *
- * Deliberately its own screen, and the only one with an irreversible control on
- * it. These used to sit at the bottom of the Me tab, which meant scrolling past
- * "Permanently erase all my training data" to reach the rest-timer default — the
- * two least-alike things in the app, adjacent. Anything that can't be undone
- * should take a deliberate navigation to reach.
- */
+// Sync status, backups, and the destructive resets — the only screen with an
+// irreversible control, so it takes a deliberate navigation to reach.
 
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -55,7 +48,6 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      // A sortable date stamp; toISOString is UTC but fine for a filename.
       link.download = backupFilename(new Date().toISOString().slice(0, 10))
       link.click()
       URL.revokeObjectURL(url)
@@ -80,7 +72,6 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
       if (!ok) return
       await importBackup(backup)
       toast.show('Backup imported')
-      // A hard reload is the simplest way to refresh every live query at once.
       window.location.reload()
     } catch (error) {
       toast.show(

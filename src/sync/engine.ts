@@ -1,18 +1,12 @@
-/**
- * The sync engine (§5.5). IndexedDB is authoritative; this reconciles it with the
- * server. Backend-agnostic (§5.6): talks only to `SyncBackend`.
- */
+// The sync engine (§5.5). IndexedDB is authoritative; this reconciles it with the
+// server. Backend-agnostic (§5.6): talks only to `SyncBackend`.
 
 import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
 import type { PushRow, SyncBackend } from './backend'
 import { syncLog } from './log'
 
-/**
- * Tables that participate in sync, in dependency order for the initial pull.
- * `personalRecords` is deliberately absent: PRs are derived from sets and
- * recomputed locally per device, so syncing them would be redundant and cause
- * push/pull disagreement.
- */
+// Tables that participate in sync, in dependency order for the initial pull.
+// `personalRecords` is absent: PRs are derived from sets and recomputed per device.
 export const SYNCED_TABLES = [
   'profiles',
   'muscles',
@@ -28,11 +22,7 @@ export const SYNCED_TABLES = [
 
 export type SyncedTable = (typeof SYNCED_TABLES)[number]
 
-/**
- * Exponential backoff with a 5-minute cap. `jitter` (0–1) spreads retries ±25% so
- * clients don't retry in lockstep after a shared outage; defaulting it keeps the
- * function pure for tests.
- */
+// Exponential backoff, 5-minute cap. `jitter` (0–1) spreads retries ±25% so clients don't retry in lockstep after a shared outage.
 export function backoffMs(attempts: number, jitter = 0.5): number {
   const base = Math.min(5 * 60_000, 1000 * 2 ** attempts)
   const spread = base * 0.25 * (jitter * 2 - 1) // ±25%
@@ -50,10 +40,7 @@ export class SyncEngine {
 
   constructor(private backend: SyncBackend) {}
 
-  /**
-   * Drains the outbox one entry at a time, oldest first. Returns when the queue
-   * empties or a transient/auth failure halts it. Re-entrant-safe.
-   */
+  // Drains the outbox oldest first; returns when it empties or a transient/auth failure halts it. Re-entrant-safe.
   async drain(now = Date.now()): Promise<DrainResult> {
     if (this.draining) return { pushed: 0, deadLettered: 0, stoppedBecause: null }
     this.draining = true
@@ -61,9 +48,8 @@ export class SyncEngine {
     let deadLettered = 0
 
     try {
-      // Ordered by seq so dependent writes replay in insertion order. Re-read each
-      // iteration to pick up entries added mid-drain. Deferred entries are skipped
-      // rather than blocking, so one live workout doesn't stall unrelated writes.
+      // Ordered by seq so dependent writes replay in insertion order; re-read each iteration
+      // to pick up mid-drain entries. Deferred entries are skipped so a live workout doesn't stall others.
       while (true) {
         const entry = await db.outbox.orderBy('seq').filter(isReadyToPush).first()
         if (!entry) break
@@ -91,8 +77,6 @@ export class SyncEngine {
         }
 
         if (outcome.status === 'permanent') {
-          // Dead-letter and never retry; log loudly with the reason so a silent
-          // "failed to sync" has an explanation (RLS 42501, missing column 42703, …).
           syncLog.warn(
             `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
             outcome.error,
@@ -114,9 +98,7 @@ export class SyncEngine {
           continue
         }
 
-        // Transient: schedule a backoff and stop so order is preserved — a later
-        // row can depend on this one, so pushing past it would order child before
-        // parent. `drainUntilSettled` handles retrying without user action.
+        // Transient: schedule a backoff and stop so order holds — pushing past this could order a child before its parent.
         const attempts = entry.attempts + 1
         const nextAttemptAt = now + backoffMs(attempts, Math.random())
         await db.outbox.update(entry.seq!, {
@@ -141,11 +123,7 @@ export class SyncEngine {
     return { pushed, deadLettered, stoppedBecause: null }
   }
 
-  /**
-   * Pulls deltas for every synced table into IndexedDB. Merge rule (§5.5): the
-   * server row wins, unless a local outbox entry for that row is still pending —
-   * then local optimistic state holds until its push lands.
-   */
+  // Pulls deltas into IndexedDB. Merge rule (§5.5): the server row wins unless a local outbox entry for that row is still pending.
   async pull(): Promise<{ applied: number }> {
     let applied = 0
     const pendingRowIds = new Set(
@@ -160,8 +138,7 @@ export class SyncEngine {
       try {
         rows = await this.backend.pull(table, since)
       } catch (error) {
-        // One table failing must not abort the others; cursor is untouched so the
-        // next pull retries this table from the same point.
+        // One table failing must not abort the others; the cursor is untouched so the next pull retries it.
         syncLog.warn(`pull failed for ${table} — skipping this cycle`, String(error))
         continue
       }
@@ -177,8 +154,7 @@ export class SyncEngine {
 
         if (pendingRowIds.has(`${table}:${id}`)) continue
 
-        // Tombstones are applied as ordinary rows (deletedAt set); keeping the row
-        // rather than hard-deleting stops a later pull resurrecting it.
+        // Tombstones are applied as ordinary rows (deletedAt set); keeping the row stops a later pull resurrecting it.
         await store.put(normalizeRow(table, row))
         applied += 1
       }
@@ -190,7 +166,7 @@ export class SyncEngine {
     return { applied }
   }
 
-  /** A full reconcile: drain local writes first, then pull server deltas. */
+  // A full reconcile: drain local writes first, then pull server deltas.
   async sync(
     now = Date.now(),
   ): Promise<{ drain: DrainResult; pull: { applied: number } }> {
@@ -200,11 +176,7 @@ export class SyncEngine {
     return { drain, pull }
   }
 
-  /**
-   * Drains repeatedly until the queue settles, waiting out each backoff, so one
-   * flaky row doesn't need repeated manual retries. Stops early on `auth` and
-   * gives up after `maxRounds` so an unreachable server can't spin forever.
-   */
+  // Drains repeatedly until the queue settles, waiting out each backoff. Stops early on `auth` and gives up after `maxRounds`.
   async drainUntilSettled(
     opts: {
       maxRounds?: number
@@ -218,8 +190,7 @@ export class SyncEngine {
 
     let pushed = 0
     let deadLettered = 0
-    // The clock the drain sees, advanced past each backoff we wait out. Carrying it
-    // explicitly lets a test stub `sleep` and stay instant.
+    // The clock the drain sees, advanced past each backoff waited out; carrying it explicitly lets a test stub `sleep`.
     let clock = Date.now()
 
     for (let round = 0; round < maxRounds; round += 1) {
@@ -231,19 +202,14 @@ export class SyncEngine {
       opts.onProgress?.({ pushed, remaining: ready.length })
 
       if (ready.length === 0) break
-      // Nothing will succeed until the user re-authenticates.
       if (result.stoppedBecause === 'auth') break
 
-      // Wait out the *head* entry's backoff specifically. It's the one blocking
-      // the drain, and it's the only one whose schedule matters — taking a min
-      // across every ready entry picks up the ones that have never failed (no
-      // `nextAttemptAt`, so 0), which reads as "due now" and exits immediately.
+      // Wait out the head entry's backoff specifically — it's the one blocking the drain; a min across all ready entries would pick up never-failed ones (nextAttemptAt 0) and exit immediately.
       const head = ready.reduce((a, b) => ((a.seq ?? 0) <= (b.seq ?? 0) ? a : b))
       const dueAt = head.nextAttemptAt ?? 0
       const waitMs = Math.max(0, dueAt - clock)
 
-      // Nothing moved, and the head entry is already due — it's failing outright
-      // rather than backing off, so stop instead of spinning.
+      // Nothing moved and the head is already due — it's failing outright, not backing off, so stop instead of spinning.
       if (result.pushed === 0 && result.deadLettered === 0 && waitMs === 0) break
 
       if (waitMs > 0) {
@@ -261,32 +227,12 @@ export class SyncEngine {
     return { pushed, deadLettered, remaining }
   }
 
-  /**
-   * Physically erases the signed-in user's training data from the server.
-   *
-   * The soft-delete path (a `deleted_at` tombstone per row) is what sync
-   * requires — but it leaves every row in Postgres, which is not what a user
-   * asking to erase their data means. This is the deliberate hard delete.
-   *
-   * Order is load-bearing:
-   *   1. **Clear the queues first.** A pending push for a row we're about to
-   *      erase would recreate it after the delete — the classic resurrection
-   *      bug. Dropping the outbox and dead-letter first makes that impossible.
-   *   2. **Delete children before parents** (reverse dependency order). FK
-   *      cascades would handle it, but not every table is reachable by a
-   *      cascade, and explicit order keeps this correct if cascades change.
-   *   3. **Reset the pull cursors.** They're high-water marks; leaving them set
-   *      would make the next pull a no-op and mask a partial failure. Resetting
-   *      to zero means the next pull re-reads from scratch and reflects reality.
-   *
-   * `profiles`, `muscles`, and `metricDefinitions` are deliberately excluded:
-   * the profile is the account itself, and those two are shared-library tables
-   * whose system rows must survive. Custom exercises are covered by `exercises`,
-   * where RLS limits the delete to rows the user owns.
-   *
-   * Returns per-table failures rather than throwing, so a partial failure is
-   * reported honestly instead of looking like success.
-   */
+  // Physically erases the signed-in user's training data from the server (the deliberate
+  // hard delete, vs. the tombstone path sync needs). Order is load-bearing: clear the queues
+  // first or a pending push resurrects a deleted row; delete children before parents; reset
+  // the pull cursors last so the next pull re-reads from scratch. profiles/muscles/
+  // metricDefinitions are excluded (account + shared-library system rows). Returns per-table
+  // failures rather than throwing.
   async hardDeleteServerData(): Promise<{ failed: { table: string; error: string }[] }> {
     const ERASE_ORDER = [
       'sets',
@@ -317,22 +263,9 @@ export class SyncEngine {
     return { failed }
   }
 
-  /**
-   * Discards every un-pushed local change and re-pulls the server's version.
-   *
-   * The deliberate counterpart to `drain()`: where that insists local wins, this
-   * concedes. For when a device has diverged — a stale edit, a botched offline
-   * session, writes that keep failing — and the server's copy is the one you
-   * trust.
-   *
-   * Drops the outbox and the dead-letter queue, resets the pull cursors so the
-   * next pull re-reads everything rather than only deltas, then pulls. Local rows
-   * the server also has are overwritten; local rows it has never seen remain
-   * (nothing can restore them, and deleting them would lose data the user never
-   * asked to lose).
-   *
-   * Returns what it discarded and re-applied, so the UI can be specific.
-   */
+  // Discards every un-pushed local change and re-pulls the server's version — the counterpart
+  // to drain() for a diverged device. Resets the pull cursors so the next pull re-reads
+  // everything; local rows the server has never seen remain, since nothing could restore them.
   async discardLocalChanges(): Promise<{ discarded: number; applied: number }> {
     const discarded = (await db.outbox.count()) + (await db.deadLetter.count())
     await db.outbox.clear()
@@ -345,33 +278,11 @@ export class SyncEngine {
     return { discarded, applied }
   }
 
-  /**
-   * Requeue every dead-lettered write back onto the outbox for another attempt.
-   *
-   * Dead-lettered rows are dropped from the drain and never retried on their own
-   * — correct when the failure is truly permanent (a poison payload), but wrong
-   * when the cause was external and since fixed (an out-of-date server schema
-   * that's now migrated, or a row that has since been re-owned by an account
-   * upgrade). This is the user-driven "try again" after fixing the root cause.
-   *
-   * Two things make this more than a straight replay, both learned from real
-   * RLS failures after a device-only → account upgrade:
-   *
-   *   1. **Re-read the row, don't replay the payload.** A dead-lettered entry
-   *      froze the row as it was when it failed — for a workout that means
-   *      `user_id: 'local-user'`, which RLS rejects forever. Reading the current
-   *      row from Dexie picks up the claimed ownership instead.
-   *   2. **Requeue in dependency order.** A chained row (`workout_exercises`,
-   *      `sets`) only passes its RLS check once its parent exists server-side
-   *      under the caller's uid. Replaying in dead-letter order can put a child
-   *      ahead of its parent, which fails with exactly the RLS error it was
-   *      dead-lettered for. SYNCED_TABLES is already in dependency order, so
-   *      sorting by it makes the replay safe.
-   *
-   * A row that no longer exists locally is dropped rather than requeued — there
-   * is nothing left to push, and replaying a stale snapshot of it would be wrong.
-   * Returns how many were requeued.
-   */
+  // User-driven "try again": requeue dead-lettered writes onto the outbox. Two invariants,
+  // both from RLS failures after a device-only → account upgrade: (1) re-read the current row
+  // rather than replay the frozen payload, whose `user_id: 'local-user'` RLS rejects forever;
+  // (2) requeue in SYNCED_TABLES (dependency) order, or a chained row can go ahead of its
+  // parent and fail RLS again. A row that no longer exists locally is dropped, not requeued.
   async retryDeadLettered(): Promise<number> {
     const failed = await db.deadLetter.toArray()
     if (failed.length === 0) return 0
@@ -418,7 +329,6 @@ export class SyncEngine {
   }
 }
 
-/** The current row behind a dead-lettered entry, or undefined if it's gone. */
 async function currentRow(
   table: string,
   rowId: string,
@@ -436,16 +346,8 @@ function toPushRow(entry: OutboxEntry): PushRow {
   }
 }
 
-/**
- * Backfills domain fields a pulled row can't carry from Postgres.
- *
- * `aliases` may be absent on an exercise pulled from Postgres, and code that
- * iterates it throws `not iterable` and blanks the screen. `movementPattern` is
- * derived locally from the primary muscle rather than stored, so a pulled row can
- * carry a value from the retired eleven-value taxonomy; leaving it would quietly
- * break cardio detection and the "Push"/"Pull" session titles. The launch-time
- * repair in `db/seed` fixes rows already written.
- */
+// Backfills domain fields a pulled row can't carry from Postgres — e.g. a missing `aliases`
+// that would throw `not iterable` and blank the screen.
 function normalizeRow(
   table: SyncedTable,
   row: Record<string, unknown>,
@@ -455,9 +357,7 @@ function normalizeRow(
     return { ...rest, aliases: row.aliases ?? [] }
   }
   if (table === 'profiles') {
-    // A server profile from before a column existed arrives without it; backfill
-    // defaults so the client never renders against undefined (e.g. the Home ring
-    // showing "/NaN" when weeklyWorkoutGoal is missing).
+    // A profile from before a column existed arrives without it; backfill defaults so the client never renders against undefined.
     return {
       ...row,
       weeklyWorkoutGoal: row.weeklyWorkoutGoal ?? 4,
@@ -470,7 +370,6 @@ function normalizeRow(
   return row
 }
 
-/** The Dexie store backing a synced table name. The one place that knows both. */
 function tableStore(table: SyncedTable) {
   const map = {
     profiles: db.profiles,

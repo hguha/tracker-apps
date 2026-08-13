@@ -1,10 +1,3 @@
-/**
- * History (§5.2). Every entry is editable, copyable, and saveable as a template
- * (§7.1, §7.2) — the moment someone decides a session is worth repeating is not
- * predictable, so those actions have to be reachable from the list itself rather
- * than only from the finish sheet.
- */
-
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -33,8 +26,7 @@ import { HistoryCalendar } from './HistoryCalendar'
 import { WorkoutPreviewSheet } from '@/features/workout/WorkoutPreviewSheet'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 
-/** How many rows to show at once; "Show more" reveals another page. Keeps the
- *  DOM small on a huge history without a full virtualization dependency. */
+// Paginate rather than pull in a virtualization dependency.
 const PAGE_SIZE = 30
 
 export function HistoryScreen({
@@ -59,9 +51,6 @@ export function HistoryScreen({
     name: string
   } | null>(null)
 
-  // One shared summary builder, so History, Home, and the start screen can never
-  // disagree about what a session contained (§5.2.1). Pull more here since the
-  // list is now searchable — the search should reach well back, not just 100.
   const data = useLiveQuery(
     async () => ({
       profile: await repo.getProfile(),
@@ -70,8 +59,6 @@ export function HistoryScreen({
     [],
   )
 
-  // The exercise picker's options: every distinct lift in the loaded history,
-  // alphabetized. Built from summaries so it needs no extra query.
   const exerciseOptions = useMemo(() => {
     const names = new Map<string, string>()
     for (const s of data?.summaries ?? []) {
@@ -84,8 +71,7 @@ export function HistoryScreen({
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [data])
 
-  // Apply text search, body-part, exercise, and day filters together. Computed
-  // before the early returns so the hook order stays stable.
+  // Computed before the early returns so the hook order stays stable.
   const filtered = useMemo(() => {
     const summaries = data?.summaries ?? []
     const q = query.trim().toLowerCase()
@@ -119,8 +105,6 @@ export function HistoryScreen({
     exerciseFilter.length > 0 ||
     selectedDay !== null
 
-  // A new filter should start from the top, not leave the user mid-way down a
-  // now-different list.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
   }, [query, regionFilter, exerciseFilter, selectedDay])
@@ -148,7 +132,6 @@ export function HistoryScreen({
 
   return (
     <div className="px-3 py-3">
-      {/* List / Calendar toggle. */}
       <div className="mb-2.5 flex gap-1 rounded-xl bg-sunken p-1">
         <ViewToggle
           active={view === 'list'}
@@ -173,8 +156,6 @@ export function HistoryScreen({
         />
       )}
 
-      {/* Search by workout name or any exercise in it — the QOL win once there
-          are hundreds of sessions. */}
       <div className="mb-2 flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
         <Search size={17} className="shrink-0 text-ink-muted" />
         <input
@@ -190,7 +171,6 @@ export function HistoryScreen({
         )}
       </div>
 
-      {/* Body-part and exercise filters, mirroring the Insights filter bar. */}
       <div className="mb-2.5 flex gap-1.5 overflow-x-auto">
         <FilterChipButton
           label={summarizeFilter(
@@ -251,7 +231,6 @@ export function HistoryScreen({
                   {formatTimeOfDay(summary.workout.startedAt)}
                 </p>
 
-                {/* Region dots give the session a shape at a glance. */}
                 {summary.regions.length > 0 && (
                   <div className="mt-2 flex items-center gap-1">
                     {summary.regions.map((region) => (
@@ -321,7 +300,6 @@ export function HistoryScreen({
         ))}
       </div>
 
-      {/* Reveal another page rather than rendering thousands of rows at once. */}
       {filtered.length > visible.length && (
         <button
           onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
@@ -406,7 +384,6 @@ function ViewToggle({
   )
 }
 
-/** "Body part", "Chest", or "3 body parts" — the chip's label by selection count. */
 function summarizeFilter(
   noun: string,
   selected: string[],

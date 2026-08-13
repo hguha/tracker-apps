@@ -1,15 +1,3 @@
-/**
- * Theme picker and accent override (§10.8).
- *
- * The accent picker is deliberately limited to the accent — buttons, active
- * states, focus rings. Chart region colors stay fixed, because their specific
- * ordering is what passes the colorblind-separation gates and because "back is
- * orange" has to keep being true.
- *
- * A chosen accent is nudged to clear the contrast floor rather than rejected,
- * so the picker never refuses a color outright.
- */
-
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
 import {
@@ -23,7 +11,6 @@ import {
 import { REGION_LABELS, REGIONS } from '@/domain/types'
 import { regionVar } from '@/lib/palette'
 
-/** A spread of hues to pick from, plus the free-form picker below. */
 const ACCENT_SWATCHES = [
   '#2a78d6',
   '#4f46c9',
@@ -160,7 +147,6 @@ export function AppearanceSection({
         {accentOverride && <AccentNotice hex={accentOverride} />}
       </Card>
 
-      {/* Being explicit about what themes don't touch, and why. */}
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Chart colors</h2>
         <p className="mt-1 text-[13px] text-ink-secondary">
@@ -184,10 +170,6 @@ export function AppearanceSection({
   )
 }
 
-/**
- * Tells the user when their pick had to be adjusted, rather than silently
- * showing a different color than the one they tapped.
- */
 function AccentNotice({ hex }: { hex: string }) {
   const rgb = parseHex(hex)
   if (!rgb) return null

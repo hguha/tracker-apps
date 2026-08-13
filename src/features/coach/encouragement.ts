@@ -1,16 +1,5 @@
-/**
- * The Home coach greeting (§5.2.1, §13).
- *
- * A warm 1–2 sentence progress note shown on Home. The rule that makes it feel
- * intentional rather than noisy: it regenerates **only after a new workout is
- * finished**, not on every app open. We key the cached note on the finished-
- * workout count — when that number goes up, the old note is stale and we fetch a
- * fresh one; otherwise the cached text is shown instantly with no model call.
- *
- * Cached in localStorage per active user so it survives reloads and costs one
- * generation per workout at most. Uses the live coach when available, the
- * offline mock otherwise — same fallback discipline as the coach screen.
- */
+// The Home coach greeting (§5.2.1, §13): regenerated only when the finished-workout
+// count changes, so it costs at most one generation per workout, cached per user.
 
 import { getActiveUserId } from '@/db/seed'
 import { getCoachSummary } from '@/data/repository'
@@ -48,14 +37,6 @@ function writeCache(value: CachedGreeting): void {
   }
 }
 
-/**
- * The greeting to show on Home, or null when there's nothing to say yet.
- *
- * Returns the cached note immediately when it matches the current workout count.
- * Only when a new workout has been finished since the cached note does it call
- * the coach for a fresh one; a failed call falls back to the mock, and a total
- * failure returns the stale cached text rather than nothing.
- */
 export async function getHomeGreeting(
   finishedWorkoutCount: number,
 ): Promise<string | null> {
@@ -64,7 +45,6 @@ export async function getHomeGreeting(
   const cached = readCache()
   if (cached && cached.workoutCount === finishedWorkoutCount) return cached.text
 
-  // A new workout happened (or no cache yet) — generate a fresh note.
   let text: string
   try {
     const summary = await getCoachSummary()

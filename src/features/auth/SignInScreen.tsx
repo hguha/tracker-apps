@@ -1,15 +1,3 @@
-/**
- * Sign in (§11.1.2).
- *
- * Two panels: the email form, then check-your-email. The second panel exists as a
- * real screen rather than a toast because it has to carry the address, a resend
- * timer, a way back, and the code fallback for when the link opens in a different
- * browser than the one that asked for it.
- *
- * Sign-up is open: any email works, and the same form both creates an account
- * and signs an existing user back in.
- */
-
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Dumbbell, Mail, WifiOff } from 'lucide-react'
 import { Button } from '@/components/Button'
@@ -21,13 +9,11 @@ import { cn } from '@/lib/cn'
 
 const RESEND_SECONDS = 30
 
-// With a real backend attached, a magic link is genuinely sent and there is no
-// on-device-only account — so the dev-code note and the offline path are hidden.
+// With a real backend, the dev-code note and offline path are hidden.
 const HAS_BACKEND = isBackendConfigured()
 
 export function SignInScreen({
-  /** "Connect account" mode: shown to a signed-in device-only user upgrading to
-   *  a real account. Hides the offline path and offers a way back. */
+  // Present in "connect account" mode: a device-only user upgrading to a real account.
   onCancel,
 }: {
   onCancel?: () => void
@@ -48,7 +34,6 @@ export function SignInScreen({
     return () => clearInterval(id)
   }, [resendIn])
 
-  // Long enough to be a real token; the server is the authority on correctness.
   const isCodeSubmittable = isSubmittableCode(code)
 
   async function sendLink() {
@@ -76,9 +61,6 @@ export function SignInScreen({
       // On success the session change propagates and this screen unmounts.
       if (result.kind === 'error') setError(result.message)
     } catch (cause) {
-      // A thrown failure (network down, unexpected server response) used to be
-      // swallowed by a bare finally, leaving the button to re-enable with no
-      // explanation — indistinguishable from "nothing happened".
       setError(cause instanceof Error ? cause.message : 'Could not verify that code.')
     } finally {
       setIsBusy(false)
@@ -161,8 +143,6 @@ export function SignInScreen({
 
             {error && <ErrorNote>{error}</ErrorNote>}
 
-            {/* The offline path is only offered at first run. A signed-in
-                device-only user connecting an account is already past it. */}
             {!isConnectMode && (
               <>
                 <Divider />
@@ -222,8 +202,7 @@ export function SignInScreen({
             </label>
             <input
               id="signin-code"
-              // Not `numeric`: an emailed token may contain letters, and a
-              // numeric keypad would make those untypable on a phone.
+              // Not `numeric`: an emailed token may contain letters.
               inputMode="text"
               autoComplete="one-time-code"
               autoCapitalize="none"
@@ -232,8 +211,7 @@ export function SignInScreen({
               maxLength={CODE_MAX_LENGTH}
               value={code}
               onChange={(event) => {
-                // Only strip whitespace — the token isn't guaranteed numeric, so
-                // digit-filtering silently ate valid characters.
+                // Only strip whitespace; the token isn't guaranteed numeric.
                 setCode(event.target.value.replace(/\s+/g, ''))
                 setError(null)
               }}
@@ -266,10 +244,7 @@ export function SignInScreen({
               {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend the link'}
             </button>
 
-            {/*
-              The local provider has no mail server, so the accepted code is
-              stated plainly. Hidden once a real backend actually sends mail.
-            */}
+            {/* The local provider has no mail server, so the accepted code is stated plainly. */}
             {!HAS_BACKEND && (
               <p className="mt-6 rounded-xl border border-dashed border-line-strong px-3.5 py-2.5 text-center text-[12.5px] text-ink-muted">
                 No server is connected yet, so no email was actually sent. Use code{' '}

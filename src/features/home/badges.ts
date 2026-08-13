@@ -1,39 +1,25 @@
-/**
- * The Home badge catalog (§5.2.1, gamification).
- *
- * Config-driven, like the Insights chart catalog: each badge declares its label,
- * a short caption, and a pure function from lifetime stats to progress. The Home
- * strip shows earned badges plus the next one to chase, and expands to the full
- * grid on tap.
- *
- * Adding a badge is one entry here — no Home edits. `progress` returns 0–1;
- * `≥ 1` means earned. `detail` renders the concrete state ("82%", "620 / 1,000 lb").
- */
+// The Home badge catalog (§5.2.1): config-driven — adding a badge is one entry here.
+// `progress` returns 0–1 (≥ 1 is earned); `detail` renders the concrete state.
 
 import { distanceToM, formatDisplayWeight, weightToKg } from '@/lib/units'
 
 export interface LifetimeStats {
   totalWorkouts: number
   totalSets: number
-  /** Total volume lifted in kg, all time (converted for display by the caller). */
   totalVolumeKg: number
   bestWeekStreak: number
-  /** Current run of consecutive weeks with a session. */
   currentWeekStreak: number
   /** Best estimated 1RM in kg on each of the big three, 0 if never trained. */
   bestSquatE1rmKg: number
   bestBenchE1rmKg: number
   bestDeadliftE1rmKg: number
-  /** Best estimated 1RM in kg across *any* lift, for a general strength badge. */
   bestAnyE1rmKg: number
-  /** Total cardio distance (meters) and time (seconds), all time. */
   totalCardioMeters: number
   totalCardioSeconds: number
   distinctExercises: number
 }
 
-/** The combined best-e1RM of squat + bench + deadlift — the powerlifting total
- *  the 1000 lb / 1200 lb / 1500 lb clubs are measured against. */
+/** Squat + bench + deadlift e1RM — the total the 1000/1200/1500 lb clubs measure. */
 export function bigThreeTotalKg(s: LifetimeStats): number {
   return s.bestSquatE1rmKg + s.bestBenchE1rmKg + s.bestDeadliftE1rmKg
 }
@@ -48,21 +34,17 @@ export interface Badge {
   group: BadgeGroup
   /** 0–1; ≥ 1 is earned. */
   progress: (s: LifetimeStats) => number
-  /** Human-readable current-vs-target, e.g. "82 / 100". */
   detail: (s: LifetimeStats) => string
 }
 
-/** One mile in metres, for the distance badges. */
 const METERS_PER_MILE = distanceToM(1, 'mi')
-/** Convert a pound target to the kg our data is stored in. */
 const lbToKg = (lb: number) => weightToKg(lb, 'lb')
-/** kg in a million pounds — the "1M Club" is total volume, in lb. */
 const MILLION_LB_IN_KG = lbToKg(1_000_000)
 
 function ratio(current: number, target: number): number {
   if (target <= 0) return 0
   const r = current / target
-  // A non-finite input (a NaN stat from bad data) must not poison the score.
+  // A NaN stat from bad data must not poison the score.
   return Number.isFinite(r) ? r : 0
 }
 
@@ -85,15 +67,11 @@ function sanitizeStats(s: LifetimeStats): LifetimeStats {
   }
 }
 
-/** "620 / 1,000 lb" — a kg value shown against a pound target. */
 function lbDetail(valueKg: number, targetLb: number): string {
   return `${formatDisplayWeight(valueKg, 'lb', { withUnit: false })} / ${targetLb.toLocaleString()} lb`
 }
 
-/**
- * The catalog, roughly by how soon a consistent lifter reaches each. Order is
- * the display order for the "next up" pick when several are unearned.
- */
+// Order is the display order for the "next up" pick when several are unearned.
 export const BADGES: Badge[] = [
   // ── Milestones: workouts logged ──
   {
@@ -391,7 +369,6 @@ export interface BadgeState extends Badge {
   detailText: string
 }
 
-/** Evaluate every badge against the stats. Earned first, then nearest-to-earn. */
 export function evaluateBadges(rawStats: LifetimeStats): BadgeState[] {
   const stats = sanitizeStats(rawStats)
   return BADGES.map((badge) => {
@@ -406,12 +383,8 @@ export function evaluateBadges(rawStats: LifetimeStats): BadgeState[] {
   })
 }
 
-/**
- * The badges worth surfacing on Home: earned ones, plus unearned ones the user
- * has *started* (fraction > 0). Untouched badges are hidden here — showing every
- * locked target is noise; the full catalog lives on the More screen. Falls back
- * to the single closest badge so Home is never empty for a new user.
- */
+// Earned badges plus started ones (fraction > 0); untouched targets are hidden as
+// noise. Falls back to the single closest badge so Home is never empty for a new user.
 export function homeBadges(all: BadgeState[]): BadgeState[] {
   const inPlay = all.filter((b) => b.earned || b.fraction > 0)
   if (inPlay.length > 0) return inPlay
@@ -419,7 +392,6 @@ export function homeBadges(all: BadgeState[]): BadgeState[] {
   return next ? [next] : []
 }
 
-/** The full catalog grouped into sections, for the More > Badges screen. */
 export function groupedBadges(
   all: BadgeState[],
 ): { group: BadgeGroup; badges: BadgeState[] }[] {

@@ -1,16 +1,3 @@
-/**
- * The month grid for History (§5.2).
- *
- * A big log is hard to navigate as an endless list — "what did I do in March?"
- * has no fast answer there. The calendar makes training density legible at a
- * glance (dots on trained days, colored by the body parts worked) and turns a
- * date into one tap. Tapping a day filters the list below to that day.
- *
- * It renders only the visible month, so it stays O(days-in-month) no matter how
- * many years of history exist. Navigation clamps to the range that actually has
- * data, so you can't page off into empty months forever.
- */
-
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
@@ -42,12 +29,10 @@ export function HistoryCalendar({
 }: {
   summaries: WorkoutSummary[]
   weekStartsOn: WeekStart
-  /** Midnight ts of the selected day, or null for "no day filter". */
+  // Midnight ts of the selected day, or null for "no day filter".
   selectedDay: number | null
   onSelectDay: (day: number | null) => void
 }) {
-  // Index sessions by their day so a cell lookup is O(1). Computed from the
-  // full set once, not per rendered month.
   const byDay = useMemo(() => {
     const map = new Map<number, DayInfo>()
     for (const summary of summaries) {
@@ -65,7 +50,6 @@ export function HistoryCalendar({
     return map
   }, [summaries])
 
-  // The bounds of real data, so month paging can't wander into the void.
   const { earliest, latest } = useMemo(() => {
     let earliest = Infinity
     let latest = -Infinity
@@ -77,7 +61,6 @@ export function HistoryCalendar({
     return { earliest, latest }
   }, [summaries])
 
-  // Start on the month of the most recent session (or today if empty).
   const [cursor, setCursor] = useState(() =>
     startOfMonth(latest > -Infinity ? latest : Date.now()).getTime(),
   )
@@ -85,8 +68,7 @@ export function HistoryCalendar({
   const cells = useMemo(() => {
     const monthStart = startOfMonth(cursor)
     const monthEnd = endOfMonth(cursor)
-    // Pad to whole weeks so the grid is rectangular. date-fns weeks are handled
-    // manually here to honor the user's week-start.
+    // Pad to whole weeks, honoring the user's week-start.
     const leadingBlanks = (monthStart.getDay() - weekStartsOn + 7) % 7
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
     return { leadingBlanks, days, monthStart }
@@ -165,8 +147,7 @@ export function HistoryCalendar({
               <span className={cn(isToday && !isSelected && 'text-accent')}>
                 {date.getDate()}
               </span>
-              {/* Up to three region dots per day; the selected day shows white
-                  dots so they read on the accent fill. */}
+              {/* Selected day shows white dots so they read on the accent fill. */}
               <span className="flex h-1.5 items-center gap-0.5">
                 {info?.regions.slice(0, 3).map((region) => (
                   <span

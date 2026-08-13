@@ -1,14 +1,3 @@
-/**
- * The single ECharts wrapper (§10.7).
- *
- * Owns three things every chart would otherwise get wrong: setOption on change,
- * resize observation, and disposal on unmount. FitNoter leaked a Chart instance
- * per render because none of that was centralized.
- *
- * ECharts is imported through a tree-shaken barrel (`echarts.ts`) so the bundle
- * carries only the chart types actually used.
- */
-
 import { useEffect, useRef } from 'react'
 import type { EChartsOption } from 'echarts'
 import { echarts } from './echarts'
@@ -48,8 +37,7 @@ export function Chart({
   }, [])
 
   useEffect(() => {
-    // `notMerge` so removing a series actually removes it rather than leaving
-    // a stale one behind from the previous option.
+    // `notMerge` so removing a series actually removes it rather than leaving a stale one.
     instanceRef.current?.setOption(option, { notMerge: true })
   }, [option])
 

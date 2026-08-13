@@ -1,12 +1,3 @@
-/**
- * Exercise search and creation (§4.3).
- *
- * Search matches aliases as well as names, so "OHP" finds Overhead Press and
- * "reverse chest fly" finds Reverse Dumbbell Fly. Recently-used exercises come
- * first when the query is empty, because the next exercise is usually one of
- * the handful trained regularly.
- */
-
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, Search, X } from 'lucide-react'
@@ -34,7 +25,6 @@ export function ExercisePicker({
     const muscles = await db.muscles.toArray()
     const muscleById = new Map(muscles.map((m) => [m.id, m]))
 
-    // Rank by how recently each exercise was performed.
     const recent = await db.workouts.orderBy('startedAt').reverse().limit(30).toArray()
     const recencyByExerciseId = new Map<string, number>()
     for (const workout of recent) {

@@ -1,12 +1,3 @@
-/**
- * The full badge catalog (§5.2.1), reached from More.
- *
- * Home shows only badges in play (earned or started); the complete set lives
- * here, grouped into themed sections, each badge tappable for its description
- * and progress. Reads the same lifetime stats and catalog as Home, so the two
- * can never disagree about what's earned.
- */
-
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft } from 'lucide-react'
@@ -24,7 +15,6 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
     const stats = await repo.getBadgeStats()
     const profile = await repo.getProfile()
 
-    // Same streak helper Home uses, so a badge evaluates identically here.
     const { currentWeekStreak, bestWeekStreak } = computeStreaks(
       finished.map((s) => s.workout.startedAt),
       profile.weekStartsOn,

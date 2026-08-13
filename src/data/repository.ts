@@ -1,6 +1,4 @@
 // The one data-access boundary (§5.6): no component imports Dexie directly.
-// Client-side ids make a replayed write an idempotent upsert; every write also
-// appends to the outbox so the sync queue stays correct for a future server.
 
 import { db, syncStamp, touch, type OutboxEntry } from '@/db/database'
 import { getActiveUserId, LOCAL_USER_ID } from '@/db/seed'
@@ -65,8 +63,6 @@ async function enqueue(
   })
 }
 
-// Defers a write that belongs to an in-progress (or open-for-edit) workout so a
-// half-logged session never reaches the server; released as one batch on finish.
 async function deferralFor(
   table: string,
   rowId: string,
@@ -91,8 +87,7 @@ async function deferralFor(
 
   if (!workoutId) return {}
 
-  // A workout open for editing holds its writes too, so a cancelled edit never
-  // publishes (§6.6).
+  // A workout open for editing holds its writes too, so a cancelled edit never publishes (§6.6).
   if ((await db.editSnapshots.get(workoutId)) !== undefined) {
     return { deferredForWorkoutId: workoutId }
   }
@@ -102,7 +97,6 @@ async function deferralFor(
   return { deferredForWorkoutId: workoutId }
 }
 
-// Releases a finished (or discarded) session's deferred writes for the next drain.
 async function releaseDeferredWrites(workoutId: string): Promise<number> {
   const held = await db.outbox.where('deferredForWorkoutId').equals(workoutId).toArray()
   for (const entry of held) {
@@ -122,7 +116,6 @@ type SyncedStore<T extends SyncFields> = {
   update: (id: string, changes: Partial<T>) => Promise<number>
 }
 
-// The one place a row is patched, stamped, and enqueued, so clientRev can't drift.
 async function patchRow<T extends SyncFields>(
   store: SyncedStore<T>,
   table: string,
@@ -133,8 +126,7 @@ async function patchRow<T extends SyncFields>(
   if (!current) return
   const next = { ...patch, ...touch(current.clientRev) } as Partial<T>
   await store.update(id, next)
-  // Enqueue the FULL row, not just changed fields, or the upsert's RLS WITH CHECK
-  // rejects the partial tuple (user_id NULL / missing parent id).
+  // Enqueue the FULL row, not just changed fields, or the upsert's RLS WITH CHECK rejects the partial tuple.
   await enqueue(table, 'update', id, { ...current, ...next }, current.clientRev + 1)
 }
 
@@ -150,14 +142,11 @@ export async function updateProfile(patch: Partial<Profile>): Promise<void> {
   await patchRow(db.profiles, 'profiles', getActiveUserId(), patch)
 }
 
-// Re-owns device-only ('local-user') rows to a real uid on sign-in and re-enqueues
-// them, so server RLS accepts what would otherwise be rejected as 'local-user'
-// (§11.1.3). One transaction so a crash can't half-migrate ownership.
+// Re-owns device-only ('local-user') rows to a real uid on sign-in so server RLS
+// accepts them (§11.1.3). One transaction so a crash can't half-migrate ownership.
 export async function claimLocalData(newUserId: string): Promise<number> {
   if (newUserId === LOCAL_USER_ID) return 0
 
-  // Only user-owned custom library rows (userId non-null, === local) move; system
-  // rows (null) stay.
   const owned = [
     { table: 'workouts', store: db.workouts },
     { table: 'templates', store: db.templates },
@@ -167,8 +156,6 @@ export async function claimLocalData(newUserId: string): Promise<number> {
     { table: 'metricDefinitions', store: db.metricDefinitions },
   ] as const
 
-  // Chained-ownership tables: no userId, re-enqueued so the server receives them
-  // under the new identity once the parent is owned.
   const chained = [
     { table: 'workoutExercises', store: db.workoutExercises },
     { table: 'sets', store: db.sets },
@@ -196,7 +183,6 @@ export async function claimLocalData(newUserId: string): Promise<number> {
       db.editSnapshots,
     ],
     async () => {
-      // Copy the local profile onto a row keyed by the new uid.
       const localProfile = await db.profiles.get(LOCAL_USER_ID)
       if (localProfile) {
         const existing = await db.profiles.get(newUserId)
@@ -218,7 +204,6 @@ export async function claimLocalData(newUserId: string): Promise<number> {
           colorScheme: localProfile.colorScheme,
           accentOverride: localProfile.accentOverride,
           bodyweightCacheKg: localProfile.bodyweightCacheKg,
-          // Keep an account value over the local row's empty default, not a pref.
           heightCm: existing?.heightCm ?? localProfile.heightCm ?? null,
           trainingGoal: localProfile.trainingGoal || (existing?.trainingGoal ?? ''),
           onboardedAt: existing?.onboardedAt ?? localProfile.onboardedAt ?? null,
@@ -233,7 +218,6 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         claimed += 1
       }
 
-      // Re-stamp userId-bearing rows owned by the local account.
       for (const { table, store } of owned) {
         const rows = await (store as typeof db.workouts).toArray()
         for (const row of rows) {
@@ -250,7 +234,6 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         }
       }
 
-      // Re-enqueue chained rows with a bumped clientRev; they aren't re-stamped.
       for (const { table, store } of chained) {
         const rows = await (store as typeof db.sets).toArray()
         for (const row of rows) {
@@ -390,8 +373,7 @@ export async function getLastTrainedMap(): Promise<Map<string, number>> {
 
 // ----- workouts -----
 
-// The in-progress session, if any; at most one exists (§4.4). Scanned not indexed
-// because IndexedDB can't index the null endedAt that "unfinished" means.
+// Scanned not indexed: IndexedDB can't index the null endedAt that "unfinished" means (§4.4).
 export async function getActiveWorkout(): Promise<Workout | undefined> {
   const recent = await db.workouts.orderBy('startedAt').reverse().limit(20).toArray()
   return recent.find((w) => w.endedAt === null && w.deletedAt === null)
@@ -432,18 +414,14 @@ export async function listWorkouts(limit = 100): Promise<Workout[]> {
   return all.filter((w) => w.deletedAt === null)
 }
 
-// Finished sessions only — an in-progress workout is a live surface, not history.
 export async function listFinishedWorkoutSummaries(
   limit = 100,
 ): Promise<WorkoutSummary[]> {
   return (await listWorkoutSummaries(limit)).filter((s) => s.workout.endedAt !== null)
 }
 
-// Everything needed to render a recognizable workout row (§5.2.1), computed once
-// so History, Home, and the start screen agree.
 export interface WorkoutSummary {
   workout: Workout
-  // Derived per §6.7 unless the user set their own title.
   title: string
   exerciseNames: string[]
   exerciseIds: string[]
@@ -474,7 +452,6 @@ export async function getWorkoutSummary(
   return buildWorkoutSummary(workout, workoutExercises, exercisesById, setsByWe, regions)
 }
 
-// Pure summary calculation shared by the batched and single-workout loaders.
 function buildWorkoutSummary(
   workout: Workout,
   workoutExercises: WorkoutExercise[],
@@ -543,8 +520,6 @@ export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[
   const workouts = await listWorkouts(limit)
   if (workouts.length === 0) return []
 
-  // Three bulk passes rather than per-workout round-trips, so cost is flat in
-  // history size.
   const workoutIds = workouts.map((w) => w.id)
   const allWe = (
     await db.workoutExercises.where('workoutId').anyOf(workoutIds).toArray()
@@ -561,7 +536,6 @@ export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[
   const exercisesById = new Map<string, Exercise>()
   exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
 
-  // Bucket the flat rows by parent, sorted, into the shape the pure builder wants.
   const weByWorkout = new Map<string, WorkoutExercise[]>()
   for (const we of allWe) {
     const list = weByWorkout.get(we.workoutId)
@@ -605,10 +579,7 @@ export interface BadgeStats {
   distinctExercises: number
 }
 
-// Lifetime figures the Home badges need beyond a workout summary: best e1RMs,
-// total cardio, and exercise variety.
 export async function getBadgeStats(): Promise<BadgeStats> {
-  // recordType isn't indexed on its own, so filter the small PR table in memory.
   const e1rmPrs = (await db.personalRecords.toArray()).filter(
     (pr) => pr.recordType === 'max_est_1rm' && pr.deletedAt === null,
   )
@@ -664,8 +635,8 @@ export async function getBadgeStats(): Promise<BadgeStats> {
   }
 }
 
-// The only function that feeds the AI coach (§13); the privacy contract lives in
-// buildCoachSummary, which never sees a name, note, or absolute date.
+// Feeds the AI coach (§13); the privacy contract lives in buildCoachSummary, which
+// never sees a name, note, or absolute date.
 export async function getCoachSummary(): Promise<CoachSummary> {
   const profile = await getProfile()
   const regionOf = await buildRegionMap()
@@ -721,7 +692,6 @@ export async function getCoachSummary(): Promise<CoachSummary> {
 
   const WEEK_MS = 7 * 24 * 3600 * 1000
   const sessions: SummarySession[] = workouts.map((w) => {
-    // Whole-week offset from the current week; 0 = this week, negative = past.
     const weekOffset = Math.round(
       (weekStart(w.startedAt, profile.weekStartsOn) - thisWeekStart) / WEEK_MS,
     )
@@ -760,15 +730,12 @@ export async function getCoachSummary(): Promise<CoachSummary> {
   })
 }
 
-// A read-only outline of a session or template, for the preview shown before
-// starting a copy (§7.2, §7.4).
 export interface WorkoutPreview {
   title: string
   performedAt: number | null
   exercises: {
     name: string
     region: Region | undefined
-    // e.g. "3 × 8 @ 60kg" for lifting, "27:30 · 3.1mi" for cardio.
     detail: string
     setCount: number
   }[]
@@ -815,7 +782,6 @@ export async function getWorkoutPreview(
   }
 }
 
-// A compact one-line summary of a group of sets, in the user's units (§4.12).
 function summarizeSets(
   sets: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>[],
   weightUnit: WeightUnit,
@@ -825,7 +791,6 @@ function summarizeSets(
   if (working.length === 0) return 'no sets'
 
   const first = working[0]!
-  // Cardio-shaped: duration and optional distance.
   if (first.durationSeconds !== null) {
     const seconds = working.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
     const meters = working.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
@@ -857,8 +822,7 @@ export async function updateWorkout(id: string, patch: Partial<Workout>): Promis
   await patchRow(db.workouts, 'workouts', id, patch)
 }
 
-// Ends a session, or discards it if nothing was logged (§6.4.1). An empty workout
-// is not a record of anything.
+// Ends a session, or discards it if nothing was logged (§6.4.1).
 export async function finishWorkout(id: string): Promise<'saved' | 'discarded-empty'> {
   await discardEmptySets(id)
 
@@ -878,11 +842,7 @@ export async function finishWorkout(id: string): Promise<'saved' | 'discarded-em
   return 'saved'
 }
 
-// ----- editing a past workout -----
-
-// Opens an edit session on a finished workout (§6.6). Snapshots workout/exercises/
-// sets so Cancel can restore, since every mutation is already written to IndexedDB.
-// Re-opening keeps the original snapshot.
+// Snapshots workout/exercises/sets so Cancel can restore (§6.6); re-opening keeps the original.
 export async function beginWorkoutEdits(workoutId: string): Promise<void> {
   if (await db.editSnapshots.get(workoutId)) return
 
@@ -915,8 +875,6 @@ export async function isEditingWorkout(workoutId: string): Promise<boolean> {
   return (await db.editSnapshots.get(workoutId)) !== undefined
 }
 
-// "Done editing": dropping the snapshot un-defers the queued writes so they push
-// as one batch.
 export async function commitWorkoutEdits(workoutId: string): Promise<void> {
   const snapshot = await db.editSnapshots.get(workoutId)
   if (!snapshot) return
@@ -927,8 +885,7 @@ export async function commitWorkoutEdits(workoutId: string): Promise<void> {
   await releaseDeferredWrites(workoutId)
 }
 
-// "Cancel": restores the snapshot and drops the deferred writes. Rows added during
-// the edit are deleted outright, not tombstoned — they were never pushed.
+// Cancel: rows added during the edit are deleted outright, not tombstoned — never pushed.
 export async function cancelWorkoutEdits(workoutId: string): Promise<void> {
   const snapshot = await db.editSnapshots.get(workoutId)
   if (!snapshot) return
@@ -980,8 +937,7 @@ export async function hasLoggedWork(workoutId: string): Promise<boolean> {
   return false
 }
 
-// Removes placeholder rows never filled in (§6.2), on finish, so an unfinished
-// template checklist doesn't leave empty sets in history.
+// Removes placeholder rows never filled in (§6.2), on finish.
 export async function discardEmptySets(workoutId: string): Promise<number> {
   const workoutExercises = await listWorkoutExercises(workoutId)
   let discarded = 0
@@ -997,7 +953,6 @@ export async function discardEmptySets(workoutId: string): Promise<number> {
     }
   }
 
-  // An exercise left with no sets at all was never actually trained.
   for (const we of workoutExercises) {
     if ((await listSets(we.id)).length === 0) {
       await removeWorkoutExercise(we.id)
@@ -1018,8 +973,6 @@ export async function restoreWorkout(id: string): Promise<void> {
   await rebuildLastPerformanceForWorkout(id)
 }
 
-// ----- workout exercises -----
-
 export async function listWorkoutExercises(
   workoutId: string,
 ): Promise<WorkoutExercise[]> {
@@ -1032,8 +985,7 @@ export async function addExerciseToWorkout(
   exerciseId: string,
 ): Promise<string> {
   const existing = await listWorkoutExercises(workoutId)
-  // One past the highest position, not the row count — counting collides when
-  // positions aren't contiguous.
+  // One past the highest position, not the row count — counting collides when positions aren't contiguous.
   const lastPosition = existing.reduce((max, we) => Math.max(max, we.position), -1)
   const row: WorkoutExercise = {
     id: newId(),
@@ -1067,7 +1019,6 @@ export async function updateWorkoutExercise(
 export async function removeWorkoutExercise(id: string): Promise<void> {
   const row = await db.workoutExercises.get(id)
   await patchRow(db.workoutExercises, 'workoutExercises', id, { deletedAt: Date.now() })
-  // Deletion can shrink a superset to one, so collapse the lone survivor.
   if (row?.supersetGroup !== null && row !== undefined) {
     await collapseLoneSuperset(row.workoutId, row.supersetGroup!)
   }
@@ -1101,14 +1052,8 @@ export async function setSupersetGroup(
   }
 }
 
-/**
- * Supersets two exercises by dropping one onto the other (§6.4).
- *
- * If either is already in a group, both join that group rather than starting a
- * new one — dragging a third exercise onto a existing pair extends it to three.
- * The dragged exercise also moves adjacent to its partner, since a superset that
- * isn't contiguous in the list reads as a mistake.
- */
+// Supersets two exercises by dropping one onto the other (§6.4); if either is
+// already in a group, both join it rather than starting a new one.
 export async function supersetExercises(
   draggedId: string,
   targetId: string,
@@ -1127,7 +1072,7 @@ export async function supersetExercises(
   await updateWorkoutExercise(draggedId, { supersetGroup: group })
   await updateWorkoutExercise(targetId, { supersetGroup: group })
 
-  // Move the dragged card to sit directly after its partner.
+  // A superset that isn't contiguous in the list reads as a mistake, so move the dragged card after its partner.
   const withoutDragged = siblings.filter((s) => s.id !== draggedId)
   const targetIndex = withoutDragged.findIndex((s) => s.id === targetId)
   const reordered = [
@@ -1138,7 +1083,6 @@ export async function supersetExercises(
   await reorderWorkoutExercises(reordered.map((s) => s.id))
 }
 
-/** Removes an exercise from its superset. Ungroups the partner if left alone. */
 export async function removeFromSuperset(workoutExerciseId: string): Promise<void> {
   const row = await db.workoutExercises.get(workoutExerciseId)
   if (!row || row.supersetGroup === null) return
@@ -1148,10 +1092,6 @@ export async function removeFromSuperset(workoutExerciseId: string): Promise<voi
   await collapseLoneSuperset(row.workoutId, group)
 }
 
-/**
- * The signals `lib/sessionTitle.ts` needs to derive a title (§6.7) — one entry
- * per working set, carrying the region and pattern that produced it.
- */
 export async function getSessionTitleSignals(workoutId: string): Promise<SetSignal[]> {
   const workoutExercises = await listWorkoutExercises(workoutId)
   const signals: SetSignal[] = []
@@ -1171,7 +1111,7 @@ export async function getSessionTitleSignals(workoutId: string): Promise<SetSign
   return signals
 }
 
-// --------------------------------------------------------------------- sets
+// ----- sets -----
 
 export async function listSets(workoutExerciseId: string): Promise<WorkoutSet[]> {
   const rows = await db.sets
@@ -1195,7 +1135,6 @@ export interface NewSetInput {
   distanceM?: number | null
   isCompleted?: boolean
   enteredUnit?: WeightUnit | null
-  /** Insert directly after this set instead of at the end (duplicate a set). */
   afterPosition?: number
 }
 
@@ -1204,12 +1143,10 @@ export async function addSet(input: NewSetInput): Promise<string> {
 
   let position: number
   if (input.afterPosition === undefined) {
-    // One past the highest, not the count — same collision as adding an
-    // exercise: delete set 2 of 3 and the next "Add set" would reuse position 2.
+    // One past the highest, not the count — deleting set 2 of 3 would otherwise reuse position 2.
     position = siblings.reduce((max, s) => Math.max(max, s.position), -1) + 1
   } else {
     position = input.afterPosition + 1
-    // Shift everything after the insertion point down by one.
     for (const sibling of siblings) {
       if (sibling.position >= position) {
         await updateSet(sibling.id, { position: sibling.position + 1 })
@@ -1254,13 +1191,8 @@ export async function restoreSet(id: string): Promise<void> {
   await patchRow(db.sets, 'sets', id, { deletedAt: null })
 }
 
-/**
- * Writes values to a set and derives its completion (§6.2).
- *
- * There is no separate confirm step: a set with values is performed, a set
- * without them is a placeholder. Returns any records the new values just broke,
- * computed locally so feedback lands in the same frame as the keystroke.
- */
+// Writes values to a set and derives its completion (§6.2): a set with values is
+// performed, one without is a placeholder. Returns any records the values just broke.
 export async function logSetValues(
   id: string,
   values: Partial<WorkoutSet>,
@@ -1284,11 +1216,7 @@ export async function logSetValues(
   return refreshPersonalRecords(workoutExercise.exerciseId, id)
 }
 
-/**
- * Whether a set carries enough to count as performed. Mirrors the UI's field
- * layout per tracking type — the two must agree, or a set could look logged on
- * screen and be absent from every metric.
- */
+// Must mirror the UI's per-tracking-type field layout, or a set can look logged on screen yet be absent from every metric.
 export function setHasValues(
   set: Pick<WorkoutSet, 'reps' | 'weightKg' | 'durationSeconds' | 'distanceM'>,
   exercise: Pick<Exercise, 'trackingType'>,
@@ -1309,20 +1237,8 @@ export function setHasValues(
   }
 }
 
-/**
- * Copies the ghost values into a set — the "same as last time" action.
- * Distinct from typing them, but lands in the same state.
- *
- * **`shown` is what the row is displaying**, passed in by the caller. It used to
- * re-derive the prefill here via `getPrefillForSet`, which is a *different*
- * calculation from the `resolvePlaceholders` the card renders: that one also
- * carries values forward from earlier rows in the same card. Where the two
- * disagreed the re-derivation returned nothing and the action silently did
- * nothing — the reported "Same as last does nothing". The row already knows the
- * numbers the user is looking at, so it says so rather than having this guess
- * again. Falling back to the derivation keeps callers without a rendered row
- * (tests, the cardio block) working.
- */
+// Copies the ghost values into a set — the "same as last time" action. `shown` is
+// what the row is displaying; callers without a rendered row fall back to derivation.
 export async function confirmPlaceholder(
   setId: string,
   shown?: SetPlaceholder,
@@ -1335,8 +1251,7 @@ export async function confirmPlaceholder(
   let prefill = shown ?? null
 
   if (!prefill) {
-    // A repeated session stores per-set placeholder overrides that win over
-    // history (§7.2), and the row already shows them.
+    // A repeated session stores per-set placeholder overrides that win over history (§7.2).
     const overrides = await getPlaceholderOverrides(workoutExercise.workoutId)
     prefill = overrides[setId] ?? null
   }
@@ -1360,7 +1275,6 @@ export async function confirmPlaceholder(
   })
 }
 
-/** Whether a placeholder carries anything worth writing. */
 function hasAnyValue(v: SetPlaceholder): boolean {
   return (
     v.weightKg !== null ||
@@ -1370,14 +1284,8 @@ function hasAnyValue(v: SetPlaceholder): boolean {
   )
 }
 
-/**
- * Which record types the given values would beat, without writing anything.
- *
- * Powers the row glow (§6.2) — the row has to light up as the number is typed,
- * before any decision to persist has been made. Measured against previous
- * sessions only, exactly like the announcement in `refreshPersonalRecords`, so
- * the green row and the toast can never disagree.
- */
+// Which record types the given values would beat, without writing (§6.2). Measured
+// against previous sessions only, like refreshPersonalRecords, so glow and toast agree.
 export async function previewRecords(
   exerciseId: string,
   candidate: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'> & {
@@ -1389,8 +1297,7 @@ export async function previewRecords(
   const broken: RecordType[] = []
   for (const [type, value] of perSetRecordValues(candidate)) {
     if (!isRecordValue(value)) continue
-    // Nothing in a previous session to beat means no record — that's what keeps
-    // a first-ever exercise quiet however its sets ramp.
+    // No previous session to beat means no record — keeps a first-ever exercise quiet.
     const previous = history.get(type)
     if (previous === undefined) continue
     // Beat history *and* every sibling, so only the session's best row glows.
@@ -1400,22 +1307,11 @@ export async function previewRecords(
   return broken
 }
 
-/** A value can hold a record only if it's a real, positive number. */
 function isRecordValue(value: number | null): value is number {
   return value !== null && Number.isFinite(value) && value > 0
 }
 
-/**
- * The record types a single set can hold, with this set's value for each.
- *
- * The one place this list lives. It was spelled out three times — in
- * `previewRecords`, the old runner-up scan, and `refreshPersonalRecords` — so
- * adding a sixth type meant finding all three, and missing one produced a record
- * that was tracked but never glowed (or the reverse).
- *
- * `max_volume_session` is absent by design: it's a session aggregate, not a
- * property of one set.
- */
+// The record types a single set can hold. `max_volume_session` is absent by design: it's a session aggregate, not a per-set property.
 function perSetRecordValues(
   set: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>,
 ): [RecordType, number | null][] {
@@ -1428,25 +1324,9 @@ function perSetRecordValues(
   ]
 }
 
-/**
- * The two bars a set has to clear to hold a record, from one pass over history.
- *
- * `history` is the best of every *other* session; `siblings` the best of the
- * set's own session, excluding itself.
- *
- * **A PR is measured against previous sessions, never against earlier sets of
- * the same session.** Comparing within the session made a normal ascending
- * workout report several records at once: a 135 → 185 → 225 ramp beat itself
- * twice, so on a brand-new exercise every rising set looked like a record while
- * a flat or descending one looked like none. That's both halves of the report —
- * "it marked a few different sets" and "it just didn't mark anything at all".
- * Splitting the bars this way makes the answer independent of the order the sets
- * were typed in: the session's best row is the only one that can glow, and only
- * if the session as a whole beats what came before it.
- *
- * With no `setId` — a hypothetical set not attached to a session, as in the
- * estimator — every session counts as history and there are no siblings.
- */
+// A PR is measured against previous sessions, never against earlier sets of the same
+// session. `history` is the best of every other session; `siblings` the best of the
+// set's own session, excluding itself. With no `setId`, every session is history.
 async function recordBars(
   exerciseId: string,
   setId: string | undefined,
@@ -1476,13 +1356,7 @@ async function recordBars(
   return { history, siblings }
 }
 
-/**
- * Live sessions containing one exercise, newest first, with their completed sets.
- *
- * Four call sites hand-rolled this walk (query workout_exercises by exerciseId →
- * load each parent workout → skip deleted → load completed sets), and they had
- * already drifted: one filtered `isCompleted` inline while the others pre-filtered.
- */
+// Live sessions containing one exercise, newest first, with their completed sets.
 async function completedSessionsForExercise(exerciseId: string): Promise<
   {
     workout: Workout
@@ -1511,24 +1385,11 @@ async function completedSessionsForExercise(exerciseId: string): Promise<
   return sessions.sort((a, b) => b.workout.startedAt - a.workout.startedAt)
 }
 
-// -------------------------------------------------------- personal records
+// ----- personal records -----
 
-/**
- * Recomputes every record for one exercise from scratch and returns the types
- * that `triggeringSetId` just claimed.
- *
- * Full recomputation rather than incremental comparison, because editing a past
- * workout can *invalidate* a record — a weight corrected downward has to be
- * able to remove a PR, which an incremental "is this better?" check can't do
- * (§6.6).
- *
- * The announcement is scoped to one set because that's what a toast is about.
- * Asking the weaker question — "does this exercise's record beat history?" — kept
- * firing for every later set in the session, including lighter ones that claimed
- * nothing, since the session's earlier record still cleared the bar. Without a
- * triggering set nothing is announced: records are still rebuilt, but a bulk
- * repair pass shouldn't fire toasts.
- */
+// Recomputes every record for one exercise from scratch; full recomputation, not
+// incremental, because editing a past workout can invalidate a record (§6.6). Returns
+// the types `triggeringSetId` claimed; with no triggering set nothing is announced.
 export async function refreshPersonalRecords(
   exerciseId: string,
   triggeringSetId?: string,
@@ -1575,11 +1436,7 @@ export async function refreshPersonalRecords(
   const triggering = await db.sets.get(triggeringSetId)
   if (!triggering || !triggering.isCompleted) return []
 
-  // Literally the glow rule, so the toast and the green row cannot disagree.
-  // `max_volume_session` never reaches this: it's a session total that grows
-  // with every set logged, so announcing it fired a "New personal record" on
-  // essentially every set. It stays tracked for the detail sheet — it just isn't
-  // a live per-set event, and `perSetRecordValues` leaves it out.
+  // The glow rule verbatim, so toast and green row can't disagree; max_volume_session is left out (it grows every set).
   return previewRecords(exerciseId, triggering)
 }
 
@@ -1587,28 +1444,16 @@ export async function listPersonalRecords(exerciseId: string): Promise<PersonalR
   return db.personalRecords.where('exerciseId').equals(exerciseId).toArray()
 }
 
-// ------------------------------------------------------- last performance
-
-/**
- * The last-time header's data source (§6.3). A denormalized blob per exercise,
- * so rendering it is one indexed lookup rather than a scan across history.
- */
+// A denormalized blob per exercise (§6.3), so the last-time header is one indexed lookup, not a scan.
 export async function getLastPerformance(
   exerciseId: string,
 ): Promise<LastPerformance | undefined> {
   return db.lastPerformance.get(exerciseId)
 }
 
-/**
- * The most recent session of an exercise **strictly before** the given workout —
- * what the `Last` column means while that workout is open.
- *
- * `lastPerformance` can't answer this: it caches the three globally-newest
- * sessions, so opening an older workout showed it numbers from a *later* one and
- * "last time" pointed forward in time. Compared by `startedAt`, with the workout
- * id as a tiebreak so two sessions stamped the same millisecond still order
- * deterministically instead of flickering between renders.
- */
+// The most recent session strictly before the given workout — the `Last` column while
+// it's open. Can't use the lastPerformance cache (globally-newest) or "last time" would
+// point forward. Workout id breaks a same-millisecond tie so ordering stays deterministic.
 export async function getPreviousSession(
   exerciseId: string,
   beforeWorkoutId: string,
@@ -1625,7 +1470,6 @@ export async function getPreviousSession(
       (workout.startedAt < anchor.startedAt ||
         (workout.startedAt === anchor.startedAt && workout.id < anchor.id)),
   )
-  // completedSessionsForExercise sorts newest-first, so the head is the answer.
   const previous = earlier[0]
   if (!previous) return null
 
@@ -1638,7 +1482,6 @@ export async function getPreviousSession(
   }
 }
 
-/** Recomputes the cache for one exercise from the last 3 sessions containing it. */
 export async function rebuildLastPerformance(exerciseId: string): Promise<void> {
   const exercise = await db.exercises.get(exerciseId)
   if (!exercise) return
@@ -1660,7 +1503,6 @@ export async function rebuildLastPerformance(exerciseId: string): Promise<void> 
   })
 }
 
-/** The four placeholder fields plus RPE, projected off a stored set. */
 function toPlaceholderSet(s: WorkoutSet): PerformedSet {
   return {
     weightKg: s.weightKg,
@@ -1671,7 +1513,6 @@ function toPlaceholderSet(s: WorkoutSet): PerformedSet {
   }
 }
 
-/** Called on finish and after editing a past workout, which invalidates the cache. */
 export async function rebuildLastPerformanceForWorkout(workoutId: string): Promise<void> {
   const workoutExercises = await listWorkoutExercises(workoutId)
   for (const we of workoutExercises) {
@@ -1687,20 +1528,9 @@ export interface SetPlaceholder {
   distanceM: number | null
 }
 
-/**
- * What to show as placeholder values on a set row (§6.2).
- *
- * Precedence, in order:
- *   1. The same set index from the most recent session containing this exercise
- *   2. **The last logged set of the current session** — so adding a 4th set to a
- *      3-set history suggests set 3's numbers instead of going blank at the exact
- *      moment the user is most tired
- *   3. The final set of the previous session
- *   4. Nothing, for a first-ever performance
- *
- * `currentSessionSets` is optional so callers that only have history (a template
- * instantiation, say) can skip it.
- */
+// Placeholder values for a set row (§6.2), by precedence: same set index from the
+// latest session, else the last logged set of this session, else the previous session's
+// final set, else nothing.
 export async function getPrefillForSet(
   exerciseId: string,
   setIndex: number,
@@ -1719,7 +1549,6 @@ export async function getPrefillForSet(
     }
   }
 
-  // Beyond what history covers: carry forward what was just done in this session.
   const loggedThisSession = (currentSessionSets ?? []).filter((s) => s.isCompleted)
   const lastThisSession = loggedThisSession[loggedThisSession.length - 1]
   if (lastThisSession) {
@@ -1744,13 +1573,7 @@ export async function getPrefillForSet(
   return null
 }
 
-/**
- * Adds a new (empty) set. The row's placeholder is resolved live by the exercise
- * card (§6.2): last time's matching set, or — for a row beyond history — the
- * numbers carried forward from earlier in this session. That means "Add set"
- * needs only to append the row; no placeholder has to be persisted here, which
- * removes the override-writing that made this fragile.
- */
+// Adds an empty set; its placeholder is resolved live by the exercise card (§6.2), so nothing is persisted here.
 export async function addSetWithPlaceholder(
   workoutExerciseId: string,
   _exerciseId: string,
@@ -1759,7 +1582,7 @@ export async function addSetWithPlaceholder(
   return { setId }
 }
 
-// ---------------------------------------------------------------- templates
+// ----- templates -----
 
 export async function listTemplates(): Promise<Template[]> {
   const all = await db.templates.toArray()
@@ -1780,14 +1603,7 @@ export async function listTemplateExercises(
   return rows.filter((r) => r.deletedAt === null).sort((a, b) => a.position - b.position)
 }
 
-// -------------------------------------------------- template editing (§7)
-
-/**
- * Creates an empty template. Editing it afterward mutates the plan only — never
- * a workout, past or present (§4.7). The two are deliberately separate: a
- * workout keeps its own copy of what was planned, so retuning a template never
- * rewrites history.
- */
+// A workout keeps its own copy of what was planned, so editing a template never rewrites history (§4.7).
 export async function createTemplate(
   name: string,
   folder: string | null = null,
@@ -1815,7 +1631,6 @@ export async function updateTemplate(
   await patchRow(db.templates, 'templates', id, patch)
 }
 
-/** Soft-deletes a template. Workouts already run from it keep their own copy. */
 export async function deleteTemplate(id: string): Promise<void> {
   await patchRow(db.templates, 'templates', id, { deletedAt: Date.now() })
 }
@@ -1867,17 +1682,8 @@ export async function reorderTemplateExercises(orderedIds: string[]): Promise<vo
   }
 }
 
-/**
- * Materialize a coach plan (§13) into real templates — one per session.
- *
- * Each plan exercise is matched to a library exercise by name or alias
- * (case-insensitive); an unmatched name is skipped rather than inventing an
- * exercise, and the skipped names are returned so the UI can say so. Weights in
- * the plan are in the user's unit and converted back to canonical kg here.
- *
- * The plan is always reviewed/edited in the UI before this runs — nothing the
- * coach proposes is auto-applied (§13).
- */
+// Materialize a coach plan (§13) into templates, one per session. Exercises are matched
+// to the library by name/alias; unmatched names are skipped (not invented) and returned.
 export async function createTemplatesFromPlan(plan: {
   sessions: {
     name: string
@@ -1891,10 +1697,8 @@ export async function createTemplatesFromPlan(plan: {
     }[]
   }[]
   unitWeight: WeightUnit
-  /** Folder to group the sessions under — a coach program's name (§13). */
   folder?: string | null
 }): Promise<{ templateIds: string[]; unmatched: string[] }> {
-  // Build a name/alias → id index over the live library once.
   const library = await listExercises()
   const byName = new Map<string, string>()
   for (const ex of library) {
@@ -1902,16 +1706,13 @@ export async function createTemplatesFromPlan(plan: {
     for (const alias of ex.aliases) byName.set(alias.toLowerCase(), ex.id)
   }
 
-  // A sensible default progression step for the user's unit, applied when the
-  // plan flags an exercise for auto-progression.
   const incrementKg = plan.unitWeight === 'kg' ? 2.5 : weightToKg(5, 'lb')
 
   const templateIds: string[] = []
   const unmatched: string[] = []
 
   for (const session of plan.sessions) {
-    // Resolve matches first, so a session where nothing matched creates no empty
-    // template — a persisted "Upper" with zero exercises is just clutter.
+    // Resolve matches first, so a session where nothing matched creates no empty template.
     const matched = session.exercises.map((pe) => ({
       pe,
       exerciseId: byName.get(pe.name.trim().toLowerCase()),
@@ -1933,8 +1734,6 @@ export async function createTemplatesFromPlan(plan: {
         targetRepsHigh: pe.repHigh,
         targetWeightKg:
           pe.weight === null ? null : weightToKg(pe.weight, plan.unitWeight),
-        // Carry the coach's progression intent into a real rule (§7 Phase 4),
-        // so a multi-week program's load increases happen automatically.
         progression: pe.autoProgress ? { kind: 'double', incrementKg, maxRpe: 8 } : null,
       })
     }
@@ -1943,11 +1742,6 @@ export async function createTemplatesFromPlan(plan: {
   return { templateIds, unmatched }
 }
 
-/**
- * A read-only outline of a template, for the preview shown before starting a
- * workout from it (§7.4) — so the user confirms the plan before a session is
- * created, and understands the workout is a fresh copy.
- */
 export async function getTemplatePreview(
   templateId: string,
 ): Promise<WorkoutPreview | null> {
@@ -1977,7 +1771,6 @@ export async function getTemplatePreview(
   return { title: template.name, performedAt: null, exercises, totalSets }
 }
 
-/** "3 × 8-10 @ 60 lb" from a template exercise's targets, in the user's unit. */
 export function describeTemplateTarget(
   te: TemplateExercise,
   weightUnit: WeightUnit,
@@ -1997,10 +1790,7 @@ export function describeTemplateTarget(
   return parts.join(' ')
 }
 
-/**
- * Captures a finished session as a reusable template, with targets pre-filled
- * from what was actually done (§7).
- */
+// Captures a finished session as a reusable template, with targets pre-filled from what was done (§7).
 export async function saveWorkoutAsTemplate(
   workoutId: string,
   name: string,
@@ -2052,10 +1842,7 @@ export async function saveWorkoutAsTemplate(
   return template.id
 }
 
-/**
- * Instantiates a template as a live workout, with planned sets already laid out
- * as unchecked rows so the session reads as a checklist (§7).
- */
+// Instantiates a template as a live workout, planned sets laid out as unchecked rows (§7).
 export async function startWorkoutFromTemplate(templateId: string): Promise<string> {
   const template = await getTemplate(templateId)
   if (!template) throw new Error('Template not found')
@@ -2073,10 +1860,7 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
       })
     }
 
-    // Apply a progression rule (§7 Phase 4) if the template-exercise has one:
-    // nudge the seeded weight/reps based on how the last session against this
-    // exercise went. Deterministic and total — with no rule or no history it
-    // just returns the template's own targets unchanged.
+    // Apply a progression rule (§7 Phase 4) if present; with no rule or history it returns the template's own targets.
     let seedWeightKg = te.targetWeightKg
     let targetReps = te.targetRepsLow ?? te.targetRepsHigh
     if (te.progression) {
@@ -2096,10 +1880,7 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
       targetReps = stepped.targetReps
     }
 
-    // Empty rows. The template supplies the *shape* — how many sets — while the
-    // numbers show as placeholders. A template target seeds the ghost when it
-    // has one; otherwise the placeholder falls back to history at log time
-    // (§6.2). Either way the row stays unlogged until the user types or taps.
+    // The template supplies the shape (set count); a target seeds the ghost, else the placeholder falls back to history (§6.2).
     const targetSets = te.targetSets ?? 3
     for (let index = 0; index < targetSets; index += 1) {
       const setId = await addSet({ workoutExerciseId })
@@ -2118,9 +1899,7 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
     await savePlaceholderOverrides(workoutId, placeholders)
   }
 
-  // Through updateTemplate so this "used it" bump enqueues and bumps clientRev
-  // like every other template edit — a raw db.update here never synced and left
-  // the row's revision stale, so a later pull could clobber it.
+  // Through updateTemplate so this bump enqueues and bumps clientRev; a raw db.update would leave the revision stale and be clobbered by a pull.
   await updateTemplate(templateId, {
     lastUsedAt: Date.now(),
     timesUsed: template.timesUsed + 1,
@@ -2129,16 +1908,8 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
   return workoutId
 }
 
-/**
- * Copies any past session into a new one (§7.2).
- *
- * Rows are created empty — nothing is pre-logged — but the *source session's*
- * numbers are returned as placeholders keyed by set id. Repeating a session from
- * six weeks ago should suggest what was done then, which is the whole reason for
- * choosing that session over the most recent one.
- *
- * Distinct from saving a template: no template row is created.
- */
+// Copies any past session into a new one (§7.2): rows are created empty, the source's
+// numbers returned as placeholders keyed by set id. No template row is created.
 export async function repeatWorkout(
   sourceWorkoutId: string,
 ): Promise<{ workoutId: string; placeholders: Record<string, SetPlaceholder> } | null> {
@@ -2174,19 +1945,13 @@ export async function repeatWorkout(
   return { workoutId, placeholders }
 }
 
-/**
- * Stores per-set placeholder overrides for a session (§7.2).
- *
- * Kept in a local-only table rather than on `sets`, because these are a UI hint
- * about a *specific repeat*, not data about the workout — they must not sync, and
- * they're meaningless once the set is logged.
- */
+// Per-set placeholder overrides for a session (§7.2), in a local-only table: they're a
+// UI hint about a specific repeat, must not sync, and are meaningless once the set is logged.
 export async function savePlaceholderOverrides(
   workoutId: string,
   placeholders: Record<string, SetPlaceholder>,
 ): Promise<void> {
-  // An empty map clears the row rather than being ignored, so overrides can be
-  // removed as well as added.
+  // An empty map clears the row, so overrides can be removed as well as added.
   if (Object.keys(placeholders).length === 0) {
     await db.placeholderOverrides.delete(workoutId)
     return
@@ -2201,7 +1966,7 @@ export async function getPlaceholderOverrides(
   return row?.placeholders ?? {}
 }
 
-// ------------------------------------------------------------ body metrics
+// ----- body metrics -----
 
 export async function listMetricEntries(
   definitionId: string,
@@ -2224,9 +1989,7 @@ export async function addMetricEntry(input: {
   measuredAt?: number
   notes?: string
 }): Promise<string> {
-  // Guard against a NaN or non-positive measurement poisoning the charts (and,
-  // for bodyweight, the volume math it feeds). Callers validate too, but this is
-  // the durable boundary.
+  // Guard against a NaN or non-positive measurement poisoning the charts and volume math.
   if (!Number.isFinite(input.value) || input.value <= 0) {
     throw new Error('Metric value must be a positive number')
   }
@@ -2250,20 +2013,8 @@ export async function addMetricEntry(input: {
   return entry.id
 }
 
-// ------------------------------------------------------------- maintenance
-
-/**
- * Soft-deletes every workout, template, custom exercise, and metric entry —
- * *through the outbox*, so the deletions propagate to the server.
- *
- * Unlike `clearLocalData` (which only wipes IndexedDB, so the next pull
- * rehydrates), this writes a real tombstone per row, so the data goes away on
- * every device. The shared system library is untouched.
- *
- * Not the "permanently erase" path — a tombstone leaves the row in Postgres, so
- * that button uses `SyncEngine.hardDeleteServerData()`. This is the primitive for
- * a selective, reversible, sync-correct bulk delete.
- */
+// Soft-deletes every workout, template, custom exercise, and metric entry through the
+// outbox, so a tombstone per row propagates to every device. The system library is untouched.
 export async function deleteAllTrainingData(): Promise<{
   workouts: number
   templates: number
@@ -2273,9 +2024,7 @@ export async function deleteAllTrainingData(): Promise<{
   const counts = { workouts: 0, templates: 0, customExercises: 0, metricEntries: 0 }
   const now = Date.now()
 
-  // Workouts. Tombstoning the parent is what hides the session everywhere; its
-  // exercises and sets are filtered by the parent on read, and the server's
-  // chained RLS means they don't each need their own tombstone.
+  // Tombstoning the parent hides the session everywhere; chained RLS covers its exercises and sets.
   for (const workout of await db.workouts.toArray()) {
     if (workout.deletedAt !== null) continue
     await patchRow(db.workouts, 'workouts', workout.id, { deletedAt: now })
@@ -2301,7 +2050,6 @@ export async function deleteAllTrainingData(): Promise<{
     counts.customExercises += 1
   }
 
-  // Derived caches are rebuilt from what's left, so they're safe to drop.
   await db.personalRecords.clear()
   await db.lastPerformance.clear()
   await db.placeholderOverrides.clear()
@@ -2310,13 +2058,8 @@ export async function deleteAllTrainingData(): Promise<{
   return counts
 }
 
-/**
- * Tombstones finished workouts that contain no completed set (§6.4.1).
- *
- * `finishWorkout` can't create these, but they arrive two ways: pulled from the
- * server (an older build, or a device whose sets failed to push), and left behind
- * when a session is interrupted. In-progress workouts are never touched.
- */
+// Tombstones finished workouts with no completed set (§6.4.1); these arrive via pull or
+// an interrupted session, never from finishWorkout. In-progress workouts are never touched.
 export async function purgeEmptyWorkouts(): Promise<number> {
   const finished = (await db.workouts.toArray()).filter(
     (w) => w.deletedAt === null && w.endedAt !== null,
@@ -2332,30 +2075,14 @@ export async function purgeEmptyWorkouts(): Promise<number> {
   return removed
 }
 
-/**
- * Enforces that the local database holds only the signed-in account's data
- * (§11.1.3). Call before any screen can read a row.
- *
- * IndexedDB reads aren't scoped by user — they query whole tables, which is right
- * for one account and much faster than filtering every row — so the guard has to
- * be at the boundary instead. Signing in as a different account wipes what the
- * previous one left behind. Without this, signing out and back in as someone else
- * showed the first account's workouts under the second account's name, and no
- * server policy can prevent that because reading a cached row never reaches the
- * server.
- *
- * A claimed local-only account is exempt: `claimLocalData` has just re-owned
- * those rows *to* this uid on purpose.
- *
- * Returns whether it wiped, so the caller can resync rather than show an empty app.
- */
+// Enforces that the local database holds only the signed-in account's data (§11.1.3),
+// since IndexedDB reads aren't scoped by user; switching accounts wipes the previous
+// one's rows. Returns whether it wiped, so the caller can resync rather than show an empty app.
 export async function assertDbOwner(userId: string): Promise<boolean> {
   const owner = getDbOwner()
   if (owner === userId) return false
 
-  // An unowned database is either a fresh install or the pre-guard state. Only
-  // wipe when it demonstrably belongs to someone else; adopting an unowned one
-  // preserves a device-only history that's about to be claimed.
+  // Only wipe a database that demonstrably belongs to someone else; adopting an unowned one preserves device-only history about to be claimed.
   const belongsToSomeoneElse = owner !== null && owner !== LOCAL_USER_ID
   if (belongsToSomeoneElse) {
     await clearLocalData()
@@ -2367,13 +2094,8 @@ export async function assertDbOwner(userId: string): Promise<boolean> {
   return false
 }
 
-/**
- * Wipes local training data and the sync queues. The caller must reload — the
- * library and profile are re-seeded by `seedIfNeeded()` at boot, not here.
- *
- * IndexedDB only: nothing on the server is deleted, so on a synced account the
- * next pull rehydrates and this is a resync; offline, it's a genuine reset.
- */
+// Wipes local training data and sync queues (IndexedDB only; nothing on the server).
+// The caller must reload — library and profile are re-seeded by seedIfNeeded() at boot.
 export async function clearLocalData(): Promise<void> {
   await db.transaction(
     'rw',
@@ -2408,10 +2130,7 @@ export async function clearLocalData(): Promise<void> {
       await db.placeholderOverrides.clear()
       await db.editSnapshots.clear()
       await db.profiles.clear()
-      // User-created library rows only — system rows (userId null) are shared and
-      // re-seeded at boot. All three tables are user-extensible, so all three
-      // need clearing; omitting muscles/metricDefinitions left a custom muscle
-      // alive across a wipe while a custom exercise was removed.
+      // User-created library rows only — system rows (userId null) are shared and re-seeded at boot. All three tables are user-extensible.
       for (const store of [db.exercises, db.muscles, db.metricDefinitions]) {
         await store.filter((row) => row.userId !== null).delete()
       }

@@ -1,13 +1,3 @@
-/**
- * The templates list (§7).
- *
- * Each row makes the three things you can do with a template distinct, so it's
- * never ambiguous which one is happening:
- *   - **Tap the row** → preview, then *start a workout* from it (a fresh copy).
- *   - **Edit** → open the template editor (changes the plan, no workout touched).
- *   - **Delete** → remove the plan (logged workouts keep their own copy).
- */
-
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, Dumbbell, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'

@@ -1,11 +1,3 @@
-/**
- * The finish summary (§6.4).
- *
- * Shows what the session actually amounted to, then offers to keep it as a
- * template — the moment right after finishing is when the user knows whether
- * the session was worth repeating.
- */
-
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
@@ -45,8 +37,7 @@ export function FinishSheet({
     let workingSets = 0
     let completedSets = 0
     let cardioSeconds = 0
-    // One lift → its single primary body part (task simplification). Secondary
-    // spreading is kept only for the detailed muscle-volume charts.
+    // Attribute each lift to its single primary body part only.
     const byRegionMap = new Map<Region, number>()
 
     for (const we of workoutExercises) {
@@ -55,8 +46,7 @@ export function FinishSheet({
       const sets = (await repo.listSets(we.id)).filter((s) => s.isCompleted)
       completedSets += sets.length
       workingSets += sets.filter((s) => isWorkingSet(s)).length
-      // Only genuine cardio, not a weighted carry or a plank, both of which
-      // also carry a duration.
+      // Only genuine cardio, not a weighted carry or plank that also carries a duration.
       if (isCardioPattern(exercise.movementPattern)) {
         cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
       }
@@ -77,8 +67,7 @@ export function FinishSheet({
       workingSets,
       completedSets,
       cardioSeconds,
-      // Drop zero-volume regions: cardio has no volume load by definition
-      // (§8.1), so listing it at 0% in a volume breakdown is misleading.
+      // Drop zero-volume regions: cardio has no volume load (§8.1), so 0% would mislead.
       byRegion: [...byRegion]
         .filter(([, value]) => value > 0)
         .sort((a, b) => b[1] - a[1]),
@@ -101,8 +90,7 @@ export function FinishSheet({
   const durationSeconds = (Date.now() - workout.startedAt) / 1000
   const totalRegionVolume = byRegion.reduce((sum, [, value]) => sum + value, 0)
 
-  // Nothing logged means there is nothing to save (§6.4.1). The sheet says so
-  // rather than offering to "finish" a session that will be thrown away.
+  // Nothing logged means there is nothing to save (§6.4.1).
   const isEmpty = completedSets === 0
 
   async function finish() {
@@ -173,8 +161,7 @@ export function FinishSheet({
             <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
               Where the work went
             </p>
-            {/* A 100% stacked bar rather than a pie: length is read accurately,
-                  angle is not, and regions are often close in size. */}
+            {/* A 100% stacked bar rather than a pie: length reads more accurately than angle. */}
             <div className="flex h-3 gap-[2px] overflow-hidden rounded-full">
               {byRegion.map(([region, value]) => (
                 <div
@@ -187,8 +174,7 @@ export function FinishSheet({
                 />
               ))}
             </div>
-            {/* Direct labels, not color alone — three light-mode region colors
-                  are below 3:1 contrast, so identity can't rest on the swatch. */}
+            {/* Direct labels, not color alone — some region swatches fall below 3:1 contrast. */}
             <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1.5">
               {byRegion.map(([region, value]) => (
                 <span key={region} className="flex items-center gap-1.5 text-[12.5px]">
@@ -247,7 +233,6 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <p className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted">
         {label}
       </p>
-      {/* Proportional figures on a standalone number — tabular looks loose here. */}
       <p className="mt-0.5 text-[21px] font-bold leading-tight">{value}</p>
     </div>
   )

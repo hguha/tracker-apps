@@ -1,16 +1,3 @@
-/**
- * The Insights chart catalog, config-driven (§9, §9.0).
- *
- * Each chart is one entry declaring the filters it actually consumes and how to
- * render it. The screen reads this to (a) lay out each sub-tab from a list of
- * keys and (b) show only the filter controls the visible charts use — so the
- * Strength tab doesn't show a Body-part filter that changes nothing there, and
- * Habit doesn't show an Exercise filter it ignores.
- *
- * Adding a chart is one entry here plus its key in a sub-tab; changing what a
- * chart is scoped by is editing its `filters` array. No screen edits.
- */
-
 import type { ReactNode } from 'react'
 import type { InsightsData } from './useInsightsData'
 import {
@@ -40,12 +27,9 @@ import {
 } from './charts'
 import { PrEstimator } from './PrEstimator'
 
-/** The filter controls a chart can be scoped by. Range (time) is universal, so
- *  it's implicit — every chart is time-windowed and the range chip always shows. */
+// Range (time) is universal, so it's implicit rather than a FilterKey.
 export type FilterKey = 'region' | 'exercise'
 
-/** Context handed to every chart's render — the aggregated data plus the single
- *  resolved exercise (when the Exercise filter is narrowed to exactly one). */
 export interface ChartContext {
   data: InsightsData
   rangeLabel: string
@@ -54,15 +38,10 @@ export interface ChartContext {
 
 export interface ChartDef {
   key: string
-  /** Which non-range filters meaningfully change this chart's output. */
   filters: FilterKey[]
   render: (ctx: ChartContext) => ReactNode
 }
 
-/**
- * The registry. `filters` is the source of truth for both the per-tab filter
- * bar and (later) any "what does this chart depend on" tooling.
- */
 export const CHART_CATALOG: Record<string, ChartDef> = {
   summary: {
     key: 'summary',
@@ -115,7 +94,6 @@ export const CHART_CATALOG: Record<string, ChartDef> = {
     render: ({ data }) => <VolumeVsDurationChart data={data} />,
   },
 
-  // Strength — these follow the single-exercise selection.
   prEstimator: {
     key: 'prEstimator',
     filters: ['exercise'],
@@ -153,7 +131,6 @@ export const CHART_CATALOG: Record<string, ChartDef> = {
     render: ({ data }) => <StalledLiftsChart data={data} />,
   },
 
-  // Habit / consistency — driven by session timing, not by region or lift.
   workoutsPerWeek: {
     key: 'workoutsPerWeek',
     filters: [],
@@ -185,7 +162,6 @@ export const CHART_CATALOG: Record<string, ChartDef> = {
     render: ({ data }) => <CardioChart data={data} />,
   },
 
-  // Body — bodyweight and (placeholder) future measurements.
   bodyweight: {
     key: 'bodyweight',
     filters: [],
@@ -204,7 +180,6 @@ export interface SubTab {
   charts: string[]
 }
 
-/** The five areas and the charts each shows, in render order. */
 export const SUB_TABS: SubTab[] = [
   {
     key: 'overview',
@@ -256,8 +231,6 @@ export const SUB_TABS: SubTab[] = [
   },
 ]
 
-/** The union of non-range filters used by any chart in a sub-tab. Drives which
- *  filter chips the bar shows for that tab. */
 export function filtersForSubTab(subTab: SubTab): Set<FilterKey> {
   const used = new Set<FilterKey>()
   for (const chartKey of subTab.charts) {

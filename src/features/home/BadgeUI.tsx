@@ -1,9 +1,3 @@
-/**
- * Shared badge UI — one tile and one detail sheet, used by both the Home strip
- * and the full Badges screen (§5.2.1). A tile is tappable; tapping opens the
- * sheet with the badge's description and progress.
- */
-
 import { BottomSheet } from '@/components/BottomSheet'
 import { cn } from '@/lib/cn'
 import type { BadgeState } from './badges'
@@ -14,7 +8,6 @@ export function BadgeTile({
   onClick,
 }: {
   badge: BadgeState
-  /** Show the "12 / 100" progress line under the label. */
   showProgress: boolean
   onClick: () => void
 }) {
@@ -40,7 +33,6 @@ export function BadgeTile({
   )
 }
 
-/** The tap-through detail: icon, name, description, and earned/progress state. */
 export function BadgeDetailSheet({
   badge,
   onDismiss,

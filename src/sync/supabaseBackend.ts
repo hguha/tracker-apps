@@ -1,14 +1,4 @@
-/**
- * The Supabase implementation of `SyncBackend` (§5.5, Phase 5).
- *
- * This is the only file that knows PostgREST exists. It translates a domain row
- * (camelCase, epoch-ms timestamps) to Postgres shape (snake_case, ISO
- * timestamps) and back, classifies HTTP outcomes into the engine's transient /
- * permanent / auth buckets, and pulls deltas by `updated_at`.
- *
- * The engine and every screen are unaware of it — swapping in PowerSync means
- * writing a sibling of this file and nothing else (§5.6).
- */
+// The Supabase implementation of `SyncBackend` (§5.5); the only file that knows PostgREST exists.
 
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import type { PulledRow, PushOutcome, PushRow, SyncBackend } from './backend'
@@ -30,9 +20,7 @@ export class SupabaseBackend implements SyncBackend {
 
     try {
       if (row.op === 'delete') {
-        // Deletes are soft (§4.11) — a hard delete can't be represented in a
-        // pull-based sync. The repository already writes deletedAt; a delete op
-        // here is belt-and-braces and also upserts the tombstone.
+        // Soft delete (§4.11): a hard delete can't be represented in a pull-based sync.
         const { error } = await this.client
           .from(table)
           .update({ deleted_at: new Date().toISOString() })
@@ -40,8 +28,7 @@ export class SupabaseBackend implements SyncBackend {
         return error ? classify(error) : { status: 'ok' }
       }
 
-      // Insert and update are both upserts on the client-generated id, so a
-      // replayed write is idempotent (§5.5).
+      // Upsert on the client-generated id, so a replayed write is idempotent (§5.5).
       const { error } = await this.client
         .from(table)
         .upsert({ ...payload, id: row.rowId }, { onConflict: 'id' })
@@ -72,12 +59,8 @@ export class SupabaseBackend implements SyncBackend {
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     const pgTable = tableToPostgres(table)
     try {
-      // PostgREST refuses an unfiltered DELETE, so this needs a predicate that
-      // matches every row. `id` is non-null on every synced table, so
-      // "id is not null" is a total filter. RLS still scopes the statement to the
-      // caller's own rows, so this can only ever erase your own data — and for
-      // the shared library tables it can only touch rows you created (system
-      // rows have user_id null and no delete policy matches them).
+      // "id is not null" is the total filter PostgREST needs (it refuses an
+      // unfiltered DELETE); RLS still scopes the statement to the caller's own rows.
       const { error } = await this.client.from(pgTable).delete().not('id', 'is', null)
       return error ? { ok: false, error: error.message } : { ok: true }
     } catch (cause) {
@@ -86,24 +69,11 @@ export class SupabaseBackend implements SyncBackend {
   }
 }
 
-/**
- * Domain fields that are NOT columns on their Postgres table, and so must be
- * stripped from a push (§4.3).
- *
- * `secondary_muscles` is retained here even though the concept was removed from
- * the domain model: rows written by an older build still carry the field
- * locally, and sending it produced "Could not find the 'secondary_muscles'
- * column of 'exercises' in the schema cache" — a permanent failure that
- * dead-lettered every custom-exercise write. The guard costs nothing and
- * removing it would resurrect that bug for anyone with pre-existing rows.
- *
- * Keyed by Postgres table name, listing snake_case keys to drop.
- */
+// Snake_case keys to strip per table (§4.3): an unmappable field dead-letters the whole row.
 const NON_COLUMN_FIELDS: Record<string, readonly string[]> = {
   exercises: ['secondary_muscles'],
 }
 
-/** Domain row → Postgres row: snake_case keys, ISO timestamps, no stray fields. */
 export function toPostgresRow(
   row: Record<string, unknown>,
   table: string,
@@ -114,13 +84,10 @@ export function toPostgresRow(
       snake[column] = msToIso(snake[column] as number)
     }
   }
-  // Drop anything the table has no column for, so one unmappable field can't
-  // dead-letter the whole row.
   for (const field of NON_COLUMN_FIELDS[table] ?? []) delete snake[field]
   return snake
 }
 
-/** Postgres row → domain row: camelCase keys, epoch-ms timestamps. */
 function fromPostgresRow(row: Record<string, unknown>): Record<string, unknown> {
   const withMs: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(row)) {
@@ -130,41 +97,24 @@ function fromPostgresRow(row: Record<string, unknown>): Record<string, unknown> 
   return keysToCamel(withMs)
 }
 
-/**
- * Maps a PostgREST error to the engine's failure buckets (§5.5).
- *
- * `PostgrestError` carries no HTTP status — only `code` (a PostgREST code like
- * `PGRST301`, or a Postgres SQLSTATE like `42501`), `message`, `details`,
- * `hint`. An earlier version read a non-existent `.status`, so every failure
- * fell through to "transient" and the dead-letter / auth-pause paths never
- * fired. Classify off `code` instead:
- *   - JWT / auth codes (PGRST301/302, SQLSTATE 28xxx) → auth: pause for re-auth.
- *   - A concrete Postgres SQLSTATE (RLS 42501, unique 23505, check 23514, …) →
- *     permanent: the write can't succeed as-is, so dead-letter it rather than
- *     retry forever.
- *   - No code at all (a fetch/network throw surfaces upstream as a thrown
- *     error, but a codeless PostgrestError is treated as transient) → retry.
- */
+// Maps a PostgREST error to the engine's failure buckets off `code` (§5.5); there is no HTTP status.
 export function classify(error: PostgrestError): PushOutcome {
   const code = error.code ?? ''
 
-  // Auth: PostgREST JWT errors and Postgres invalid-authorization SQLSTATEs.
+  // JWT errors and invalid-authorization SQLSTATEs pause for re-auth rather than dead-letter.
   if (code === 'PGRST301' || code === 'PGRST302' || code.startsWith('28')) {
     return { status: 'auth', error: error.message }
   }
 
-  // A real SQLSTATE (5 chars, starts with a digit) is a definite server-side
-  // rejection — RLS, constraint, type, not-null. Retrying can't fix it.
+  // A real SQLSTATE (RLS, constraint, type, not-null) is a rejection retrying can't fix.
   if (/^[0-9]/.test(code)) {
     return { status: 'permanent', error: error.message }
   }
 
-  // Any other PostgREST code (e.g. PGRST1xx schema/parse issues) is also a
-  // request the client can't fix by retrying.
+  // Any other PostgREST code (e.g. PGRST1xx schema/parse) is also unfixable by retry.
   if (code.startsWith('PGRST')) {
     return { status: 'permanent', error: error.message }
   }
 
-  // No usable code — treat as transient and let backoff retry.
   return { status: 'transient', error: error.message }
 }

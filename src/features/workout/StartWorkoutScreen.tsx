@@ -1,15 +1,3 @@
-/**
- * The "log a workout" entry point (§7.4).
- *
- * The body is a list of recent sessions, each tappable to repeat. A single
- * "repeat last workout" button was wrong: on a 3-day rotation the next session is
- * rarely the immediately previous one, so that button forced a detour through
- * History for the common case.
- *
- * "Log a past workout" is gone — backdating is the session menu's date control
- * (§6.4), which removes a whole screen without removing the capability.
- */
-
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react'
@@ -30,7 +18,6 @@ export function StartWorkoutScreen({
   onStarted: (workoutId: string) => void
   onCancel: () => void
 }) {
-  // Which workout / template is being previewed before committing to start it.
   const [previewWorkoutId, setPreviewWorkoutId] = useState<string | null>(null)
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -44,8 +31,7 @@ export function StartWorkoutScreen({
         exerciseCount: (await repo.listTemplateExercises(template.id)).length,
       })),
     )
-    // Pull a deep list so search reaches real history; the unsearched view still
-    // shows just the most recent handful (sliced below).
+    // Pull a deep list so search reaches real history; the unsearched view slices to a handful below.
     const recent = (await repo.listFinishedWorkoutSummaries(500)).filter(
       (s) => s.setCount > 0,
     )
@@ -54,8 +40,6 @@ export function StartWorkoutScreen({
 
   const q = query.trim().toLowerCase()
 
-  // With no query, show the recent handful; with one, search title + exercises
-  // across all of history so an old rotation is findable by name.
   const shownTemplates = useMemo(() => {
     const all = data?.templates ?? []
     if (!q) return all
@@ -97,8 +81,6 @@ export function StartWorkoutScreen({
           Start an empty workout
         </Button>
 
-        {/* Search templates and past workouts by name — find a rotation without
-            scrolling once history is deep. */}
         <div className="flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
           <Search size={17} className="shrink-0 text-ink-muted" />
           <input

@@ -1,15 +1,5 @@
-/**
- * Wires the sync engine to its triggers (§5.5).
- *
- * Push is event-driven (an enqueued write, or `online`); pull happens only on app
- * open/foreground or on request. Never on a timer: a background pull writes to
- * IndexedDB, every `useLiveQuery` re-runs, and that re-render lands mid-touch on a
- * phone — the button takes its `:active` style but the tap never registers. An
- * in-progress workout isn't pushed at all until Finish (see `deferralFor`).
- *
- * Idle with no backend configured, and idle for an offline ("this device only")
- * session, which has no server identity. Returns live counts either way.
- */
+// Wires the sync engine to its triggers (§5.5): push is event-driven, pull only on
+// open/foreground — never on a timer, since a background re-render lands mid-touch on a phone.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -24,35 +14,16 @@ import { SyncEngine } from './engine'
 export type SyncPhase = 'idle' | 'syncing' | 'error'
 
 export interface SyncStatus {
-  /** Writes queued and ready to send. Excludes an in-progress workout's writes,
-   *  which are deliberately held until Finish and aren't actionable. */
+  /** Ready to send; excludes an in-progress workout's writes, held until Finish. */
   pending: number
-  /** Writes held back because their workout is still in progress. */
   deferred: number
   deadLettered: number
   enabled: boolean
   phase: SyncPhase
-  /** Runs a reconcile now; resolves when it finishes. No-op when not enabled. */
   syncNow: () => Promise<void>
-  /** Requeues dead-lettered writes and drains, for the "retry failed" action.
-   *  Resolves to how many were requeued. */
   retryFailed: () => Promise<number>
-  /**
-   * Physically erases this user's training data from the server (§11.3), for the
-   * "delete everything" action. Resolves to any per-table failures, so the
-   * caller can report a partial failure honestly. A no-op with no backend.
-   */
   eraseServerData: () => Promise<{ failed: { table: string; error: string }[] }>
-  /**
-   * Throws away un-pushed local changes and adopts the server's version, for the
-   * "my local copy is wrong" escape hatch. Resolves to what it discarded/applied.
-   */
   discardLocalChanges: () => Promise<{ discarded: number; applied: number }>
-  /**
-   * Pushes the whole queue, retrying through backoffs until it settles, for the
-   * first-run upload (§11.1.3). One call replaces the "sync failed, retry, retry"
-   * loop a user with existing local data used to hit.
-   */
   uploadEverything: (
     onProgress?: (progress: { pushed: number; remaining: number }) => void,
   ) => Promise<{ pushed: number; deadLettered: number; remaining: number }>
@@ -75,8 +46,6 @@ export function useSync(): SyncStatus {
 
     const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
 
-    // Push only. Safe to call often: the engine is re-entrant-safe and a drain
-    // with an empty (or fully deferred) queue costs nothing.
     const push = () => {
       if (cancelled || isOffline()) return
       engine.drain().catch((error) => {
@@ -84,8 +53,7 @@ export function useSync(): SyncStatus {
       })
     }
 
-    // Pull + push. Only on open/foreground, never on a timer, so a background
-    // write can't re-render the screen while it's being used.
+    // Pull + push only on open/foreground, never on a timer (see file header).
     const reconcile = () => {
       if (cancelled || isOffline()) return
       engine.sync().catch((error) => {
@@ -95,10 +63,7 @@ export function useSync(): SyncStatus {
 
     reconcile()
 
-    // Push whenever a write lands in the outbox. Dexie's observable fires on
-    // change, so this replaces polling with "send it when there's something to
-    // send". Deferred (in-progress-workout) entries are skipped by the drain, so
-    // logging a set costs a no-op drain rather than a request.
+    // Push whenever a write lands in the outbox, instead of polling.
     const subscription = liveQuery(() => db.outbox.count()).subscribe({
       next: (count) => {
         if (count > 0) push()
@@ -135,11 +100,7 @@ export function useSync(): SyncStatus {
     if (!active || !engine || !session || session.isLocal) return 0
     setPhase('syncing')
     try {
-      // Repair ownership first. Rows written before this account existed (or
-      // during a failed upgrade) can still be owned by 'local-user', which the
-      // server's RLS rejects forever — the "new row violates row-level security
-      // policy" failure. claimLocalData is idempotent, so this is a no-op once
-      // everything is owned correctly.
+      // Repair ownership first: rows still owned by 'local-user' are rejected by RLS forever.
       const claimed = await repo.claimLocalData(session.userId)
       if (claimed > 0) {
         console.info(`[sync] re-owned ${claimed} rows to ${session.userId} before retry`)
@@ -185,8 +146,7 @@ export function useSync(): SyncStatus {
       if (!active || !engine) return { pushed: 0, deadLettered: 0, remaining: 0 }
       setPhase('syncing')
       try {
-        // Repair ownership first: rows logged before this account existed are
-        // still stamped 'local-user' and would be rejected by RLS forever.
+        // Repair ownership first: rows still stamped 'local-user' are rejected by RLS forever.
         if (session && !session.isLocal) await repo.claimLocalData(session.userId)
         const result = await engine.drainUntilSettled({ onProgress })
         setPhase(result.remaining > 0 ? 'error' : 'idle')
@@ -199,8 +159,7 @@ export function useSync(): SyncStatus {
     [active, engine, session],
   )
 
-  // Split the queue: what's ready to send vs what's held for a live workout.
-  // Reporting held writes as "pending" would show a count the user can't clear.
+  // Split the queue: reporting held writes as "pending" would show a count the user can't clear.
   const counts = useLiveQuery(
     async () => {
       const all = await db.outbox.toArray()

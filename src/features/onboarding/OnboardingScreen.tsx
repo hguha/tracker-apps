@@ -1,22 +1,3 @@
-/**
- * First-run setup, shown once after a real account's first sign-in (§11.1.3).
- *
- * Two jobs, and the second is the reason this screen exists rather than a
- * settings nag:
- *
- *   1. **Prime the coach.** Height, bodyweight, weekly goal, and a stated training
- *      goal are what turn generic advice into tailored advice (§9.1). Asking once,
- *      up front, gets far better answers than hoping someone finds the settings.
- *   2. **Upload what's already here.** A user who logged workouts on this device
- *      before signing in has a full outbox, and `drain` stops at the first
- *      transient failure to preserve order — so the old experience was "sync
- *      failed", then manual retries pushing a few rows at a time. This runs
- *      `drainUntilSettled` and shows real progress until the queue is empty.
- *
- * Every answer is optional and every one is editable later in Me → Coaching, so
- * skipping costs nothing.
- */
-
 import { useEffect, useState } from 'react'
 import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -55,8 +36,6 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [theme, setTheme] = useState('default')
   const [isSaving, setIsSaving] = useState(false)
 
-  // Load the profile's existing units, so the height/weight fields are labeled
-  // in whatever the account already uses.
   useEffect(() => {
     void repo.getProfile().then((p) => {
       setUnits({ weight: p.unitWeight, length: p.unitLength })
@@ -77,8 +56,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           heightCm: h !== null && h > 0 ? lengthToCm(h, units.length) : null,
           weeklyWorkoutGoal: weeklyGoal,
         })
-        // Bodyweight is a metric entry, not a profile field — it's a time series,
-        // and it also backfills profile.bodyweightCacheKg for the volume math.
+        // Bodyweight is a metric time series; it also backfills bodyweightCacheKg for volume math.
         if (bw !== null && bw > 0) {
           await repo.addMetricEntry({
             definitionId: 'bodyweight',
@@ -219,9 +197,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                 {THEME_PRESETS.map((preset) => (
                   <button
                     key={preset.id}
-                    // Written immediately rather than on Continue: the point of
-                    // this step is seeing the theme, and App's appearance
-                    // live-query repaints the app from the profile.
+                    // Written immediately so App's appearance live-query repaints the preview.
                     onClick={() => {
                       setTheme(preset.id)
                       void repo.updateProfile({ theme: preset.id })
@@ -272,12 +248,6 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   )
 }
 
-/**
- * The upload step: runs `drainUntilSettled` and reports progress.
- *
- * This is what replaces "sync failed, press retry, press retry again" for a user
- * whose device already holds a history.
- */
 function SyncStep({
   sync,
   onDone,
@@ -291,7 +261,6 @@ function SyncStep({
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      // Nothing queued and no backend: there's nothing to upload.
       if (!sync.enabled) {
         if (!cancelled) setState('done')
         return
@@ -306,7 +275,7 @@ function SyncStep({
     return () => {
       cancelled = true
     }
-    // Runs once for this step; sync's identity changes on every count update.
+    // Run once; sync's identity changes on every count update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

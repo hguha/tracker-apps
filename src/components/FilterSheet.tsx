@@ -1,15 +1,3 @@
-/**
- * A searchable multi-select sheet, used by every filter chip (§9.0, §7.3).
- *
- * The reason filters live in a sheet rather than an inline pill row: with 200
- * exercises or 30 muscles, pills wrap into a wall and stop being scannable. A
- * chip that summarizes ("3 body parts") plus a searchable sheet stays the same
- * size no matter how much data exists.
- *
- * Search is only rendered past a threshold, so a 7-option list doesn't get a
- * search box it doesn't need.
- */
-
 import { useMemo, useState } from 'react'
 import { Check, Search, X } from 'lucide-react'
 import { BottomSheet } from '@/components/BottomSheet'
@@ -21,11 +9,8 @@ const SEARCHABLE_THRESHOLD = 12
 export interface FilterOption {
   value: string
   label: string
-  /** Optional color dot, e.g. a region's fixed palette color. */
   swatch?: string
-  /** Secondary line, e.g. an exercise's muscle and equipment. */
   hint?: string
-  /** Options sharing a group render under a group heading. */
   group?: string
 }
 
@@ -57,7 +42,7 @@ export function FilterSheet({
     )
   }, [options, query])
 
-  /** Preserve the caller's ordering while inserting group headings. */
+  // Preserve the caller's ordering while inserting group headings.
   const grouped = useMemo(() => {
     const groups: { name: string | undefined; options: FilterOption[] }[] = []
     for (const option of filtered) {
@@ -181,7 +166,6 @@ export function FilterSheet({
   )
 }
 
-/** Shared chip renderer so every filter bar looks identical. */
 export function FilterChipButton({
   label,
   isActive,

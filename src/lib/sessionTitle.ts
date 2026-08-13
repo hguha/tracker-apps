@@ -1,13 +1,5 @@
-/**
- * Automatic session titles (§6.7).
- *
- * A history list of rows all reading "Workout" carries no information. This
- * derives something scannable — `Jul 29 Evening · Push` — from the date and
- * what was actually trained.
- *
- * Display-only: never written to `workouts.title`, so it stays correct when
- * sets are added later, and a user-typed title always wins.
- */
+// Display-only session titles (§6.7): `Jul 29 Evening · Push`, derived from the
+// date and what was trained. Never written to workouts.title; a user title wins.
 
 import { format } from 'date-fns'
 import type { MovementPattern, Region } from '@/domain/types'
@@ -22,7 +14,7 @@ export function partOfDay(timestamp: number): PartOfDay {
   return 'Evening'
 }
 
-/** One entry per working set performed, which is all the inference needs. */
+// One entry per working set performed.
 export interface SetSignal {
   region: Region
   pattern: MovementPattern
@@ -30,21 +22,13 @@ export interface SetSignal {
 
 const UPPER_REGIONS: Region[] = ['chest', 'back', 'shoulders', 'biceps', 'triceps']
 
-/** Share of the session a predicate accounts for, 0–1. */
 function share(signals: SetSignal[], predicate: (s: SetSignal) => boolean): number {
   if (signals.length === 0) return 0
   return signals.filter(predicate).length / signals.length
 }
 
-/**
- * The split label — `Push`, `Legs`, `Upper`, `Full Body`, or a single region's
- * name. Null when there's nothing to infer from.
- *
- * A single region only names itself when it is the *only* region trained.
- * Otherwise the movement story wins: 8 sets of bench plus 2 of triceps reads
- * better as "Push" than as "Chest", because the triceps work is part of the
- * same session intent.
- */
+// A single region names itself only when it's the only one trained; otherwise
+// the movement story wins (bench + a little triceps reads as "Push", not "Chest").
 export function inferSplit(signals: SetSignal[]): string | null {
   if (signals.length === 0) return null
 
@@ -55,7 +39,6 @@ export function inferSplit(signals: SetSignal[]): string | null {
     regionCounts.set(signal.region, (regionCounts.get(signal.region) ?? 0) + 1)
   }
 
-  // Exactly one region trained — nothing more specific to say than its name.
   if (regionCounts.size === 1) {
     const [region] = [...regionCounts.keys()]
     return region === 'cardio' ? 'Cardio' : REGION_LABELS[region!]
@@ -64,8 +47,7 @@ export function inferSplit(signals: SetSignal[]): string | null {
   const pushShare = share(signals, (s) => s.pattern === 'push')
   const pullShare = share(signals, (s) => s.pattern === 'pull')
 
-  // Triceps are push accessories; biceps are pull accessories. Splitting arms
-  // lets each land with the movement it actually accompanies.
+  // Triceps ride with push, biceps with pull, so each lands with its movement.
   const chestShoulderArm = share(signals, (s) =>
     ['chest', 'shoulders', 'triceps'].includes(s.region),
   )
@@ -74,15 +56,12 @@ export function inferSplit(signals: SetSignal[]): string | null {
   const legShare = share(signals, (s) => s.region === 'legs')
   const cardioShare = share(signals, (s) => s.region === 'cardio')
 
-  // Push and pull both draw on arms, so the pattern mix breaks the tie.
   if (chestShoulderArm >= DOMINANT && pushShare > pullShare) return 'Push'
   if (backArm >= DOMINANT && pullShare > pushShare) return 'Pull'
   if (legShare >= DOMINANT) return 'Legs'
   if (cardioShare >= DOMINANT) return 'Cardio'
   if (upperShare >= DOMINANT) return 'Upper'
 
-  // A single region dominating without a clearer story still names itself,
-  // e.g. mostly back rows plus a little core.
   for (const [region, count] of regionCounts) {
     if (count / signals.length >= DOMINANT) {
       return region === 'cardio' ? 'Cardio' : REGION_LABELS[region]
@@ -92,10 +71,6 @@ export function inferSplit(signals: SetSignal[]): string | null {
   return regionCounts.size >= 3 ? 'Full Body' : null
 }
 
-/**
- * The displayed title. Falls back through: the user's own title, then a derived
- * one, then a bare date for an empty session.
- */
 export function sessionTitle(
   userTitle: string,
   startedAt: number,

@@ -1,15 +1,5 @@
-/**
- * A deterministic, offline coach (§13).
- *
- * Not an LLM: it reads the same de-identified summary the real provider will and
- * applies plain heuristics — balance, staleness, adherence, rep-range spread —
- * to produce a genuine critique and a sensible next-week plan. This exists so
- * the entire coach interaction (critique → plan → editable templates → save) is
- * real, testable, and useful *before* any API key exists, and it's the fallback
- * when the network or the LLM is unavailable.
- *
- * Pure given its summary — no I/O, no randomness — so its output is unit-tested.
- */
+// Deterministic offline coach (§13): heuristics over the de-identified summary,
+// used before any API key exists and as the fallback when the LLM is unreachable.
 
 import { REGION_LABELS, type Region } from '@/domain/types'
 import { displayWeight, displayWeightOrNull } from '@/lib/units'
@@ -48,7 +38,6 @@ function critique(summary: CoachSummary): CoachCritique {
     }
   }
 
-  // Weekly frequency vs the stated goal.
   const recentWeeks = summary.weeks.filter((w) => w.weekOffset >= -3)
   const avgPerWeek =
     recentWeeks.length > 0
@@ -65,7 +54,6 @@ function critique(summary: CoachSummary): CoachCritique {
     )
   }
 
-  // Balance: which core regions are untrained or clearly under-trained.
   const setsByRegion = new Map<Region, number>(
     summary.regionSets.map((r) => [r.region, r.sets]),
   )
@@ -79,7 +67,6 @@ function critique(summary: CoachSummary): CoachCritique {
     )
   }
 
-  // Push/pull balance — a common imbalance worth surfacing.
   const push = (setsByRegion.get('chest') ?? 0) + (setsByRegion.get('triceps') ?? 0)
   const pull = (setsByRegion.get('back') ?? 0) + (setsByRegion.get('biceps') ?? 0)
   if (push > 0 && pull > 0) {
@@ -93,7 +80,6 @@ function critique(summary: CoachSummary): CoachCritique {
     }
   }
 
-  // Stale lifts: trained earlier in the window but not recently.
   const stale = summary.exercises
     .filter((e) => e.lastWeekOffset <= -3 && e.sessions >= 2)
     .slice(0, 2)
@@ -104,7 +90,6 @@ function critique(summary: CoachSummary): CoachCritique {
     suggestions.push(`Cycle ${stale[0]!.name} back in if it's still a goal.`)
   }
 
-  // A strength highlight, so the critique isn't only corrective.
   const strongest = summary.exercises
     .filter((e) => e.bestE1rmKg !== null)
     .sort((a, b) => (b.bestE1rmKg ?? 0) - (a.bestE1rmKg ?? 0))[0]
@@ -122,18 +107,9 @@ function critique(summary: CoachSummary): CoachCritique {
   return { observations, suggestions }
 }
 
-/**
- * A parsed reading of a free-text goal. The offline coach can't reason like the
- * LLM, so it extracts the few things that change the shape of a plan — which
- * split, what emphasis, how long — and builds toward *that* rather than toward
- * whatever the user already does most (the "reinforces the imbalance" bug).
- */
 interface GoalIntent {
-  /** Named split the user asked for, or null to continue their own training. */
   split: 'lower' | 'upper' | 'push_pull_legs' | 'full_body' | null
-  /** Rep emphasis: strength (low reps, compounds) vs hypertrophy (moderate). */
   emphasis: 'strength' | 'hypertrophy' | null
-  /** Program length in weeks if the goal named one (e.g. "12-week"), else null. */
   weeks: number | null
 }
 
@@ -156,9 +132,7 @@ function parseGoal(goal: string): GoalIntent {
   return { split, emphasis, weeks }
 }
 
-/** The library-backed movement each session slot draws from, by region. A named
- *  split builds from these so the plan matches the goal even when the user's own
- *  history doesn't cover those regions. Names match the seeded library. */
+// Names must match the seeded library so a named split can build regardless of history.
 const MOVEMENTS: Record<Exclude<Region, 'cardio'>, string[]> = {
   legs: [
     'Barbell Back Squat',
@@ -175,19 +149,10 @@ const MOVEMENTS: Record<Exclude<Region, 'cardio'>, string[]> = {
   core: ['Plank', 'Hanging Leg Raise'],
 }
 
-/**
- * Build a plan toward a stated goal (offline). When the goal names a split, the
- * plan is built from that split's canonical movements — seeded at the user's
- * recent weight where they've done a lift, null otherwise — rather than
- * replaying whatever they train most. A blank goal falls back to continuing
- * their own recent training, split upper/lower.
- */
 function plan(summary: CoachSummary, goal = ''): CoachPlan {
   const unit = summary.unitWeight
   const toDisplay = (kg: number | null) => displayWeightOrNull(kg, unit)
 
-  // The user's recent top set per exercise name, to seed weights when the plan
-  // reuses a lift they've actually done.
   const recentByName = new Map<string, ExerciseAgg>()
   for (const e of summary.exercises) recentByName.set(e.name.toLowerCase(), e)
 
@@ -201,7 +166,6 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
         ? hypertrophyReps
         : [6, 10]
 
-  // Turn a movement name into a planned exercise, seeding from history if present.
   const build = (name: string, isCompound: boolean) => {
     const seen = recentByName.get(name.toLowerCase())
     return {
@@ -213,7 +177,6 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
       note: seen
         ? 'Seeded at your recent working weight; progress from there.'
         : 'New to your log — start conservative and build up.',
-      // Compounds progress; isolation holds its rep range.
       autoProgress: isCompound,
     }
   }
@@ -232,14 +195,11 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
     ),
   })
 
-  // A goal with no split, emphasis, or duration is uninformative — continue the
-  // user's own recent training instead of inventing a split.
+  // An uninformative goal continues the user's own training rather than inventing a split.
   if (intent.split === null && intent.emphasis === null && intent.weeks === null) {
     return continuationPlan(summary)
   }
 
-  // A goal that named an emphasis or duration but no split gets a balanced
-  // upper/lower split built toward that emphasis (rather than continuation).
   const effectiveSplit = intent.split ?? 'upper_lower'
 
   let sessions: PlanSession[]
@@ -330,7 +290,6 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
       break
   }
 
-  // A named duration makes it a program; progression carries the weekly load.
   if (intent.weeks) {
     programName =
       intent.emphasis === 'strength'
@@ -342,7 +301,6 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
   return { overview, programName, durationWeeks: intent.weeks, sessions }
 }
 
-/** The blank-goal path: continue the user's recent lifts, split upper/lower. */
 function continuationPlan(summary: CoachSummary): CoachPlan {
   const unit = summary.unitWeight
   const toDisplay = (kg: number | null) => displayWeightOrNull(kg, unit)
@@ -411,7 +369,6 @@ function continuationPlan(summary: CoachSummary): CoachPlan {
   }
 }
 
-/** A balanced beginner week, used only when there's no history to build on. */
 const STARTER_SESSIONS: PlanSession[] = [
   {
     name: 'Full Body A',
@@ -479,7 +436,6 @@ const STARTER_SESSIONS: PlanSession[] = [
   },
 ]
 
-/** Answer a freeform question from the summary — heuristic, honest about limits. */
 function answer(summary: CoachSummary, question: string): string {
   const q = question.toLowerCase()
 
@@ -487,7 +443,6 @@ function answer(summary: CoachSummary, question: string): string {
     return "There's no training history yet, so I can't answer from your data. Log a few sessions and ask again."
   }
 
-  // A few recognizable intents; otherwise a grounded fallback.
   if (q.includes('volume') || q.includes('how much')) {
     const total = summary.weeks.reduce((s, w) => s + w.sets, 0)
     return `Over the last ${summary.weeksCovered} weeks you've logged ${total} working sets across ${summary.totalWorkouts} sessions.`
@@ -507,8 +462,6 @@ function answer(summary: CoachSummary, question: string): string {
   )
 }
 
-/** Whether an Ask question is really asking for a workout/program to be built,
- *  so the offline coach can answer with a plan instead of prose. */
 function looksLikePlanRequest(question: string): boolean {
   const q = question.toLowerCase()
   return /\b(give me|make me|build|design|create|plan|program|split|routine|workout|day|week)\b/.test(
@@ -516,7 +469,6 @@ function looksLikePlanRequest(question: string): boolean {
   )
 }
 
-/** A warm 1–2 sentence note for the Home greeting, grounded in the numbers. */
 function encouragement(summary: CoachSummary): string {
   if (summary.totalWorkouts === 0) {
     return "Every strong log starts with one session — get the first one in and I'll start tracking your progress."
@@ -537,15 +489,10 @@ function encouragement(summary: CoachSummary): string {
   return `${summary.totalWorkouts} sessions logged and counting. Showing up is the hard part, and you're doing it.`
 }
 
-/**
- * The offline coach. Available everywhere; used until a real LLM provider is
- * wired, and as the fallback when one is unreachable.
- */
 export const mockCoachProvider: CoachProvider = {
   name: 'FitNote Coach (offline)',
   async respond(summary: CoachSummary, request: CoachRequest): Promise<CoachResponse> {
-    // A per-request goal wins; otherwise fall back to the standing profile goal
-    // so even a bare "Plan" builds toward what the user is training for.
+    // A per-request goal wins; else fall back to the standing profile goal.
     switch (request.kind) {
       case 'critique':
         return { kind: 'critique', critique: critique(summary) }
@@ -555,8 +502,7 @@ export const mockCoachProvider: CoachProvider = {
           plan: plan(summary, request.goal || summary.trainingGoal),
         }
       case 'ask': {
-        // If the question reads like a plan request, answer with a plan built
-        // toward it — matching the live provider's unified Ask behavior.
+        // A plan-like question is answered with a plan, matching the live provider.
         if (looksLikePlanRequest(request.question)) {
           return { kind: 'plan', plan: plan(summary, request.question) }
         }

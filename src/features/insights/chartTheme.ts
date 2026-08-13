@@ -1,12 +1,3 @@
-/**
- * Shared chart chrome (§10.4).
- *
- * Every chart builds its option object on top of `baseOption()` so marks stay
- * thin, gridlines stay solid hairlines one shade off the surface, and text wears
- * text tokens rather than series colors. Resolved at call time so a theme switch
- * picks up the new values.
- */
-
 import type { EChartsOption } from 'echarts'
 import { resolveToken } from '@/lib/palette'
 
@@ -17,24 +8,7 @@ export interface ChartChrome {
   gridline: string
   axis: string
   surface: string
-  /**
-   * The mark color for a **single-series** chart — categorical slot 1, fixed.
-   *
-   * Deliberately not the theme accent. Measuring each theme's accent against the
-   * 7 region colors (OKLab ΔE ×100) found every theme but Mono landing inside
-   * the ≥15 series floor of some region — Forest's dark accent sits 4.0 from the
-   * legs hue. Letting the accent draw marks would mean the same green is a
-   * button in one card and "legs" in the next.
-   *
-   * Using slot 1 keeps mark color stable across themes and matches the rule that
-   * a one-series chart takes slot 1 rather than a value ramp. It shares the chest
-   * hue, which is fine: these charts plot one titled series and encode nothing
-   * categorically, so there is no second meaning for the color to collide with.
-   * Any chart that *does* encode regions uses the region palette throughout.
-   *
-   * Interactive chrome inside a chart card — filter chips, the table toggle —
-   * still uses the accent, because those are controls, not marks.
-   */
+  // Single-series mark color = categorical slot 1, not the accent (which can collide with region hues).
   plot: string
 }
 
