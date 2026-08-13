@@ -1,26 +1,14 @@
-/**
- * Service worker for FitNote.
- *
- * Two goals: (1) keep the app openable when offline, and (2) do NOT get in the
- * way of a fresh deploy. Vite fingerprints every asset filename with a content
- * hash, so once a hash is in the cache it can serve from there forever; new
- * hashes come in on the next network fetch. index.html is the only path with a
- * stable URL that changes contents, so it must go to network first.
- *
- * SCOPE: this worker is registered with an explicit scope of
- * /workout-tracker/ because the origin also hosts the marketing site
- * (DEPLOYING.md). It only ever intercepts requests inside its scope.
- */
+// Offline shell for FitNote. index.html is network-first so a deploy takes
+// effect at once; Vite's content-hashed assets are cache-first since a given
+// URL never changes contents. Scoped to the registration path — the origin is
+// shared with the marketing site (DEPLOYING.md).
 
 const CACHE_NAME = 'fitnote-v1'
 const SCOPE_PATH = new URL(self.registration.scope).pathname // '/workout-tracker/'
 
 self.addEventListener('install', (event) => {
-  // Precache just the app root so an offline reload has something to open;
-  // the hashed assets follow on the first successful load.
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.add(SCOPE_PATH)),
-  )
+  // The app root is enough to open offline; hashed assets fill in on first load.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add(SCOPE_PATH)))
   self.skipWaiting()
 })
 
@@ -50,8 +38,6 @@ self.addEventListener('fetch', (event) => {
   const isNavigation = req.mode === 'navigate' || req.destination === 'document'
 
   if (isNavigation) {
-    // Network-first for the shell: a deploy takes effect immediately when online,
-    // and the cached copy is the offline fallback.
     event.respondWith(
       (async () => {
         try {
@@ -72,9 +58,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Hashed assets (JS, CSS, fonts, images): stale-while-revalidate. Serve the
-  // cache immediately and refresh in the background, so offline works and a
-  // slow network never stalls a page load.
+  // Hashed assets: serve cache, refresh in the background.
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE_NAME)

@@ -16,12 +16,9 @@ export async function updateProfile(patch: Partial<Profile>): Promise<void> {
 // Re-owns device-only ('local-user') rows to a real uid on sign-in so server RLS
 // accepts them (§11.1.3). One transaction so a crash can't half-migrate ownership.
 //
-// Chained tables (workoutExercises, sets, templateExercises) carry no client-side
-// userId, so ownership can't be read off the row directly. Instead we track which
-// workouts and templates were re-owned in this pass and only enqueue children of
-// those parents — otherwise every log-in that trips the composite-provider
-// upgrade path would push every set on the device to the server again, even
-// rows that have been synced for months.
+// Chained rows carry no userId, so children of parents that weren't re-owned
+// this pass must be skipped — enqueueing them all would re-push already-synced
+// data on every upgrade.
 
 export async function claimLocalData(newUserId: string): Promise<number> {
   if (newUserId === LOCAL_USER_ID) return 0
@@ -110,9 +107,7 @@ export async function claimLocalData(newUserId: string): Promise<number> {
       await reownOwned('exercises', db.exercises as never)
       await reownOwned('metricDefinitions', db.metricDefinitions as never)
 
-      // Nothing was locally owned by the device user — the upgrade fired on a
-      // device that had already been claimed. Every chained row belongs to a
-      // parent that is already the caller's, so there is nothing to re-enqueue.
+      // No parents re-owned → all chained rows are already the caller's.
       if (claimedWorkoutIds.size === 0 && claimedTemplateIds.size === 0) return
 
       for (const we of await db.workoutExercises.toArray()) {
@@ -124,8 +119,6 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         claimed += 1
       }
 
-      // A set's parent workout is one hop away; build the WE→workout map once so
-      // this stays O(sets) instead of an .get() per row inside a transaction.
       const workoutIdOfWe = new Map<string, string>()
       for (const we of await db.workoutExercises.toArray()) {
         workoutIdOfWe.set(we.id, we.workoutId)

@@ -16,9 +16,7 @@ import { fileURLToPath } from 'node:url'
  */
 const basePath = process.env.BASE_PATH ?? '/workout-tracker/'
 
-// Stamp the build with `<package version>+<git short-hash>` so a crash report
-// in the client_errors table can be tied to a specific commit. Vercel exposes
-// the commit sha as VERCEL_GIT_COMMIT_SHA; falls back to a local git call.
+// `<version>+<git-sha>`, so a client_errors row points at a commit.
 function appVersion(): string {
   const pkg = JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string }
   const sha =

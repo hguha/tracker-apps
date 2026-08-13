@@ -1,19 +1,7 @@
 /**
- * First-party error reporting (§11.4).
- *
- * §11.4 forbids a third-party error SDK because the app holds health-adjacent
- * data. So instead of Sentry we insert a scrubbed record into `client_errors`
- * (migration 0020). The client can INSERT but cannot SELECT; developer reads
- * happen through the service role in the dashboard. The row cascades away on
- * account deletion.
- *
- * Best-effort by design. If the network fails, the client isn't signed in, or
- * the backend isn't configured, we drop the report silently — the console log
- * is still there for whoever is looking.
- *
- * Signed-out and device-only sessions do not report. RLS would reject those
- * inserts anyway (auth.uid() is null), and it keeps privacy tight: a user who
- * hasn't opted into an account never leaks anything, including error text.
+ * First-party error reporting (§11.4): insert a scrubbed record into
+ * `client_errors` instead of running a third-party SDK. Best-effort — anything
+ * short of a signed-in caller with a working network drops the report silently.
  */
 
 import { getSupabase } from '@/sync/supabaseClient'
@@ -23,11 +11,9 @@ export type ErrorContext =
   | 'window-error'
   | 'unhandled-rejection'
 
-// A short, stable identifier for the running build — set at build time by Vite
-// (see vite.config.ts). Falls back to 'dev' under `vite dev`.
 const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev'
 
-// A cheap same-payload dedupe so a render loop doesn't flood the table.
+// Same-payload dedupe so a render loop can't flood the table.
 const recentKeys = new Map<string, number>()
 const DEDUPE_WINDOW_MS = 60_000
 const MAX_MESSAGE_LEN = 4_000
@@ -56,7 +42,7 @@ export async function reportError(
   const client = getSupabase()
   if (!client) return
 
-  // A signed-out or device-only caller has no auth.uid() and would fail RLS.
+  // No auth.uid() → the insert would fail RLS anyway; don't leak error text either.
   const { data } = await client.auth.getSession()
   const userId = data.session?.user.id
   if (!userId) return
@@ -82,14 +68,11 @@ export async function reportError(
         typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,
     })
   } catch {
-    // Fire-and-forget: reporting failures must never bubble into user-facing code.
+    // A failed report must never bubble into user-facing code.
   }
 }
 
-/**
- * Wires window-level error and unhandled-rejection handlers to the reporter.
- * Idempotent — safe to call once from main.tsx.
- */
+/** Routes window errors and unhandled rejections to the reporter. Idempotent. */
 export function installGlobalErrorHandlers(): void {
   if (typeof window === 'undefined') return
   if ((window as unknown as { __fitnoteErrorHandlersInstalled?: boolean })
