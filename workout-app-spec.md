@@ -497,7 +497,7 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 
 ## 13. What's built
 
-346 tests passing. Everything below is in the codebase and working.
+375 tests passing. Everything below is in the codebase and working.
 
 | Area | State |
 |---|---|
@@ -507,15 +507,16 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 | Repeat a past session, start screen as a list of recent sessions | ✅ |
 | Exercise library screen with full taxonomy | ✅ |
 | History list + calendar + filters + pagination | ✅ |
-| 21 of 41 charts, config-driven, with table twins and empty states | ✅ |
+| 23 of 41 charts, config-driven, with table twins and empty states | ✅ |
 | Body metrics (28 definitions) | ✅ |
 | Rest timer tier 1, sound cues | ✅ |
 | Themes + custom accent | ✅ |
 | Home — goal ring, streaks, 32 badges, avatar (opt-in), coach greeting | ✅ |
 | Auth — magic link, OTP fallback, device-only, composite provider, local→account upgrade | ✅ |
-| Supabase backend — schema, RLS + test suite, 12 migrations, live project | ✅ |
+| Supabase backend — schema, RLS + test suite, 16 migrations, live project | ✅ |
 | Sync — event-driven push, pull on open/foreground/manual, deferred in-progress workouts, dead-letter, retry, discard-local, hard erase | ✅ |
 | AI coach — mock + Gemini, critique/plan/ask/encouragement, data disclosure | ✅ |
+| Account deletion Edge Function — cascades from `auth.users` | ✅ |
 | Export / import JSON | ✅ |
 
 ## 14. What's not built
@@ -525,16 +526,17 @@ Ordered by value, with the reason it hasn't happened.
 | Item | Why it's still open |
 |---|---|
 | **PWA shell** — Workbox service worker, `navigator.storage.persist()`, iOS install education | Already works offline (IndexedDB is the read path); this is the installable wrapper and eviction protection. `persist()` matters most — without it iOS may evict IndexedDB under pressure. |
-| **Remaining 20 charts** | Mostly the Body sub-tab, which needs logged biomarker history before it can draw anything. |
+| **Remaining 18 charts** | Mostly the Body sub-tab, which needs logged biomarker history before it can draw anything. |
 | **Per-exercise charts on the library detail screen** | Data and chart components both exist; wiring only. |
 | **Pinned charts + URL filter state** | Needs `chart_prefs` and a router; deferred with routing itself. |
 | **Plate calculator** | Nice-to-have; the quick-adjust chips cover most of it. |
 | **Rest timer tiers 2 and 3** | Tier 3 needs a Cloudflare Durable Object. Only matters if the phone locks mid-rest. |
 | **Bootstrap pull with progress bar** | The delta pull handles `since = 0` already; this is the determinate-progress UI. |
-| **`delete-account` Edge Function + `keep_alive` cron** | Account deletion currently needs the service role. Keep-alive matters at 1 week idle (§2). |
+| **`keep_alive` cron** | Supabase pauses free-tier projects at 1 week idle (§2). Trivial scheduled function; matters at rest, not at use. |
+| **Error monitoring** | No Sentry / crash reporting wired. Production visibility gap. |
 | **Weekly R2 backup** | Manual JSON export covers it for now. |
 | **Progress photos** | Needs a private bucket, signed URLs, and mandatory client-side compression — uncompressed phone photos exhaust the 1 GB free tier in ~15 months. |
-| **E2E tests (Playwright)** | Unit and integration coverage is solid; the offline→force-quit→reconnect path is still manual. |
+| **E2E tests (Playwright)** | Unit and integration coverage is solid; the offline→force-quit→reconnect path is still manual. Old browser smoke scripts were removed after the equipment-as-dimension migration made their seeded exercise IDs invalid. |
 | **TS↔SQL metric parity test** | Only needed if server-side aggregation lands (§8.2). |
 
 ## 15. Deliberately abandoned
@@ -561,7 +563,7 @@ Recorded so they don't get "rediscovered".
 ## 16. Testing
 
 - **Unit:** `lib/units.ts` (round-trip), `lib/dates.ts` (DST, week starts, timezones), `lib/metrics.ts` (every tracking type, bodyweight math, the 12-rep e1RM cutoff, cardio kept out of volume), `lib/progression.ts`, `lib/sessionTitle.ts`, `lib/theme.ts`.
-- **Repository:** 107 tests — the logging loop, placeholder precedence, PR recomputation and announcement scoping, outbox contents, the local→account claim, deletion semantics.
+- **Repository:** 106 tests — the logging loop, placeholder precedence, PR recomputation and announcement scoping, outbox contents, the local→account claim, deletion semantics.
 - **Sync:** against a mock backend — offline queueing, replay idempotency, permanent/transient/auth classification, dead-lettering, tombstones, deferred in-progress workouts, hard delete, discard-local.
 - **Security:** per table, user A cannot read or write user B's rows (`supabase/tests/rls.test.sql`).
 - **Not covered:** E2E (Playwright), and manual device passes for iOS install, audio unlock, and locked-screen push.

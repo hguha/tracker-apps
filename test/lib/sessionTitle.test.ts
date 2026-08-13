@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MovementPattern, Region } from '@/domain/types'
-import { inferSplit, partOfDay, sessionTitle, type SetSignal } from './sessionTitle'
+import { inferSplit, partOfDay, sessionTitle, type SetSignal } from '@/lib/sessionTitle'
 
 function signals(entries: [Region, MovementPattern, number][]): SetSignal[] {
   return entries.flatMap(([region, pattern, count]) =>

@@ -7,7 +7,7 @@
  * failure classification, backoff, dead-lettering, and pending-write guard.
  */
 
-import type { PulledRow, PushOutcome, PushRow, SyncBackend } from './backend'
+import type { PulledRow, PushOutcome, PushRow, SyncBackend } from '@/sync/backend'
 
 type Store = Map<string, Map<string, Record<string, unknown>>>
 

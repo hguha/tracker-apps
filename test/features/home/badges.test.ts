@@ -5,7 +5,7 @@ import {
   groupedBadges,
   homeBadges,
   type LifetimeStats,
-} from './badges'
+} from '@/features/home/badges'
 
 const KG_PER_LB = 1 / 2.20462262185
 const lb = (pounds: number) => pounds * KG_PER_LB

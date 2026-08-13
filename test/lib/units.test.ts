@@ -13,7 +13,7 @@ import {
   lengthToCm,
   weightFromKg,
   weightToKg,
-} from './units'
+} from '@/lib/units'
 
 describe('weight round-trip', () => {
   // The requirement from §4.12: what the user typed is what the user sees.

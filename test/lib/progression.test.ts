@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextTarget, type ProgressionInput, type ProgressionSet } from './progression'
+import { nextTarget, type ProgressionInput, type ProgressionSet } from '@/lib/progression'
 import type { ProgressionRule } from '@/domain/types'
 
 const RULE: ProgressionRule = { kind: 'double', incrementKg: 2.5, maxRpe: 8 }

@@ -45,6 +45,9 @@ const PLAN_EXERCISE_SCHEMA = {
     repHigh: { type: 'integer' },
     weight: { type: 'number', nullable: true },
     // An exercise name is a movement only; how it's loaded is this separate field.
+    // Kept in sync with `EQUIPMENT` in src/domain/types.ts — Deno can't import
+    // that file, and the enum here constrains what Gemini is allowed to output.
+    // If you add an item there, add it here and redeploy the function.
     equipment: {
       type: 'string',
       nullable: true,

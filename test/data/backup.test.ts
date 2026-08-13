@@ -9,7 +9,7 @@ import {
   exportToJson,
   importBackup,
   parseBackup,
-} from './backup'
+} from '@/data/backup'
 
 beforeEach(async () => {
   setActiveUserId(LOCAL_USER_ID)

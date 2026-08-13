@@ -9,7 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    include: ['test/**/*.test.ts'],
     // fake-indexeddb lets the Dexie-backed repository be tested without a browser.
-    setupFiles: ['./src/test/setup.ts'],
+    setupFiles: ['./test/setup.ts'],
   },
 })

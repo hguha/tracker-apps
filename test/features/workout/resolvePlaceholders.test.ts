@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePlaceholders, type SetValues } from './resolvePlaceholders'
+import { resolvePlaceholders, type SetValues } from '@/features/workout/resolvePlaceholders'
 
 function set(id: string, v: Partial<SetValues> = {}): SetValues & { id: string } {
   return { id, weightKg: null, reps: null, durationSeconds: null, distanceM: null, ...v }

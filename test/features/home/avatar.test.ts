@@ -6,7 +6,7 @@ import {
   overallCondition,
   regionFitness,
   WINDOW_DAYS,
-} from './avatar'
+} from '@/features/home/avatar'
 import type { Region } from '@/domain/types'
 
 describe('regionFitness', () => {

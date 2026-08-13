@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deriveBases, BASE_EXERCISES, VARIANT_MAPPINGS } from './bases'
-import { EXERCISE_SEEDS } from './exercises'
+import { deriveBases, BASE_EXERCISES, VARIANT_MAPPINGS } from '@/db/seed/bases'
+import { EXERCISE_SEEDS } from '@/db/seed/exercises'
 
 describe('deriveBases', () => {
   const { bases, mappings } = deriveBases(EXERCISE_SEEDS)

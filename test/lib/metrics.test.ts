@@ -8,7 +8,7 @@ import {
   topSetWeightKg,
   volumeLoadKg,
   weightForRepsKg,
-} from './metrics'
+} from '@/lib/metrics'
 
 type SetInput = Parameters<typeof volumeLoadKg>[0][number] & Pick<WorkoutSet, 'rpe'>
 

@@ -8,7 +8,7 @@ import {
   parseHex,
   resolveScheme,
   toHex,
-} from './theme'
+} from '@/lib/theme'
 
 const LIGHT_SURFACE = { r: 252, g: 252, b: 251 }
 const DARK_SURFACE = { r: 26, g: 26, b: 25 }

@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import * as repo from '@/data/repository'
-import { buildExerciseResolver } from './resolveExerciseName'
+import { buildExerciseResolver } from '@/data/resolveExerciseName'
 import type { Equipment } from '@/domain/types'
 
 let resolve: ReturnType<typeof buildExerciseResolver>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeStreaks } from './streaks'
+import { computeStreaks } from '@/features/home/streaks'
 import { weekStart } from '@/lib/dates'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000

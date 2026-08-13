@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { classify, toPostgresRow } from './supabaseBackend'
+import { classify, toPostgresRow } from '@/sync/supabaseBackend'
 
 /** Minimal PostgrestError-shaped object for the classifier. */
 function err(code: string, message = 'x') {

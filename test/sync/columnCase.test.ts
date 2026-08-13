@@ -7,7 +7,7 @@ import {
   msToIso,
   snakeToCamel,
   tableToPostgres,
-} from './columnCase'
+} from '@/sync/columnCase'
 
 describe('column case conversion', () => {
   it('round-trips a key through camel↔snake', () => {

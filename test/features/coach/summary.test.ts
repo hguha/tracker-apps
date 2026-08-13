@@ -4,7 +4,7 @@ import {
   SUMMARY_VERSION,
   type SummaryInput,
   type SummarySession,
-} from './summary'
+} from '@/features/coach/summary'
 
 function session(
   weekOffset: number,

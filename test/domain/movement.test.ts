@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isCardioPattern, movementFor, patternForRegion } from './movement'
-import { MOVEMENT_PATTERNS, REGIONS } from './types'
+import { isCardioPattern, movementFor, patternForRegion } from '@/domain/movement'
+import { MOVEMENT_PATTERNS, REGIONS } from '@/domain/types'
 
 describe('patternForRegion', () => {
   it('maps pushing regions to push', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mockCoachProvider } from './mockProvider'
-import type { CoachSummary, ExerciseAgg } from './summary'
+import { mockCoachProvider } from '@/features/coach/mockProvider'
+import type { CoachSummary, ExerciseAgg } from '@/features/coach/summary'
 
 function ex(partial: Partial<ExerciseAgg> & { name: string }): ExerciseAgg {
   return {

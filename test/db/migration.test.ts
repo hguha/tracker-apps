@@ -9,7 +9,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import Dexie from 'dexie'
-import { db, WorkoutDatabase } from './database'
+import { db, WorkoutDatabase } from '@/db/database'
 
 const NAME = 'upgrade-test'
 

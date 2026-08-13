@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import * as repo from '@/data/repository'
-import { SyncEngine } from './engine'
+import { SyncEngine } from '@/sync/engine'
 import { MockBackend } from './mockBackend'
 
 /**
