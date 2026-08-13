@@ -1,15 +1,3 @@
-/**
- * One exercise within a session: the last-time header, its set rows, and the
- * add-set action.
- *
- * The header is rendered unconditionally, never behind a tap (§1, §6.3). It is
- * the most useful information mid-workout — "what did I do last time" is the
- * question every set starts with — so it costs zero interaction.
- *
- * PR candidacy is computed here rather than in the row, because it needs the
- * stored records for the whole exercise and the row shouldn't each fetch them.
- */
-
 import { useEffect, useMemo, useState } from 'react'
 import { GripVertical, MoreHorizontal, Plus, StickyNote } from 'lucide-react'
 import { Card } from '@/components/Card'
@@ -32,7 +20,6 @@ import { SetRow, hasLoggedValues } from './SetRow'
 import { hasValue, resolvePlaceholders } from './resolvePlaceholders'
 import { isCardioPattern } from '@/domain/movement'
 
-/** The subset of a performed set that can act as a placeholder. */
 export interface SetPlaceholderHint {
   weightKg: number | null
   reps: number | null
@@ -44,29 +31,19 @@ export interface ExerciseCardProps {
   exercise: Exercise
   muscle: Muscle | undefined
   sets: WorkoutSet[]
-  /**
-   * The session of this exercise immediately before the workout being viewed, or
-   * null if there isn't one. Drives both the header summary and the `Last`
-   * column, so an older workout never shows numbers from a newer one.
-   */
+  // The session immediately before the one being viewed, so an older workout
+  // never shows numbers from a newer one.
   previousSession: PerformedSession | null
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   showRpe: boolean
-  /** Non-null marks this card as part of a superset group (§6.4). */
   supersetGroup: number | null
-  /** This exercise's note within this workout, distinct from the exercise's own. */
   sessionNote: string
-  /**
-   * Per-set placeholder hints from a "do this again" copy (§7.2), keyed by set id.
-   * These win over history, because repeating a specific session should suggest
-   * that session's numbers.
-   */
+  // Per-set hints from a "do this again" copy (§7.2), keyed by set id; win over history.
   placeholderOverrides: Record<string, PerformedSet | SetPlaceholderHint>
   onAddSet: () => void
   onSetChange: (setId: string, patch: Partial<WorkoutSet>) => void
   onDeleteSet: (setId: string) => void
-  /** `shown` is the ghost the row is displaying — see `repo.confirmPlaceholder`. */
   onConfirmPlaceholder: (setId: string, shown: SetPlaceholderHint | undefined) => void
   onDuplicateSet: (setId: string) => void
   onOpenDetail: () => void
@@ -92,10 +69,6 @@ export function ExerciseCard(props: ExerciseCardProps) {
     onOpenDetail,
   } = props
 
-  /**
-   * Which set ids currently hold record-beating values. Recomputed whenever the
-   * sets change, so the glow tracks edits rather than only firing once.
-   */
   const [recordSetIds, setRecordSetIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -104,8 +77,8 @@ export function ExerciseCard(props: ExerciseCardProps) {
       const matches = new Set<string>()
       for (const set of sets) {
         if (!hasLoggedValues(set, exercise)) continue
-        // Pass the whole set (id included) so a row that already holds the
-        // record isn't compared against itself and thus stops glowing.
+        // Pass the whole set (id included) so a row already holding the record
+        // isn't compared against itself and stops glowing.
         const broken = await repo.previewRecords(exercise.id, set)
         if (broken.length > 0) matches.add(set.id)
       }
@@ -123,20 +96,6 @@ export function ExerciseCard(props: ExerciseCardProps) {
     [previousSession],
   )
 
-  /**
-   * The placeholder for each row, resolved once in row order (§6.2, §7.2).
-   *
-   * Precedence per row, highest first:
-   *   1. A per-set override from a repeated workout or a template (§7.2) — an
-   *      explicit request for *that* source's numbers.
-   *   2. The matching set from the last time this exercise was trained.
-   *   3. Carry-forward: the most recent numbers from earlier in this same card —
-   *      either what was actually logged in an earlier row, or that row's own
-   *      placeholder. So on a brand-new exercise, logging set 1 gives set 2 a
-   *      placeholder even with no history at all.
-   * Blank only when the exercise has never been done and nothing precedes the
-   * row — which, given carry-forward, effectively never happens after set 1.
-   */
   const placeholderFor = useMemo<(PerformedSet | undefined)[]>(
     () => resolvePlaceholders(sets, placeholderOverrides, previousSets),
     [sets, placeholderOverrides, previousSets],
@@ -151,13 +110,10 @@ export function ExerciseCard(props: ExerciseCardProps) {
     <Card
       className={cn(
         'overflow-hidden',
-        // A superset is a shared left rule rather than a box, so grouped cards
-        // still read as separate exercises.
         supersetGroup !== null && 'border-l-[3px] border-l-accent',
       )}
     >
       <div className="flex items-start gap-1 px-2.5 pt-3 pb-1">
-        {/* The whole card is draggable. */}
         <span className="mt-0.5 shrink-0 text-ink-muted/60" aria-hidden>
           <GripVertical size={16} />
         </span>
@@ -188,10 +144,6 @@ export function ExerciseCard(props: ExerciseCardProps) {
               {loggingHint(exercise, weightUnit)}
             </p>
           )}
-          {/* Notes are visible on the card, not hidden behind the ⋯ — a note you
-              have to go looking for is a note you don't read mid-set. Tapping one
-              opens the sheet to edit it. The session note leads, since it's the
-              more urgent of the two. */}
           {(sessionNote.trim() !== '' || exercise.notes.trim() !== '') && (
             <button
               onClick={onOpenDetail}
@@ -239,7 +191,6 @@ export function ExerciseCard(props: ExerciseCardProps) {
         </div>
       ) : (
         <>
-          {/* Column headings, so an untouched first-ever row still reads clearly. */}
           <div className="mt-1 flex items-center gap-2 border-t border-line px-3 pb-1 pt-1.5 pr-2.5">
             <span className="w-6 shrink-0 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
               Set
@@ -301,20 +252,12 @@ export function ExerciseCard(props: ExerciseCardProps) {
   )
 }
 
-/**
- * A one-line convention hint, so logging is unambiguous where it commonly isn't:
- * for a dumbbell lift, enter the weight of **one** dumbbell, not the pair. (The
- * "per side" note was dropped — it read as more confusing than helpful.)
- */
 function loggingHint(exercise: Exercise, weightUnit: WeightUnit): string | null {
   if (exercise.equipment === 'dumbbell') return `Enter one dumbbell’s ${weightUnit}`
   return null
 }
 
-/**
- * Column headings matching whatever inputs `trackingType` produces. Kept beside
- * the layout switch in SetRow — if one changes, so must the other.
- */
+// Must stay in sync with the layout switch in SetRow's inputLayoutFor.
 function columnLabels(
   exercise: Exercise,
   weightUnit: WeightUnit,
@@ -339,7 +282,6 @@ function columnLabels(
   }
 }
 
-/** The one-line summary: date, sets × reps, best e1RM. */
 function summarizeLastSession(
   session: PerformedSession | null,
   weightUnit: WeightUnit,

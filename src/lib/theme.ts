@@ -1,12 +1,6 @@
-/**
- * Theme application and accent validation (§10.8).
- *
- * A custom accent has to stay readable against both the light and dark surface
- * of the chosen preset, since a single stored hex is used in both. Rather than
- * rejecting a color the user liked, we walk its lightness until it clears the
- * contrast floor — nudging to the nearest passing step, which is the same
- * discipline the chart palette follows.
- */
+// Theme application and accent validation (§10.8). A custom accent is one stored
+// hex used on both light and dark surfaces, so it's nudged to clear the contrast
+// floor rather than rejected.
 
 export const THEME_PRESETS = [
   { id: 'default', label: 'Default', swatch: '#2a78d6' },
@@ -21,10 +15,7 @@ export const THEME_PRESETS = [
 export type ThemeId = (typeof THEME_PRESETS)[number]['id']
 export type ColorSchemePreference = 'system' | 'light' | 'dark'
 
-/** Text/UI contrast floor for an accent that carries white or dark text on it. */
 const MIN_CONTRAST = 3
-
-// ------------------------------------------------------------ color math
 
 interface Rgb {
   r: number
@@ -82,14 +73,11 @@ function scale(color: Rgb, factor: number): Rgb {
   }
 }
 
-/**
- * Nudges a color toward or away from a surface until it clears the contrast
- * floor, preserving hue. Returns the original when it already passes.
- */
+// Nudges a color away from a surface (preserving hue) until it clears the
+// contrast floor. Returns the original when it already passes.
 export function ensureContrast(color: Rgb, surface: Rgb, minRatio = MIN_CONTRAST): Rgb {
   if (contrastRatio(color, surface) >= minRatio) return color
 
-  // Move away from the surface: darker on light surfaces, lighter on dark ones.
   const direction = luminance(surface) > 0.5 ? -1 : 1
   let candidate = color
   for (let step = 1; step <= 20; step += 1) {
@@ -99,17 +87,13 @@ export function ensureContrast(color: Rgb, surface: Rgb, minRatio = MIN_CONTRAST
   return candidate
 }
 
-/** A wash for active states — the accent at low alpha. */
 export function accentWash(hex: string, alpha = 0.14): string {
   const rgb = parseHex(hex)
   if (!rgb) return 'rgba(0,0,0,0.08)'
   return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${alpha})`
 }
 
-/**
- * Whether white or near-black text is legible on this accent. Buttons use the
- * accent as a background, so this decides the label color.
- */
+// White or near-black, whichever is legible on this accent (buttons use it as bg).
 export function contrastingInk(hex: string): string {
   const rgb = parseHex(hex)
   if (!rgb) return '#ffffff'
@@ -118,14 +102,9 @@ export function contrastingInk(hex: string): string {
   return contrastRatio(rgb, white) >= contrastRatio(rgb, black) ? '#ffffff' : '#0b0b0b'
 }
 
-// ---------------------------------------------------------------- apply
-
 export interface AppearanceSettings {
-  /**
-   * A preset id. Typed loosely because it round-trips through storage, where an
-   * older or newer build could have written a name this version doesn't know;
-   * `applyAppearance` falls back rather than leaving the app unthemed.
-   */
+  // Loosely typed: it round-trips through storage where another build could have
+  // written an unknown name. resolveTheme falls back rather than leaving it unset.
   theme: string
   colorScheme: ColorSchemePreference
   accentOverride: string | null
@@ -143,18 +122,8 @@ export function resolveScheme(preference: ColorSchemePreference): 'light' | 'dar
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-/**
- * Writes the theme to <html>. Called on load and whenever appearance changes.
- * Everything else in the app reads CSS variables, so this is the only place
- * that knows a theme switch happened.
- */
-/**
- * Applies the default theme before any profile has loaded.
- *
- * Without this, `--accent` and `--surface-*` are unset until sign-in completes,
- * so the auth screen renders its accent-colored button and logo as transparent
- * shapes. Called once at module load.
- */
+// Applied once at module load, before any profile exists, so the auth screen's
+// accent-colored elements aren't transparent until sign-in.
 export function applyDefaultAppearance(): void {
   applyAppearance({ theme: 'default', colorScheme: 'system', accentOverride: null })
 }
@@ -170,8 +139,7 @@ export function applyAppearance(settings: AppearanceSettings): void {
   if (settings.accentOverride) {
     const rgb = parseHex(settings.accentOverride)
     if (rgb) {
-      // The same stored accent is used in both schemes, so hold it to the
-      // contrast floor of whichever surface is currently showing.
+      // Hold the accent to the contrast floor of whichever surface is showing.
       const surface =
         scheme === 'dark' ? { r: 26, g: 26, b: 25 } : { r: 252, g: 252, b: 251 }
       const safe = toHex(ensureContrast(rgb, surface))

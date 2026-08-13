@@ -1,21 +1,6 @@
 /**
- * The sync engine (§5.5).
- *
- * IndexedDB is authoritative for the UI; this engine reconciles it with the
- * server. It never blocks a read and never sits in the logging path — a component
- * writes locally and enqueues, and the engine sends later.
- *
- * Triggers live in `useSync`, and the split matters: a **push** fires when a write
- * is enqueued or connectivity returns, while a **pull** only happens on app
- * open/foreground or when the user asks. Pull writes to IndexedDB, which re-runs
- * every live query, so doing it on a timer re-rendered the screen mid-use — on a
- * phone that swallowed taps outright.
- *
- * Drains sequentially by `seq`: parallel drains reorder dependent writes (a set
- * before its workout_exercise) into FK violations. Failure classification and the
- * pull's local-pending guard are documented at their implementations.
- *
- * Backend-agnostic (§5.6): it talks only to `SyncBackend`.
+ * The sync engine (§5.5). IndexedDB is authoritative; this reconciles it with the
+ * server. Backend-agnostic (§5.6): talks only to `SyncBackend`.
  */
 
 import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
@@ -24,12 +9,9 @@ import { syncLog } from './log'
 
 /**
  * Tables that participate in sync, in dependency order for the initial pull.
- *
- * `personalRecords` is deliberately absent: PRs are *derived* from sets, and the
- * repository recomputes them locally on every set change without enqueuing. Each
- * device rebuilds its own from the synced sets (the server does the same via
- * `rebuild_prs`), so syncing the derived rows would be both redundant and a
- * source of push/pull disagreement.
+ * `personalRecords` is deliberately absent: PRs are derived from sets and
+ * recomputed locally per device, so syncing them would be redundant and cause
+ * push/pull disagreement.
  */
 export const SYNCED_TABLES = [
   'profiles',
@@ -47,12 +29,9 @@ export const SYNCED_TABLES = [
 export type SyncedTable = (typeof SYNCED_TABLES)[number]
 
 /**
- * Backoff for transient failures: exponential with a 5-minute cap, plus jitter.
- *
- * `jitter` is a 0–1 fraction the caller supplies (a random value in prod), used
- * to spread retries across ±25% so many clients don't retry in lockstep after a
- * shared outage. Defaulting it to 0.5 keeps the function pure and testable; the
- * drain passes a real random value.
+ * Exponential backoff with a 5-minute cap. `jitter` (0–1) spreads retries ±25% so
+ * clients don't retry in lockstep after a shared outage; defaulting it keeps the
+ * function pure for tests.
  */
 export function backoffMs(attempts: number, jitter = 0.5): number {
   const base = Math.min(5 * 60_000, 1000 * 2 ** attempts)
@@ -73,8 +52,7 @@ export class SyncEngine {
 
   /**
    * Drains the outbox one entry at a time, oldest first. Returns when the queue
-   * empties or a transient/auth failure halts it. Re-entrant-safe: a second call
-   * while a drain is running is a no-op.
+   * empties or a transient/auth failure halts it. Re-entrant-safe.
    */
   async drain(now = Date.now()): Promise<DrainResult> {
     if (this.draining) return { pushed: 0, deadLettered: 0, stoppedBecause: null }
@@ -83,19 +61,14 @@ export class SyncEngine {
     let deadLettered = 0
 
     try {
-      // Ordered by seq — the insertion order — so dependent writes replay in the
-      // order they were made. Re-read each iteration so entries added mid-drain
-      // are still picked up.
-      //
-      // Deferred entries are skipped rather than blocking: they sit at the head
-      // of the queue for a whole session, so stopping on one would stall every
-      // unrelated write (a profile edit, a template) behind it.
+      // Ordered by seq so dependent writes replay in insertion order. Re-read each
+      // iteration to pick up entries added mid-drain. Deferred entries are skipped
+      // rather than blocking, so one live workout doesn't stall unrelated writes.
       while (true) {
         const entry = await db.outbox.orderBy('seq').filter(isReadyToPush).first()
         if (!entry) break
 
-        // Respect backoff: if this entry failed recently, stop the whole drain.
-        // Because it's the head of the queue, waiting on it preserves order.
+        // Stop the whole drain if the head entry is still backing off, so order holds.
         if (entry.attempts > 0 && entry.nextAttemptAt && entry.nextAttemptAt > now) {
           return { pushed, deadLettered, stoppedBecause: 'transient' }
         }
@@ -118,10 +91,8 @@ export class SyncEngine {
         }
 
         if (outcome.status === 'permanent') {
-          // A permanent failure is the silent killer — the write is dropped to
-          // the dead-letter queue and never retried. Log loudly with the reason
-          // so "failed to sync" has an explanation (RLS 42501, missing column
-          // 42703, constraint 23xxx, …).
+          // Dead-letter and never retry; log loudly with the reason so a silent
+          // "failed to sync" has an explanation (RLS 42501, missing column 42703, …).
           syncLog.warn(
             `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
             outcome.error,
@@ -143,13 +114,9 @@ export class SyncEngine {
           continue
         }
 
-        // Transient: record the attempt, schedule a backoff, and stop so order
-        // is preserved. The next trigger resumes from this same head entry.
-        //
-        // Stopping is deliberate — a later row can depend on this one (a set on
-        // its workout_exercise), so pushing past a transient failure would put
-        // the child ahead of its parent. Retrying in-line instead of making the
-        // user press sync again is what `drainUntilSettled` is for.
+        // Transient: schedule a backoff and stop so order is preserved — a later
+        // row can depend on this one, so pushing past it would order child before
+        // parent. `drainUntilSettled` handles retrying without user action.
         const attempts = entry.attempts + 1
         const nextAttemptAt = now + backoffMs(attempts, Math.random())
         await db.outbox.update(entry.seq!, {
@@ -175,11 +142,9 @@ export class SyncEngine {
   }
 
   /**
-   * Pulls deltas for every synced table and merges them into IndexedDB.
-   *
-   * Merge rule (§5.5): the server row wins, unless a local outbox entry for that
-   * row is still pending — then local optimistic state holds until its own push
-   * lands, so a background pull never clobbers an edit the user just made.
+   * Pulls deltas for every synced table into IndexedDB. Merge rule (§5.5): the
+   * server row wins, unless a local outbox entry for that row is still pending —
+   * then local optimistic state holds until its push lands.
    */
   async pull(): Promise<{ applied: number }> {
     let applied = 0
@@ -195,10 +160,8 @@ export class SyncEngine {
       try {
         rows = await this.backend.pull(table, since)
       } catch (error) {
-        // One table failing to pull (e.g. a missing column on an out-of-date
-        // server) must not abort the pull for every other table — and it must
-        // not become an unhandled rejection. Log it and move on; the cursor is
-        // untouched, so the next pull retries this table from the same point.
+        // One table failing must not abort the others; cursor is untouched so the
+        // next pull retries this table from the same point.
         syncLog.warn(`pull failed for ${table} — skipping this cycle`, String(error))
         continue
       }
@@ -212,12 +175,10 @@ export class SyncEngine {
         const updatedAt = Number((row as { updatedAt?: unknown }).updatedAt ?? 0)
         if (updatedAt > highWater) highWater = updatedAt
 
-        // Local pending write for this row wins for now.
         if (pendingRowIds.has(`${table}:${id}`)) continue
 
-        // A tombstone is applied like any other row: deletedAt is set, and every
-        // read path already filters it out. We keep the row rather than hard
-        // deleting, so a later pull can't resurrect it.
+        // Tombstones are applied as ordinary rows (deletedAt set); keeping the row
+        // rather than hard-deleting stops a later pull resurrecting it.
         await store.put(normalizeRow(table, row))
         applied += 1
       }
@@ -234,23 +195,15 @@ export class SyncEngine {
     now = Date.now(),
   ): Promise<{ drain: DrainResult; pull: { applied: number } }> {
     const drain = await this.drain(now)
-    // Only pull if we're not paused on auth — a pull would also fail auth.
+    // Skip the pull when paused on auth — it would fail auth too.
     const pull = drain.stoppedBecause === 'auth' ? { applied: 0 } : await this.pull()
     return { drain, pull }
   }
 
   /**
-   * Drains repeatedly until the queue settles, waiting out each backoff.
-   *
-   * `drain` stops at the first transient failure to preserve order, which is
-   * correct but means one flaky row leaves everything behind it queued. A user
-   * uploading an existing history saw exactly that: the first sync "failed", a
-   * manual retry pushed some, another retry pushed a few more. This does the
-   * retrying, so pressing sync once is enough.
-   *
-   * Stops early on `auth` (nothing will succeed until re-auth) and gives up after
-   * `maxRounds` so a permanently unreachable server can't spin forever. Reports
-   * progress per round, so a first-run screen can show real movement.
+   * Drains repeatedly until the queue settles, waiting out each backoff, so one
+   * flaky row doesn't need repeated manual retries. Stops early on `auth` and
+   * gives up after `maxRounds` so an unreachable server can't spin forever.
    */
   async drainUntilSettled(
     opts: {
@@ -265,9 +218,8 @@ export class SyncEngine {
 
     let pushed = 0
     let deadLettered = 0
-    // The clock the drain sees. Advanced past each backoff we wait out, so the
-    // next round treats the entry as due. Real waiting moves the wall clock too;
-    // carrying it explicitly is what lets a test stub `sleep` and stay instant.
+    // The clock the drain sees, advanced past each backoff we wait out. Carrying it
+    // explicitly lets a test stub `sleep` and stay instant.
     let clock = Date.now()
 
     for (let round = 0; round < maxRounds; round += 1) {

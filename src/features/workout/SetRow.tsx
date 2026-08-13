@@ -1,21 +1,4 @@
-/**
- * One set. The most-touched component in the app (§6.2).
- *
- * The central rule: **typing a value logs the set.** There is no confirm step.
- * Last session's numbers show as gray placeholders; a row still showing only
- * placeholders has not happened and is ignored everywhere — volume, PRs, counts.
- *
- * This replaced a design with pre-filled real values and a confirm circle. The
- * circle read as decorative (nobody could say what it did), and pre-filling real
- * values meant a set the user never performed was already recorded as done.
- *
- * Other constraints that shaped this:
- *   - Which fields appear is decided entirely by `trackingType`, so cardio and
- *     lifting share one component instead of forking the screen.
- *   - A row whose values would beat a record glows immediately — the feedback
- *     has to land in the same frame as the keystroke, so it's computed locally.
- *   - No modal, ever. Editing happens in place.
- */
+// Typing a value logs the set — there is no confirm step (§6.2).
 
 import { Copy, Trash2, Trophy } from 'lucide-react'
 import type {
@@ -41,35 +24,20 @@ export interface SetRowProps {
   set: WorkoutSet
   index: number
   exercise: Exercise
-  /**
-   * The ghost values for this row's inputs. Resolved by `resolvePlaceholders`,
-   * so it may come from a template override or be carried forward from an
-   * earlier row in this same card — it is *not* necessarily last session.
-   */
   previous: PerformedSet | undefined
-  /**
-   * What this set index was in the previous session, for the `Last` column, or
-   * undefined if that session had no such set.
-   *
-   * Deliberately separate from `previous`: sharing one value made the column
-   * echo the row's own numbers, since carry-forward feeds a row its own
-   * neighbours' values. The column is a record of the past and must never
-   * reflect the current session.
-   */
+  // Must reflect only the previous session, never the current one: sharing this
+  // with `previous` made the column echo the row's own carry-forward values.
   lastSession: PerformedSet | undefined
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   showRpe: boolean
-  /** True when these values would beat a stored record. Drives the glow. */
   isRecord: boolean
   onChange: (patch: Partial<WorkoutSet>) => void
   onDelete: () => void
-  /** Copy the placeholder in as real values — "same as last time". */
   onConfirmPlaceholder: () => void
   onDuplicate: () => void
 }
 
-/** Which inputs a tracking type needs. One switch, no forked screens. */
 export function inputLayoutFor(exercise: Exercise): {
   weight: boolean
   reps: boolean
@@ -93,19 +61,13 @@ export function inputLayoutFor(exercise: Exercise): {
   }
 }
 
-/**
- * Whether this row represents work that actually happened.
- *
- * The rule from §6.2: values present means logged. A row with nothing typed is
- * a placeholder and does not exist as far as any metric is concerned.
- */
+// Values present means logged; a row with nothing typed is ignored everywhere (§6.2).
 export function hasLoggedValues(set: WorkoutSet, exercise: Exercise): boolean {
   const layout = inputLayoutFor(exercise)
   if (layout.reps && set.reps !== null) return true
   if (layout.duration && set.durationSeconds !== null) return true
   if (layout.distance && set.distanceM !== null) return true
-  // Weight alone counts only when it's the sole numeric field, as in a carry
-  // where duration might be filled first.
+  // Weight alone counts only when it's the sole numeric field.
   if (layout.weight && set.weightKg !== null && !layout.reps && !layout.duration) {
     return true
   }
@@ -148,7 +110,7 @@ export function SetRow(props: SetRowProps) {
       }}
     >
       <div className="relative flex items-center gap-2 py-1.5 pl-3 pr-2.5">
-        {/* PR glow — an inset ring rather than a border, so nothing reflows. */}
+        {/* Inset ring rather than a border, so nothing reflows. */}
         {isRecord && (
           <span
             aria-hidden
@@ -157,7 +119,6 @@ export function SetRow(props: SetRowProps) {
           />
         )}
 
-        {/* Set number. */}
         <div className="w-6 shrink-0 text-center">
           <span
             className={cn(
@@ -169,7 +130,6 @@ export function SetRow(props: SetRowProps) {
           </span>
         </div>
 
-        {/* Last time, for this exact set index. Never the current session. */}
         <div className="w-14 shrink-0 tabular text-[11.5px] leading-tight text-ink-muted">
           {formatPrevious(lastSession, weightUnit, distanceUnit)}
         </div>
@@ -243,7 +203,6 @@ export function SetRow(props: SetRowProps) {
           )}
         </div>
 
-        {/* Status column: a PR trophy, a logged tick, or the confirm affordance. */}
         <div className="flex w-8 shrink-0 items-center justify-center">
           {isRecord ? (
             <Trophy
@@ -266,16 +225,9 @@ export function SetRow(props: SetRowProps) {
   )
 }
 
-/**
- * "Same" — copy the ghost values in as real ones.
- *
- * Its own component because `useRowTap` is a hook and this renders conditionally.
- * The tap commits on `pointerup` (see `SwipeableRow`), since a plain `onClick`
- * inside a row that also handles pointer events doesn't reliably fire on iOS —
- * the button would highlight and do nothing. The visible chip is small but the
- * target is 44px and overhangs the row's right edge, because at the screen
- * border a thumb lands short as often as square.
- */
+// Commits on `pointerup` (via `useRowTap`): a plain `onClick` inside a
+// pointer-handling row doesn't reliably fire on iOS. Target is 44px and overhangs
+// the row edge, where a thumb lands short as often as square.
 function SameAsLastButton({ onTap }: { onTap: () => void }) {
   return (
     <button
@@ -288,7 +240,6 @@ function SameAsLastButton({ onTap }: { onTap: () => void }) {
   )
 }
 
-/** The `prev` column. Compact enough to read without looking away from the bar. */
 function formatPrevious(
   previous: PerformedSet | undefined,
   weightUnit: WeightUnit,
@@ -306,13 +257,8 @@ function formatPrevious(
   return '—'
 }
 
-/**
- * A numeric field that commits on blur rather than per keystroke.
- *
- * Per-keystroke writes fight the user: typing "1", "12", "125" would each
- * persist, and clearing the field to retype would briefly store null — which,
- * under the §6.2 rule, would un-log the set mid-edit.
- */
+// Commits on blur, not per keystroke: clearing the field mid-edit would briefly
+// store null and un-log the set under the §6.2 rule.
 function NumericField({
   value,
   placeholder,
@@ -323,7 +269,6 @@ function NumericField({
 }: {
   value: string
   placeholder: string
-  /** Receives the parsed value, or null for empty/invalid — never a raw NaN. */
   onCommit: (value: number | null) => void
   ariaLabel: string
   integer?: boolean
@@ -348,7 +293,6 @@ function NumericField({
       className={cn(
         'h-11 min-w-0 flex-1 touch-pan-y rounded-xl border text-center tabular text-[16px] font-semibold',
         'focus:border-accent focus:bg-surface focus:outline-none',
-        // An empty field is visibly provisional; a filled one is committed.
         isEmpty
           ? 'border-dashed border-line bg-transparent text-ink placeholder:text-ink-muted placeholder:font-normal'
           : 'border-line bg-sunken text-ink',

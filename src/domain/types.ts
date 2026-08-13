@@ -1,20 +1,8 @@
-/**
- * Domain types. These mirror the Postgres schema in the spec (§4) one-to-one,
- * so the same shapes travel from IndexedDB to Postgres unchanged when sync lands.
- *
- * Storage is ALWAYS metric (§4.12). Anything named `_kg`, `_m`, or `_cm` is
- * canonical; conversion to the user's units happens only at the display
- * boundary, in `lib/units.ts`.
- */
+// Mirrors the Postgres schema (§4) one-to-one. Storage is always metric —
+// anything `_kg`/`_m`/`_cm` is canonical; conversion happens only in lib/units.
 
-/**
- * The fixed training regions, each mapped to a palette slot (§10.2).
- *
- * Biceps and triceps are separate regions rather than one "Arms": pull work and
- * push work load them on different days, so folding them together hid the
- * imbalance the split is meant to surface. Elbow flexors (biceps, brachialis)
- * and forearms roll up to `biceps`; the triceps stand alone.
- */
+// Biceps and triceps are separate regions, not one "Arms", so a push/pull
+// imbalance is visible. Elbow flexors and forearms roll up to `biceps`.
 export const REGIONS = [
   'chest',
   'back',
@@ -38,19 +26,16 @@ export const REGION_LABELS: Record<Region, string> = {
   cardio: 'Cardio',
 }
 
-/**
- * Drives the entire set-input UI (§6.5). One component switches on this value,
- * so adding a modality is a new case rather than a new screen.
- */
+// Picks the set-input UI: one component switches on this value.
 export const TRACKING_TYPES = [
-  'weight_reps', // barbell bench press
-  'bodyweight_reps', // push-up
-  'weighted_bodyweight', // weighted pull-up
-  'assisted_bodyweight', // assisted dip
-  'reps_only', // band pull-apart
-  'time', // plank
-  'distance_time', // treadmill run
-  'weight_time', // farmer's carry
+  'weight_reps',
+  'bodyweight_reps',
+  'weighted_bodyweight',
+  'assisted_bodyweight',
+  'reps_only',
+  'time',
+  'distance_time',
+  'weight_time',
 ] as const
 export type TrackingType = (typeof TRACKING_TYPES)[number]
 
@@ -67,31 +52,13 @@ export const EQUIPMENT = [
 ] as const
 export type Equipment = (typeof EQUIPMENT)[number]
 
-/**
- * Movement pattern was removed as a user-facing concept: squat vs hinge, and
- * horizontal vs vertical push, are distinctions nobody was using to answer a
- * question, and they made creating an exercise a taxonomy quiz. The primary
- * muscle group carries the information that actually drives the app.
- *
- * The column survives with two live values because two features genuinely need
- * them, and both are inferable rather than asked for:
- *   - `cardio` switches the whole logging UI to time/distance (§6.4). Derived
- *     from the primary muscle's region, which is `cardio` for exactly the
- *     exercises that want it.
- *   - `push`/`pull` are what let a session title read "Push" rather than
- *     "Chest" (§6.7). Inferred from the primary muscle group.
- * Keeping the column rather than dropping it also means no data migration and no
- * change to the sync schema.
- */
+// Derived from the primary muscle's region (domain/movement.ts), not asked for.
+// Only cardio (switches the log UI) and push/pull (session titles) are used.
 export const MOVEMENT_PATTERNS = ['push', 'pull', 'other', 'cardio'] as const
 export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number]
 
-/**
- * Set type. Collapsed to a single `normal` value — the warmup/dropset/AMRAP/etc.
- * distinctions were removed as confusing and unused. The column is kept (rather
- * than dropped) so stored rows and the sync schema stay stable, and so the
- * feature could return without a migration.
- */
+// Collapsed to one value; the warmup/dropset/etc. distinctions were removed. Kept
+// as a column so stored rows and the sync schema stay stable.
 export const SET_TYPES = ['normal'] as const
 export type SetType = (typeof SET_TYPES)[number]
 
@@ -99,17 +66,12 @@ export type WeightUnit = 'lb' | 'kg'
 export type DistanceUnit = 'mi' | 'km'
 export type LengthUnit = 'in' | 'cm'
 
-/**
- * Sync bookkeeping present on every user-owned row (§4.11). Carried in the
- * prototype even though nothing syncs yet — retrofitting these columns after
- * history exists means a migration over real data.
- */
 export interface SyncColumns {
   createdAt: number
   updatedAt: number
-  /** Soft delete. Every read path filters this out; hard deletes can't sync. */
+  // Soft delete: every read filters this out. Hard deletes can't sync.
   deletedAt: number | null
-  /** Bumped locally per edit. Drives last-write-wins comparison. */
+  // Bumped per edit; drives last-write-wins.
   clientRev: number
 }
 
@@ -119,51 +81,31 @@ export interface Profile extends SyncColumns {
   unitWeight: WeightUnit
   unitDistance: DistanceUnit
   unitLength: LengthUnit
-  /** IANA zone. Required for correct day/week bucketing. */
   timezone: string
-  /** 0 = Sunday, 1 = Monday. */
   weekStartsOn: 0 | 1
-  /** Target sessions per week, for the Home progress ring (§5.2.1). */
   weeklyWorkoutGoal: number
   defaultRestSeconds: number
-  /** RPE inputs are hidden by default (§6.4). The columns still exist. */
   showRpe: boolean
-  /** Denormalized latest bodyweight, for bodyweight-exercise volume math. */
+  // Latest bodyweight, denormalized for bodyweight-exercise volume math.
   bodyweightCacheKg: number | null
-  /** Height in cm, or null if unset. Storage is metric (§4.12); the Me screen
-   *  converts to the user's length unit. Fed to the coach for tailoring. */
   heightCm: number | null
-  /** Free-text training goal ("gain strength", "lean out for summer"). Drives
-   *  the coach when no per-request goal is given, and is sent in the coach
-   *  summary (shown in the §13 "data sent" disclosure). Empty = unset. */
+  // Fed to the coach for tailoring; free text. Empty = unset.
   trainingGoal: string
-  /** When first-run setup was completed, or null if it hasn't been. On the
-   *  profile rather than localStorage so it follows the account across devices —
-   *  otherwise signing in on a second device re-runs setup (§11.1.3). */
+  // Null until first-run setup completes. On the profile so it follows the
+  // account across devices rather than re-running per device (§11.1.3).
   onboardedAt: number | null
 
-  // Appearance and feedback (§10.8, §6.8).
-  /** Named preset — `default`, `slate`, `forest`, `ocean`, `sunset`, … */
   theme: string
-  /** Independent of the preset, so a theme keeps its light and dark variants. */
   colorScheme: 'system' | 'light' | 'dark'
-  /** Overrides the preset's accent only, never chart series colors. */
   accentOverride: string | null
   soundEnabled: boolean
-  /**
-   * When true, logging a set starts the rest timer. Off by default — an implicit
-   * timer was unpredictable, so §6.4.2 makes the rest button the only reliable
-   * trigger and this the opt-in shortcut.
-   */
   autoStartRest: boolean
-  /** Show the training avatar on Home. Off by default — opt-in while it's a
-   *  prototype (§5.2.1). */
   showAvatar: boolean
 }
 
 export interface Muscle extends SyncColumns {
   id: string
-  /** null = system row, visible to everyone. */
+  // null = system row, visible to everyone.
   userId: string | null
   name: string
   region: Region
@@ -172,38 +114,35 @@ export interface Muscle extends SyncColumns {
 
 export interface Exercise extends SyncColumns {
   id: string
-  /** null = system library row. */
+  // null = system library row.
   userId: string | null
   name: string
   primaryMuscleId: string
   aliases: string[]
   equipment: Equipment
-  /** Derived from the primary muscle, never asked for — see MOVEMENT_PATTERNS. */
   movementPattern: MovementPattern
   trackingType: TrackingType
   isUnilateral: boolean
-  /** Fraction of bodyweight moved: pull-up 1.00, push-up 0.64, dip 0.95. */
+  // Fraction of bodyweight moved: pull-up 1.00, push-up 0.64, dip 0.95.
   bodyweightFactor: number | null
-  /** Retained for schema/sync stability; the key-lift feature was removed. */
+  // Retained for schema/sync stability; the key-lift feature was removed.
   isKeyLift: boolean
-  /** Cues, pin settings, seat height. */
   notes: string
   defaultRestSeconds: number | null
-  /** Never hard-delete — history references this row. */
+  // Never hard-delete — history references this row.
   isArchived: boolean
 }
 
 export interface Workout extends SyncColumns {
   id: string
   userId: string
-  /** Timestamp, not a date — two-a-days must work (§4.4). */
+  // Timestamp, not a date — two-a-days must work (§4.4).
   startedAt: number
-  /** null = in progress. At most one such row per user. */
+  // null = in progress. At most one such row per user.
   endedAt: number | null
   title: string
   notes: string
   perceivedExertion: number | null
-  /** Provenance, so planned-vs-actual adherence comes free. */
   templateId: string | null
   bodyweightKg: number | null
 }
@@ -213,7 +152,7 @@ export interface WorkoutExercise extends SyncColumns {
   workoutId: string
   exerciseId: string
   position: number
-  /** Same value = same superset. Rest starts after the group's last exercise. */
+  // Same value = same superset.
   supersetGroup: number | null
   restSeconds: number | null
   notes: string
@@ -226,20 +165,19 @@ export interface WorkoutSet extends SyncColumns {
   setType: SetType
   weightKg: number | null
   reps: number | null
-  /** Unilateral exercises only. */
+  // Unilateral exercises only.
   repsLeft: number | null
   repsRight: number | null
   durationSeconds: number | null
   distanceM: number | null
   rpe: number | null
   rir: number | null
-  /** Measured, not target. Powers "rest taken vs target" (D-36). */
   restTakenSeconds: number | null
-  /** false = planned but not performed. Templates instantiate as unchecked. */
+  // false = planned but not performed. Templates instantiate as unchecked.
   isCompleted: boolean
   completedAt: number | null
   notes: string
-  /** Display hint so a lb user who typed 135 sees exactly 135 again (§4.12). */
+  // Display hint so a lb user who typed 135 sees exactly 135 again (§4.12).
   enteredUnit: WeightUnit | null
 }
 
@@ -248,7 +186,6 @@ export interface Template extends SyncColumns {
   userId: string
   name: string
   description: string
-  /** One level of nesting, e.g. "PPL 6-day". */
   folder: string | null
   lastUsedAt: number | null
   timesUsed: number
@@ -262,32 +199,23 @@ export interface TemplateExercise extends SyncColumns {
   position: number
   supersetGroup: number | null
   targetSets: number | null
-  /** Ranges, because real programs read "3×8–10". All nullable. */
   targetRepsLow: number | null
   targetRepsHigh: number | null
   targetWeightKg: number | null
   targetRpe: number | null
   restSeconds: number | null
   notes: string
-  /**
-   * Declarative progression (§7 Phase 4). null = manual, no auto-progression.
-   * When set, the target weight is nudged at instantiation based on how the last
-   * session against this template-exercise went. The deterministic version of
-   * programming automation — ships before any LLM.
-   */
+  // null = manual. When set, the target weight is nudged at instantiation from
+  // the last session's result (§7 Phase 4).
   progression: ProgressionRule | null
 }
 
-/**
- * A double-progression rule: hold the weight until every working set reaches the
- * top of the rep range (at or under an RPE cap), then add an increment and reset
- * to the bottom of the range. The most common linear-progression scheme.
- */
+// Double progression: hold the weight until every set hits the top of the rep
+// range (under the RPE cap), then add the increment and reset to the bottom.
 export interface ProgressionRule {
   kind: 'double'
-  /** kg to add when the advance condition is met. */
   incrementKg: number
-  /** Only advance if the hardest logged set was at or below this RPE. null = ignore RPE. */
+  // null = ignore RPE.
   maxRpe: number | null
 }
 
@@ -302,7 +230,7 @@ export const RECORD_TYPES = [
 export type RecordType = (typeof RECORD_TYPES)[number]
 
 export interface PersonalRecord extends SyncColumns {
-  /** Composite: `${exerciseId}:${recordType}`. */
+  // Composite: `${exerciseId}:${recordType}`.
   id: string
   userId: string
   exerciseId: string
@@ -330,10 +258,7 @@ export interface MetricDefinition extends SyncColumns {
   label: string
   unitType: MetricUnitType
   category: MetricCategory
-  /**
-   * null means no delta color is applied — bodyweight rising is neither good
-   * nor bad, and inventing a valence is worse than omitting one (§10.3).
-   */
+  // null = no delta color; bodyweight rising is neither good nor bad (§10.3).
   higherIsBetter: boolean | null
   aggregation: 'last' | 'mean' | 'min' | 'max'
   precision: number
@@ -348,11 +273,8 @@ export interface MetricEntry extends SyncColumns {
   notes: string
 }
 
-/**
- * Denormalized cache of recent performance per exercise (§6.3). One indexed
- * lookup instead of a scan over history, so the last-time header renders
- * instantly and offline.
- */
+// Denormalized cache of recent performance per exercise (§6.3), so the last-time
+// header is one indexed lookup rather than a history scan.
 export interface LastPerformance {
   exerciseId: string
   sessions: PerformedSession[]
@@ -363,7 +285,7 @@ export interface PerformedSession {
   workoutId: string
   performedAt: number
   sets: PerformedSet[]
-  /** Best e1RM in the session, or null if no set was in the 1-12 rep window. */
+  // null if no set was in the 1-12 rep window.
   bestE1rmKg: number | null
   volumeKg: number
 }
@@ -373,7 +295,6 @@ export interface PerformedSet {
   reps: number | null
   durationSeconds: number | null
   distanceM: number | null
-  /** Carried so progression rules can gate on RPE (§7 Phase 4). Optional — RPE
-   *  logging is off by default, and older cached rows won't have it. */
+  // Optional: RPE logging is off by default and older cached rows lack it.
   rpe?: number | null
 }

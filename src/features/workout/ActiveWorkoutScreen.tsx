@@ -1,11 +1,5 @@
-/**
- * The active workout screen (§6). This is the product — everything else exists
- * to serve it.
- *
- * The same component serves a live session and an edit of a past one (§6.6);
- * `isEditMode` suppresses the timers but leaves every mutation available,
- * because "add the set I forgot" has to work.
- */
+// Serves both a live session and an edit of a past one (§6.6); `isEditMode`
+// suppresses the timers but leaves every mutation available.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -48,8 +42,6 @@ export function ActiveWorkoutScreen({
     workoutExerciseId: string
   } | null>(null)
 
-  // Everything reads from IndexedDB and re-renders on write, so the UI updates
-  // in the same frame as the tap without explicit optimistic bookkeeping.
   const data = useLiveQuery(async () => {
     const workout = await repo.getWorkout(workoutId)
     if (!workout) return null
@@ -71,7 +63,6 @@ export function ActiveWorkoutScreen({
     const muscles = await db.muscles.toArray()
     const muscleById = new Map(muscles.map((m) => [m.id, m]))
     const titleSignals = await repo.getSessionTitleSignals(workoutId)
-    // Per-set placeholder hints from a "do this again" copy (§7.2).
     const placeholderOverrides = await repo.getPlaceholderOverrides(workoutId)
 
     return { workout, profile, rows, muscleById, titleSignals, placeholderOverrides }
@@ -89,18 +80,14 @@ export function ActiveWorkoutScreen({
     return () => clearInterval(id)
   }, [startedAt, endedAt])
 
-  /**
-   * Writes a set's values and handles everything that follows: the rest timer,
-   * the log cue, and PR feedback (§6.2). Typing *is* logging, so this is the
-   * single path for it.
-   */
+  // Single path for logging a set: writes values, then the rest timer, log cue,
+  // and PR feedback (§6.2).
   const handleSetChange = useCallback(
     async (setId: string, patch: Partial<WorkoutSet>, exerciseId: string) => {
       const before = await db.sets.get(setId)
       const wasLogged = before?.isCompleted ?? false
 
-      // Capture how long the previous rest actually lasted, for D-36. Measured
-      // rest can't be reconstructed later, so it's captured or lost.
+      // Measured rest can't be reconstructed later, so capture it now or lose it.
       const measured = timer.elapsedSeconds()
       const brokenRecords = await repo.logSetValues(setId, {
         ...patch,
@@ -116,8 +103,8 @@ export function ActiveWorkoutScreen({
         playCue('set-logged')
 
         const row = data?.rows.find((r) => r.workoutExercise.exerciseId === exerciseId)
-        // Auto-start is opt-in (§6.4.2). A timer already running is never
-        // restarted — that would misreport the measured gap. Cardio never rests.
+        // Opt-in (§6.4.2). A running timer is never restarted — that would
+        // misreport the measured gap. Cardio never rests.
         const shouldAutoStart =
           (data?.profile.autoStartRest ?? false) &&
           !isEditMode &&
@@ -176,10 +163,8 @@ export function ActiveWorkoutScreen({
     async (exerciseId: string) => {
       const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, exerciseId)
 
-      // Start with a single row (cardio and lifting alike). Its placeholder is
-      // drawn from history, and "Add set" carries the ghost forward (§6.2), so
-      // one row is enough to log from — extra empty rows were just noise the
-      // user had to delete when they did fewer sets than the seed assumed.
+      // One row is enough: its placeholder comes from history and "Add set"
+      // carries the ghost forward (§6.2).
       await repo.addSetWithPlaceholder(workoutExerciseId, exerciseId)
       setIsPickerOpen(false)
     },
@@ -207,11 +192,8 @@ export function ActiveWorkoutScreen({
     onExit()
   }, [workoutId, timer, toast, onExit])
 
-  /**
-   * Editing a past workout is a transaction (§6.6). The snapshot taken here backs
-   * Cancel and holds this workout's writes back until Done, so a cancelled edit
-   * never reaches the server.
-   */
+  // Editing a past workout is a transaction (§6.6): the snapshot backs Cancel and
+  // holds this workout's writes back until Done, so a cancelled edit never ships.
   useEffect(() => {
     if (!isEditMode) return
     void repo.beginWorkoutEdits(workoutId)
@@ -251,10 +233,7 @@ export function ActiveWorkoutScreen({
   const displayTitle = sessionTitle(workout.title, workout.startedAt, titleSignals)
   const orderedIds = rows.map((r) => r.workoutExercise.id)
 
-  /**
-   * What the rest button will run for. Uses the last exercise that isn't cardio,
-   * since that's the one just trained; falls back to the profile default.
-   */
+  // The last non-cardio exercise is the one just trained; fall back to the default.
   const restDefaultSeconds =
     [...rows]
       .reverse()
@@ -268,8 +247,7 @@ export function ActiveWorkoutScreen({
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2">
         <button
-          // Back keeps the edits, like leaving any other editable screen. It must
-          // not merely navigate: the snapshot is what defers this workout's
+          // Must commit, not merely navigate: the snapshot defers this workout's
           // writes, so an uncommitted exit would strand them unsent forever.
           onClick={() => (isEditMode ? void handleDoneEditing() : onExit())}
           aria-label="Back"
@@ -386,9 +364,6 @@ export function ActiveWorkoutScreen({
 
       <div className="border-t border-line bg-surface px-3 py-2.5 pb-safe">
         {isEditMode ? (
-          // Cancel is a peer of Done, not hidden in a menu: an accidental tap on
-          // a set is exactly when it's needed, and without it the only way out
-          // was to undo the change by hand.
           <div className="flex gap-2">
             <Button
               variant="secondary"
@@ -452,7 +427,6 @@ export function ActiveWorkoutScreen({
           onDismiss={() => setIsFinishOpen(false)}
           onFinished={(outcome) => {
             timer.cancel()
-            // A discarded empty session isn't an accomplishment, so no fanfare.
             if (outcome === 'saved') playCue('workout-complete')
             onExit()
           }}

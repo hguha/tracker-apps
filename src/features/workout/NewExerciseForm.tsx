@@ -1,12 +1,5 @@
-/**
- * Create a custom exercise (§4.3).
- *
- * This is the "I've never done a reverse dumbbell fly and want to add it as a
- * delt exercise so it shows up in workouts and charts" flow. The muscle choice
- * is what wires a new exercise into every chart, so it is required rather than
- * optional — an untagged exercise would silently vanish from every region
- * breakdown.
- */
+// Create a custom exercise (§4.3). The muscle choice is required, not optional:
+// an untagged exercise would silently vanish from every region breakdown.
 
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -25,7 +18,6 @@ import {
   type TrackingType,
 } from '@/domain/types'
 
-/** Plain-language labels — the enum values are for the database, not the user. */
 const TRACKING_LABELS: Record<TrackingType, string> = {
   weight_reps: 'Weight & reps',
   bodyweight_reps: 'Bodyweight reps',

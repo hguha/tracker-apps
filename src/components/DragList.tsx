@@ -1,19 +1,5 @@
-/**
- * Drag to reorder, drag-onto to superset (§6.4).
- *
- * Hand-rolled on pointer events for the same reason `SwipeableRow` is: the
- * behavior needed is narrow and specific, and the important part is what it
- * refuses to do — it must not fight vertical scrolling, and it must not trigger
- * while the user is typing in a set field.
- *
- * The interaction has two distinct drop outcomes, which is what makes an
- * off-the-shelf sortable list a poor fit:
- *   - Dropping in a *gap* between cards reorders.
- *   - Dropping *onto* a card's middle band supersets the two.
- *
- * The distinction is communicated before release: the drop target highlights and
- * captions what will happen, so the outcome is never a surprise.
- */
+// Drag to reorder, drag-onto to superset (§6.4). Two drop outcomes: a gap between
+// cards reorders; a card's middle band supersets the two.
 
 import {
   createContext,
@@ -54,14 +40,12 @@ interface DragApi extends DragState {
 
 const DragContext = createContext<DragApi | null>(null)
 
-/** Identity of a drop intent, for cheap change detection. */
 function intentTarget(intent: DropIntent): string | number | null {
   if (intent.kind === 'superset') return intent.targetId
   if (intent.kind === 'reorder') return intent.index
   return null
 }
 
-/** The nearest ancestor that actually scrolls, for edge auto-scrolling. */
 function findScrollParent(node: HTMLElement | null): HTMLElement | null {
   let current = node?.parentElement ?? null
   while (current) {
@@ -91,11 +75,8 @@ export function DragList({
 }: {
   itemIds: string[]
   onReorder: (orderedIds: string[]) => void
-  /**
-   * Optional. When omitted, there is no superset gesture and the middle band
-   * reorders like the rest — used by the template editor, where grouping isn't
-   * offered and an accidental superset would be a surprise.
-   */
+  // When omitted, there's no superset gesture and the middle band reorders like
+  // the rest (used by the template editor, where grouping isn't offered).
   onSuperset?: (draggedId: string, targetId: string) => void
   children: ReactNode
 }) {
@@ -106,14 +87,9 @@ export function DragList({
   const elements = useRef(new Map<string, HTMLElement>())
   const pressTimer = useRef<number | null>(null)
   const isDragging = useRef(false)
-  /**
-   * The lifted card follows the finger by writing `transform` straight to the
-   * node, not through React state. At 60–120 Hz a setState per pointermove
-   * re-renders every card in the list (each of which runs its own liveQuery
-   * subscriptions), which is what made dragging feel heavy and laggy. Only the
-   * *drop intent* goes through state, and that changes a handful of times per
-   * drag rather than once per frame.
-   */
+  // The lifted card follows the finger by writing `transform` straight to the
+  // node, not through state: a setState per pointermove re-renders every card
+  // (each with its own liveQuery subscriptions). Only the drop intent uses state.
   const liftedNode = useRef<HTMLElement | null>(null)
   const scrollParent = useRef<HTMLElement | null>(null)
   const autoScroll = useRef<number | null>(null)
@@ -123,7 +99,7 @@ export function DragList({
     else elements.current.delete(id)
   }, [])
 
-  /** Where a release at this y-coordinate would land. */
+  // Where a release at this y-coordinate would land.
   const resolveIntent = useCallback(
     (draggedId: string, clientY: number): DropIntent => {
       const boxes = itemIds
@@ -149,7 +125,6 @@ export function DragList({
         return { kind: 'reorder', index: offset <= 0.5 ? index : index + 1 }
       }
 
-      // Past the end of the list.
       const last = boxes[boxes.length - 1]
       if (last && clientY > last.rect.top + last.rect.height) {
         return { kind: 'reorder', index: boxes.length }
@@ -185,7 +160,6 @@ export function DragList({
       let currentIntent: DropIntent = { kind: 'none' }
       let lastY = startY
 
-      /** Move the lifted card to follow the finger. Never via setState. */
       const paint = (clientY: number) => {
         const node = liftedNode.current
         if (node) node.style.transform = `translateY(${clientY - startY}px) scale(1.02)`
@@ -203,7 +177,6 @@ export function DragList({
         }
       }
 
-      /** Scroll the list when the finger nears an edge, so a long list is reachable. */
       const stepAutoScroll = () => {
         const container = scrollParent.current
         if (!container || !isDragging.current) return
@@ -227,7 +200,7 @@ export function DragList({
 
       const onMove = (moveEvent: PointerEvent) => {
         if (!isDragging.current) {
-          // Movement before the hold completes means the user is scrolling.
+          // Movement before the hold completes means the user is scrolling, not dragging.
           const moved =
             Math.abs(moveEvent.clientY - startY) + Math.abs(moveEvent.clientX - startX)
           if (moved > 10 && pressTimer.current !== null) {
@@ -275,7 +248,6 @@ export function DragList({
         setState({ activeId: id, intent: { kind: 'none' } })
         paint(lastY)
         autoScroll.current = requestAnimationFrame(stepAutoScroll)
-        // A short buzz confirms the card is lifted, since the visual change is subtle.
         if ('vibrate' in navigator) navigator.vibrate(18)
       }, LONG_PRESS_MS)
 
@@ -294,10 +266,6 @@ export function DragList({
   return <DragContext.Provider value={api}>{children}</DragContext.Provider>
 }
 
-/**
- * Wraps one draggable card. Renders the reorder indicator and the superset
- * highlight, so the caller only supplies content.
- */
 export function DragItem({
   id,
   index,
@@ -306,7 +274,6 @@ export function DragItem({
 }: {
   id: string
   index: number
-  /** Shown while hovering this card as a superset target, e.g. "Bench Press". */
   supersetLabel?: string
   children: ReactNode
 }) {
@@ -328,15 +295,12 @@ export function DragItem({
       onPointerDown={(event) => beginDrag(id, event)}
       className="relative"
       style={{
-        // The lifted card stays in the flow (so the list doesn't jump) but rides
-        // above its neighbours and follows the finger. `transform` is deliberately
-        // absent: while dragging, `DragList` writes it straight to this node every
-        // frame, and setting it here would fight that on each re-render.
+        // `transform` is deliberately absent: while dragging, `DragList` writes it
+        // straight to this node every frame, and setting it here would fight that.
         opacity: isActive ? 0.92 : 1,
         zIndex: isActive ? 40 : undefined,
         boxShadow: isActive ? '0 12px 28px rgb(0 0 0 / 0.22)' : undefined,
-        // No transform transition while lifted — it would lag a frame behind the
-        // finger. The drop still animates, since the class returns on release.
+        // No transform transition while lifted — it would lag a frame behind the finger.
         transition: isActive
           ? 'opacity 120ms, box-shadow 120ms'
           : 'transform 160ms ease-out',

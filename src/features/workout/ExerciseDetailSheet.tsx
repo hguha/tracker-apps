@@ -1,11 +1,3 @@
-/**
- * The exercise detail sheet (§6.3) — what the card's `⋯` opens.
- *
- * That control previously did nothing, which is worse than not existing. It now
- * answers the questions that come up mid-set: what did I do last time in detail,
- * what are my records here, what was that note about the seat height.
- */
-
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Trash2, X } from 'lucide-react'
@@ -44,11 +36,10 @@ export function ExerciseDetailSheet({
   onDismiss,
 }: {
   exerciseId: string
-  /** Present when opened from inside a session — enables session-scoped actions. */
+  // Present when opened from inside a session — enables session-scoped actions.
   workoutExerciseId?: string
-  /** The active session's id, so "This session" reflects *this* workout — not
-   *  the most recent historical one, which would show stale numbers before
-   *  anything is logged here. */
+  // The active session's id, so "This session" reflects *this* workout, not the
+  // most recent historical one (which would show stale numbers).
   currentWorkoutId?: string
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
@@ -58,11 +49,8 @@ export function ExerciseDetailSheet({
   const detail = useLiveQuery(() => repo.getExerciseDetail(exerciseId), [exerciseId])
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
 
-  // The note scoped to this exercise *in this workout* — "felt heavy today",
-  // "left shoulder tweaked" — as opposed to the standing note about the exercise
-  // itself. Kept separate because one is a diary entry and the other is a setup
-  // reminder, and folding them together meant a one-off observation followed the
-  // exercise around forever.
+  // The note scoped to this exercise in this workout, kept separate from the
+  // standing note: one is a diary entry, the other a setup reminder.
   const sessionRow = useLiveQuery(
     async () =>
       workoutExerciseId === undefined
@@ -72,7 +60,7 @@ export function ExerciseDetailSheet({
   )
   const [sessionNoteDraft, setSessionNoteDraft] = useState<string | null>(null)
 
-  // Adopt the stored note once it loads, without stomping an in-progress edit.
+  // Adopt the stored note once it loads, without clobbering an in-progress edit.
   useEffect(() => {
     if (detail && noteDraft === null) setNoteDraft(detail.exercise.notes)
   }, [detail, noteDraft])
@@ -84,11 +72,8 @@ export function ExerciseDetailSheet({
   if (!detail) return null
 
   const { exercise, primaryMuscle, records, sessions } = detail
-  // "This session" must be *this* workout, matched by id. Falling back to
-  // sessions[0] (the most recent historical session) showed last workout's
-  // numbers before anything was logged here. When opened from a session where
-  // nothing's been logged yet, there's simply no matching session and the block
-  // is hidden.
+  // "This session" must be matched by id; falling back to sessions[0] would show
+  // the most recent historical session's numbers before anything is logged here.
   const thisSession = currentWorkoutId
     ? sessions.find((s) => s.workoutId === currentWorkoutId)
     : sessions[0]
@@ -151,7 +136,6 @@ export function ExerciseDetailSheet({
       </div>
 
       <div className="space-y-5 px-5 py-4">
-        {/* Notes first — it's the thing most likely to be needed right now. */}
         {workoutExerciseId !== undefined && (
           <Section title="Note for this workout">
             <textarea
@@ -207,7 +191,6 @@ export function ExerciseDetailSheet({
           </Section>
         )}
 
-        {/* Taxonomy — the same fields the create form captures (§7.3). */}
         <Section title="Details">
           <dl className="space-y-1.5 text-[13.5px]">
             <Row label="Equipment" value={humanizeSlug(exercise.equipment)} />

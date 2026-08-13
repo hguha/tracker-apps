@@ -1,15 +1,4 @@
-/**
- * The chart catalog (§9). Each export is one chart from the spec, keyed by its
- * catalog id in the comment.
- *
- * Every chart here obeys the same rules:
- *   - Form chosen by the data's job, then color by *its* job (§10.1).
- *   - No dual axes, ever. Two measures of different scale become two charts or
- *     both indexed to a common base.
- *   - A legend whenever there are 2+ series; selective direct labels, never a
- *     number on every point.
- *   - Region colors come from the fixed palette and never shift with a filter.
- */
+/** The chart catalog (§9), keyed by catalog id. No dual axes; region colors are fixed (§10.1). */
 
 import { useMemo } from 'react'
 import type { EChartsOption } from 'echarts'
@@ -79,7 +68,6 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
           itemStyle: { color: c.plot },
         },
         {
-          // The trend is the point; the raw line is context, so it recedes.
           name: '4-week average',
           type: 'line',
           data: movingAverage,
@@ -114,13 +102,6 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
 
 // C-20
 
-/**
- * Where training goes, as a 100% stacked bar rather than a pie.
- *
- * With seven regions often close in size, angle comparison is the task human
- * vision is worst at; bar length is read accurately. Direct labels carry the
- * identity because three of these colors are below 3:1 on the light surface.
- */
 export function RegionShareChart({ data }: { data: InsightsData }) {
   const unit = data.profile.unitWeight
   const entries = REGIONS.map((region) => ({
@@ -146,7 +127,6 @@ export function RegionShareChart({ data }: { data: InsightsData }) {
       }}
     >
       <div className="px-2 pb-1 pt-2">
-        {/* 2px surface gaps between segments rather than borders around them. */}
         <div className="flex h-7 gap-[2px] overflow-hidden rounded-lg">
           {entries.map((entry) => (
             <div
@@ -183,7 +163,6 @@ export function RegionShareChart({ data }: { data: InsightsData }) {
 
 // C-21
 
-/** How emphasis has shifted. Categorical — the regions are the subject. */
 export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
@@ -218,7 +197,6 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
         type: 'bar' as const,
         stack: 'volume',
         data: series.values,
-        // Color follows the region, fixed — never reassigned by rank.
         itemStyle: { color: resolveRegionColor(series.region) },
         barMaxWidth: 28,
       })),
@@ -297,21 +275,11 @@ export function SetsByRegionChart({ data }: { data: InsightsData }) {
 
 // B-8
 
-/**
- * Estimated 1RM over time for one lift, as **emphasis**: one lift in the accent
- * hue, nothing else competing.
- *
- * This chart is inherently about a *single* lift — there's no "all exercises"
- * version of one progression line. So when the shared Exercise filter names
- * exactly one lift, that's the subject; otherwise it shows a prompt card asking
- * for one, rather than silently guessing (which read as confusing).
- */
 export function StrengthProgressionChart({
   data,
   activeExerciseId,
 }: {
   data: InsightsData
-  /** The single lift to chart, or null when the filter isn't narrowed to one. */
   activeExerciseId: string | null
 }) {
   const appearance = useAppearanceKey()
@@ -376,10 +344,6 @@ export function StrengthProgressionChart({
   )
 }
 
-/**
- * Shown in place of a per-exercise chart when the Exercise filter hasn't been
- * narrowed to a single lift. Explains what to do rather than guessing at one.
- */
 function PickExerciseCard({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -473,13 +437,7 @@ export function TopSetChart({
 
 // C-27
 
-/**
- * How the training is actually distributed across rep ranges.
- *
- * The buckets are **ordered**, so this uses the sequential ramp rather than
- * categorical hues — a value ramp is correct here precisely because the
- * categories have a natural order.
- */
+// Buckets are ordered, so a sequential ramp is used rather than categorical hues.
 export function RepRangeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -487,7 +445,6 @@ export function RepRangeChart({ data }: { data: InsightsData }) {
     const counts = REP_BUCKETS.map((bucket) => data.repBuckets.get(bucket) ?? 0)
     const total = counts.reduce((a, b) => a + b, 0)
     const c = chrome()
-    // Ordinal ramp: the lightest step still clears 2:1 against the surface.
     const ramp = [
       resolveToken('--seq-300', '#6da7ec'),
       resolveToken('--seq-400', '#3987e5'),
@@ -582,7 +539,6 @@ export function DayOfWeekChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
   const { option, labels, counts } = useMemo(() => {
-    // Rotate so the week starts where the user says it does.
     const order = Array.from({ length: 7 }, (_, i) => (i + data.profile.weekStartsOn) % 7)
     const labels = order.map((day) => DAY_LABELS[day]!)
     const counts = order.map((day) => data.dayOfWeekCounts[day]!)
@@ -681,11 +637,6 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
 
 // E-42
 
-/**
- * Bodyweight as **emphasis**: raw daily readings recede to gray, the 7-day
- * moving average carries the accent — because a single day's weight is noise and
- * the trend is the signal.
- */
 export function BodyweightChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight

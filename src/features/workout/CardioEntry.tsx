@@ -1,14 +1,5 @@
-/**
- * Cardio entry (§6.5.1).
- *
- * A run is one continuous effort, not three sets of running. Rendering it as a
- * numbered set table borrows lifting's structure for something it doesn't fit, so
- * cardio gets a single entry block with derived pace instead.
- *
- * Intervals are still `sets` rows underneath — the schema doesn't change, so
- * nothing downstream needs to know the difference. "Add interval" is available but
- * secondary, because most cardio is one block.
- */
+// Cardio entry (§6.5.1): a single block with derived pace rather than a set table.
+// Intervals are still `sets` rows underneath, so nothing downstream changes.
 
 import { Plus, Trash2 } from 'lucide-react'
 import type {
@@ -34,12 +25,11 @@ import { parseDuration } from './SetRow'
 export interface CardioEntryProps {
   exercise: Exercise
   sets: WorkoutSet[]
-  /** Last session's entries, for placeholders. Aligned to `sets` by index. */
+  // Last session's entries, for placeholders. Aligned to `sets` by index.
   previous: (PerformedSet | undefined)[]
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   onChange: (setId: string, patch: Partial<WorkoutSet>) => void
-  /** `shown` is the ghost being displayed — see `repo.confirmPlaceholder`. */
   onConfirmPlaceholder: (setId: string, shown: PerformedSet | undefined) => void
   onAddInterval: () => void
   onDeleteInterval: (setId: string) => void
@@ -60,16 +50,14 @@ export function CardioEntry(props: CardioEntryProps) {
 
   const wantsDistance = exercise.trackingType === 'distance_time'
   const wantsWeight = exercise.trackingType === 'weight_time'
-  // Only label intervals once there's more than one — "Interval 1" on a single
-  // entry implies a structure the user didn't ask for.
+  // Only label intervals once there's more than one.
   const isInterval = sets.length > 1
 
   return (
     <div className="px-3 pb-1 pt-2">
       {sets.map((set, index) => {
         const raw = previous[index]
-        // Only treat it as a placeholder if it actually carries something — an
-        // all-null carry-forward shouldn't offer a "Same as last" that copies
+        // An all-null carry-forward shouldn't offer a "Same as last" that copies
         // nothing (matches SetRow's placeholderAt guard).
         const placeholder =
           raw &&
@@ -170,7 +158,6 @@ export function CardioEntry(props: CardioEntryProps) {
             </div>
 
             <div className="mt-2 flex items-center justify-between">
-              {/* Pace is derived and shown live — never entered. */}
               <span className="text-[13px] text-ink-secondary">
                 {pace ? (
                   <>
@@ -230,10 +217,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-/**
- * Larger than a set-row input, because cardio has two or three fields instead of
- * a dense table and the extra room is free.
- */
 function BigInput({
   value,
   placeholder,
@@ -243,7 +226,7 @@ function BigInput({
   value: string
   placeholder: string
   ariaLabel: string
-  /** Receives the trimmed raw text; the caller parses (number vs m:ss). */
+  // Receives the trimmed raw text; the caller parses (number vs m:ss).
   onCommit: (raw: string) => void
 }) {
   const { isEmpty, inputProps } = useDraftInput({
