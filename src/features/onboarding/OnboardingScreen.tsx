@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react'
+import { ArrowRight, Check, ChevronLeft, Dumbbell, Loader2, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
-import { THEME_PRESETS } from '@/lib/theme'
+import { cn } from '@/lib/cn'
+import { THEME_PRESETS, type ColorSchemePreference } from '@/lib/theme'
 import { lengthToCm, parseNumber, weightToKg } from '@/lib/units'
-import type { LengthUnit, WeightUnit } from '@/domain/types'
+import type { DistanceUnit, WeightUnit } from '@/domain/types'
 
-type Step = 'name' | 'body' | 'goal' | 'look' | 'sync'
+// Bump to re-show the walkthrough to everyone (App gates on profile.onboardingVersion).
+export const ONBOARDING_VERSION = 1
+
+type Step = 'welcome' | 'name' | 'units' | 'body' | 'goal' | 'look' | 'sync'
+
+// welcome and sync frame the flow; the middle five carry the dots + skip.
+const FLOW: Step[] = ['name', 'units', 'body', 'goal', 'look']
+const ALL_STEPS: Step[] = ['welcome', ...FLOW, 'sync']
 
 const GOAL_SUGGESTIONS = [
   'Get stronger on the big lifts',
@@ -19,66 +27,111 @@ const GOAL_SUGGESTIONS = [
   'Train for a race',
 ]
 
+const SCHEME_OPTIONS: { value: ColorSchemePreference; label: string }[] = [
+  { value: 'system', label: 'Auto' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
+
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const { session, updateDisplayName } = useAuth()
   const sync = useSync()
 
-  const [step, setStep] = useState<Step>('name')
+  const [step, setStep] = useState<Step>('welcome')
   const [name, setName] = useState(session?.displayName ?? '')
-  const [units, setUnits] = useState<{ weight: WeightUnit; length: LengthUnit }>({
-    weight: 'lb',
-    length: 'in',
-  })
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('mi')
   const [height, setHeight] = useState('')
   const [bodyweight, setBodyweight] = useState('')
   const [weeklyGoal, setWeeklyGoal] = useState(4)
   const [goal, setGoal] = useState('')
   const [theme, setTheme] = useState('default')
+  const [scheme, setScheme] = useState<ColorSchemePreference>('system')
   const [isSaving, setIsSaving] = useState(false)
+
+  const lengthUnit = weightUnit === 'kg' ? 'cm' : 'in'
 
   useEffect(() => {
     void repo.getProfile().then((p) => {
-      setUnits({ weight: p.unitWeight, length: p.unitLength })
+      setWeightUnit(p.unitWeight)
+      setDistanceUnit(p.unitDistance)
       setTheme(p.theme)
+      setScheme(p.colorScheme)
+      if (p.trainingGoal) setGoal(p.trainingGoal)
     })
   }, [])
 
-  async function saveAndContinue(next: Step) {
+  function goNext() {
+    const i = ALL_STEPS.indexOf(step)
+    setStep(ALL_STEPS[Math.min(i + 1, ALL_STEPS.length - 1)]!)
+  }
+
+  function goBack() {
+    const i = ALL_STEPS.indexOf(step)
+    setStep(ALL_STEPS[Math.max(i - 1, 0)]!)
+  }
+
+  // Persist the current step's answers, then advance. Each step saves only its own
+  // fields so a mid-flow quit still keeps what was entered.
+  async function saveAndContinue() {
     setIsSaving(true)
     try {
       if (step === 'name' && name.trim() && name.trim() !== session?.displayName) {
         await updateDisplayName(name.trim())
       }
+      if (step === 'units') {
+        await repo.updateProfile({
+          unitWeight: weightUnit,
+          unitDistance: distanceUnit,
+          unitLength: lengthUnit,
+        })
+      }
       if (step === 'body') {
         const h = parseNumber(height)
         const bw = parseNumber(bodyweight)
         await repo.updateProfile({
-          heightCm: h !== null && h > 0 ? lengthToCm(h, units.length) : null,
+          heightCm: h !== null && h > 0 ? lengthToCm(h, lengthUnit) : null,
           weeklyWorkoutGoal: weeklyGoal,
         })
-        // Bodyweight is a metric time series; it also backfills bodyweightCacheKg for volume math.
         if (bw !== null && bw > 0) {
           await repo.addMetricEntry({
             definitionId: 'bodyweight',
-            value: weightToKg(bw, units.weight),
+            value: weightToKg(bw, weightUnit),
           })
         }
       }
       if (step === 'goal') {
         await repo.updateProfile({ trainingGoal: goal.trim() })
       }
-      setStep(next)
+      goNext()
     } finally {
       setIsSaving(false)
     }
   }
 
+  if (step === 'welcome') {
+    return <WelcomeStep onStart={goNext} />
+  }
+
+  const flowIndex = FLOW.indexOf(step)
+
   return (
     <div className="flex h-full flex-col bg-page">
-      <div className="flex-1 overflow-y-auto px-6 pb-6 pt-safe">
-        <div className="mx-auto w-full max-w-sm pt-10">
-          <StepDots step={step} />
+      <header className="flex items-center gap-2 px-4 pt-safe">
+        <div className="flex h-12 w-full items-center gap-3">
+          <button
+            onClick={goBack}
+            aria-label="Back"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          {step !== 'sync' && <StepDots activeIndex={flowIndex} />}
+        </div>
+      </header>
 
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="mx-auto w-full max-w-sm pt-6">
           {step === 'name' && (
             <StepShell
               title="What should we call you?"
@@ -89,19 +142,47 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') void saveAndContinue('body')
+                  if (event.key === 'Enter') void saveAndContinue()
                 }}
                 placeholder="Your name"
                 className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
               />
-              <Button
-                size="lg"
-                className="mt-3 w-full"
+              <ContinueButton
+                onClick={() => void saveAndContinue()}
                 disabled={isSaving}
-                onClick={() => void saveAndContinue('body')}
-              >
-                Continue <ArrowRight size={17} />
-              </Button>
+              />
+            </StepShell>
+          )}
+
+          {step === 'units' && (
+            <StepShell
+              title="Your units"
+              body="How weights and distances show up everywhere. Change them any time in Settings."
+            >
+              <Field label="Weight">
+                <Segmented<WeightUnit>
+                  options={[
+                    { value: 'lb', label: 'Pounds (lb)' },
+                    { value: 'kg', label: 'Kilograms (kg)' },
+                  ]}
+                  value={weightUnit}
+                  onChange={setWeightUnit}
+                />
+              </Field>
+              <Field label="Distance">
+                <Segmented<DistanceUnit>
+                  options={[
+                    { value: 'mi', label: 'Miles' },
+                    { value: 'km', label: 'Kilometers' },
+                  ]}
+                  value={distanceUnit}
+                  onChange={setDistanceUnit}
+                />
+              </Field>
+              <ContinueButton
+                onClick={() => void saveAndContinue()}
+                disabled={isSaving}
+              />
             </StepShell>
           )}
 
@@ -110,7 +191,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
               title="A few numbers"
               body="These let the coach tailor loads and rep ranges to you. Optional — skip anything you'd rather not share."
             >
-              <Field label={`Height (${units.length})`}>
+              <Field label={`Height (${lengthUnit})`}>
                 <input
                   inputMode="decimal"
                   value={height}
@@ -119,7 +200,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
                 />
               </Field>
-              <Field label={`Bodyweight (${units.weight})`}>
+              <Field label={`Bodyweight (${weightUnit})`}>
                 <input
                   inputMode="decimal"
                   value={bodyweight}
@@ -134,26 +215,22 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                     <button
                       key={count}
                       onClick={() => setWeeklyGoal(count)}
-                      className={
-                        'h-11 flex-1 rounded-lg text-[14px] font-semibold ' +
-                        (weeklyGoal === count
-                          ? 'bg-accent text-white'
-                          : 'bg-sunken text-ink-secondary')
-                      }
+                      className={cn(
+                        'h-11 flex-1 rounded-lg text-[14px] font-semibold',
+                        weeklyGoal === count
+                          ? 'bg-accent text-accent-contrast'
+                          : 'bg-sunken text-ink-secondary',
+                      )}
                     >
                       {count}
                     </button>
                   ))}
                 </div>
               </Field>
-              <Button
-                size="lg"
-                className="mt-4 w-full"
+              <ContinueButton
+                onClick={() => void saveAndContinue()}
                 disabled={isSaving}
-                onClick={() => void saveAndContinue('goal')}
-              >
-                Continue <ArrowRight size={17} />
-              </Button>
+              />
             </StepShell>
           )}
 
@@ -180,55 +257,65 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   </button>
                 ))}
               </div>
-              <Button
-                size="lg"
-                className="mt-4 w-full"
+              <ContinueButton
+                onClick={() => void saveAndContinue()}
                 disabled={isSaving}
-                onClick={() => void saveAndContinue('look')}
-              >
-                Continue <ArrowRight size={17} />
-              </Button>
+              />
             </StepShell>
           )}
 
           {step === 'look' && (
-            <StepShell title="Pick a look" body="Changeable any time in settings.">
-              <div className="grid grid-cols-2 gap-2">
-                {THEME_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    // Written immediately so App's appearance live-query repaints the preview.
-                    onClick={() => {
-                      setTheme(preset.id)
-                      void repo.updateProfile({ theme: preset.id })
-                    }}
-                    className={
-                      'rounded-xl border p-3 text-left ' +
-                      (theme === preset.id
-                        ? 'border-accent bg-accent-wash'
-                        : 'border-line bg-surface')
-                    }
-                  >
-                    <span className="flex items-center justify-between">
-                      <span className="text-[14px] font-semibold">{preset.label}</span>
-                      {theme === preset.id && <Check size={15} className="text-accent" />}
-                    </span>
-                    <span
-                      className="mt-2 block h-3.5 w-10 rounded-full"
-                      style={{ background: preset.swatch }}
-                      aria-hidden
-                    />
-                  </button>
-                ))}
-              </div>
-              <Button
-                size="lg"
-                className="mt-4 w-full"
+            <StepShell title="Make it yours" body="Changeable any time in settings.">
+              <Field label="Appearance">
+                <Segmented<ColorSchemePreference>
+                  options={SCHEME_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                  value={scheme}
+                  onChange={(next) => {
+                    setScheme(next)
+                    void repo.updateProfile({ colorScheme: next })
+                  }}
+                />
+              </Field>
+              <Field label="Accent">
+                <div className="grid grid-cols-2 gap-2">
+                  {THEME_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      // Written immediately so App's appearance live-query repaints.
+                      onClick={() => {
+                        setTheme(preset.id)
+                        void repo.updateProfile({ theme: preset.id })
+                      }}
+                      className={cn(
+                        'rounded-xl border p-3 text-left',
+                        theme === preset.id
+                          ? 'border-accent bg-accent-wash'
+                          : 'border-line bg-surface',
+                      )}
+                    >
+                      <span className="flex items-center justify-between">
+                        <span className="text-[14px] font-semibold">{preset.label}</span>
+                        {theme === preset.id && (
+                          <Check size={15} className="text-accent" />
+                        )}
+                      </span>
+                      <span
+                        className="mt-2 block h-3.5 w-10 rounded-full"
+                        style={{ background: preset.swatch }}
+                        aria-hidden
+                      />
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <ContinueButton
+                onClick={() => void saveAndContinue()}
                 disabled={isSaving}
-                onClick={() => void saveAndContinue('sync')}
-              >
-                Continue <ArrowRight size={17} />
-              </Button>
+                label="Almost done"
+              />
             </StepShell>
           )}
 
@@ -238,12 +325,76 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
 
       {step !== 'sync' && (
         <button
-          onClick={() => void saveAndContinue('sync')}
+          onClick={goNext}
           className="pb-safe py-4 text-center text-[13.5px] font-semibold text-ink-muted active:opacity-60"
         >
           Skip for now
         </button>
       )}
+    </div>
+  )
+}
+
+function WelcomeStep({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center bg-page px-8 pb-safe pt-safe text-center">
+      <div className="flex size-20 items-center justify-center rounded-3xl bg-accent text-accent-contrast shadow-lg shadow-accent/25">
+        <Dumbbell size={38} />
+      </div>
+      <h1 className="mt-6 text-[30px] font-bold tracking-tight">Welcome to FitNote</h1>
+      <p className="mt-2 max-w-xs text-[15px] leading-relaxed text-ink-secondary">
+        A fast, private log for your training — every set, PR, and trend, saved on your
+        device and synced if you want it.
+      </p>
+      <Button size="lg" className="mt-8 w-full max-w-xs" onClick={onStart}>
+        Let's set up <ArrowRight size={17} />
+      </Button>
+      <p className="mt-3 text-[12.5px] text-ink-muted">Takes about a minute.</p>
+    </div>
+  )
+}
+
+function ContinueButton({
+  onClick,
+  disabled,
+  label = 'Continue',
+}: {
+  onClick: () => void
+  disabled: boolean
+  label?: string
+}) {
+  return (
+    <Button size="lg" className="mt-4 w-full" disabled={disabled} onClick={onClick}>
+      {label} <ArrowRight size={17} />
+    </Button>
+  )
+}
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string }[]
+  value: T
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="flex gap-1 rounded-xl bg-sunken p-1">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'h-10 flex-1 rounded-lg text-[14px] font-semibold transition-colors',
+            value === option.value
+              ? 'bg-surface text-ink shadow-sm'
+              : 'text-ink-secondary',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -287,14 +438,16 @@ function SyncStep({
           ? 'Uploading anything you logged on this device so it lives in your account.'
           : state === 'partial'
             ? "Most of it is up. A few changes are still queued — they'll go up on their own, and you can check progress in Me → Data."
-            : 'Everything on this device is in your account.'
+            : sync.enabled
+              ? 'Everything on this device is in your account.'
+              : "You're all set — your workouts are saved right here on this device."
       }
     >
       <Card className="flex items-center gap-3 p-4">
         {state === 'running' ? (
           <Loader2 size={20} className="shrink-0 animate-spin text-accent" />
         ) : (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-contrast">
             <Sparkles size={16} />
           </span>
         )}
@@ -303,9 +456,11 @@ function SyncStep({
             ? pushed > 0
               ? `Uploaded ${pushed} ${pushed === 1 ? 'change' : 'changes'}…`
               : 'Checking what needs uploading…'
-            : pushed > 0
-              ? `Uploaded ${pushed} ${pushed === 1 ? 'change' : 'changes'}.`
-              : 'Nothing needed uploading.'}
+            : !sync.enabled
+              ? 'Saved on this device.'
+              : pushed > 0
+                ? `Uploaded ${pushed} ${pushed === 1 ? 'change' : 'changes'}.`
+                : 'Nothing needed uploading.'}
         </span>
       </Card>
 
@@ -332,7 +487,7 @@ function StepShell({
 }) {
   return (
     <>
-      <h1 className="mt-6 text-[24px] font-bold tracking-tight">{title}</h1>
+      <h1 className="mt-4 text-[24px] font-bold tracking-tight">{title}</h1>
       <p className="mt-1.5 mb-5 text-[14.5px] leading-snug text-ink-secondary">{body}</p>
       {children}
     </>
@@ -350,18 +505,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-const STEPS: Step[] = ['name', 'body', 'goal', 'look', 'sync']
-
-function StepDots({ step }: { step: Step }) {
-  const index = STEPS.indexOf(step)
+function StepDots({ activeIndex }: { activeIndex: number }) {
   return (
-    <div className="flex gap-1.5" aria-hidden>
-      {STEPS.map((s, i) => (
+    <div className="flex flex-1 gap-1.5" aria-hidden>
+      {FLOW.map((s, i) => (
         <span
           key={s}
-          className={
-            'h-1 flex-1 rounded-full ' + (i <= index ? 'bg-accent' : 'bg-line-strong')
-          }
+          className={cn(
+            'h-1 flex-1 rounded-full transition-colors',
+            i <= activeIndex ? 'bg-accent' : 'bg-line-strong',
+          )}
         />
       ))}
     </div>

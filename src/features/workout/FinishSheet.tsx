@@ -30,8 +30,6 @@ export function FinishSheet({
 
     const profile = await repo.getProfile()
     const workoutExercises = await repo.listWorkoutExercises(workoutId)
-    const muscles = await db.muscles.toArray()
-    const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
 
     let totalVolumeKg = 0
     let workingSets = 0
@@ -54,8 +52,8 @@ export function FinishSheet({
       const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
       totalVolumeKg += exerciseVolume
 
-      const region = regionOf.get(exercise.primaryMuscleId)
-      if (region) byRegionMap.set(region, (byRegionMap.get(region) ?? 0) + exerciseVolume)
+      const region = exercise.region
+      byRegionMap.set(region, (byRegionMap.get(region) ?? 0) + exerciseVolume)
     }
 
     const byRegion = byRegionMap
@@ -76,7 +74,13 @@ export function FinishSheet({
     }
   }, [workoutId])
 
-  if (!summary) return null
+  if (!summary) {
+    return (
+      <BottomSheet onDismiss={onDismiss} panelClassName="p-6">
+        <p className="py-6 text-center text-[14px] text-ink-muted">Adding it up…</p>
+      </BottomSheet>
+    )
+  }
 
   const {
     workout,
@@ -141,25 +145,35 @@ export function FinishSheet({
       <div className="px-5 pt-5">
         <h2 className="text-[20px] font-bold tracking-tight">Session complete</h2>
 
+        {/* The tiles arrive one after another: this is the payoff moment of a
+            session, and a staggered reveal makes it feel earned. */}
         <div className="mt-4 grid grid-cols-2 gap-2.5">
-          <StatTile label="Duration" value={formatDuration(durationSeconds)} />
-          <StatTile label="Sets" value={String(workingSets)} />
+          <StatTile label="Duration" value={formatDuration(durationSeconds)} index={0} />
+          <StatTile label="Sets" value={String(workingSets)} index={1} />
           {totalVolumeKg > 0 && (
             <StatTile
               label="Volume"
               value={formatDisplayWeight(totalVolumeKg, profile.unitWeight)}
+              index={2}
             />
           )}
           {/* Cardio time is reported on its own, never folded into volume. */}
           {cardioSeconds > 0 && (
-            <StatTile label="Cardio time" value={formatDuration(cardioSeconds)} />
+            <StatTile
+              label="Cardio time"
+              value={formatDuration(cardioSeconds)}
+              index={3}
+            />
           )}
         </div>
 
         {byRegion.length > 0 && (
           <div className="mt-5">
-            <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+            <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
               Where the work went
+            </p>
+            <p className="mb-2 text-[12px] text-ink-muted">
+              Share of weight lifted — cardio isn't counted here.
             </p>
             {/* A 100% stacked bar rather than a pie: length reads more accurately than angle. */}
             <div className="flex h-3 gap-[2px] overflow-hidden rounded-full">
@@ -227,9 +241,20 @@ export function FinishSheet({
   )
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({
+  label,
+  value,
+  index = 0,
+}: {
+  label: string
+  value: string
+  index?: number
+}) {
   return (
-    <div className="rounded-xl border border-line bg-sunken px-3.5 py-2.5">
+    <div
+      className="animate-pop rounded-xl border border-line bg-sunken px-3.5 py-2.5"
+      style={{ animationDelay: `${index * 55}ms` }}
+    >
       <p className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted">
         {label}
       </p>

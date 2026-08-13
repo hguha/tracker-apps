@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
         <div className="flex flex-col gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="h-11 rounded-xl bg-accent px-5 text-[15px] font-semibold text-white active:brightness-90"
+            className="h-11 rounded-xl bg-accent px-5 text-[15px] font-semibold text-accent-contrast active:brightness-90"
           >
             Reload
           </button>

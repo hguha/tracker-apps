@@ -78,6 +78,60 @@ input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Motion. Everything here is short and eased-out — the app should feel quick, not
+ * animated. `prefers-reduced-motion` below flattens all of it.
+ *
+ * The overshoot on `rise` is the one deliberate flourish: a sheet that settles
+ * slightly past its resting point reads as physical rather than as a repaint.
+ */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 160ms ease-out;
+}
+.animate-rise {
+  animation: rise 260ms cubic-bezier(0.16, 1.03, 0.3, 1);
+}
+.animate-drop-in {
+  animation: drop-in 220ms cubic-bezier(0.16, 1.03, 0.3, 1);
+}
+.animate-pop {
+  animation: pop 340ms cubic-bezier(0.2, 1.1, 0.35, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

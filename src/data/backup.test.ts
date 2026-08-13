@@ -21,7 +21,7 @@ beforeEach(async () => {
 /** Log a small but complete session so the export has a full graph to carry. */
 async function seedSession() {
   const workoutId = await repo.startWorkout({ title: 'Push' })
-  const bench = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+  const bench = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
   for (const reps of [8, 6]) {
     const id = await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps })
     await repo.logSetValues(id, {})
@@ -43,8 +43,7 @@ describe('buildBackup', () => {
   it('excludes the system exercise library, keeping only custom exercises', async () => {
     const customId = await repo.createExercise({
       name: 'My Custom Curl',
-      primaryMuscleId: 'biceps',
-      equipment: 'dumbbell',
+      region: 'biceps',
       trackingType: 'weight_reps',
     })
     const backup = await buildBackup()

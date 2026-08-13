@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import {
-  bestOneRepMaxKg,
+  bestOneRepMaxSet,
   isWorkingSet,
   topSetWeightKg,
   volumeLoadKg,
@@ -35,6 +35,8 @@ export interface ExerciseSeries {
   points: {
     at: number
     e1rmKg: number | null
+    // The logged set e1rmKg was computed from, so an estimate can cite it.
+    e1rmSet: { weightKg: number; reps: number } | null
     topSetKg: number | null
     volumeKg: number
     repRange: [number, number] | null
@@ -87,8 +89,6 @@ function repBucket(reps: number): string {
 export function useInsightsData(filters: InsightsFilters): InsightsData | undefined {
   return useLiveQuery(async () => {
     const profile = await repo.getProfile()
-    const muscles = await db.muscles.toArray()
-    const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
 
     const cutoff = Date.now() - filters.weeks * 7 * 24 * 3600 * 1000
     const allWorkouts = (await repo.listWorkouts(500)).filter((w) => w.endedAt !== null)
@@ -130,7 +130,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         exerciseOptions.set(we.exerciseId, {
           id: exercise.id,
           name: exercise.name,
-          region: regionOf.get(exercise.primaryMuscleId),
+          region: exercise.region,
         })
       }
     }
@@ -148,8 +148,8 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         const exercise = await db.exercises.get(we.exerciseId)
         if (!exercise) continue
 
-        const region = regionOf.get(exercise.primaryMuscleId)
-        if (regionFilter.size > 0 && (!region || !regionFilter.has(region))) continue
+        const region = exercise.region
+        if (regionFilter.size > 0 && !regionFilter.has(region)) continue
         if (exerciseFilter.size > 0 && !exerciseFilter.has(exercise.id)) continue
         matchedFilter = true
 
@@ -179,34 +179,36 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
           }
         }
 
-        // Region-level views credit the exercise's single primary region only: one lift, one body part (§4.3).
-        if (region) {
-          volumeByRegion.set(region, (volumeByRegion.get(region) ?? 0) + exerciseVolume)
-          const weekMap = regionVolumeByWeek.get(key) ?? new Map<Region, number>()
-          weekMap.set(region, (weekMap.get(region) ?? 0) + exerciseVolume)
-          regionVolumeByWeek.set(key, weekMap)
-        }
+        // Region-level views credit the exercise's single region only: one lift, one body part (§4.3).
+        volumeByRegion.set(region, (volumeByRegion.get(region) ?? 0) + exerciseVolume)
+        const weekMap = regionVolumeByWeek.get(key) ?? new Map<Region, number>()
+        weekMap.set(region, (weekMap.get(region) ?? 0) + exerciseVolume)
+        regionVolumeByWeek.set(key, weekMap)
 
-        if (region) {
-          sessionRegions.add(region)
-          setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
-        }
+        sessionRegions.add(region)
+        setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
 
         setsByPattern.set(
           exercise.movementPattern,
           (setsByPattern.get(exercise.movementPattern) ?? 0) + working.length,
         )
         setsByEquipment.set(
-          exercise.equipment,
-          (setsByEquipment.get(exercise.equipment) ?? 0) + working.length,
+          we.equipment,
+          (setsByEquipment.get(we.equipment) ?? 0) + working.length,
         )
 
         const series =
           seriesByExercise.get(exercise.id) ??
-          ({ exerciseId: exercise.id, name: exercise.name, points: [] } as ExerciseSeries)
+          ({
+            exerciseId: exercise.id,
+            name: exercise.name,
+            points: [],
+          } as ExerciseSeries)
+        const bestE1rm = bestOneRepMaxSet(sets)
         series.points.push({
           at: workout.startedAt,
-          e1rmKg: bestOneRepMaxKg(sets),
+          e1rmKg: bestE1rm?.e1rmKg ?? null,
+          e1rmSet: bestE1rm && { weightKg: bestE1rm.weightKg, reps: bestE1rm.reps },
           topSetKg: topSetWeightKg(sets),
           volumeKg: exerciseVolume,
           repRange: computeRepRange(working),

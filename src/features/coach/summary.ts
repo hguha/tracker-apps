@@ -139,7 +139,10 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
       if (ex.region)
         regionMap.set(ex.region, (regionMap.get(ex.region) ?? 0) + working.length)
 
-      const acc = exMap.get(ex.exerciseId) ?? {
+      // Keyed per (movement + equipment): a cable row and a barbell row are
+      // different work, and merging them kept whichever equipment came first.
+      const key = `${ex.exerciseId}:${ex.equipment}`
+      const acc = exMap.get(key) ?? {
         name: ex.name,
         region: ex.region,
         pattern: ex.pattern,
@@ -179,7 +182,7 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
         acc.recentWeek = session.weekOffset
       }
 
-      exMap.set(ex.exerciseId, acc)
+      exMap.set(key, acc)
     }
 
     weekMap.set(session.weekOffset, week)

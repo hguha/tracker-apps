@@ -1,7 +1,7 @@
 // Deterministic offline coach (§13): heuristics over the de-identified summary,
 // used before any API key exists and as the fallback when the LLM is unreachable.
 
-import { REGION_LABELS, type Region } from '@/domain/types'
+import { REGION_LABELS, type Equipment, type Region } from '@/domain/types'
 import { displayWeight, displayWeightOrNull } from '@/lib/units'
 import type { CoachSummary, ExerciseAgg } from './summary'
 import type {
@@ -132,21 +132,48 @@ function parseGoal(goal: string): GoalIntent {
   return { split, emphasis, weeks }
 }
 
-// Names must match the seeded library so a named split can build regardless of history.
-const MOVEMENTS: Record<Exclude<Region, 'cardio'>, string[]> = {
+// Base movement names plus how each is loaded, matching the library's own model —
+// the name alone can't say "cable", and guessing it produced "Barbell Face Pull".
+interface Suggestion {
+  name: string
+  equipment: Equipment
+}
+
+const MOVEMENTS: Record<Exclude<Region, 'cardio'>, Suggestion[]> = {
   legs: [
-    'Barbell Back Squat',
-    'Romanian Deadlift',
-    'Leg Press',
-    'Lying Leg Curl',
-    'Leg Extension',
+    { name: 'Back Squat', equipment: 'barbell' },
+    { name: 'Romanian Deadlift', equipment: 'barbell' },
+    { name: 'Leg Press', equipment: 'machine' },
+    { name: 'Lying Leg Curl', equipment: 'machine' },
+    { name: 'Leg Extension', equipment: 'machine' },
   ],
-  chest: ['Barbell Bench Press', 'Incline Dumbbell Bench Press', 'Cable Fly'],
-  back: ['Barbell Row', 'Lat Pulldown', 'Seated Cable Row'],
-  shoulders: ['Overhead Press', 'Dumbbell Lateral Raise', 'Face Pull'],
-  biceps: ['Barbell Curl', 'Dumbbell Curl'],
-  triceps: ['Cable Triceps Pushdown', 'Overhead Cable Triceps Extension'],
-  core: ['Plank', 'Hanging Leg Raise'],
+  chest: [
+    { name: 'Bench Press', equipment: 'barbell' },
+    { name: 'Incline Bench Press', equipment: 'dumbbell' },
+    { name: 'Chest Fly', equipment: 'cable' },
+  ],
+  back: [
+    { name: 'Row', equipment: 'barbell' },
+    { name: 'Lat Pulldown', equipment: 'cable' },
+    { name: 'Seated Row', equipment: 'cable' },
+  ],
+  shoulders: [
+    { name: 'Overhead Press', equipment: 'barbell' },
+    { name: 'Lateral Raise', equipment: 'dumbbell' },
+    { name: 'Face Pull', equipment: 'cable' },
+  ],
+  biceps: [
+    { name: 'Biceps Curl', equipment: 'barbell' },
+    { name: 'Hammer Curl', equipment: 'dumbbell' },
+  ],
+  triceps: [
+    { name: 'Triceps Pushdown', equipment: 'cable' },
+    { name: 'Overhead Triceps Extension', equipment: 'cable' },
+  ],
+  core: [
+    { name: 'Plank', equipment: 'bodyweight' },
+    { name: 'Hanging Leg Raise', equipment: 'bodyweight' },
+  ],
 }
 
 function plan(summary: CoachSummary, goal = ''): CoachPlan {
@@ -166,10 +193,11 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
         ? hypertrophyReps
         : [6, 10]
 
-  const build = (name: string, isCompound: boolean) => {
+  const build = ({ name, equipment }: Suggestion, isCompound: boolean) => {
     const seen = recentByName.get(name.toLowerCase())
     return {
       name,
+      equipment,
       sets: isCompound && intent.emphasis === 'strength' ? 4 : 3,
       repLow: isCompound ? repLow : Math.max(repLow, 8),
       repHigh: isCompound ? repHigh : Math.max(repHigh, 12),
@@ -213,10 +241,10 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
         {
           name: 'Lower B — Posterior',
           exercises: [
-            build('Romanian Deadlift', true),
-            build('Lying Leg Curl', false),
-            build('Leg Press', true),
-            build('Plank', false),
+            build({ name: 'Romanian Deadlift', equipment: 'barbell' }, true),
+            build({ name: 'Lying Leg Curl', equipment: 'machine' }, false),
+            build({ name: 'Leg Press', equipment: 'machine' }, true),
+            build({ name: 'Plank', equipment: 'bodyweight' }, false),
           ],
         },
       ]
@@ -255,17 +283,17 @@ function plan(summary: CoachSummary, goal = ''): CoachPlan {
         {
           name: 'Full Body A',
           exercises: [
-            build('Barbell Back Squat', true),
-            build('Barbell Bench Press', true),
-            build('Barbell Row', true),
+            build({ name: 'Back Squat', equipment: 'barbell' }, true),
+            build({ name: 'Bench Press', equipment: 'barbell' }, true),
+            build({ name: 'Row', equipment: 'barbell' }, true),
           ],
         },
         {
           name: 'Full Body B',
           exercises: [
-            build('Romanian Deadlift', true),
-            build('Overhead Press', true),
-            build('Lat Pulldown', true),
+            build({ name: 'Romanian Deadlift', equipment: 'barbell' }, true),
+            build({ name: 'Overhead Press', equipment: 'barbell' }, true),
+            build({ name: 'Lat Pulldown', equipment: 'cable' }, true),
           ],
         },
       ]
@@ -326,6 +354,8 @@ function continuationPlan(summary: CoachSummary): CoachPlan {
 
   const planned = (e: ExerciseAgg) => ({
     name: e.name,
+    // Carry through how they actually did it, rather than making the resolver guess.
+    equipment: e.equipment,
     sets: 3,
     repLow: e.repRange ? e.repRange[0] : 8,
     repHigh: e.repRange ? e.repRange[1] : 12,
@@ -374,7 +404,8 @@ const STARTER_SESSIONS: PlanSession[] = [
     name: 'Full Body A',
     exercises: [
       {
-        name: 'Barbell Back Squat',
+        name: 'Back Squat',
+        equipment: 'barbell',
         sets: 3,
         repLow: 5,
         repHigh: 8,
@@ -383,7 +414,8 @@ const STARTER_SESSIONS: PlanSession[] = [
         note: 'Start light and add weight each session.',
       },
       {
-        name: 'Barbell Bench Press',
+        name: 'Bench Press',
+        equipment: 'barbell',
         sets: 3,
         repLow: 5,
         repHigh: 8,
@@ -392,7 +424,8 @@ const STARTER_SESSIONS: PlanSession[] = [
         note: 'Focus on clean, controlled reps.',
       },
       {
-        name: 'Barbell Row',
+        name: 'Row',
+        equipment: 'barbell',
         sets: 3,
         repLow: 8,
         repHigh: 12,
@@ -407,6 +440,7 @@ const STARTER_SESSIONS: PlanSession[] = [
     exercises: [
       {
         name: 'Deadlift',
+        equipment: 'barbell',
         sets: 2,
         repLow: 5,
         repHigh: 5,
@@ -416,6 +450,7 @@ const STARTER_SESSIONS: PlanSession[] = [
       },
       {
         name: 'Overhead Press',
+        equipment: 'barbell',
         sets: 3,
         repLow: 5,
         repHigh: 8,
@@ -425,6 +460,7 @@ const STARTER_SESSIONS: PlanSession[] = [
       },
       {
         name: 'Lat Pulldown',
+        equipment: 'cable',
         sets: 3,
         repLow: 8,
         repHigh: 12,

@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, Play, X } from 'lucide-react'
+import { Dumbbell, Pencil, Play, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { useActiveWorkout } from '@/data/useActiveWorkout'
 import { BottomSheet } from '@/components/BottomSheet'
@@ -97,9 +97,14 @@ export function TemplatePreviewSheet({
           </Button>
         )}
         {active ? (
-          <Button size="lg" className="flex-1" onClick={() => onStart(active.id)}>
-            <Play size={17} />
-            Resume your workout
+          <Button
+            variant="secondary"
+            size="lg"
+            className="flex-1"
+            onClick={() => onStart(active.id)}
+          >
+            <Dumbbell size={17} />
+            Go to your workout in progress
           </Button>
         ) : (
           <Button

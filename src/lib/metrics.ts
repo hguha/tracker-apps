@@ -8,27 +8,21 @@ type VolumeInput = Pick<
   'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'
 > & { isCompleted?: boolean }
 
+// The tracking facts volume math needs from the exercise.
+type VolumeExercise = Pick<Exercise, 'trackingType' | 'bodyweightFactor'>
+
 // A set counts as work unless explicitly marked incomplete.
 export function isWorkingSet(set: VolumeInput): boolean {
   return set.isCompleted !== false
 }
 
-// Two-arm dumbbell lifts move a dumbbell per hand, so the entered weight counts
-// twice (§6); one-arm dumbbells and everything else are their true total (factor 1).
-export function loadUnitsMoved(
-  exercise: Pick<Exercise, 'equipment' | 'isUnilateral'>,
-): number {
-  return exercise.equipment === 'dumbbell' && !exercise.isUnilateral ? 2 : 1
-}
-
-// Weight actually moved (doubles two-arm dumbbells, adds a bodyweight fraction).
-// Drives volume load only — max-weight and e1RM PRs deliberately use raw entered weight.
+// Weight actually moved. The entered weight is taken at face value — for two-hand
+// implements (a pair of dumbbells) the user logs the combined weight, so there's
+// no equipment-specific doubling. Bodyweight movements add a fraction of bodyweight.
+// Drives volume load only — max-weight and e1RM PRs use raw entered weight.
 export function effectiveWeightKg(
   set: Pick<VolumeInput, 'weightKg'>,
-  exercise: Pick<
-    Exercise,
-    'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'
-  >,
+  exercise: VolumeExercise,
   bodyweightKg: number | null,
 ): number | null {
   const entered = set.weightKg ?? 0
@@ -38,7 +32,7 @@ export function effectiveWeightKg(
   switch (exercise.trackingType) {
     case 'weight_reps':
     case 'weight_time':
-      return set.weightKg === null ? null : set.weightKg * loadUnitsMoved(exercise)
+      return set.weightKg
     case 'bodyweight_reps':
       return bw === null ? null : bw * factor
     case 'weighted_bodyweight':
@@ -55,10 +49,7 @@ export function effectiveWeightKg(
 
 export function volumeLoadKg(
   sets: VolumeInput[],
-  exercise: Pick<
-    Exercise,
-    'trackingType' | 'bodyweightFactor' | 'equipment' | 'isUnilateral'
-  >,
+  exercise: VolumeExercise,
   bodyweightKg: number | null,
 ): number {
   let total = 0
@@ -93,15 +84,26 @@ export function weightForRepsKg(oneRepMaxKg: number, reps: number): number | nul
 
 export const PROJECTION_REPS = [1, 2, 3, 5, 8, 10, 12] as const
 
+// Returns the set the best estimate came from, not just the number, so an
+// estimate can always be shown next to the real lift behind it.
+export function bestOneRepMaxSet(
+  sets: Pick<PerformedSet, 'weightKg' | 'reps'>[],
+): { weightKg: number; reps: number; e1rmKg: number } | null {
+  let best: { weightKg: number; reps: number; e1rmKg: number } | null = null
+  for (const set of sets) {
+    const e1rmKg = estimatedOneRepMaxKg(set.weightKg, set.reps)
+    if (e1rmKg === null || set.weightKg === null || set.reps === null) continue
+    if (best === null || e1rmKg > best.e1rmKg) {
+      best = { weightKg: set.weightKg, reps: set.reps, e1rmKg }
+    }
+  }
+  return best
+}
+
 export function bestOneRepMaxKg(
   sets: Pick<PerformedSet, 'weightKg' | 'reps'>[],
 ): number | null {
-  let best: number | null = null
-  for (const set of sets) {
-    const e1rm = estimatedOneRepMaxKg(set.weightKg, set.reps)
-    if (e1rm !== null && (best === null || e1rm > best)) best = e1rm
-  }
-  return best
+  return bestOneRepMaxSet(sets)?.e1rmKg ?? null
 }
 
 /** Heaviest completed working set, for the top-set line chart (B-9). */
@@ -112,22 +114,4 @@ export function topSetWeightKg(sets: VolumeInput[]): number | null {
     if (best === null || set.weightKg > best) best = set.weightKg
   }
   return best
-}
-
-/** Seconds per unit distance. Kept separate from volume load, always (§8.1). */
-export function paceSecondsPerM(
-  durationSeconds: number | null,
-  distanceM: number | null,
-): number | null {
-  if (!durationSeconds || !distanceM || distanceM <= 0) return null
-  return durationSeconds / distanceM
-}
-
-/** Crude density proxy. Label it as such wherever it's shown. */
-export function tonnagePerMinute(
-  volumeKg: number,
-  durationSeconds: number | null,
-): number | null {
-  if (!durationSeconds || durationSeconds <= 0) return null
-  return volumeKg / (durationSeconds / 60)
 }

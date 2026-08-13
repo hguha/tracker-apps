@@ -3,9 +3,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, MoreHorizontal, Plus } from 'lucide-react'
+import { ChevronLeft, FileText, MoreHorizontal, Plus } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
+import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
 import { DragItem, DragList } from '@/components/DragList'
@@ -14,13 +15,17 @@ import { useRestTimer } from '@/features/timer/restTimerStore'
 import { playCue } from '@/features/timer/sounds'
 import { formatDuration } from '@/lib/units'
 import { sessionTitle } from '@/lib/sessionTitle'
-import type { WorkoutSet } from '@/domain/types'
+import type { Equipment, WorkoutSet } from '@/domain/types'
 import { ExerciseCard } from './ExerciseCard'
 import { ExerciseDetailSheet } from './ExerciseDetailSheet'
 import { ExercisePicker } from './ExercisePicker'
 import { FinishSheet } from './FinishSheet'
 import { SessionMenu } from './SessionMenu'
 import { isCardioPattern } from '@/domain/movement'
+
+// How many finished sessions before the swipe hint retires. Deleting and reusing a
+// set have no visible control, so one showing isn't enough to learn them.
+const GESTURE_HINT_WORKOUTS = 3
 
 export function ActiveWorkoutScreen({
   workoutId,
@@ -37,6 +42,9 @@ export function ActiveWorkoutScreen({
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isFinishOpen, setIsFinishOpen] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
+  // The template this session stopped following, held just long enough to say so.
+  const [detachedFrom, setDetachedFrom] = useState<string | null>(null)
   const [detailFor, setDetailFor] = useState<{
     exerciseId: string
     workoutExerciseId: string
@@ -56,16 +64,34 @@ export function ActiveWorkoutScreen({
         sets: await repo.listSets(we.id),
         // Relative to *this* workout, so editing an older session shows what
         // came before it rather than the newest session overall.
-        previousSession: await repo.getPreviousSession(we.exerciseId, workoutId),
+        previousSession: await repo.getPreviousSession(
+          we.exerciseId,
+          we.equipment,
+          workoutId,
+        ),
       })),
     )
 
-    const muscles = await db.muscles.toArray()
-    const muscleById = new Map(muscles.map((m) => [m.id, m]))
+    // Named only while the session still matches the template it came from.
+    const template =
+      workout.templateId === null ? null : await repo.getTemplate(workout.templateId)
     const titleSignals = await repo.getSessionTitleSignals(workoutId)
     const placeholderOverrides = await repo.getPlaceholderOverrides(workoutId)
+    // Swipe is the only way to delete or reuse a set, so the hint stays until the
+    // gestures have plausibly been learned rather than showing exactly once.
+    const finishedWorkouts = await db.workouts
+      .filter((w) => w.endedAt !== null && w.deletedAt === null)
+      .count()
 
-    return { workout, profile, rows, muscleById, titleSignals, placeholderOverrides }
+    return {
+      workout,
+      profile,
+      template,
+      rows,
+      titleSignals,
+      placeholderOverrides,
+      finishedWorkouts,
+    }
   }, [workoutId])
 
   const [elapsedLabel, setElapsedLabel] = useState('')
@@ -142,6 +168,7 @@ export function ActiveWorkoutScreen({
   const handleDeleteSet = useCallback(
     async (setId: string) => {
       await repo.deleteSet(setId)
+      playCue('undo')
       toast.show('Set deleted', () => void repo.restoreSet(setId))
     },
     [toast],
@@ -160,13 +187,22 @@ export function ActiveWorkoutScreen({
   }, [])
 
   const handleAddExercise = useCallback(
-    async (exerciseId: string) => {
-      const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, exerciseId)
+    async (exerciseId: string, equipment: Equipment) => {
+      const workoutExerciseId = await repo.addExerciseToWorkout(
+        workoutId,
+        exerciseId,
+        equipment,
+      )
 
       // One row is enough: its placeholder comes from history and "Add set"
       // carries the ghost forward (§6.2).
       await repo.addSetWithPlaceholder(workoutExerciseId, exerciseId)
+      playCue('exercise-added')
       setIsPickerOpen(false)
+      // Adding an exercise changes the session's shape, so it is no longer an
+      // instance of the template it started from.
+      const wasFollowing = await repo.detachWorkoutFromTemplate(workoutId)
+      if (wasFollowing !== null) setDetachedFrom(wasFollowing)
     },
     [workoutId],
   )
@@ -178,7 +214,7 @@ export function ActiveWorkoutScreen({
   const handleSuperset = useCallback(
     async (draggedId: string, targetId: string) => {
       await repo.supersetExercises(draggedId, targetId)
-      playCue('set-logged')
+      playCue('superset')
       toast.show('Grouped as a superset', () => void repo.removeFromSuperset(draggedId))
     },
     [toast],
@@ -210,6 +246,18 @@ export function ActiveWorkoutScreen({
     onExit()
   }, [workoutId, toast, onExit])
 
+  // Leaving an edit means abandoning it, matching what a back arrow implies
+  // everywhere else. Only prompt when there is something to lose; an edit that
+  // changed nothing just closes.
+  const handleLeaveEditing = useCallback(async () => {
+    if (await repo.hasUnsavedWorkoutEdits(workoutId)) {
+      setIsLeaveConfirmOpen(true)
+      return
+    }
+    await repo.cancelWorkoutEdits(workoutId)
+    onExit()
+  }, [workoutId, onExit])
+
   const loggedSetCount = useMemo(
     () => data?.rows.flatMap((r) => r.sets).filter((s) => s.isCompleted).length ?? 0,
     [data?.rows],
@@ -229,9 +277,19 @@ export function ActiveWorkoutScreen({
     )
   }
 
-  const { workout, profile, rows, muscleById, titleSignals, placeholderOverrides } = data
+  const { workout, profile, template, rows, titleSignals, placeholderOverrides } = data
+
+  // Guide a genuine first-timer through logging; drop it once they've logged a set.
+  const showGestureHint =
+    data.finishedWorkouts < GESTURE_HINT_WORKOUTS && !isEditMode && rows.length > 0
   const displayTitle = sessionTitle(workout.title, workout.startedAt, titleSignals)
   const orderedIds = rows.map((r) => r.workoutExercise.id)
+
+  // Backs "Delete last set" in the exercise sheet, so the gesture isn't the only way.
+  const detailSets = detailFor
+    ? (rows.find((r) => r.workoutExercise.id === detailFor.workoutExerciseId)?.sets ?? [])
+    : []
+  const lastSetOfDetail = detailSets[detailSets.length - 1]
 
   // The last non-cardio exercise is the one just trained; fall back to the default.
   const restDefaultSeconds =
@@ -247,9 +305,7 @@ export function ActiveWorkoutScreen({
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2">
         <button
-          // Must commit, not merely navigate: the snapshot defers this workout's
-          // writes, so an uncommitted exit would strand them unsent forever.
-          onClick={() => (isEditMode ? void handleDoneEditing() : onExit())}
+          onClick={isEditMode ? () => void handleLeaveEditing() : onExit}
           aria-label="Back"
           className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
         >
@@ -259,10 +315,18 @@ export function ActiveWorkoutScreen({
           <h1 className="truncate text-[16px] font-semibold tracking-tight">
             {displayTitle}
           </h1>
-          <p className="text-[12px] text-ink-muted">
-            {isEditMode
-              ? `${loggedSetCount} sets · editing`
-              : `${elapsedLabel} · ${loggedSetCount} sets`}
+          <p className="flex items-center gap-1.5 text-[12px] text-ink-muted">
+            {template && (
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-accent">
+                <FileText size={10} />
+                {template.name}
+              </span>
+            )}
+            <span className="truncate">
+              {isEditMode
+                ? `${loggedSetCount} sets · editing`
+                : `${elapsedLabel} · ${loggedSetCount} sets`}
+            </span>
           </p>
         </div>
         <button
@@ -284,6 +348,14 @@ export function ActiveWorkoutScreen({
           </div>
         )}
 
+        {showGestureHint && (
+          <div className="mb-2.5 rounded-2xl border border-accent/30 bg-accent-wash px-4 py-3 text-[13px] leading-relaxed text-ink-secondary">
+            <p className="mb-0.5 font-semibold text-ink">How to log</p>
+            Tap a set's fields and type your weight and reps — that logs it. Swipe a set
+            left to delete it, or right to reuse it.
+          </div>
+        )}
+
         <DragList
           itemIds={orderedIds}
           onReorder={(ids) => void handleReorder(ids)}
@@ -301,7 +373,9 @@ export function ActiveWorkoutScreen({
                 >
                   <ExerciseCard
                     exercise={row.exercise}
-                    muscle={muscleById.get(row.exercise.primaryMuscleId)}
+                    equipment={row.workoutExercise.equipment}
+                    asOf={workout.startedAt}
+                    isPastSession={isEditMode}
                     sets={row.sets}
                     previousSession={row.previousSession}
                     weightUnit={profile.unitWeight}
@@ -369,16 +443,16 @@ export function ActiveWorkoutScreen({
               variant="secondary"
               size="lg"
               className="flex-1"
-              onClick={() => void handleCancelEditing()}
+              onClick={() => void handleLeaveEditing()}
             >
-              Cancel edits
+              Discard changes
             </Button>
             <Button
               size="lg"
               className="flex-[2]"
               onClick={() => void handleDoneEditing()}
             >
-              Done editing
+              Save changes
             </Button>
           </div>
         ) : (
@@ -390,7 +464,9 @@ export function ActiveWorkoutScreen({
 
       {isPickerOpen && (
         <ExercisePicker
-          onPick={(exerciseId) => void handleAddExercise(exerciseId)}
+          onPick={(exerciseId, equipment) =>
+            void handleAddExercise(exerciseId, equipment)
+          }
           onDismiss={() => setIsPickerOpen(false)}
         />
       )}
@@ -404,9 +480,20 @@ export function ActiveWorkoutScreen({
           distanceUnit={profile.unitDistance}
           onRemoveFromWorkout={() => {
             const id = detailFor.workoutExerciseId
-            void repo.removeWorkoutExercise(id)
+            void repo.removeWorkoutExercise(id).then(async () => {
+              const wasFollowing = await repo.detachWorkoutFromTemplate(workoutId)
+              if (wasFollowing !== null) setDetachedFrom(wasFollowing)
+            })
             toast.show('Exercise removed', () => void repo.restoreWorkoutExercise(id))
           }}
+          onRemoveLastSet={
+            lastSetOfDetail
+              ? () => {
+                  const setId = lastSetOfDetail.id
+                  void handleDeleteSet(setId)
+                }
+              : undefined
+          }
           onDismiss={() => setDetailFor(null)}
         />
       )}
@@ -414,7 +501,9 @@ export function ActiveWorkoutScreen({
       {isMenuOpen && (
         <SessionMenu
           workout={workout}
-          canSaveAsTemplate={rows.length > 0}
+          // A session still following a template already has one; offering to save
+          // it again would just make a duplicate.
+          canSaveAsTemplate={rows.length > 0 && workout.templateId === null}
           onDiscard={() => void handleDiscard()}
           onDismiss={() => setIsMenuOpen(false)}
           onSaved={(message) => toast.show(message)}
@@ -431,6 +520,73 @@ export function ActiveWorkoutScreen({
             onExit()
           }}
         />
+      )}
+
+      {detachedFrom !== null && (
+        <BottomSheet
+          onDismiss={() => setDetachedFrom(null)}
+          panelClassName="p-5"
+          labelledBy="detached-title"
+        >
+          <h2 id="detached-title" className="text-[19px] font-bold tracking-tight">
+            No longer following {detachedFrom}
+          </h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-ink-secondary">
+            You've changed which exercises this session has, so it won't count as a run of
+            that template. Everything you log still saves normally — and you can save this
+            version as its own template from the workout menu when you finish.
+          </p>
+          <Button size="lg" className="mt-5 w-full" onClick={() => setDetachedFrom(null)}>
+            Got it
+          </Button>
+        </BottomSheet>
+      )}
+
+      {isLeaveConfirmOpen && (
+        <BottomSheet
+          onDismiss={() => setIsLeaveConfirmOpen(false)}
+          dismissOnBackdrop={false}
+          panelClassName="p-5"
+          labelledBy="leave-edit-title"
+        >
+          <h2 id="leave-edit-title" className="text-[19px] font-bold tracking-tight">
+            Discard your changes?
+          </h2>
+          <p className="mt-2 text-[14px] text-ink-secondary">
+            Your edits to this workout haven't been saved yet. Leaving now puts it back
+            the way it was.
+          </p>
+          <div className="mt-5 flex gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={() => setIsLeaveConfirmOpen(false)}
+            >
+              Keep editing
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              className="flex-1"
+              onClick={() => {
+                setIsLeaveConfirmOpen(false)
+                void handleCancelEditing()
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+          <button
+            onClick={() => {
+              setIsLeaveConfirmOpen(false)
+              void handleDoneEditing()
+            }}
+            className="mt-2 w-full py-2 text-[13.5px] font-semibold text-accent active:opacity-60"
+          >
+            Save changes instead
+          </button>
+        </BottomSheet>
       )}
     </div>
   )

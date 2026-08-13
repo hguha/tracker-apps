@@ -50,20 +50,18 @@ export function HistoryCalendar({
     return map
   }, [summaries])
 
-  const { earliest, latest } = useMemo(() => {
+  const { earliest } = useMemo(() => {
     let earliest = Infinity
-    let latest = -Infinity
     for (const s of summaries) {
       const at = s.workout.startedAt
       if (at < earliest) earliest = at
-      if (at > latest) latest = at
     }
-    return { earliest, latest }
+    return { earliest }
   }, [summaries])
 
-  const [cursor, setCursor] = useState(() =>
-    startOfMonth(latest > -Infinity ? latest : Date.now()).getTime(),
-  )
+  // Open on this month, not the last workout's: after a break the calendar
+  // otherwise opens in the past with a disabled "next" and no way back to today.
+  const [cursor, setCursor] = useState(() => startOfMonth(Date.now()).getTime())
 
   const cells = useMemo(() => {
     const monthStart = startOfMonth(cursor)
@@ -75,7 +73,7 @@ export function HistoryCalendar({
   }, [cursor, weekStartsOn])
 
   const canGoBack = earliest < Infinity && cursor > startOfMonth(earliest).getTime()
-  const canGoForward = latest > -Infinity && cursor < startOfMonth(latest).getTime()
+  const canGoForward = cursor < startOfMonth(Date.now()).getTime()
 
   const orderedInitials = Array.from(
     { length: 7 },
@@ -137,7 +135,7 @@ export function HistoryCalendar({
               className={cn(
                 'flex aspect-square flex-col items-center justify-center gap-1 rounded-lg text-[13px]',
                 isSelected
-                  ? 'bg-accent font-bold text-white'
+                  ? 'bg-accent font-bold text-accent-contrast'
                   : info
                     ? 'font-semibold text-ink active:bg-sunken'
                     : 'text-ink-muted active:bg-sunken',

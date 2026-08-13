@@ -94,7 +94,7 @@ export function SignInScreen({
               </button>
             )}
             <div className="mb-8 text-center">
-              <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent text-white">
+              <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-contrast">
                 <Dumbbell size={28} />
               </span>
               <h1 className="mt-4 text-[26px] font-bold tracking-tight">

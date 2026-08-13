@@ -9,7 +9,7 @@
  * mis-tap away from an in-progress session.
  */
 
-import { BarChart3, CalendarDays, Home, Plus, User } from 'lucide-react'
+import { BarChart3, CalendarDays, Dumbbell, Home, Plus, User } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 export type TabKey = 'home' | 'history' | 'library' | 'insights' | 'me'
@@ -30,10 +30,12 @@ export function TabBar({
   active,
   onSelect,
   onStartWorkout,
+  hasActiveWorkout = false,
 }: {
   active: TabKey
   onSelect: (tab: TabKey) => void
   onStartWorkout: () => void
+  hasActiveWorkout?: boolean
 }) {
   return (
     <nav className="relative border-t border-line bg-surface pb-safe">
@@ -42,14 +44,26 @@ export function TabBar({
           <TabButton key={tab.key} tab={tab} active={active} onSelect={onSelect} />
         ))}
 
-        {/* Center action, raised so it reads as primary rather than a fifth tab. */}
-        <div className="flex w-16 shrink-0 justify-center">
+        {/* Center action, raised so it reads as primary rather than a fifth tab.
+            Mid-session it returns to that workout instead of starting one, so it
+            drops the plus for the session glyph and a live pulse. */}
+        <div className="relative flex w-16 shrink-0 justify-center">
+          {hasActiveWorkout && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-4 size-14 animate-ping rounded-full bg-accent opacity-25"
+            />
+          )}
           <button
             onClick={onStartWorkout}
-            aria-label="Log a workout"
-            className="-mt-4 flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-lg active:brightness-90"
+            aria-label={hasActiveWorkout ? 'Back to your workout' : 'Log a workout'}
+            className="relative z-10 -mt-4 flex size-14 items-center justify-center rounded-full bg-accent text-accent-contrast shadow-lg active:brightness-90"
           >
-            <Plus size={26} strokeWidth={2.5} />
+            {hasActiveWorkout ? (
+              <Dumbbell size={24} strokeWidth={2.5} />
+            ) : (
+              <Plus size={26} strokeWidth={2.5} />
+            )}
           </button>
         </div>
 

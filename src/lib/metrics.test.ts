@@ -5,8 +5,6 @@ import {
   effectiveWeightKg,
   estimatedOneRepMaxKg,
   isWorkingSet,
-  paceSecondsPerM,
-  tonnagePerMinute,
   topSetWeightKg,
   volumeLoadKg,
   weightForRepsKg,
@@ -31,12 +29,10 @@ function exercise(partial: Partial<Exercise> = {}): Exercise {
     id: 'ex1',
     userId: null,
     name: 'Test',
-    primaryMuscleId: 'm1',
+    region: 'chest',
     aliases: [],
-    equipment: 'barbell',
     movementPattern: 'push',
     trackingType: 'weight_reps',
-    isUnilateral: false,
     bodyweightFactor: null,
     isKeyLift: false,
     notes: '',
@@ -100,15 +96,10 @@ describe('effectiveWeightKg', () => {
     expect(effectiveWeightKg(set({ weightKg: null }), pushup, null)).toBeNull()
   })
 
-  it('doubles a two-arm dumbbell lift — a pair moves each rep (§6)', () => {
-    const dbPress = exercise({ equipment: 'dumbbell', isUnilateral: false })
-    // The user enters one 40 kg dumbbell; the load moved is 80 kg.
-    expect(effectiveWeightKg(set({ weightKg: 40 }), dbPress, 80)).toBe(80)
-  })
-
-  it('does not double a one-arm dumbbell lift — only one is held', () => {
-    const oneArmRow = exercise({ equipment: 'dumbbell', isUnilateral: true })
-    expect(effectiveWeightKg(set({ weightKg: 40 }), oneArmRow, 80)).toBe(40)
+  it('takes the entered weight at face value for a dumbbell lift — no doubling (§6)', () => {
+    // Equipment no longer affects the effective weight: the user logs the weight
+    // they intend, so a 40 kg dumbbell entry is 40 kg of effective load, not 80.
+    expect(effectiveWeightKg(set({ weightKg: 40 }), exercise(), 80)).toBe(40)
   })
 })
 
@@ -194,24 +185,6 @@ describe('bestOneRepMaxKg', () => {
 describe('topSetWeightKg', () => {
   it('finds the heaviest working set', () => {
     expect(topSetWeightKg([set({ weightKg: 100 }), set({ weightKg: 120 })])).toBe(120)
-  })
-})
-
-describe('cardio and density', () => {
-  it('computes pace', () => {
-    expect(paceSecondsPerM(1800, 5000)).toBeCloseTo(0.36)
-  })
-
-  it('returns null pace for a zero distance', () => {
-    expect(paceSecondsPerM(1800, 0)).toBeNull()
-  })
-
-  it('computes tonnage per minute', () => {
-    expect(tonnagePerMinute(6000, 3600)).toBe(100)
-  })
-
-  it('returns null density for a zero-length session', () => {
-    expect(tonnagePerMinute(6000, 0)).toBeNull()
   })
 })
 

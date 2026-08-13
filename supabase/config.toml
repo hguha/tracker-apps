@@ -10,3 +10,8 @@ project_id = "orzuzeojacttsxiydwye"
 # The coach function verifies the caller's Supabase JWT itself and must be
 # reachable by any signed-in user, so the default gateway JWT check is fine.
 verify_jwt = true
+
+[functions.delete-account]
+# Must stay true: the function trusts the JWT's `sub` as the id to delete, so the
+# gateway signature check is what stops a user deleting anyone but themselves.
+verify_jwt = true

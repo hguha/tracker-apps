@@ -134,23 +134,38 @@ export function parseBackup(json: string): BackupFile {
     throw new BackupParseError('This backup is missing its data.')
   }
 
-  // Normalize: tolerate a file that predates a table by defaulting it to empty.
+  // Normalize: tolerate a file that predates a table by defaulting it to empty,
+  // and drop any row without a string primary key. A row missing its `id` throws
+  // on bulkPut (the key is inline), and a hand-edited file is untrusted input —
+  // so keep only rows the DB can actually store rather than trusting the shape.
   const d = obj.data as Record<string, unknown>
-  const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+  const rows = <T extends { id: string }>(v: unknown): T[] =>
+    (Array.isArray(v) ? v : []).filter(
+      (r): r is T =>
+        typeof r === 'object' &&
+        r !== null &&
+        typeof (r as { id?: unknown }).id === 'string' &&
+        (r as { id: string }).id !== '',
+    )
+  const profile = d.profile
   return {
     format: 'fitnote-backup',
     version: obj.version,
     exportedAt: typeof obj.exportedAt === 'number' ? obj.exportedAt : 0,
     data: {
-      profile: (d.profile as Profile) ?? null,
-      exercises: arr<Exercise>(d.exercises),
-      templates: arr<Template>(d.templates),
-      templateExercises: arr<TemplateExercise>(d.templateExercises),
-      workouts: arr<Workout>(d.workouts),
-      workoutExercises: arr<WorkoutExercise>(d.workoutExercises),
-      sets: arr<WorkoutSet>(d.sets),
-      personalRecords: arr<PersonalRecord>(d.personalRecords),
-      metricEntries: arr<MetricEntry>(d.metricEntries),
+      profile:
+        typeof profile === 'object' && profile !== null ? (profile as Profile) : null,
+      exercises: rows<Exercise>(d.exercises).map((e) => ({
+        ...e,
+        aliases: Array.isArray(e.aliases) ? e.aliases : [],
+      })),
+      templates: rows<Template>(d.templates),
+      templateExercises: rows<TemplateExercise>(d.templateExercises),
+      workouts: rows<Workout>(d.workouts),
+      workoutExercises: rows<WorkoutExercise>(d.workoutExercises),
+      sets: rows<WorkoutSet>(d.sets),
+      personalRecords: rows<PersonalRecord>(d.personalRecords),
+      metricEntries: rows<MetricEntry>(d.metricEntries),
     },
   }
 }

@@ -45,7 +45,7 @@ export function MeScreen({
           onClick={onOpenAccount}
           className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-accent-wash"
         >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-[14px] font-bold text-white">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-[14px] font-bold text-accent-contrast">
             {initialsOf(session?.displayName ?? '')}
           </span>
           <span className="min-w-0 flex-1">

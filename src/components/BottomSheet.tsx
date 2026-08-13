@@ -34,7 +34,7 @@ export function BottomSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
+      className="animate-fade-in fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
       onClick={dismissOnBackdrop ? onDismiss : undefined}
     >
       <div
@@ -43,7 +43,7 @@ export function BottomSheet({
         aria-labelledby={labelledBy}
         // Stop taps inside the panel from bubbling to the backdrop's dismiss.
         onClick={(event) => event.stopPropagation()}
-        className={cn('rounded-t-3xl bg-surface pb-safe', panelClassName)}
+        className={cn('animate-rise rounded-t-3xl bg-surface pb-safe', panelClassName)}
       >
         {children}
       </div>

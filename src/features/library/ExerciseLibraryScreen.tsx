@@ -1,35 +1,30 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
-import { db } from '@/db/database'
+import { ChevronLeft, Plus, Search, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
 import { cn } from '@/lib/cn'
-import { formatRelativeDay } from '@/lib/dates'
-import { regionVar } from '@/lib/palette'
+import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
+import { MovementList } from '@/components/MovementList'
 import { type Region } from '@/domain/types'
 import { NewExerciseForm } from '@/features/workout/NewExerciseForm'
 import { ExerciseDetailSheet } from '@/features/workout/ExerciseDetailSheet'
-import { humanizeSlug } from '@/lib/labels'
 
 type SortMode = 'name' | 'recent'
 
-export function ExerciseLibraryScreen() {
+export function ExerciseLibraryScreen({ onBack }: { onBack?: () => void }) {
   const [query, setQuery] = useState('')
   const [regionFilter, setRegionFilter] = useState<Region | null>(null)
-  const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null)
   const [sort, setSort] = useState<SortMode>('name')
   const [isCreating, setIsCreating] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [detailFor, setDetailFor] = useState<string | null>(null)
 
   const data = useLiveQuery(async () => {
     const exercises = await repo.listExercises()
-    const muscles = await db.muscles.toArray()
     const profile = await repo.getProfile()
     return {
       exercises,
-      muscleById: new Map(muscles.map((m) => [m.id, m])),
       lastTrained: await repo.getLastTrainedMap(),
       profile,
     }
@@ -42,12 +37,7 @@ export function ExerciseLibraryScreen() {
     let list = data.exercises
 
     if (regionFilter !== null) {
-      list = list.filter(
-        (e) => data.muscleById.get(e.primaryMuscleId)?.region === regionFilter,
-      )
-    }
-    if (equipmentFilter !== null) {
-      list = list.filter((e) => e.equipment === equipmentFilter)
+      list = list.filter((e) => e.region === regionFilter)
     }
 
     if (normalized) {
@@ -66,7 +56,9 @@ export function ExerciseLibraryScreen() {
       }
       return a.name.localeCompare(b.name)
     })
-  }, [data, query, regionFilter, equipmentFilter, sort])
+  }, [data, query, regionFilter, sort])
+
+  const editingExercise = data?.exercises.find((e) => e.id === editingId)
 
   if (isCreating) {
     return (
@@ -81,11 +73,42 @@ export function ExerciseLibraryScreen() {
     )
   }
 
-  const hasFilters = regionFilter !== null || equipmentFilter !== null
+  if (editingExercise) {
+    return (
+      <NewExerciseForm
+        exercise={editingExercise}
+        onCreated={(exerciseId) => {
+          setEditingId(null)
+          // A system row forks to a new id; follow the fork.
+          setDetailFor(exerciseId)
+        }}
+        onCancel={() => setEditingId(null)}
+      />
+    )
+  }
+
+  const hasFilters = regionFilter !== null
+  const movementCount = results.length
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-line bg-surface px-3 pb-2 pt-2">
+        {/* Every other destination off More has a titled header; without one this
+            read as a stray search box with no way back. */}
+        <div className="mb-2 flex items-center gap-1">
+          {onBack && (
+            <button
+              onClick={onBack}
+              aria-label="Back"
+              className="-ml-2 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
+            >
+              <ChevronLeft size={22} />
+            </button>
+          )}
+          <h1 className="flex-1 text-[16px] font-semibold tracking-tight">
+            Exercise library
+          </h1>
+        </div>
         <div className="flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
           <Search size={17} className="shrink-0 text-ink-muted" />
           <input
@@ -100,34 +123,11 @@ export function ExerciseLibraryScreen() {
             </button>
           )}
         </div>
-
-        <div className="mt-2 flex items-center gap-1.5">
-          <button
-            onClick={() => setSort(sort === 'name' ? 'recent' : 'name')}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] font-medium text-ink-secondary"
-          >
-            <SlidersHorizontal size={13} />
-            {sort === 'name' ? 'A–Z' : 'Recent'}
-          </button>
-          {hasFilters && (
-            <button
-              onClick={() => {
-                setRegionFilter(null)
-                setEquipmentFilter(null)
-              }}
-              className="shrink-0 px-2 text-[13px] font-semibold text-accent"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
       </div>
 
       <ExerciseFilterPills
         region={regionFilter}
-        equipment={equipmentFilter}
         onRegionChange={setRegionFilter}
-        onEquipmentChange={setEquipmentFilter}
         className="border-b border-line bg-surface"
       />
 
@@ -144,50 +144,42 @@ export function ExerciseLibraryScreen() {
           </span>
         </button>
 
-        <p className="mb-2 px-1 text-[12px] text-ink-muted">
-          {results.length} {results.length === 1 ? 'exercise' : 'exercises'}
-        </p>
-
-        <Card className="overflow-hidden">
-          {results.map((exercise, index) => {
-            const muscle = data?.muscleById.get(exercise.primaryMuscleId)
-            const lastAt = data?.lastTrained.get(exercise.id)
-            return (
+        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+          <span className="text-[12px] text-ink-muted">
+            {movementCount} {movementCount === 1 ? 'movement' : 'movements'}
+            {hasFilters && (
               <button
-                key={exercise.id}
-                onClick={() => setDetailFor(exercise.id)}
+                onClick={() => setRegionFilter(null)}
+                className="ml-2 font-semibold text-accent"
+              >
+                Clear
+              </button>
+            )}
+          </span>
+          <div className="flex gap-0.5 rounded-lg bg-sunken p-0.5 text-[12px] font-semibold">
+            {(['name', 'recent'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setSort(mode)}
                 className={cn(
-                  'flex w-full items-center gap-3 px-4 py-3 text-left active:bg-accent-wash',
-                  index > 0 && 'border-t border-line',
+                  'rounded-md px-2.5 py-1',
+                  sort === mode ? 'bg-surface text-ink shadow-sm' : 'text-ink-secondary',
                 )}
               >
-                {muscle && (
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ background: regionVar(muscle.region) }}
-                    aria-hidden
-                  />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate text-[15px] font-medium">
-                      {exercise.name}
-                    </span>
-                  </span>
-                  <span className="block truncate text-[12.5px] text-ink-muted">
-                    {muscle?.name} · {humanizeSlug(exercise.equipment)}
-                    {lastAt ? ` · ${formatRelativeDay(lastAt)}` : ''}
-                  </span>
-                </span>
-                {exercise.userId !== null && (
-                  <span className="shrink-0 rounded-full bg-sunken px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                    Custom
-                  </span>
-                )}
-                <ChevronRight size={16} className="shrink-0 text-ink-muted" />
+                {mode === 'name' ? 'A–Z' : 'Recent'}
               </button>
-            )
-          })}
+            ))}
+          </div>
+        </div>
+
+        <Card className="overflow-hidden">
+          {data && (
+            <MovementList
+              exercises={results}
+              lastTrained={data.lastTrained}
+              onChoose={setDetailFor}
+            />
+          )}
 
           {results.length === 0 && (
             <p className="px-4 py-8 text-center text-[14px] text-ink-muted">
@@ -203,6 +195,10 @@ export function ExerciseLibraryScreen() {
           exerciseId={detailFor}
           weightUnit={data.profile.unitWeight}
           distanceUnit={data.profile.unitDistance}
+          onEdit={() => {
+            setEditingId(detailFor)
+            setDetailFor(null)
+          }}
           onDismiss={() => setDetailFor(null)}
         />
       )}

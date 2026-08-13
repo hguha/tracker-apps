@@ -3,7 +3,12 @@ import { Timer } from 'lucide-react'
 import { formatClock } from '@/lib/units'
 import { parseDuration } from '@/features/workout/SetRow'
 import { remainingSeconds, useRestTimer } from './restTimerStore'
-import { playCue, signalRestComplete } from './sounds'
+import {
+  cancelScheduledRest,
+  playCue,
+  scheduleRestComplete,
+  signalRestComplete,
+} from './sounds'
 
 // Seconds remaining when the heads-up tick fires (§6.8).
 const WARNING_AT = 10
@@ -31,11 +36,18 @@ export function RestTimerBar({
   const lingerTimeout = useRef<number | null>(null)
 
   useEffect(() => {
-    if (targetAt === null) return
+    if (targetAt === null) {
+      cancelScheduledRest()
+      return
+    }
     hasFired.current = false
     hasWarned.current = false
     setHasExpired(false)
     setRemaining(remainingSeconds(targetAt))
+
+    // Queue the chime on the audio clock as well as the interval below: JS timers
+    // are frozen while the app is backgrounded, which is when rest usually ends.
+    scheduleRestComplete((targetAt - Date.now()) / 1000)
 
     const id = window.setInterval(() => setRemaining(remainingSeconds(targetAt)), 250)
     return () => clearInterval(id)
@@ -48,13 +60,20 @@ export function RestTimerBar({
     if (!hasWarned.current && remaining > 0 && remaining <= WARNING_AT) {
       hasWarned.current = true
       playCue('rest-warning')
+      // Reaching this proves timers are live, so the foreground chime below will
+      // fire. Drop the queued backup now rather than racing it at expiry.
+      cancelScheduledRest()
     }
 
     // Recompute from the target, not `remaining`, which can still be a stale 0 in the same commit a fresh timer starts.
     if (!hasFired.current && remainingSeconds(targetAt) === 0) {
       hasFired.current = true
       setHasExpired(true)
-      signalRestComplete()
+      // Noticeably late means timers were frozen and the queued chime already
+      // played while the app was in the background — don't sound it twice.
+      const isLate = Date.now() - targetAt > 3000
+      cancelScheduledRest()
+      if (!isLate) signalRestComplete()
       onExpire?.()
       // Hold the "rest over" message briefly; tracked so cleanup can cancel it if the bar unmounts first.
       lingerTimeout.current = window.setTimeout(() => {
@@ -192,7 +211,7 @@ function RestStartBar({
         />
         <button
           onClick={commitCustom}
-          className="h-11 shrink-0 rounded-xl bg-accent px-4 text-[14px] font-semibold text-white active:opacity-80"
+          className="h-11 shrink-0 rounded-xl bg-accent px-4 text-[14px] font-semibold text-accent-contrast active:opacity-80"
         >
           Start
         </button>

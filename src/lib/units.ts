@@ -28,8 +28,6 @@ function roundToIncrement(value: number, increment: number): number {
   return Math.round(value / increment) * increment
 }
 
-// ---------------------------------------------------------------- weight
-
 export function weightToKg(value: number, from: WeightUnit): number {
   return from === 'kg' ? value : value / LB_PER_KG
 }
@@ -83,8 +81,6 @@ export function formatDisplayWeight(
   return opts.withUnit === false ? text : `${text} ${unit}`
 }
 
-// -------------------------------------------------------------- distance
-
 export function distanceToM(value: number, from: DistanceUnit): number {
   return from === 'km' ? value * 1000 : value * KM_PER_MI * 1000
 }
@@ -105,8 +101,6 @@ export function formatDistance(
   return opts.withUnit === false ? text : `${text} ${unit}`
 }
 
-// ---------------------------------------------------------------- length
-
 export function lengthToCm(value: number, from: LengthUnit): number {
   return from === 'cm' ? value : value * CM_PER_IN
 }
@@ -114,8 +108,6 @@ export function lengthToCm(value: number, from: LengthUnit): number {
 export function lengthFromCm(cm: number, to: LengthUnit): number {
   return clean(to === 'cm' ? cm : cm / CM_PER_IN, 2)
 }
-
-// -------------------------------------------------------- time & pace
 
 export function formatDuration(seconds: number | null): string {
   if (seconds === null) return '—'

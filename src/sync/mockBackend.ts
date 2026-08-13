@@ -11,6 +11,12 @@ import type { PulledRow, PushOutcome, PushRow, SyncBackend } from './backend'
 
 type Store = Map<string, Map<string, Record<string, unknown>>>
 
+// The chained workout tables, mirroring the real schema's foreign keys.
+const PARENTS: Record<string, { table: string; field: string }> = {
+  workoutExercises: { table: 'workouts', field: 'workoutId' },
+  sets: { table: 'workoutExercises', field: 'workoutExerciseId' },
+}
+
 export class MockBackend implements SyncBackend {
   private store: Store = new Map()
 
@@ -28,6 +34,42 @@ export class MockBackend implements SyncBackend {
     this.pushed.push(row)
     const forced = this.forced.shift()
     if (forced && forced.status !== 'ok') return forced
+
+    // Model the foreign key: a child whose parent isn't here yet is rejected the
+    // way Postgres rejects it — transiently, because the parent may still be
+    // queued behind it. Without this the mock accepts orphans and the engine's
+    // ordering guarantees can't be tested at all.
+    const parent = PARENTS[row.table]
+    if (parent) {
+      const parentId = (row.payload as Record<string, unknown>)[parent.field]
+      if (typeof parentId === 'string' && !this.store.get(parent.table)?.has(parentId)) {
+        return {
+          status: 'transient',
+          error: `insert or update on table "${row.table}" violates foreign key constraint`,
+        }
+      }
+    }
+
+    // Model `one_active_workout` (0001_schema.sql): a partial unique index allowing
+    // at most one workout per user with ended_at null and deleted_at null. Pushing
+    // a stale "in progress" payload violates it permanently, which is what used to
+    // dead-letter a whole finished session. Without this the mock accepts it.
+    if (row.table === 'workouts') {
+      const payload = row.payload as { endedAt?: unknown; deletedAt?: unknown }
+      if (payload.endedAt === null && payload.deletedAt === null) {
+        for (const [id, existing] of this.store.get('workouts') ?? []) {
+          if (id === row.rowId) continue
+          const other = existing as { endedAt?: unknown; deletedAt?: unknown }
+          if (other.endedAt === null && other.deletedAt === null) {
+            return {
+              status: 'permanent',
+              error:
+                'duplicate key value violates unique constraint "one_active_workout"',
+            }
+          }
+        }
+      }
+    }
 
     const table = this.store.get(row.table) ?? new Map()
     // Upsert on rowId — idempotent, so a replay is harmless.

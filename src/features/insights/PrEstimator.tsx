@@ -3,6 +3,7 @@ import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
 import { estimatedOneRepMaxKg, PROJECTION_REPS, weightForRepsKg } from '@/lib/metrics'
 import { displayWeight, weightFromKg, weightToKg } from '@/lib/units'
+import { formatRelativeDay } from '@/lib/dates'
 import type { InsightsData } from './useInsightsData'
 
 export function PrEstimator({ data }: { data: InsightsData }) {
@@ -11,16 +12,18 @@ export function PrEstimator({ data }: { data: InsightsData }) {
   const [reps, setReps] = useState('')
   const [source, setSource] = useState<string | null>(null)
 
-  // Best recent set per trained lift; bestE1rmKg is the best across the range, used for comparison.
+  // Best recent set per trained lift, plus the single best-estimating set in range
+  // — kept whole (weight, reps, date) because the comparison has to name the set
+  // the estimate came from rather than imply that number was ever lifted.
   const quickLifts = useMemo(() => {
     return data.exerciseSeries
       .map((series) => {
         const withTop = series.points.filter((p) => p.topSetKg !== null)
         const last = withTop[withTop.length - 1]
         if (!last || last.topSetKg === null) return null
-        const bestE1rmKg = series.points.reduce<number | null>(
+        const bestPoint = series.points.reduce<(typeof series.points)[number] | null>(
           (best, p) =>
-            p.e1rmKg !== null && (best === null || p.e1rmKg > best) ? p.e1rmKg : best,
+            p.e1rmKg !== null && (best === null || p.e1rmKg > best.e1rmKg!) ? p : best,
           null,
         )
         return {
@@ -28,7 +31,14 @@ export function PrEstimator({ data }: { data: InsightsData }) {
           name: series.name,
           weightKg: last.topSetKg,
           reps: last.repRange ? last.repRange[0] : null,
-          bestE1rmKg,
+          best:
+            bestPoint && bestPoint.e1rmKg !== null && bestPoint.e1rmSet
+              ? {
+                  e1rmKg: bestPoint.e1rmKg,
+                  at: bestPoint.at,
+                  set: bestPoint.e1rmSet,
+                }
+              : null,
         }
       })
       .filter((l): l is NonNullable<typeof l> => l !== null && l.reps !== null)
@@ -41,19 +51,29 @@ export function PrEstimator({ data }: { data: InsightsData }) {
     weightNum !== null && Number.isFinite(weightNum) ? weightToKg(weightNum, unit) : null
   const e1rmKg = estimatedOneRepMaxKg(weightKg, repsNum)
 
-  // A heavy multi-rep set can legitimately project above a lighter true single, so say so.
+  // Context against the lift's own history. The number being compared against is
+  // itself an estimate, so it's always named as one and attributed to the set it
+  // came from — otherwise it reads as a weight that was actually lifted. A single
+  // is the exception: that one really was lifted.
   const comparison = useMemo(() => {
     const lift = quickLifts.find((l) => l.id === source)
-    if (!lift || e1rmKg === null || lift.bestE1rmKg === null) return null
-    const best = displayWeight(lift.bestE1rmKg, unit)
+    if (!lift || e1rmKg === null || !lift.best) return null
+    const best = displayWeight(lift.best.e1rmKg, unit)
     const estimate = displayWeight(e1rmKg, unit)
+    const { weightKg, reps } = lift.best.set
+    const when = formatRelativeDay(lift.best.at)
+    const from =
+      reps === 1
+        ? `${displayWeight(weightKg, unit)} ${unit} for a single on ${when}`
+        : `${displayWeight(weightKg, unit)} ${unit} × ${reps} on ${when}`
+
     if (estimate > best) {
-      return `Above your best estimate for ${lift.name} (${best} ${unit}) — this set projects higher than anything you've actually hit.`
+      return `That beats your best estimate for ${lift.name} — ${best} ${unit}, from ${from}.`
     }
     if (estimate === best) {
-      return `This is your best estimate for ${lift.name}.`
+      return `That matches your best estimate for ${lift.name}, from ${from}.`
     }
-    return `Your best estimate for ${lift.name} is ${best} ${unit}, from a different set.`
+    return `Your best estimate for ${lift.name} is ${best} ${unit}, from ${from}.`
   }, [quickLifts, source, e1rmKg, unit])
 
   return (

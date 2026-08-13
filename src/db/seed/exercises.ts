@@ -1,99 +1,107 @@
 /**
  * The system exercise library (§4.3).
  *
- * Each row carries what the app actually uses: a primary muscle, the equipment,
- * and a tracking type that decides which input UI the set row renders.
+ * Each row carries what the app actually uses: the body region it trains, the
+ * equipment, and a tracking type that decides which input UI the set row renders.
  *
- * Two fields were removed rather than maintained. **Weighted secondary muscles**
- * spread partial volume credit (bench → front delt at 0.5), which sounded
- * precise but was guesswork per exercise, never surfaced a number anyone acted
- * on, and made adding an exercise a research task. **Movement pattern** is now
- * derived from the primary muscle (`domain/movement.ts`) instead of hand-tagged
- * per row — the only distinctions the app needs are cardio and push/pull.
+ * Three things were removed rather than maintained. **Weighted secondary
+ * muscles** spread partial volume credit (bench → front delt at 0.5), which
+ * sounded precise but was guesswork per exercise and never surfaced a number
+ * anyone acted on. **Movement pattern** is derived from the region
+ * (`domain/movement.ts`) instead of hand-tagged per row. And the **specific
+ * muscle** below the region (Front Delt vs Rear Delt) was a second taxonomy to
+ * maintain and choose from that nothing in the app read: every chart, the coach,
+ * and the avatar all aggregate by region, so the region is what rows store.
  *
  * `bodyweightFactor` is the fraction of bodyweight the movement actually
  * lifts — without it, a set of pull-ups registers as zero load.
  */
 
-import type { Equipment, TrackingType } from '@/domain/types'
+import type { Equipment, Region, TrackingType } from '@/domain/types'
 
 export interface ExerciseSeed {
   name: string
-  primary: string
+  region: Region
   equipment: Equipment
   /** Defaults to `weight_reps`, which covers most of the library. */
   tracking?: TrackingType
   bodyweightFactor?: number
   unilateral?: boolean
   aliases?: string[]
+  /**
+   * Grouping label, defaulting to `movementFor(name)`. Set explicitly only when
+   * the derivation would group this row wrongly — e.g. to keep a weighted "Cable
+   * Crunch" out of the bodyweight "Crunch" movement.
+   */
+  movement?: string
 }
 
 export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------------------- chest
   {
     name: 'Barbell Bench Press',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'barbell',
     aliases: ['bench', 'flat bench', 'bb bench'],
   },
   {
     name: 'Incline Barbell Bench Press',
-    primary: 'upper_chest',
+    region: 'chest',
     equipment: 'barbell',
     aliases: ['incline bench'],
   },
   {
     name: 'Decline Barbell Bench Press',
-    primary: 'lower_chest',
+    region: 'chest',
     equipment: 'barbell',
   },
   {
     name: 'Dumbbell Bench Press',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'dumbbell',
     aliases: ['db bench'],
   },
   {
     name: 'Incline Dumbbell Bench Press',
-    primary: 'upper_chest',
+    region: 'chest',
     equipment: 'dumbbell',
     aliases: ['incline db press'],
   },
   {
-    name: 'Dumbbell Fly',
-    primary: 'mid_chest',
+    name: 'Dumbbell Chest Fly',
+    region: 'chest',
     equipment: 'dumbbell',
   },
   {
-    name: 'Cable Fly',
-    primary: 'mid_chest',
+    name: 'Cable Chest Fly',
+    region: 'chest',
     equipment: 'cable',
     aliases: ['cable crossover'],
   },
   {
     name: 'Low-to-High Cable Fly',
-    primary: 'upper_chest',
+    region: 'chest',
     equipment: 'cable',
   },
   {
     name: 'Pec Deck',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'machine',
     aliases: ['machine fly'],
   },
   {
     name: 'Chest Press Machine',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'machine',
   },
   {
     name: 'Smith Machine Bench Press',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'smith',
   },
   {
     name: 'Push-up',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.64,
@@ -101,7 +109,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Dip',
-    primary: 'lower_chest',
+    region: 'chest',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 0.95,
@@ -109,7 +117,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Assisted Dip',
-    primary: 'lower_chest',
+    region: 'chest',
     equipment: 'machine',
     tracking: 'assisted_bodyweight',
     bodyweightFactor: 0.95,
@@ -118,70 +126,70 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ----------------------------------------------------------------- back
   {
     name: 'Deadlift',
-    primary: 'erectors',
+    region: 'back',
     equipment: 'barbell',
     aliases: ['conventional deadlift', 'dl'],
   },
   {
     name: 'Sumo Deadlift',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Trap Bar Deadlift',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Romanian Deadlift',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'barbell',
     aliases: ['rdl'],
   },
   {
     name: 'Barbell Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'barbell',
     aliases: ['bent over row', 'bb row'],
   },
   {
     name: 'Pendlay Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Dumbbell Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'dumbbell',
     unilateral: true,
     aliases: ['one arm row', 'db row'],
   },
   {
     name: 'Seated Cable Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'cable',
     aliases: ['cable row'],
   },
   {
     name: 'Chest-Supported Row',
-    primary: 'rhomboids',
+    region: 'back',
     equipment: 'machine',
   },
   {
     name: 'T-Bar Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Inverted Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 0.55,
   },
   {
     name: 'Pull-up',
-    primary: 'lats',
+    region: 'back',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 1.0,
@@ -189,7 +197,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Chin-up',
-    primary: 'lats',
+    region: 'back',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 1.0,
@@ -197,40 +205,40 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Assisted Pull-up',
-    primary: 'lats',
+    region: 'back',
     equipment: 'machine',
     tracking: 'assisted_bodyweight',
     bodyweightFactor: 1.0,
   },
   {
     name: 'Lat Pulldown',
-    primary: 'lats',
+    region: 'back',
     equipment: 'cable',
     aliases: ['pulldown'],
   },
   {
     name: 'Close-Grip Lat Pulldown',
-    primary: 'lats',
+    region: 'back',
     equipment: 'cable',
   },
   {
     name: 'Straight-Arm Pulldown',
-    primary: 'lats',
+    region: 'back',
     equipment: 'cable',
   },
   {
     name: 'Barbell Shrug',
-    primary: 'upper_traps',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Dumbbell Shrug',
-    primary: 'upper_traps',
+    region: 'back',
     equipment: 'dumbbell',
   },
   {
     name: 'Back Extension',
-    primary: 'erectors',
+    region: 'back',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 0.5,
@@ -238,164 +246,164 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Rack Pull',
-    primary: 'erectors',
+    region: 'back',
     equipment: 'barbell',
   },
 
   // ------------------------------------------------------------ shoulders
   {
     name: 'Overhead Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'barbell',
     aliases: ['ohp', 'military press', 'standing press'],
   },
   {
     name: 'Seated Dumbbell Shoulder Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'dumbbell',
     aliases: ['db shoulder press'],
   },
   {
     name: 'Arnold Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'dumbbell',
   },
   {
     name: 'Machine Shoulder Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'machine',
   },
   {
     name: 'Dumbbell Lateral Raise',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'dumbbell',
     aliases: ['side raise', 'lat raise'],
   },
   {
     name: 'Cable Lateral Raise',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'cable',
     unilateral: true,
   },
   {
     name: 'Machine Lateral Raise',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'machine',
   },
   {
     name: 'Reverse Dumbbell Fly',
-    primary: 'rear_delt',
+    region: 'shoulders',
     equipment: 'dumbbell',
     aliases: ['rear delt fly', 'reverse chest fly', 'bent over fly'],
   },
   {
     name: 'Reverse Pec Deck',
-    primary: 'rear_delt',
+    region: 'shoulders',
     equipment: 'machine',
     aliases: ['reverse fly machine'],
   },
   {
     name: 'Face Pull',
-    primary: 'rear_delt',
+    region: 'shoulders',
     equipment: 'cable',
   },
   {
     name: 'Front Raise',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'dumbbell',
   },
   {
     name: 'Upright Row',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'barbell',
   },
 
   // ----------------------------------------------------------------- arms
   {
-    name: 'Barbell Curl',
-    primary: 'biceps',
+    name: 'Barbell Biceps Curl',
+    region: 'biceps',
     equipment: 'barbell',
     aliases: ['bb curl'],
   },
   {
-    name: 'Dumbbell Curl',
-    primary: 'biceps',
+    name: 'Dumbbell Biceps Curl',
+    region: 'biceps',
     equipment: 'dumbbell',
     aliases: ['db curl'],
   },
   {
     name: 'Incline Dumbbell Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Hammer Curl',
-    primary: 'brachialis',
+    region: 'biceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Preacher Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'barbell',
   },
   {
-    name: 'Cable Curl',
-    primary: 'biceps',
+    name: 'Cable Biceps Curl',
+    region: 'biceps',
     equipment: 'cable',
   },
   {
     name: 'Concentration Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'dumbbell',
     unilateral: true,
   },
   {
     name: 'Close-Grip Bench Press',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'barbell',
   },
   {
     name: 'Skull Crusher',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'barbell',
     aliases: ['lying triceps extension'],
   },
   {
     name: 'Cable Triceps Pushdown',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'cable',
     aliases: ['tricep pushdown', 'rope pushdown'],
   },
   {
     name: 'Overhead Cable Triceps Extension',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'cable',
   },
   {
     name: 'Dumbbell Overhead Triceps Extension',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Triceps Dip',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 0.9,
   },
   {
     name: 'Wrist Curl',
-    primary: 'forearms',
+    region: 'biceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Reverse Wrist Curl',
-    primary: 'forearms',
+    region: 'biceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Farmer Carry',
-    primary: 'forearms',
+    region: 'biceps',
     equipment: 'dumbbell',
     tracking: 'weight_time',
   },
@@ -403,178 +411,180 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ----------------------------------------------------------------- legs
   {
     name: 'Barbell Back Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
     aliases: ['squat', 'back squat'],
   },
   {
     name: 'Front Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Hack Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Leg Press',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Goblet Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'kettlebell',
   },
   {
     name: 'Bulgarian Split Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'dumbbell',
     unilateral: true,
     aliases: ['bss', 'rear foot elevated split squat'],
   },
   {
     name: 'Walking Lunge',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'dumbbell',
   },
   {
     name: 'Reverse Lunge',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'dumbbell',
     unilateral: true,
   },
   {
     name: 'Step-up',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'dumbbell',
     unilateral: true,
   },
   {
     name: 'Leg Extension',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Lying Leg Curl',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Seated Leg Curl',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Nordic Hamstring Curl',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.6,
   },
   {
     name: 'Hip Thrust',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Glute Bridge',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 0.4,
   },
   {
     name: 'Cable Kickback',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'cable',
     unilateral: true,
   },
   {
     name: 'Hip Abduction Machine',
-    primary: 'abductors',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Hip Adduction Machine',
-    primary: 'adductors',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Standing Calf Raise',
-    primary: 'calves',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Seated Calf Raise',
-    primary: 'calves',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Kettlebell Swing',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'kettlebell',
   },
 
   // ----------------------------------------------------------------- core
   {
     name: 'Plank',
-    primary: 'transverse_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'time',
   },
   {
     name: 'Side Plank',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'time',
     unilateral: true,
   },
   {
     name: 'Hanging Leg Raise',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'weighted_bodyweight',
     bodyweightFactor: 0.5,
   },
   {
     name: 'Cable Crunch',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'cable',
+    // A weighted cable movement, not the same lift as a floor Crunch.
+    movement: 'Cable Crunch',
   },
   {
     name: 'Crunch',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'reps_only',
   },
   {
     name: 'Russian Twist',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'other',
   },
   {
     name: 'Cable Woodchop',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'cable',
     unilateral: true,
   },
   {
     name: 'Ab Wheel Rollout',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'other',
     tracking: 'reps_only',
   },
   {
     name: 'Dead Bug',
-    primary: 'transverse_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'reps_only',
   },
   {
     name: 'Pallof Press',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'cable',
     unilateral: true,
   },
@@ -583,78 +593,78 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // distance_time gets a distance + duration input; time alone gets a timer.
   {
     name: 'Treadmill Run',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
     aliases: ['treadmill'],
   },
   {
     name: 'Outdoor Run',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'distance_time',
     aliases: ['run', 'jog'],
   },
   {
     name: 'Treadmill Walk',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
   },
   {
     name: 'Incline Walk',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
   },
   {
     name: 'Stationary Bike',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
     aliases: ['bike', 'cycling'],
   },
   {
     name: 'Rowing Machine',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
     aliases: ['erg', 'row'],
   },
   {
     name: 'Elliptical',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
   },
   {
     name: 'Stair Climber',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'time',
     aliases: ['stairmaster'],
   },
   {
     name: 'Swimming',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'distance_time',
   },
   {
     name: 'Jump Rope',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'time',
   },
   {
     name: 'Ruck',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'distance_time',
   },
   {
     name: 'Assault Bike',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'time',
   },
@@ -662,29 +672,29 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------------- chest (more)
   {
     name: 'Machine Chest Fly',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'machine',
   },
   {
     name: 'Incline Cable Fly',
-    primary: 'upper_chest',
+    region: 'chest',
     equipment: 'cable',
   },
   {
     name: 'Incline Machine Press',
-    primary: 'upper_chest',
+    region: 'chest',
     equipment: 'machine',
   },
   {
     name: 'Svend Press',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'other',
   },
 
   // ------------------------------------------------------------- back (more)
   {
     name: 'Wide-Grip Pull-up',
-    primary: 'lats',
+    region: 'back',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 1.0,
@@ -692,243 +702,243 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Neutral-Grip Pulldown',
-    primary: 'lats',
+    region: 'back',
     equipment: 'cable',
     aliases: ['neutral pulldown'],
   },
   {
     name: 'Single-Arm Dumbbell Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'dumbbell',
     unilateral: true,
     aliases: ['one arm row'],
   },
   {
     name: 'Meadows Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'barbell',
     unilateral: true,
   },
   {
     name: 'Seal Row',
-    primary: 'mid_traps',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Machine Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'machine',
   },
   {
     name: 'Machine Pullover',
-    primary: 'lats',
+    region: 'back',
     equipment: 'machine',
   },
   {
     name: 'Good Morning',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'barbell',
   },
 
   // -------------------------------------------------------- shoulders (more)
   {
     name: 'Push Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'barbell',
   },
   {
     name: 'Seated Barbell Overhead Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'barbell',
     aliases: ['seated ohp'],
   },
   {
     name: 'Landmine Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'barbell',
     unilateral: true,
   },
   {
     name: 'Cable Rear Delt Fly',
-    primary: 'rear_delt',
+    region: 'shoulders',
     equipment: 'cable',
   },
   {
     name: 'Leaning Cable Lateral Raise',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'cable',
     unilateral: true,
   },
   {
     name: 'Plate Front Raise',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'other',
   },
 
   // ------------------------------------------------------------- arms (more)
   {
     name: 'EZ-Bar Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'barbell',
     aliases: ['ez curl'],
   },
   {
     name: 'Spider Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Cable Rope Hammer Curl',
-    primary: 'brachialis',
+    region: 'biceps',
     equipment: 'cable',
   },
   {
     name: 'Bayesian Cable Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'cable',
     unilateral: true,
   },
   {
     name: 'Dumbbell Skull Crusher',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Rope Overhead Extension',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'cable',
     aliases: ['overhead rope extension'],
   },
   {
     name: 'Bench Dip',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.6,
   },
   {
     name: 'Reverse Curl',
-    primary: 'brachialis',
+    region: 'biceps',
     equipment: 'barbell',
   },
   {
     name: 'Behind-the-Back Wrist Curl',
-    primary: 'forearms',
+    region: 'biceps',
     equipment: 'barbell',
   },
 
   // ------------------------------------------------------------- legs (more)
   {
     name: 'Pause Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Box Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Belt Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Sissy Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.7,
   },
   {
     name: 'Single-Leg Press',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'machine',
     unilateral: true,
   },
   {
     name: 'Stiff-Leg Deadlift',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'barbell',
     aliases: ['sldl'],
   },
   {
     name: 'Single-Leg Romanian Deadlift',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'dumbbell',
     unilateral: true,
     aliases: ['single leg rdl'],
   },
   {
     name: 'Standing Leg Curl',
-    primary: 'hamstrings',
+    region: 'legs',
     equipment: 'machine',
     unilateral: true,
   },
   {
     name: 'Cable Pull-Through',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'cable',
   },
   {
     name: 'Curtsy Lunge',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'dumbbell',
     unilateral: true,
   },
   {
     name: 'Leg Press Calf Raise',
-    primary: 'calves',
+    region: 'legs',
     equipment: 'machine',
   },
   {
     name: 'Donkey Calf Raise',
-    primary: 'calves',
+    region: 'legs',
     equipment: 'machine',
   },
 
   // ------------------------------------------------------------- core (more)
   {
     name: 'Toes-to-Bar',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.5,
   },
   {
     name: 'Weighted Plank',
-    primary: 'transverse_abdominis',
+    region: 'core',
     equipment: 'other',
     tracking: 'weight_time',
   },
   {
     name: 'Decline Sit-up',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.5,
   },
   {
     name: 'Bicycle Crunch',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'reps_only',
   },
   {
     name: 'Hanging Knee Raise',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.4,
   },
   {
     name: 'Landmine Rotation',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'barbell',
   },
   {
     name: 'Copenhagen Plank',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'time',
   },
@@ -936,25 +946,25 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // --------------------------------------------------------- cardio (more)
   {
     name: 'Sled Push',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'time',
   },
   {
     name: 'Battle Ropes',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'time',
   },
   {
     name: 'Box Jump',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'bodyweight',
     tracking: 'reps_only',
   },
   {
     name: 'Burpee',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'bodyweight',
     tracking: 'reps_only',
   },
@@ -962,43 +972,43 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- olympic / power
   {
     name: 'Power Clean',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'barbell',
     aliases: ['clean'],
   },
   {
     name: 'Hang Clean',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Clean and Jerk',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Snatch',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Power Snatch',
-    primary: 'upper_traps',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Clean Pull',
-    primary: 'upper_traps',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Thruster',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Wall Ball',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'other',
     tracking: 'reps_only',
   },
@@ -1006,36 +1016,36 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- strongman
   {
     name: 'Atlas Stone Lift',
-    primary: 'erectors',
+    region: 'back',
     equipment: 'other',
   },
   {
     name: 'Yoke Carry',
-    primary: 'erectors',
+    region: 'back',
     equipment: 'other',
     tracking: 'weight_time',
   },
   {
     name: 'Log Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'other',
   },
   {
     name: 'Sandbag Carry',
-    primary: 'transverse_abdominis',
+    region: 'core',
     equipment: 'other',
     tracking: 'weight_time',
   },
   {
     name: 'Suitcase Carry',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'dumbbell',
     tracking: 'weight_time',
     unilateral: true,
   },
   {
     name: 'Tire Flip',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'other',
     tracking: 'reps_only',
   },
@@ -1043,17 +1053,17 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- chest (more)
   {
     name: 'Guillotine Press',
-    primary: 'upper_chest',
+    region: 'chest',
     equipment: 'barbell',
   },
   {
     name: 'Floor Press',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'barbell',
   },
   {
     name: 'Deficit Push-up',
-    primary: 'mid_chest',
+    region: 'chest',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.7,
@@ -1062,101 +1072,101 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- back (more)
   {
     name: 'Pendlay Deficit Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'barbell',
   },
   {
     name: 'Kroc Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'dumbbell',
     unilateral: true,
   },
   {
     name: 'Gorilla Row',
-    primary: 'lats',
+    region: 'back',
     equipment: 'kettlebell',
     unilateral: true,
   },
   {
     name: 'Rope Face Pull',
-    primary: 'rear_delt',
+    region: 'shoulders',
     equipment: 'cable',
   },
   {
     name: 'Kneeling Lat Pulldown',
-    primary: 'lats',
+    region: 'back',
     equipment: 'cable',
   },
   {
     name: 'Deadlift (Snatch Grip)',
-    primary: 'erectors',
+    region: 'back',
     equipment: 'barbell',
   },
 
   // ---------------------------------------------------- shoulders (more)
   {
     name: 'Z Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'barbell',
   },
   {
     name: 'Viking Press',
-    primary: 'front_delt',
+    region: 'shoulders',
     equipment: 'machine',
   },
   {
     name: 'Cable Upright Row',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'cable',
   },
   {
     name: 'Machine Reverse Fly',
-    primary: 'rear_delt',
+    region: 'shoulders',
     equipment: 'machine',
   },
   {
     name: 'Lu Raise',
-    primary: 'side_delt',
+    region: 'shoulders',
     equipment: 'dumbbell',
   },
 
   // ---------------------------------------------------- arms (more)
   {
     name: 'Zottman Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Drag Curl',
-    primary: 'biceps',
+    region: 'biceps',
     equipment: 'barbell',
   },
   {
     name: 'Cross-Body Hammer Curl',
-    primary: 'brachialis',
+    region: 'biceps',
     equipment: 'dumbbell',
     unilateral: true,
   },
   {
     name: 'JM Press',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'barbell',
   },
   {
     name: 'Tate Press',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'dumbbell',
   },
   {
     name: 'Diamond Push-up',
-    primary: 'triceps',
+    region: 'triceps',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.64,
   },
   {
     name: 'Wrist Roller',
-    primary: 'forearms',
+    region: 'biceps',
     equipment: 'other',
     tracking: 'weight_time',
   },
@@ -1164,17 +1174,17 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- legs (more)
   {
     name: 'Zercher Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Landmine Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'barbell',
   },
   {
     name: 'Pistol Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.9,
@@ -1182,7 +1192,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Cossack Squat',
-    primary: 'adductors',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.8,
@@ -1190,18 +1200,21 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Frog Pump',
-    primary: 'glutes',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'reps_only',
   },
   {
     name: 'Kettlebell Goblet Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'kettlebell',
+    // Same equipment as 'Goblet Squat'; keep separate so the movement doesn't
+    // offer two identical kettlebell options.
+    movement: 'Kettlebell Goblet Squat',
   },
   {
     name: 'ATG Split Squat',
-    primary: 'quads',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.85,
@@ -1209,7 +1222,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   },
   {
     name: 'Tibialis Raise',
-    primary: 'calves',
+    region: 'legs',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.3,
@@ -1218,31 +1231,31 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- core (more)
   {
     name: 'Dragon Flag',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'bodyweight_reps',
     bodyweightFactor: 0.6,
   },
   {
     name: 'Hollow Body Hold',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'time',
   },
   {
     name: 'Cable Pallof Hold',
-    primary: 'obliques',
+    region: 'core',
     equipment: 'cable',
     tracking: 'weight_time',
   },
   {
     name: 'Weighted Decline Sit-up',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'other',
   },
   {
     name: 'L-Sit',
-    primary: 'rectus_abdominis',
+    region: 'core',
     equipment: 'bodyweight',
     tracking: 'time',
   },
@@ -1250,31 +1263,31 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
   // ---------------------------------------------------- cardio (more)
   {
     name: 'Mountain Climbers',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'bodyweight',
     tracking: 'time',
   },
   {
     name: 'High Knees',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'bodyweight',
     tracking: 'time',
   },
   {
     name: 'Ski Erg',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'machine',
     tracking: 'distance_time',
   },
   {
     name: 'Sled Drag',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'other',
     tracking: 'time',
   },
   {
     name: 'Shadow Boxing',
-    primary: 'cardiovascular',
+    region: 'cardio',
     equipment: 'bodyweight',
     tracking: 'time',
   },

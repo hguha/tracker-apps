@@ -203,7 +203,7 @@ export function HomeScreen({
           onClick={onOpenCoach}
           className="flex w-full items-start gap-3 rounded-2xl border border-accent/30 bg-accent-wash p-4 text-left active:opacity-80"
         >
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-contrast">
             <Sparkles size={16} />
           </span>
           <span className="min-w-0 flex-1">
@@ -316,8 +316,7 @@ export function HomeScreen({
           </div>
 
           <div className="mt-4 flex gap-5 border-t border-line pt-3">
-            <Stat label="Workouts" value={String(weeklyWorkouts)} />
-            <Stat label="Sets" value={String(weeklySets)} />
+            <Stat label="Sets this week" value={String(weeklySets)} />
             <Stat label="Best streak" value={`${bestWeekStreak} wk`} />
           </div>
         </Card>
@@ -362,7 +361,7 @@ export function HomeScreen({
       {neglected && neglected.lastAt > 0 && (
         <Card className="p-4">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-            Next up
+            Least recently trained
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[15px]">
             <span

@@ -29,6 +29,13 @@ describe('classify', () => {
     expect(classify(err('23502')).status).toBe('permanent') // not-null violation
   })
 
+  it('treats a foreign-key violation as transient, since the parent may still be queued', () => {
+    // A set whose workout_exercise hasn't been pushed yet is an ordering problem,
+    // not a rejection: the drain halts on transient and resumes in seq order,
+    // which delivers the parent first. Dead-lettering it strands the child.
+    expect(classify(err('23503')).status).toBe('transient')
+  })
+
   it('treats a non-auth PostgREST code as permanent', () => {
     expect(classify(err('PGRST100')).status).toBe('permanent') // parse error
     expect(classify(err('PGRST204')).status).toBe('permanent') // no such column
@@ -43,31 +50,30 @@ describe('classify', () => {
 })
 
 describe('toPostgresRow', () => {
-  it("strips exercises.secondaryMuscles, which has no column (it's a join table)", () => {
-    // The real failure: "Could not find the 'secondary_muscles' column of
-    // 'exercises' in the schema cache" — a permanent error that dead-lettered
-    // every custom-exercise write.
-    const row = toPostgresRow(
-      {
-        id: 'my_lift',
-        name: 'My Lift',
-        primaryMuscleId: 'mid_chest',
-        aliases: ['ml'],
-      },
-      'exercises',
-    )
-    expect(row).not.toHaveProperty('secondary_muscles')
-    // Everything else still maps, snake_cased.
-    expect(row.primary_muscle_id).toBe('mid_chest')
+  it('maps every camelCase field to its snake_case column', () => {
+    // A field with no column dead-letters the whole row permanently, so the
+    // payload must be exactly the table's columns.
+    const row = toPostgresRow({
+      id: 'my_lift',
+      name: 'My Lift',
+      region: 'chest',
+      bodyweightFactor: null,
+      aliases: ['ml'],
+    })
+    expect(row.region).toBe('chest')
+    expect(row.bodyweight_factor).toBeNull()
     expect(row.aliases).toEqual(['ml'])
   })
 
-  it('leaves other tables untouched and converts timestamps to ISO', () => {
+  it('converts timestamps to ISO', () => {
     const at = Date.UTC(2026, 0, 2, 3, 4, 5)
-    const row = toPostgresRow(
-      { id: 'w1', userId: 'u1', startedAt: at, endedAt: null, deletedAt: null },
-      'workouts',
-    )
+    const row = toPostgresRow({
+      id: 'w1',
+      userId: 'u1',
+      startedAt: at,
+      endedAt: null,
+      deletedAt: null,
+    })
     expect(row.user_id).toBe('u1')
     expect(row.started_at).toBe(new Date(at).toISOString())
     // A null timestamp stays null rather than becoming an epoch string.

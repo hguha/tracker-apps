@@ -25,7 +25,20 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
   const [isClearing, setIsClearing] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [showQueue, setShowQueue] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Exactly what's waiting to upload, held, or rejected — so a stuck sync is
+  // inspectable (and recoverable) rather than an opaque count.
+  const queue = useLiveQuery(async () => {
+    const outbox = await db.outbox.orderBy('seq').toArray()
+    const dead = await db.deadLetter.orderBy('seq').toArray()
+    return {
+      pending: outbox.filter((e) => e.deferredForWorkoutId === undefined),
+      held: outbox.filter((e) => e.deferredForWorkoutId !== undefined),
+      failed: dead,
+    }
+  }, [])
 
   // The reason the most recent write was rejected, so "Failed to sync" explains
   // itself (e.g. an RLS or missing-column error) instead of being opaque.
@@ -219,6 +232,57 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
           )}
         </Card>
 
+        {queue && queue.pending.length + queue.held.length + queue.failed.length > 0 && (
+          <Card className="p-4">
+            <button
+              onClick={() => setShowQueue((v) => !v)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <h2 className="text-[15px] font-semibold tracking-tight">What's syncing</h2>
+              <span className="text-[13px] font-semibold text-accent">
+                {showQueue ? 'Hide' : 'Show'}
+              </span>
+            </button>
+            {showQueue && (
+              <div className="mt-3 space-y-3">
+                <QueueGroup
+                  label="Waiting to upload"
+                  entries={queue.pending.map((e) => ({
+                    key: String(e.seq),
+                    heading: `${e.op} · ${e.table}`,
+                    sub: e.rowId,
+                    payload: e.payload,
+                  }))}
+                />
+                <QueueGroup
+                  label="Held until you finish the workout"
+                  entries={queue.held.map((e) => ({
+                    key: String(e.seq),
+                    heading: `${e.op} · ${e.table}`,
+                    sub: e.rowId,
+                    payload: e.payload,
+                  }))}
+                />
+                <QueueGroup
+                  label="Rejected"
+                  tone="serious"
+                  entries={queue.failed.map((e) => ({
+                    key: String(e.seq),
+                    heading: `${e.op} · ${e.table}`,
+                    sub: e.error,
+                    payload: e.payload,
+                  }))}
+                />
+                <p className="text-[12px] text-ink-muted">
+                  These are the exact rows queued on this device. Use “Retry failed” above
+                  once a connection or server issue is resolved, or export a backup first
+                  if you want to keep a copy.
+                </p>
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Export / import: the portable backup that makes depending on a free
             tier acceptable (§11.3). Pure client-side JSON. */}
         <Card className="p-4">
@@ -364,6 +428,43 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
         </Card>
 
         <div className="h-4" />
+      </div>
+    </div>
+  )
+}
+
+function QueueGroup({
+  label,
+  entries,
+  tone,
+}: {
+  label: string
+  entries: { key: string; heading: string; sub: string; payload: unknown }[]
+  tone?: 'serious'
+}) {
+  if (entries.length === 0) return null
+  return (
+    <div>
+      <p
+        className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide"
+        style={{ color: tone === 'serious' ? 'var(--status-serious)' : undefined }}
+      >
+        {label} ({entries.length})
+      </p>
+      <div className="space-y-1.5">
+        {entries.map((entry) => (
+          <details key={entry.key} className="rounded-lg bg-sunken px-3 py-2">
+            <summary className="cursor-pointer list-none text-[13px] font-medium">
+              {entry.heading}
+              <span className="ml-1.5 break-all text-[11.5px] font-normal text-ink-muted">
+                {entry.sub}
+              </span>
+            </summary>
+            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface p-2 text-[11px] leading-snug text-ink-secondary">
+              {JSON.stringify(entry.payload, null, 2)}
+            </pre>
+          </details>
+        ))}
       </div>
     </div>
   )

@@ -93,7 +93,7 @@ src/
     sessionTitle.ts      Auto titles: date + time of day + inferred split.
   db/
     database.ts          Dexie schema + the outbox queue.
-    seed/                ~100 exercises, 27 muscles, 27 biomarkers.
+    seed/                ~193 base movements, 27 biomarkers.
   auth/                  AuthProvider interface + local implementation.
   data/repository.ts     The single data-access boundary. Nothing else touches Dexie.
   features/
@@ -133,6 +133,16 @@ because their specific ordering is what passes the colorblind-separation checks,
 and because a color has to keep meaning the same body part. Charts draw marks in
 categorical slot 1, never the accent — every theme accent but Mono measures
 inside the ΔE≥15 series floor of some body-part color.
+
+## Comments: keep them to an absolute minimum
+
+The code should read on its own; reorganize or rename rather than annotate. Add a
+comment ONLY when it earns its place — a non-obvious *why* (a workaround, an
+invariant, a subtle ordering constraint), never a *what* the code already states.
+Prefer one terse line over a block. No banners, no restating signatures, no
+"// loop over exercises". When editing, delete comments that have gone stale or
+that narrate the obvious. The existing comments in this repo are the intended
+density ceiling, not a target — most functions have none.
 
 ## Deploying
 

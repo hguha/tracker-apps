@@ -118,13 +118,12 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
                       }))
                     }
                     inputMode="decimal"
-                    placeholder={
-                      latest
-                        ? String(toDisplay(definition.unitType, latest.value))
-                        : unitSuffix(definition.unitType)
-                    }
-                    className="tabular h-11 flex-1 rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                    placeholder="Log a new value"
+                    className="tabular h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
                   />
+                  <span className="self-center text-[13px] text-ink-muted">
+                    {unitSuffix(definition.unitType) || '—'}
+                  </span>
                   <Button
                     variant="secondary"
                     onClick={() => void saveMetric(definition.id, definition.unitType)}

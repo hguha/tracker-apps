@@ -32,6 +32,16 @@ migrations/
                         Drops exercise_secondary_muscles; collapses
                         movement_pattern to push/pull/other/cardio, derived from
                         the primary muscle's region rather than hand-tagged
+  0014_exercise_movement.sql        exercises.movement (superseded by 0015)
+  0015_equipment_dimension.sql      Equipment becomes a dimension of the workout:
+                        equipment on workout_exercises/template_exercises/
+                        personal_records, base exercise rows, history repointed
+  0016_drop_exercise_equipment.sql  Drops the retired per-exercise equipment columns
+  0017_onboarding_version.sql       profiles.onboarding_version (replayable setup)
+  0018_regions_replace_muscles.sql  exercises.region replaces primary_muscle_id;
+                        drops the muscles table (nothing read the finer level)
+  0019_own_chained_workout_rows.sql user_id on workout_exercises + sets, so RLS
+                        stops depending on the parent already being on the server
 tests/
   rls.test.sql          Asserts user A cannot read/write user B's rows (§4.13)
 ```
@@ -98,10 +108,18 @@ Redeploy after changing `functions/coach/index.ts`. The client sends the
 de-identified summary + request; without a signed-in JWT the function returns
 401 and the app falls back to the offline coach.
 
+## Edge Functions
+
+- `coach` — the AI coach (§13). JWT-verified, per-user rate-limited, Gemini key
+  server-side only. Deploy: `supabase functions deploy coach`.
+- `delete-account` — erases the caller's account (§11.1.2); the row's
+  `on delete cascade` back to `auth.users` takes their data with it. Needs the
+  service role, which the runtime injects as `SUPABASE_SERVICE_ROLE_KEY`. Deploy:
+  `supabase functions deploy delete-account`.
+
 ## Still to wire (later in Phase 5/6)
 
 - The initial **bootstrap pull** with a determinate progress bar (§5.5). The
   delta pull is implemented; bootstrap is the same call with `since = 0` plus UI.
 - `keep_alive` RPC + Cloudflare cron every 3 days (§5.4).
-- `delete-account` Edge Function (needs service role; §11.1.2).
 - Weekly R2 backup and web-push scheduling (Phases 6–7).

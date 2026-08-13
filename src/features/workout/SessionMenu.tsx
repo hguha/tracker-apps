@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarClock, FileText, Pencil, Trash2, X } from 'lucide-react'
+import { CalendarClock, ChevronLeft, FileText, Pencil, Trash2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -83,7 +83,7 @@ export function SessionMenu({
           aria-label={panel === 'menu' ? 'Close' : 'Back'}
           className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
         >
-          <X size={19} />
+          {panel === 'menu' ? <X size={19} /> : <ChevronLeft size={20} />}
         </button>
       </div>
 

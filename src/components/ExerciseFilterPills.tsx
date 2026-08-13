@@ -1,22 +1,18 @@
-// Body-part and equipment filter rows (§7.3), shared by the picker and library.
-// Single-select per row; tapping the active pill clears it.
+// Body-part filter row (§7.3), shared by the picker and library. Single-select;
+// tapping the active pill clears it. Equipment is no longer a filter — any
+// movement can use any equipment, so it's chosen when adding, not filtered on.
 
 import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'
-import { humanizeSlug } from '@/lib/labels'
-import { EQUIPMENT, REGION_LABELS, REGIONS, type Region } from '@/domain/types'
+import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 
 export function ExerciseFilterPills({
   region,
-  equipment,
   onRegionChange,
-  onEquipmentChange,
   className,
 }: {
   region: Region | null
-  equipment: string | null
   onRegionChange: (next: Region | null) => void
-  onEquipmentChange: (next: string | null) => void
   className?: string
 }) {
   return (
@@ -44,26 +40,6 @@ export function ExerciseFilterPills({
                 />
               )}
               {REGION_LABELS[value]}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="flex gap-1.5 overflow-x-auto px-3 pb-2">
-        {EQUIPMENT.map((value) => {
-          const isActive = equipment === value
-          return (
-            <button
-              key={value}
-              onClick={() => onEquipmentChange(isActive ? null : value)}
-              className={cn(
-                'shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium',
-                isActive
-                  ? 'border-accent bg-accent-wash text-accent'
-                  : 'border-line text-ink-secondary',
-              )}
-            >
-              {humanizeSlug(value)}
             </button>
           )
         })}

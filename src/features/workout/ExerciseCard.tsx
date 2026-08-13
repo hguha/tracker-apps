@@ -3,18 +3,18 @@ import { GripVertical, MoreHorizontal, Plus, StickyNote } from 'lucide-react'
 import { Card } from '@/components/Card'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
-import { formatRelativeDay } from '@/lib/dates'
-import { displayWeight, distanceFromM, formatDuration, weightFromKg } from '@/lib/units'
+import { formatDayHeading, formatRelativeDay } from '@/lib/dates'
 import type {
   DistanceUnit,
+  Equipment,
   Exercise,
-  Muscle,
   PerformedSession,
   PerformedSet,
   WeightUnit,
   WorkoutSet,
 } from '@/domain/types'
 import { regionVar } from '@/lib/palette'
+import { composeExerciseName } from '@/lib/labels'
 import { CardioEntry } from './CardioEntry'
 import { SetRow, hasLoggedValues } from './SetRow'
 import { hasValue, resolvePlaceholders } from './resolvePlaceholders'
@@ -29,7 +29,11 @@ export interface SetPlaceholderHint {
 
 export interface ExerciseCardProps {
   exercise: Exercise
-  muscle: Muscle | undefined
+  equipment: Equipment
+  // The workout being viewed, so a date gap is measured from it and not from today.
+  asOf: number
+  // True when this is a past session opened from history rather than a live one.
+  isPastSession: boolean
   sets: WorkoutSet[]
   // The session immediately before the one being viewed, so an older workout
   // never shows numbers from a newer one.
@@ -52,7 +56,9 @@ export interface ExerciseCardProps {
 export function ExerciseCard(props: ExerciseCardProps) {
   const {
     exercise,
-    muscle,
+    equipment,
+    asOf,
+    isPastSession,
     sets,
     previousSession,
     weightUnit,
@@ -79,7 +85,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
         if (!hasLoggedValues(set, exercise)) continue
         // Pass the whole set (id included) so a row already holding the record
         // isn't compared against itself and stops glowing.
-        const broken = await repo.previewRecords(exercise.id, set)
+        const broken = await repo.previewRecords(exercise.id, equipment, set)
         if (broken.length > 0) matches.add(set.id)
       }
       if (!cancelled) setRecordSetIds(matches)
@@ -87,7 +93,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
     return () => {
       cancelled = true
     }
-  }, [sets, exercise])
+  }, [sets, exercise, equipment])
 
   const isCardio = isCardioPattern(exercise.movementPattern)
 
@@ -114,21 +120,23 @@ export function ExerciseCard(props: ExerciseCardProps) {
       )}
     >
       <div className="flex items-start gap-1 px-2.5 pt-3 pb-1">
-        <span className="mt-0.5 shrink-0 text-ink-muted/60" aria-hidden>
+        <span
+          className="mt-0.5 shrink-0 text-ink-muted"
+          title="Hold and drag to reorder or superset"
+          aria-hidden
+        >
           <GripVertical size={16} />
         </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {muscle && (
-              <span
-                className="size-2 shrink-0 rounded-full"
-                style={{ background: regionVar(muscle.region) }}
-                aria-hidden
-              />
-            )}
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: regionVar(exercise.region) }}
+              aria-hidden
+            />
             <h3 className="truncate text-[16px] font-semibold tracking-tight">
-              {exercise.name}
+              {composeExerciseName(exercise.name, equipment)}
             </h3>
             {supersetGroup !== null && (
               <span className="shrink-0 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
@@ -137,11 +145,11 @@ export function ExerciseCard(props: ExerciseCardProps) {
             )}
           </div>
           <p className="mt-0.5 text-[12.5px] text-ink-secondary">
-            {summarizeLastSession(previousSession, weightUnit, distanceUnit)}
+            {lastSessionLine(previousSession, asOf, isPastSession)}
           </p>
-          {loggingHint(exercise, weightUnit) && (
+          {loggingHint(equipment, weightUnit) && (
             <p className="mt-0.5 text-[11.5px] text-ink-muted">
-              {loggingHint(exercise, weightUnit)}
+              {loggingHint(equipment, weightUnit)}
             </p>
           )}
           {(sessionNote.trim() !== '' || exercise.notes.trim() !== '') && (
@@ -168,7 +176,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
 
         <button
           onClick={onOpenDetail}
-          aria-label={`${exercise.name} details`}
+          aria-label={`${composeExerciseName(exercise.name, equipment)} details`}
           className="-mr-0.5 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
         >
           <MoreHorizontal size={18} />
@@ -252,8 +260,11 @@ export function ExerciseCard(props: ExerciseCardProps) {
   )
 }
 
-function loggingHint(exercise: Exercise, weightUnit: WeightUnit): string | null {
-  if (exercise.equipment === 'dumbbell') return `Enter one dumbbell’s ${weightUnit}`
+function loggingHint(equipment: Equipment, weightUnit: WeightUnit): string | null {
+  // Log the total weight moved, so two-implement lifts aren't half-counted. No
+  // per-equipment doubling happens downstream — the number is taken as entered.
+  if (equipment === 'dumbbell')
+    return `Using two dumbbells? Add them up (total ${weightUnit}).`
   return null
 }
 
@@ -282,50 +293,21 @@ function columnLabels(
   }
 }
 
-function summarizeLastSession(
+// Says WHEN you last did this, and nothing else. The numbers used to be repeated
+// here too, but each set row already shows them as its ghost placeholder — right
+// where you type — so the header was a second copy of the same thing.
+//
+// `asOf` is the session being viewed, not today: dating the gap from `Date.now()`
+// made a workout opened from history report its previous session as "4 days ago"
+// when the two sessions were 2 days apart.
+function lastSessionLine(
   session: PerformedSession | null,
-  weightUnit: WeightUnit,
-  distanceUnit: DistanceUnit,
+  asOf: number,
+  isPastSession: boolean,
 ): string {
   if (!session) return 'First time — no history yet'
-
-  const working = session.sets
-  if (working.length === 0) return formatRelativeDay(session.performedAt)
-
-  const when = formatRelativeDay(session.performedAt)
-
-  // Cardio reads as distance and time, not sets and reps.
-  const first = working[0]!
-  if (first.durationSeconds !== null) {
-    const totalSeconds = working.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
-    const totalMeters = working.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
-    const parts = [formatDuration(totalSeconds)]
-    if (totalMeters > 0) {
-      const distance = distanceFromM(totalMeters, distanceUnit)
-      parts.push(`${distance.toFixed(2)} ${distanceUnit}`)
-    }
-    return `Last: ${when} · ${parts.join(' · ')}`
-  }
-
-  const reps = working.map((s) => s.reps).filter((r): r is number => r !== null)
-  const weights = working.map((s) => s.weightKg).filter((w): w is number => w !== null)
-  const repRange =
-    reps.length === 0
-      ? ''
-      : Math.min(...reps) === Math.max(...reps)
-        ? `${reps[0]}`
-        : `${Math.min(...reps)}-${Math.max(...reps)}`
-
-  const pieces = [`Last: ${when}`]
-  if (repRange) {
-    const weightPart =
-      weights.length > 0
-        ? ` @ ${weightFromKg(Math.max(...weights), weightUnit)}${weightUnit}`
-        : ''
-    pieces.push(`${working.length}×${repRange}${weightPart}`)
-  }
-  if (session.bestE1rmKg !== null) {
-    pieces.push(`e1RM ${displayWeight(session.bestE1rmKg, weightUnit)}`)
-  }
-  return pieces.join(' · ')
+  // Editing an old session: an absolute date, because "2 days ago" would be read
+  // against today while it actually means "before the workout you're looking at".
+  if (isPastSession) return `Previous · ${formatDayHeading(session.performedAt, asOf)}`
+  return `Last time · ${formatRelativeDay(session.performedAt, asOf)}`
 }

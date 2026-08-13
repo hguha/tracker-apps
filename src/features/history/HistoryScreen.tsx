@@ -7,6 +7,7 @@ import {
   FileText,
   List,
   MoreHorizontal,
+  Plus,
   Search,
   Trash2,
   X,
@@ -32,9 +33,11 @@ const PAGE_SIZE = 30
 export function HistoryScreen({
   onOpenWorkout,
   onStartedCopy,
+  onStartWorkout,
 }: {
   onOpenWorkout: (workoutId: string) => void
   onStartedCopy: (workoutId: string) => void
+  onStartWorkout: () => void
 }) {
   const toast = useToast()
   const [query, setQuery] = useState('')
@@ -46,6 +49,8 @@ export function HistoryScreen({
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [previewFor, setPreviewFor] = useState<string | null>(null)
+  // A logged session is too much work to lose to one mis-tap behind a 5s undo.
+  const [deleteFor, setDeleteFor] = useState<{ id: string; sets: number } | null>(null)
   const [templateFor, setTemplateFor] = useState<{
     id: string
     name: string
@@ -116,8 +121,12 @@ export function HistoryScreen({
       <div className="mt-24 px-6 text-center">
         <p className="text-[16px] font-semibold">No workouts yet</p>
         <p className="mt-1 text-[14px] text-ink-muted">
-          Tap the + button to log your first one.
+          Finished sessions show up here, newest first.
         </p>
+        <Button className="mt-5" onClick={onStartWorkout}>
+          <Plus size={17} />
+          Log a workout
+        </Button>
       </div>
     )
   }
@@ -125,6 +134,7 @@ export function HistoryScreen({
   async function discard(workoutId: string) {
     await repo.deleteWorkout(workoutId)
     setMenuFor(null)
+    setDeleteFor(null)
     toast.show('Workout deleted', () => void repo.restoreWorkout(workoutId))
   }
 
@@ -223,9 +233,16 @@ export function HistoryScreen({
             <div className="flex items-start">
               <button
                 onClick={() => onOpenWorkout(summary.workout.id)}
-                className="min-w-0 flex-1 px-4 py-3.5 text-left active:bg-accent-wash"
+                className="min-w-0 flex-1 px-4 py-3.5 text-left transition-transform duration-75 active:scale-[0.99] active:bg-accent-wash"
               >
-                <p className="truncate text-[15.5px] font-semibold">{summary.title}</p>
+                <div className="flex items-center gap-1">
+                  <p className="min-w-0 flex-1 truncate text-[15.5px] font-semibold">
+                    {summary.title}
+                  </p>
+                  {/* Inside the button, so the glyph everyone aims for is the tap
+                      target rather than a decoration beside it. */}
+                  <ChevronRight size={16} className="shrink-0 text-ink-muted" />
+                </div>
                 <p className="text-[12.5px] text-ink-muted">
                   {formatDayHeading(summary.workout.startedAt)} ·{' '}
                   {formatTimeOfDay(summary.workout.startedAt)}
@@ -263,7 +280,7 @@ export function HistoryScreen({
                 </div>
               </button>
 
-              <div className="flex shrink-0 flex-col items-center gap-1 py-3 pr-2">
+              <div className="flex shrink-0 items-start py-3 pr-2">
                 <button
                   onClick={() => setMenuFor(summary.workout.id)}
                   aria-label={`Options for ${summary.title}`}
@@ -271,12 +288,14 @@ export function HistoryScreen({
                 >
                   <MoreHorizontal size={18} />
                 </button>
-                <ChevronRight size={16} className="text-ink-muted" />
               </div>
             </div>
 
             {menuFor === summary.workout.id && (
               <RowMenu
+                // A session that ran a template already has one; saving it again
+                // would just duplicate that template.
+                canSaveAsTemplate={summary.workout.templateId === null}
                 onRepeat={() => {
                   setPreviewFor(summary.workout.id)
                   setMenuFor(null)
@@ -288,11 +307,10 @@ export function HistoryScreen({
                   })
                   setMenuFor(null)
                 }}
-                onEdit={() => {
+                onDiscard={() => {
                   setMenuFor(null)
-                  onOpenWorkout(summary.workout.id)
+                  setDeleteFor({ id: summary.workout.id, sets: summary.setCount })
                 }}
-                onDiscard={() => void discard(summary.workout.id)}
                 onDismiss={() => setMenuFor(null)}
               />
             )}
@@ -355,6 +373,43 @@ export function HistoryScreen({
           onDismiss={() => setTemplateFor(null)}
         />
       )}
+
+      {deleteFor && (
+        <BottomSheet
+          onDismiss={() => setDeleteFor(null)}
+          dismissOnBackdrop={false}
+          panelClassName="p-5"
+          labelledBy="delete-workout-title"
+        >
+          <h2 id="delete-workout-title" className="text-[19px] font-bold tracking-tight">
+            Delete this workout?
+          </h2>
+          <p className="mt-2 text-[14px] text-ink-secondary">
+            {deleteFor.sets === 1
+              ? 'Its 1 logged set goes with it.'
+              : `Its ${deleteFor.sets} logged sets go with it.`}{' '}
+            You can undo this from the toast, but only for a few seconds.
+          </p>
+          <div className="mt-5 flex gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={() => setDeleteFor(null)}
+            >
+              Keep it
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              className="flex-1"
+              onClick={() => void discard(deleteFor.id)}
+            >
+              Delete
+            </Button>
+          </div>
+        </BottomSheet>
+      )}
     </div>
   )
 }
@@ -397,13 +452,13 @@ function summarizeFilter(
 function RowMenu({
   onRepeat,
   onSaveTemplate,
-  onEdit,
+  canSaveAsTemplate,
   onDiscard,
   onDismiss,
 }: {
   onRepeat: () => void
   onSaveTemplate: () => void
-  onEdit: () => void
+  canSaveAsTemplate: boolean
   onDiscard: () => void
   onDismiss: () => void
 }) {
@@ -416,16 +471,13 @@ function RowMenu({
           label="Do this workout again"
           onClick={onRepeat}
         />
-        <MenuItem
-          icon={<FileText size={16} />}
-          label="Save as template"
-          onClick={onSaveTemplate}
-        />
-        <MenuItem
-          icon={<ChevronRight size={16} />}
-          label="Open and edit"
-          onClick={onEdit}
-        />
+        {canSaveAsTemplate && (
+          <MenuItem
+            icon={<FileText size={16} />}
+            label="Save as template"
+            onClick={onSaveTemplate}
+          />
+        )}
         <MenuItem
           icon={<Trash2 size={16} />}
           label="Delete workout"

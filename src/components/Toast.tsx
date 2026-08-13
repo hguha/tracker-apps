@@ -144,7 +144,7 @@ function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss: () =>
         transition: isDragging ? 'none' : 'transform 160ms ease-out, opacity 160ms',
         touchAction: 'pan-y',
       }}
-      className="pointer-events-auto mt-2 flex w-full max-w-md items-center justify-between gap-3 rounded-xl border border-line-strong bg-surface px-4 py-3 shadow-lg"
+      className="animate-drop-in pointer-events-auto mt-2 flex w-full max-w-md items-center justify-between gap-3 rounded-xl border border-line-strong bg-surface/80 px-4 py-3 shadow-lg backdrop-blur-xl"
     >
       <span className="min-w-0 flex-1 text-[14px]">{message.text}</span>
       {message.onUndo ? (

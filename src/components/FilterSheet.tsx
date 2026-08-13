@@ -155,10 +155,10 @@ export function FilterSheet({
 
       {!singleSelect && (
         <div className="border-t border-line px-4 py-3">
+          {/* Selecting already filters the list behind the sheet, so this only
+              closes it — "Apply" would imply the taps hadn't counted yet. */}
           <Button size="lg" className="w-full" onClick={onDismiss}>
-            {selected.length === 0
-              ? 'Show all'
-              : `Apply ${selected.length} ${selected.length === 1 ? 'filter' : 'filters'}`}
+            Done
           </Button>
         </div>
       )}

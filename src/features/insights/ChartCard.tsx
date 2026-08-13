@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Table2 } from 'lucide-react'
+import { LineChart, Table2 } from 'lucide-react'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
 
@@ -37,11 +37,12 @@ export function ChartCard({
             onClick={() => setIsTable((current) => !current)}
             aria-label={isTable ? 'Show chart' : 'Show table'}
             className={cn(
-              'flex size-8 shrink-0 items-center justify-center rounded-lg',
+              'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold',
               isTable ? 'bg-accent-wash text-accent' : 'text-ink-muted active:bg-sunken',
             )}
           >
-            <Table2 size={16} />
+            {isTable ? <LineChart size={15} /> : <Table2 size={15} />}
+            {isTable ? 'Chart' : 'Table'}
           </button>
         )}
       </div>

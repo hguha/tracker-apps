@@ -1,20 +1,18 @@
-// Create a custom exercise (§4.3). The muscle choice is required, not optional:
-// an untagged exercise would silently vanish from every region breakdown.
+// Create a custom exercise (§4.3). The body part is required, not optional: an
+// untagged exercise would silently vanish from every region breakdown.
 
-import { useMemo, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
-import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { cn } from '@/lib/cn'
 import { regionVar } from '@/lib/palette'
 import {
-  EQUIPMENT,
   REGION_LABELS,
   REGIONS,
   TRACKING_TYPES,
-  type Equipment,
+  type Exercise,
+  type Region,
   type TrackingType,
 } from '@/domain/types'
 
@@ -29,60 +27,41 @@ const TRACKING_LABELS: Record<TrackingType, string> = {
   weight_time: 'Weight & time (carries)',
 }
 
-const EQUIPMENT_LABELS: Record<Equipment, string> = {
-  barbell: 'Barbell',
-  dumbbell: 'Dumbbell',
-  machine: 'Machine',
-  cable: 'Cable',
-  smith: 'Smith machine',
-  bodyweight: 'Bodyweight',
-  kettlebell: 'Kettlebell',
-  band: 'Band',
-  other: 'Other',
-}
-
 export function NewExerciseForm({
   initialName = '',
+  exercise,
   onCreated,
   onCancel,
 }: {
   initialName?: string
+  // When present, the form edits this exercise instead of creating a new one.
+  exercise?: Exercise
+  // Called with the resulting exercise id (a fork's id when a system row is edited).
   onCreated: (exerciseId: string) => void
   onCancel: () => void
 }) {
-  const [name, setName] = useState(initialName)
-  const [region, setRegion] = useState<string | null>(null)
-  const [primaryMuscleId, setPrimaryMuscleId] = useState<string | null>(null)
-  const [equipment, setEquipment] = useState<Equipment>('dumbbell')
-  const [trackingType, setTrackingType] = useState<TrackingType>('weight_reps')
-  const [isUnilateral, setIsUnilateral] = useState(false)
-  const [notes, setNotes] = useState('')
+  const [name, setName] = useState(exercise?.name ?? initialName)
+  const [region, setRegion] = useState<Region | null>(exercise?.region ?? null)
+  const [trackingType, setTrackingType] = useState<TrackingType>(
+    exercise?.trackingType ?? 'weight_reps',
+  )
+  const [notes, setNotes] = useState(exercise?.notes ?? '')
   const [isSaving, setIsSaving] = useState(false)
 
-  const muscles = useLiveQuery(async () => {
-    const all = await db.muscles.toArray()
-    return all.filter((m) => m.deletedAt === null && !m.isArchived)
-  }, [])
-
-  const musclesInRegion = useMemo(
-    () => (muscles ?? []).filter((m) => m.region === region),
-    [muscles, region],
-  )
-
-  const canSave = name.trim().length > 0 && primaryMuscleId !== null
+  const canSave = name.trim().length > 0 && region !== null
 
   async function save() {
-    if (!canSave || primaryMuscleId === null) return
+    if (!canSave || region === null) return
     setIsSaving(true)
     try {
-      const exerciseId = await repo.createExercise({
-        name,
-        primaryMuscleId,
-        equipment,
-        trackingType,
-        isUnilateral,
-        notes,
-      })
+      const exerciseId = exercise
+        ? await repo.saveExerciseEdits(exercise.id, {
+            name: name.trim(),
+            region,
+            trackingType,
+            notes,
+          })
+        : await repo.createExercise({ name, region, trackingType, notes })
       onCreated(exerciseId)
     } finally {
       setIsSaving(false)
@@ -99,7 +78,9 @@ export function NewExerciseForm({
         >
           <ChevronLeft size={22} />
         </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">New exercise</h1>
+        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">
+          {exercise ? 'Edit exercise' : 'New exercise'}
+        </h1>
       </header>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
@@ -123,10 +104,7 @@ export function NewExerciseForm({
               return (
                 <button
                   key={option}
-                  onClick={() => {
-                    setRegion(option)
-                    setPrimaryMuscleId(null)
-                  }}
+                  onClick={() => setRegion(option)}
                   className={cn(
                     'flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13.5px] font-medium',
                     isActive
@@ -149,38 +127,6 @@ export function NewExerciseForm({
           </div>
         </Field>
 
-        {region && (
-          <Field label="Specific muscle">
-            <div className="flex flex-wrap gap-1.5">
-              {musclesInRegion.map((muscle) => (
-                <button
-                  key={muscle.id}
-                  onClick={() => setPrimaryMuscleId(muscle.id)}
-                  className={cn(
-                    'rounded-full border px-3 py-2 text-[13.5px] font-medium',
-                    primaryMuscleId === muscle.id
-                      ? 'border-accent bg-accent-wash text-accent'
-                      : 'border-line text-ink-secondary',
-                  )}
-                >
-                  {muscle.name}
-                </button>
-              ))}
-            </div>
-          </Field>
-        )}
-
-        <Field label="Equipment">
-          <ChipGroup
-            options={EQUIPMENT.map((value) => ({
-              value,
-              label: EQUIPMENT_LABELS[value],
-            }))}
-            value={equipment}
-            onChange={setEquipment}
-          />
-        </Field>
-
         <Field label="How it's tracked" hint="Decides which inputs the set row shows.">
           <ChipGroup
             options={TRACKING_TYPES.map((value) => ({
@@ -191,21 +137,6 @@ export function NewExerciseForm({
             onChange={setTrackingType}
           />
         </Field>
-
-        <label className="flex items-center justify-between rounded-xl border border-line bg-surface px-3.5 py-3">
-          <span>
-            <span className="block text-[15px] font-medium">One side at a time</span>
-            <span className="block text-[12.5px] text-ink-muted">
-              Tracks left and right separately
-            </span>
-          </span>
-          <input
-            type="checkbox"
-            checked={isUnilateral}
-            onChange={(event) => setIsUnilateral(event.target.checked)}
-            className="size-5 accent-[var(--accent)]"
-          />
-        </label>
 
         <Field label="Notes" hint="Seat height, pin setting, cues.">
           <textarea
@@ -224,7 +155,11 @@ export function NewExerciseForm({
           disabled={!canSave || isSaving}
           onClick={() => void save()}
         >
-          {primaryMuscleId === null ? 'Pick a muscle to continue' : 'Create exercise'}
+          {region === null
+            ? 'Pick a body part to continue'
+            : exercise
+              ? 'Save changes'
+              : 'Create exercise'}
         </Button>
       </div>
     </div>

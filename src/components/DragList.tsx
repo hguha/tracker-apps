@@ -316,7 +316,7 @@ export function DragItem({
             className="pointer-events-none absolute inset-0 z-20 rounded-2xl ring-2"
             style={{ '--tw-ring-color': 'var(--accent)' } as React.CSSProperties}
           />
-          <span className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-lg">
+          <span className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-contrast shadow-lg">
             Superset with {supersetLabel}
           </span>
         </>

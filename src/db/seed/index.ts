@@ -1,12 +1,10 @@
 // Populates the system library on first run; idempotent and additive, safe to run every launch.
 
 import { db, syncStamp } from '@/db/database'
-import { MOVEMENT_PATTERNS } from '@/domain/types'
-import type { Exercise, MetricDefinition, Muscle, Profile } from '@/domain/types'
+import type { Exercise, MetricDefinition, Profile } from '@/domain/types'
 import { patternForRegion } from '@/domain/movement'
-import { EXERCISE_SEEDS } from './exercises'
+import { BASE_EXERCISES } from './bases'
 import { METRIC_SEEDS } from './metrics'
-import { MUSCLE_SEEDS } from './muscles'
 
 // The offline owner id, replaced with the authenticated UID via setActiveUserId so RLS accepts synced rows.
 export const LOCAL_USER_ID = 'local-user'
@@ -22,14 +20,6 @@ export function getActiveUserId(): string {
   return activeUserId
 }
 
-/** Stable id from a name, so re-seeding never duplicates an exercise. */
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '')
-}
-
 // Guards against concurrent runs: StrictMode double-invokes effects, and two seeds collide on the primary key.
 let inFlight: Promise<void> | null = null
 
@@ -42,50 +32,25 @@ export function seedIfNeeded(): Promise<void> {
 
 async function runSeed(): Promise<void> {
   await seedProfile()
-  await seedMuscles()
   await seedExercises()
   await seedMetricDefinitions()
-  await repairExerciseRows()
-  await repairArmsRegion()
+  await repairRetiredRegions()
 }
 
-// Remaps muscle rows off the retired 'arms' region into 'triceps'/'biceps' (§10.2).
-async function repairArmsRegion(): Promise<void> {
-  const stale = await db.muscles.filter((m) => (m.region as string) === 'arms').toArray()
-  if (stale.length === 0) return
-  await db.muscles.bulkPut(
-    stale.map((m) => ({
-      ...m,
-      region: m.id === 'triceps' ? 'triceps' : 'biceps',
-    })),
-  )
-}
-
-// Heals older exercise rows: backfills undefined `aliases`, and remaps any retired
-// `movementPattern` value to one derived from the primary muscle.
-async function repairExerciseRows(): Promise<void> {
-  const muscles = await db.muscles.toArray()
-  const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
-
-  const broken = await db.exercises
-    .filter(
-      (e) =>
-        e.aliases === undefined ||
-        !(MOVEMENT_PATTERNS as readonly string[]).includes(e.movementPattern),
-    )
+// 'arms' was split into 'biceps'/'triceps' (§10.2). Exercise rows written before
+// that split still carry it, and no enum guards a Dexie value.
+async function repairRetiredRegions(): Promise<void> {
+  const stale = await db.exercises
+    .filter((e) => (e.region as string) === 'arms')
     .toArray()
-  if (broken.length === 0) return
-
-  await db.exercises.bulkPut(
-    broken.map((e) => {
-      const region = regionOf.get(e.primaryMuscleId)
-      return {
-        ...e,
-        aliases: e.aliases ?? [],
-        movementPattern: region ? patternForRegion(region) : 'other',
-      }
-    }),
-  )
+  if (stale.length === 0) return
+  for (const row of stale) {
+    const region = row.movementPattern === 'push' ? 'triceps' : 'biceps'
+    await db.exercises.update(row.id, {
+      region,
+      movementPattern: patternForRegion(region),
+    })
+  }
 }
 
 async function seedProfile(): Promise<void> {
@@ -99,6 +64,9 @@ async function seedProfile(): Promise<void> {
     if (existing.trainingGoal === undefined) backfill.trainingGoal = ''
     // An existing local profile predates onboarding; treat it as done.
     if (existing.onboardedAt === undefined) backfill.onboardedAt = Date.now()
+    // 0 trails the current ONBOARDING_VERSION, so existing accounts replay the
+    // reworked walkthrough once (§11.1.3).
+    if (existing.onboardingVersion === undefined) backfill.onboardingVersion = 0
     if (Object.keys(backfill).length > 0) {
       await db.profiles.update(existing.id, backfill)
     }
@@ -120,6 +88,7 @@ async function seedProfile(): Promise<void> {
     heightCm: null,
     trainingGoal: '',
     onboardedAt: null,
+    onboardingVersion: 0,
     theme: 'default',
     colorScheme: 'system',
     accentOverride: null,
@@ -132,42 +101,22 @@ async function seedProfile(): Promise<void> {
   await db.profiles.put(profile)
 }
 
-async function seedMuscles(): Promise<void> {
-  const existingIds = new Set(await db.muscles.toCollection().primaryKeys())
-  const missing: Muscle[] = MUSCLE_SEEDS.filter((m) => !existingIds.has(m.id)).map(
-    (m) => ({
-      id: m.id,
-      userId: null,
-      name: m.name,
-      region: m.region,
-      isArchived: false,
-      ...syncStamp(),
-    }),
-  )
-  if (missing.length > 0) await db.muscles.bulkPut(missing)
-}
-
 async function seedExercises(): Promise<void> {
   const existingIds = new Set(await db.exercises.toCollection().primaryKeys())
   const missing: Exercise[] = []
-  // Muscles are seeded first, so their regions are available to derive movement patterns.
-  const regionOf = new Map((await db.muscles.toArray()).map((m) => [m.id, m.region]))
 
-  for (const seed of EXERCISE_SEEDS) {
-    const id = slugify(seed.name)
-    if (existingIds.has(id)) continue
+  for (const base of BASE_EXERCISES) {
+    if (existingIds.has(base.id)) continue
     missing.push({
-      id,
+      id: base.id,
       userId: null,
-      name: seed.name,
-      primaryMuscleId: seed.primary,
-      aliases: seed.aliases ?? [],
-      equipment: seed.equipment,
+      name: base.name,
+      region: base.region,
+      aliases: base.aliases,
       // Derived, not seeded — see `domain/movement.ts`.
-      movementPattern: patternForRegion(regionOf.get(seed.primary) ?? 'core'),
-      trackingType: seed.tracking ?? 'weight_reps',
-      isUnilateral: seed.unilateral ?? false,
-      bodyweightFactor: seed.bodyweightFactor ?? null,
+      movementPattern: patternForRegion(base.region),
+      trackingType: base.trackingType,
+      bodyweightFactor: base.bodyweightFactor,
       isKeyLift: false,
       notes: '',
       defaultRestSeconds: null,

@@ -44,8 +44,13 @@ function read(): StoredSession | null {
 }
 
 function write(session: StoredSession | null): void {
-  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  else localStorage.removeItem(SESSION_KEY)
+  try {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+    else localStorage.removeItem(SESSION_KEY)
+  } catch {
+    // Safari private mode throws on setItem. The in-memory session still works
+    // for this tab; failing to persist must not crash sign-in.
+  }
 }
 
 function toSession(stored: StoredSession): Session {

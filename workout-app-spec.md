@@ -156,11 +156,11 @@ An earlier version reconciled every 30 seconds. A background *pull* writes to In
 
 Every read path filters `deleted_at is null`.
 
-**Exception — deliberate hard delete.** "Permanently erase all my training data" issues a real `DELETE` (`hardDeleteServerData`), because a tombstone leaves every row in Postgres, which is not what erasing your data means. Ordering is load-bearing: clear the queues *first* (a pending push would recreate what was just erased), delete children before parents, then reset the pull cursors. `profiles`, `muscles`, and `metric_definitions` are excluded — the profile is the account, and those hold shared system rows.
+**Exception — deliberate hard delete.** "Permanently erase all my training data" issues a real `DELETE` (`hardDeleteServerData`), because a tombstone leaves every row in Postgres, which is not what erasing your data means. Ordering is load-bearing: clear the queues *first* (a pending push would recreate what was just erased), delete children before parents, then reset the pull cursors. `profiles` and `metric_definitions` are excluded — the profile is the account, and those hold shared system rows.
 
 ### 4.5 Row-Level Security
 
-RLS on every table. Direct-ownership tables use `using (user_id = auth.uid())`. Tables without their own `user_id` walk the chain to the owning workout. Shared library tables (`exercises`, `muscles`, `metric_definitions`) are read-open (`user_id is null or user_id = auth.uid()`), write-own-only. System rows are seeded by migration under the service role, never through the API.
+RLS on every table, and **every** owned table carries its own `user_id`: `using (user_id = auth.uid())`. `workout_exercises` and `sets` originally proved ownership with an `EXISTS` join up to `workouts`, but Postgres evaluates `WITH CHECK` before the foreign key, so a child whose parent hadn't been pushed yet came back as `42501 RLS violation` — a permanent rejection — when the real problem was ordering. Migration `0019` denormalized `user_id` onto both (server-managed, `default auth.uid()`), so a missing parent now surfaces as a retryable `23503` and `42501` means what it says. Shared library tables (`exercises`, `metric_definitions`) are read-open (`user_id is null or user_id = auth.uid()`), write-own-only. System rows are seeded by migration under the service role, never through the API.
 
 **Signup is open** as of migration `0010`. It was invite-only via an `allowed_emails` table plus an auth-hook trigger; that trigger is dropped.
 
@@ -180,31 +180,30 @@ Postgres, mirrored in `src/domain/types.ts`. Every user-owned table carries `use
 
 `id` (PK → `auth.users`), `display_name`, `unit_weight`, `unit_distance`, `unit_length`, `timezone` (IANA — required for correct day/week bucketing), `week_starts_on`, `weekly_workout_goal` (default 4), `default_rest_seconds` (default 60), `show_rpe` (default false), `show_avatar` (default false), `bodyweight_cache_kg`, `height_cm`, `training_goal` (free text, fed to the coach), `theme`, `color_scheme`, `accent_override`, `sound_enabled`, `auto_start_rest` (default false).
 
-### 5.2 Muscle taxonomy
+### 5.2 Body regions
 
 `region` is a fixed enum of **8**: `chest`, `back`, `shoulders`, `biceps`, `triceps`, `legs`, `core`, `cardio`.
 
 Biceps and triceps are **separate regions**, not one "arms" — pull work and push work load them on different days, so folding them together hid the imbalance the split exists to surface. Elbow flexors and forearms roll up to `biceps`. Migration `0006` performed the split; the now-unused `arms` enum value remains because Postgres can't drop one.
 
-`muscles`: `id`, `user_id` (nullable; `null` = system row), `name`, `region`, `is_archived`. **28 seeded.**
-
-Two levels rather than one flat list, so a reverse dumbbell fly tags to **Rear Delt / shoulders** and lands in shoulder volume instead of polluting chest.
+**One level, not two.** There was a `muscles` table below the region (Front Delt vs Rear Delt, 27 rows) so a reverse fly could tag to Rear Delt. Nothing read it: every chart, the coach summary, the avatar, and session titles aggregate by region, so it was a second taxonomy to maintain and a second thing to pick when adding an exercise, with no reader. Migration `0018` denormalized `region` onto `exercises` and dropped the table.
 
 ### 5.3 `exercises`
 
-`id`, `user_id` (nullable), `name`, `primary_muscle_id`, `aliases`, `is_archived` (**never hard-delete** — history references it), `notes`, `default_rest_seconds`.
+One row per **movement** — equipment is a dimension of the workout, not of the exercise (§5.3.1).
+
+`id`, `user_id` (nullable), `name`, `region`, `aliases`, `is_archived` (**never hard-delete** — history references it), `notes`, `default_rest_seconds`.
 
 | Column | Values |
 |---|---|
-| `equipment` | `barbell`, `dumbbell`, `machine`, `cable`, `smith`, `bodyweight`, `kettlebell`, `band`, `other` |
-| `movement_pattern` | `squat`, `hinge`, `lunge`, `horizontal_push`, `vertical_push`, `horizontal_pull`, `vertical_pull`, `carry`, `rotation`, `isolation`, `cardio` |
+| `region` | `chest`, `back`, `shoulders`, `biceps`, `triceps`, `legs`, `core`, `cardio` |
+| `movement_pattern` | Derived from `region`, never hand-tagged: `push`, `pull`, `other`, `cardio` |
 | `tracking_type` | **Drives the input UI.** `weight_reps`, `bodyweight_reps`, `weighted_bodyweight`, `assisted_bodyweight`, `reps_only`, `time`, `distance_time`, `weight_time` |
-| `is_unilateral` | Enables per-side values |
 | `bodyweight_factor` | Fraction of bodyweight moved. Pull-up 1.00, push-up 0.64, dip 0.95 |
 
-**210 system exercises seeded**, including cardio modalities.
+**~193 base movements seeded**, including cardio modalities, derived from a per-variant seed list (`db/seed/bases.ts`) so the taxonomy has one source of truth.
 
-`secondaryMuscles` is an inline array locally (volume math needs it in one read) but Postgres normalizes it into an `exercise_secondary_muscles` join table. **There is no `secondary_muscles` column**, so the push strips it — sending it failed permanently and dead-lettered every custom-exercise write. **Known gap:** secondaries are not yet written to the join table, so a custom exercise synced to a second device arrives with its primary muscle only.
+Weighted **secondary muscles** were removed rather than maintained: they spread partial volume credit (bench → front delt at 0.5), which sounded precise but was guesswork per exercise and never surfaced a number anyone acted on. Migration `0013` dropped the join table.
 
 ### 5.4 `workouts` / `workout_exercises` / `sets`
 
@@ -380,7 +379,7 @@ Opt-in and deliberately unobtrusive.
 | **Effective weight** | `weight_reps` → `weight_kg`. `bodyweight_reps` → `bodyweight_kg × factor`. `weighted_bodyweight` → `+ weight_kg`. `assisted_bodyweight` → `− weight_kg`. Time/distance types contribute **no** volume load |
 | **Working set** | Any logged, completed set. Replaces "hard set", which was jargon with a hidden `reps ≥ 5` rule — a set of 3 heavy singles is not "easy", and a term nobody can define on sight can't appear on a stat tile |
 | **Estimated 1RM** | Epley `w × (1 + reps/30)`, **only for reps 1–12**. Above 12, return null rather than a fabricated number |
-| **Per-muscle volume** | Primary muscle `1.0 ×`; each secondary `contribution ×`. Regions sum their muscles |
+| **Per-region volume** | The exercise's single `region` takes `1.0 ×`. One lift, one body part — no partial credit to spread |
 | **Cardio load** | `duration_seconds` and `distance_m` summed separately; **never** folded into volume load |
 | **Streak** | Consecutive weeks with ≥1 workout, in the user's timezone, honoring `week_starts_on` |
 
@@ -525,7 +524,6 @@ Ordered by value, with the reason it hasn't happened.
 
 | Item | Why it's still open |
 |---|---|
-| **Secondary muscles in the sync join table** | Custom exercises sync, but their secondaries don't reach Postgres, so a second device sees primary-only. Smallest real correctness gap. |
 | **PWA shell** — Workbox service worker, `navigator.storage.persist()`, iOS install education | Already works offline (IndexedDB is the read path); this is the installable wrapper and eviction protection. `persist()` matters most — without it iOS may evict IndexedDB under pressure. |
 | **Remaining 20 charts** | Mostly the Body sub-tab, which needs logged biomarker history before it can draw anything. |
 | **Per-exercise charts on the library detail screen** | Data and chart components both exist; wiring only. |

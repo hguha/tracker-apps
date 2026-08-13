@@ -39,6 +39,13 @@ export const TRACKING_TYPES = [
 ] as const
 export type TrackingType = (typeof TRACKING_TYPES)[number]
 
+// Equipment only varies for externally-loaded lifts (a bench can be barbell or
+// dumbbell). Bodyweight, assisted, and cardio movements have a fixed implement, so
+// the picker skips the equipment step and stamps `defaultEquipmentForTracking`.
+export function equipmentIsChosen(trackingType: TrackingType): boolean {
+  return trackingType === 'weight_reps' || trackingType === 'weight_time'
+}
+
 export const EQUIPMENT = [
   'barbell',
   'dumbbell',
@@ -51,6 +58,25 @@ export const EQUIPMENT = [
   'other',
 ] as const
 export type Equipment = (typeof EQUIPMENT)[number]
+
+// The implement a non-chosen (bodyweight/assisted/cardio) movement is logged
+// under, so records still scope consistently per (exercise + equipment).
+export function defaultEquipmentForTracking(trackingType: TrackingType): Equipment {
+  switch (trackingType) {
+    case 'assisted_bodyweight':
+      return 'machine'
+    case 'bodyweight_reps':
+    case 'weighted_bodyweight':
+    case 'reps_only':
+      return 'bodyweight'
+    case 'time':
+    case 'distance_time':
+      return 'other'
+    case 'weight_reps':
+    case 'weight_time':
+      return 'barbell'
+  }
+}
 
 // Derived from the primary muscle's region (domain/movement.ts), not asked for.
 // Only cardio (switches the log UI) and push/pull (session titles) are used.
@@ -94,6 +120,10 @@ export interface Profile extends SyncColumns {
   // Null until first-run setup completes. On the profile so it follows the
   // account across devices rather than re-running per device (§11.1.3).
   onboardedAt: number | null
+  // The onboarding revision this account last completed. When it trails
+  // ONBOARDING_VERSION the walkthrough runs again, so a reworked onboarding can be
+  // re-shown to everyone with a single bump. 0 = never done the current flow.
+  onboardingVersion: number
 
   theme: string
   colorScheme: 'system' | 'light' | 'dark'
@@ -103,26 +133,21 @@ export interface Profile extends SyncColumns {
   showAvatar: boolean
 }
 
-export interface Muscle extends SyncColumns {
-  id: string
-  // null = system row, visible to everyone.
-  userId: string | null
-  name: string
-  region: Region
-  isArchived: boolean
-}
-
+// A movement ("Bench Press"), independent of equipment. Equipment is chosen when
+// the exercise is added to a workout and lives on the WorkoutExercise — any
+// movement can be loaded with any equipment, so the exercise stores none.
 export interface Exercise extends SyncColumns {
   id: string
   // null = system library row.
   userId: string | null
   name: string
-  primaryMuscleId: string
+  // The body region trained, stored directly. There is deliberately no finer
+  // muscle below it: every consumer (charts, coach, avatar, session titles)
+  // aggregates by region, so a second taxonomy was upkeep with no reader.
+  region: Region
   aliases: string[]
-  equipment: Equipment
   movementPattern: MovementPattern
   trackingType: TrackingType
-  isUnilateral: boolean
   // Fraction of bodyweight moved: pull-up 1.00, push-up 0.64, dip 0.95.
   bodyweightFactor: number | null
   // Retained for schema/sync stability; the key-lift feature was removed.
@@ -151,6 +176,9 @@ export interface WorkoutExercise extends SyncColumns {
   id: string
   workoutId: string
   exerciseId: string
+  // The equipment chosen for this instance of the base exercise. Drives the log
+  // UI, volume math, and per-equipment records.
+  equipment: Equipment
   position: number
   // Same value = same superset.
   supersetGroup: number | null
@@ -196,6 +224,7 @@ export interface TemplateExercise extends SyncColumns {
   id: string
   templateId: string
   exerciseId: string
+  equipment: Equipment
   position: number
   supersetGroup: number | null
   targetSets: number | null
@@ -230,10 +259,12 @@ export const RECORD_TYPES = [
 export type RecordType = (typeof RECORD_TYPES)[number]
 
 export interface PersonalRecord extends SyncColumns {
-  // Composite: `${exerciseId}:${recordType}`.
+  // Composite: `${exerciseId}:${equipment}:${recordType}` — records are scoped per
+  // (base exercise + equipment), so a barbell and dumbbell bench are separate PRs.
   id: string
   userId: string
   exerciseId: string
+  equipment: Equipment
   recordType: RecordType
   value: number
   achievedAt: number
@@ -273,10 +304,14 @@ export interface MetricEntry extends SyncColumns {
   notes: string
 }
 
-// Denormalized cache of recent performance per exercise (§6.3), so the last-time
-// header is one indexed lookup rather than a history scan.
+// Denormalized cache of recent performance per (exercise + equipment) (§6.3), so
+// the last-time header is one indexed lookup rather than a history scan. Scoped
+// by equipment so a dumbbell day never prefills barbell numbers.
 export interface LastPerformance {
+  // Composite: `${exerciseId}:${equipment}`.
+  id: string
   exerciseId: string
+  equipment: Equipment
   sessions: PerformedSession[]
   updatedAt: number
 }

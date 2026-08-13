@@ -8,7 +8,6 @@ import {
   EquipmentMixChart,
   ExerciseVarietyChart,
   GapDistributionChart,
-  MoreBodyChartsCard,
   PatternCoverageChart,
   PerExerciseVolumeChart,
   RegionShareChart,
@@ -167,11 +166,6 @@ export const CHART_CATALOG: Record<string, ChartDef> = {
     filters: [],
     render: ({ data }) => <BodyweightChart data={data} />,
   },
-  moreBody: {
-    key: 'moreBody',
-    filters: [],
-    render: () => <MoreBodyChartsCard />,
-  },
 }
 
 export interface SubTab {
@@ -227,7 +221,7 @@ export const SUB_TABS: SubTab[] = [
   {
     key: 'body',
     label: 'Body',
-    charts: ['bodyweight', 'moreBody'],
+    charts: ['bodyweight'],
   },
 ]
 

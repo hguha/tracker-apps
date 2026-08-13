@@ -44,6 +44,22 @@ const PLAN_EXERCISE_SCHEMA = {
     repLow: { type: 'integer' },
     repHigh: { type: 'integer' },
     weight: { type: 'number', nullable: true },
+    // An exercise name is a movement only; how it's loaded is this separate field.
+    equipment: {
+      type: 'string',
+      nullable: true,
+      enum: [
+        'barbell',
+        'dumbbell',
+        'machine',
+        'cable',
+        'smith',
+        'bodyweight',
+        'kettlebell',
+        'band',
+        'other',
+      ],
+    },
     note: { type: 'string' },
     autoProgress: { type: 'boolean' },
   },
@@ -96,7 +112,12 @@ const SYSTEM = [
   '  (e.g. relative-strength framing, sensible starting loads). Never comment on',
   '  appearance or weight in a judgmental way.',
   '- Prefer exercises from the provided library list, by their exact name, so the',
-  '  app can save them. A well-known barbell/dumbbell lift is acceptable if absent.',
+  '  app can save them. A well-known lift is acceptable if absent.',
+  '- Exercise names are MOVEMENTS and carry no equipment: use "Face Pull", not',
+  '  "Cable Face Pull". Say how it is loaded in the separate `equipment` field',
+  '  (barbell, dumbbell, machine, cable, smith, bodyweight, kettlebell, band,',
+  '  other). Leave equipment null only if it genuinely does not matter — the app',
+  "  will then infer it from the movement and the user's own history.",
   "- Weights you propose are in the user's unit. Use null to let the app seed the",
   '  weight from history when they have done the lift; give a real starting number',
   '  for a lift new to them, informed by their bodyweight and comparable lifts.',
@@ -121,7 +142,7 @@ function promptFor(
 ): string {
   const context =
     `Training summary (JSON):\n${summaryJson}\n\n` +
-    `Available exercises (use these exact names where possible):\n` +
+    `Available exercises — movement names only, pair each with an \`equipment\` value:\n` +
     `${libraryNames.join(', ')}\n\n`
 
   switch (request.kind) {
@@ -189,7 +210,9 @@ function rateLimited(userId: string): boolean {
   return recent.length > RATE_MAX
 }
 
-/** Extract the Supabase user id from the verified JWT (payload.sub). */
+// Reads payload.sub WITHOUT verifying the signature — safe only because the
+// gateway already verified it (config.toml: `verify_jwt = true`, which must stay
+// true or `sub` and the rate-limit key below become forgeable).
 function userIdFromAuth(authHeader: string | null): string | null {
   if (!authHeader?.startsWith('Bearer ')) return null
   try {
@@ -219,13 +242,21 @@ Deno.serve(async (req: Request) => {
   if (!userId) return json({ error: 'Unauthorized' }, 401)
   if (rateLimited(userId)) return json({ error: 'Too many requests — slow down' }, 429)
 
+  // Bound the body so an authenticated client can't inflate Gemini token cost with
+  // a giant summary/question. A real de-identified summary is a few KB.
+  const MAX_BODY_BYTES = 64 * 1024
+  const declaredLength = Number(req.headers.get('Content-Length') ?? '0')
+  if (declaredLength > MAX_BODY_BYTES) return json({ error: 'Request too large' }, 413)
+
   let payload: {
     summary?: unknown
     library?: unknown
     request?: { kind?: string; goal?: string; question?: string }
   }
   try {
-    payload = await req.json()
+    const raw = await req.text()
+    if (raw.length > MAX_BODY_BYTES) return json({ error: 'Request too large' }, 413)
+    payload = JSON.parse(raw)
   } catch {
     return json({ error: 'Invalid JSON' }, 400)
   }

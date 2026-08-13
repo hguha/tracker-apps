@@ -6,7 +6,6 @@ import type {
   LastPerformance,
   MetricDefinition,
   MetricEntry,
-  Muscle,
   PersonalRecord,
   Profile,
   Template,
@@ -82,7 +81,6 @@ export interface EditSnapshot {
 
 export class WorkoutDatabase extends Dexie {
   profiles!: EntityTable<Profile, 'id'>
-  muscles!: EntityTable<Muscle, 'id'>
   exercises!: EntityTable<Exercise, 'id'>
   workouts!: EntityTable<Workout, 'id'>
   workoutExercises!: EntityTable<WorkoutExercise, 'id'>
@@ -135,6 +133,54 @@ export class WorkoutDatabase extends Dexie {
     this.version(5).stores({
       editSnapshots: 'workoutId',
     })
+
+    // v6 makes equipment a dimension of the workout rather than the exercise:
+    // WorkoutExercise/TemplateExercise carry equipment; records and last-time are
+    // keyed per (exercise + equipment). The data repoint from equipment-named
+    // exercises to base exercises runs in migrateToBaseExercises() on launch,
+    // after seeding — Dexie upgrade hooks can't reach the seed/derivation.
+    //
+    // lastPerformance switches its primary key from exerciseId to a composite id,
+    // which Dexie can't do in place ("changing primary key"). It's a pure cache
+    // rebuilt from history, so v6 drops it and v7 recreates it under the new key.
+    this.version(6).stores({
+      exercises: 'id, name, primaryMuscleId, movementPattern, userId, isKeyLift',
+      workoutExercises: 'id, workoutId, exerciseId, [workoutId+position]',
+      personalRecords:
+        'id, exerciseId, [exerciseId+equipment], [exerciseId+equipment+recordType], achievedAt',
+      lastPerformance: null,
+    })
+
+    this.version(7).stores({
+      lastPerformance: 'id, exerciseId',
+    })
+
+    // v8 collapses the muscle taxonomy: an exercise stores its region directly
+    // instead of pointing at a row in a separate `muscles` table. The backfill
+    // from primaryMuscleId to region runs in the upgrade hook, since the region
+    // for a retired muscle id can't be recovered once the table is gone.
+    this.version(8)
+      .stores({
+        exercises: 'id, name, region, movementPattern, userId, isKeyLift',
+        muscles: null,
+      })
+      .upgrade(async (tx) => {
+        const muscles = await tx.table('muscles').toArray()
+        const regionOf = new Map<string, string>(
+          muscles.map((m: { id: string; region: string }) => [m.id, m.region]),
+        )
+        await tx
+          .table('exercises')
+          .toCollection()
+          .modify((exercise: Record<string, unknown>) => {
+            const muscleId = exercise.primaryMuscleId as string | undefined
+            // Seeding has run on every prior launch, so the lookup hits; 'core'
+            // only guards a row pointing at a muscle that was never seeded.
+            exercise.region =
+              (muscleId !== undefined ? regionOf.get(muscleId) : undefined) ?? 'core'
+            delete exercise.primaryMuscleId
+          })
+      })
   }
 }
 

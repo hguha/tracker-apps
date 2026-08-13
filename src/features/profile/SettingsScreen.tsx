@@ -1,18 +1,21 @@
 // Preferences: units, logging, coaching inputs, appearance.
 
-import { ChevronLeft, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronLeft, Compass, Sparkles, Volume2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
 import { useDraftInput } from '@/lib/useDraftInput'
-import { playCue, setSoundEnabled } from '@/features/timer/sounds'
+import { playCue, setSoundEnabled, unlockAudio } from '@/features/timer/sounds'
+import { AppTour } from '@/features/onboarding/AppTour'
 import { AppearanceSection } from './AppearanceSection'
 import { lengthFromCm, lengthToCm, parseNumber } from '@/lib/units'
 import type { DistanceUnit, LengthUnit, Profile, WeightUnit } from '@/domain/types'
 
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [])
+  const [showTour, setShowTour] = useState(false)
 
   if (!profile) return <div className="p-6 text-ink-muted">Loading…</div>
 
@@ -69,7 +72,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                     className={cn(
                       'h-10 flex-1 rounded-lg text-[13px] font-semibold',
                       profile.defaultRestSeconds === seconds
-                        ? 'bg-accent text-white'
+                        ? 'bg-accent text-accent-contrast'
                         : 'bg-sunken text-ink-secondary',
                     )}
                   >
@@ -92,7 +95,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                     className={cn(
                       'h-10 flex-1 rounded-lg text-[13px] font-semibold',
                       profile.weeklyWorkoutGoal === count
-                        ? 'bg-accent text-white'
+                        ? 'bg-accent text-accent-contrast'
                         : 'bg-sunken text-ink-secondary',
                     )}
                   >
@@ -104,7 +107,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
             <ToggleRow
               label="Track RPE"
-              hint="Adds an effort field to every set"
+              hint="Rate of Perceived Exertion — how hard each set felt, 1–10"
               checked={profile.showRpe}
               onChange={(showRpe) => void repo.updateProfile({ showRpe })}
             />
@@ -128,6 +131,27 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               }}
             />
 
+            {/* On iPhone the ringer switch silences web audio outright, and nothing
+                reports it — so give people a button that proves whether it works. */}
+            {profile.soundEnabled && (
+              <div className="-mt-1">
+                <button
+                  onClick={() => {
+                    unlockAudio()
+                    playCue('rest-complete')
+                  }}
+                  className="flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[13px] font-semibold text-accent active:bg-accent-wash"
+                >
+                  <Volume2 size={15} />
+                  Test sound
+                </button>
+                <p className="mt-1.5 text-[12px] text-ink-muted">
+                  Hear nothing on iPhone? Check the ring/silent switch — it mutes web
+                  audio even at full volume.
+                </p>
+              </div>
+            )}
+
             <ToggleRow
               label="Training avatar"
               hint="A body on Home that buffs up and deflates with your training"
@@ -146,8 +170,31 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           onChange={(patch) => void repo.updateProfile(patch)}
         />
 
+        <Card className="p-4">
+          <h2 className="text-[15px] font-semibold tracking-tight">Getting started</h2>
+          <p className="mt-1 text-[12.5px] text-ink-muted">
+            Nothing you've logged is affected.
+          </p>
+          <button
+            onClick={() => setShowTour(true)}
+            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-[14px] font-semibold text-accent active:bg-accent-wash"
+          >
+            <Compass size={16} />
+            App walkthrough
+          </button>
+          <button
+            onClick={() => void repo.updateProfile({ onboardingVersion: 0 })}
+            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-[14px] font-semibold text-accent active:bg-accent-wash"
+          >
+            <Sparkles size={16} />
+            Replay setup
+          </button>
+        </Card>
+
         <div className="h-4" />
       </div>
+
+      {showTour && <AppTour onClose={() => setShowTour(false)} />}
     </div>
   )
 }

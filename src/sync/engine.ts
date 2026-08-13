@@ -4,12 +4,12 @@
 import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
 import type { PushRow, SyncBackend } from './backend'
 import { syncLog } from './log'
+import { deferralFor } from '@/data/repository'
 
 // Tables that participate in sync, in dependency order for the initial pull.
 // `personalRecords` is absent: PRs are derived from sets and recomputed per device.
 export const SYNCED_TABLES = [
   'profiles',
-  'muscles',
   'exercises',
   'templates',
   'templateExercises',
@@ -46,6 +46,11 @@ export class SyncEngine {
     this.draining = true
     let pushed = 0
     let deadLettered = 0
+    // Rows the server rejected outright during this drain. Their children can
+    // only fail too, so they're quarantined rather than sent — otherwise one bad
+    // parent becomes a pile of confusing child failures that no single retry can
+    // clear, and the cause is buried under its own consequences.
+    const rejectedRowIds = new Set<string>()
 
     try {
       // Ordered by seq so dependent writes replay in insertion order; re-read each iteration
@@ -57,6 +62,21 @@ export class SyncEngine {
         // Stop the whole drain if the head entry is still backing off, so order holds.
         if (entry.attempts > 0 && entry.nextAttemptAt && entry.nextAttemptAt > now) {
           return { pushed, deadLettered, stoppedBecause: 'transient' }
+        }
+
+        const rejectedParent = parentRowIdOf(entry)
+        if (rejectedParent !== undefined && rejectedRowIds.has(rejectedParent)) {
+          syncLog.warn(
+            `SKIPPED ${entry.op} ${entry.table}/${entry.rowId} — its parent ${rejectedParent} was rejected`,
+          )
+          await this.deadLetter(
+            entry,
+            `Skipped: its parent row ${rejectedParent} was rejected by the server.`,
+            now,
+          )
+          rejectedRowIds.add(entry.rowId)
+          deadLettered += 1
+          continue
         }
 
         const outcome = await this.backend.push(toPushRow(entry))
@@ -81,19 +101,8 @@ export class SyncEngine {
             `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
             outcome.error,
           )
-          await db.transaction('rw', db.outbox, db.deadLetter, async () => {
-            await db.deadLetter.add({
-              table: entry.table,
-              op: entry.op,
-              rowId: entry.rowId,
-              payload: entry.payload,
-              clientRev: entry.clientRev,
-              queuedAt: entry.queuedAt,
-              failedAt: now,
-              error: outcome.error,
-            })
-            await db.outbox.delete(entry.seq!)
-          })
+          await this.deadLetter(entry, outcome.error, now)
+          rejectedRowIds.add(entry.rowId)
           deadLettered += 1
           continue
         }
@@ -121,6 +130,26 @@ export class SyncEngine {
       syncLog.info(`drain done — pushed ${pushed}, dead-lettered ${deadLettered}`)
     }
     return { pushed, deadLettered, stoppedBecause: null }
+  }
+
+  private async deadLetter(
+    entry: OutboxEntry,
+    error: string,
+    failedAt: number,
+  ): Promise<void> {
+    await db.transaction('rw', db.outbox, db.deadLetter, async () => {
+      await db.deadLetter.add({
+        table: entry.table,
+        op: entry.op,
+        rowId: entry.rowId,
+        payload: entry.payload,
+        clientRev: entry.clientRev,
+        queuedAt: entry.queuedAt,
+        failedAt,
+        error,
+      })
+      await db.outbox.delete(entry.seq!)
+    })
   }
 
   // Pulls deltas into IndexedDB. Merge rule (§5.5): the server row wins unless a local outbox entry for that row is still pending.
@@ -306,6 +335,11 @@ export class SyncEngine {
         continue
       }
 
+      // Re-apply deferral: a retried child of a session that is live again must be
+      // held, not handed straight back to the drain. Resolved before the
+      // transaction opens — it reads workout tables that aren't in its scope.
+      const deferral = await deferralFor(entry.table, entry.rowId, current)
+
       await db.transaction('rw', db.outbox, db.deadLetter, async () => {
         await db.outbox.add({
           table: entry.table,
@@ -314,6 +348,7 @@ export class SyncEngine {
           payload: current,
           clientRev: Number((current as { clientRev?: unknown }).clientRev ?? 1),
           queuedAt: entry.queuedAt,
+          ...deferral,
           attempts: 0,
         })
         await db.deadLetter.delete(entry.seq!)
@@ -337,6 +372,15 @@ async function currentRow(
   return tableStore(table as SyncedTable).get(rowId)
 }
 
+// The row this one is a child of, read off the payload. Only the two chained
+// workout tables have a parent; everything else stands alone.
+function parentRowIdOf(entry: OutboxEntry): string | undefined {
+  const payload = entry.payload as { workoutId?: string; workoutExerciseId?: string }
+  if (entry.table === 'workoutExercises') return payload.workoutId
+  if (entry.table === 'sets') return payload.workoutExerciseId
+  return undefined
+}
+
 function toPushRow(entry: OutboxEntry): PushRow {
   return {
     table: entry.table,
@@ -353,8 +397,7 @@ function normalizeRow(
   row: Record<string, unknown>,
 ): Record<string, unknown> {
   if (table === 'exercises') {
-    const { secondaryMuscles: _dropped, ...rest } = row
-    return { ...rest, aliases: row.aliases ?? [] }
+    return { ...row, aliases: row.aliases ?? [] }
   }
   if (table === 'profiles') {
     // A profile from before a column existed arrives without it; backfill defaults so the client never renders against undefined.
@@ -365,6 +408,7 @@ function normalizeRow(
       heightCm: row.heightCm ?? null,
       trainingGoal: row.trainingGoal ?? '',
       onboardedAt: row.onboardedAt ?? null,
+      onboardingVersion: row.onboardingVersion ?? 0,
     }
   }
   return row
@@ -373,7 +417,6 @@ function normalizeRow(
 function tableStore(table: SyncedTable) {
   const map = {
     profiles: db.profiles,
-    muscles: db.muscles,
     exercises: db.exercises,
     templates: db.templates,
     templateExercises: db.templateExercises,

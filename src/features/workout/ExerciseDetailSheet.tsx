@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Trash2, X } from 'lucide-react'
+import { Pencil, Trash2, Undo2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -11,7 +11,6 @@ import { humanizeSlug } from '@/lib/labels'
 import {
   REGION_LABELS,
   type DistanceUnit,
-  type Region,
   type RecordType,
   type WeightUnit,
   type WorkoutSet,
@@ -33,6 +32,8 @@ export function ExerciseDetailSheet({
   weightUnit,
   distanceUnit,
   onRemoveFromWorkout,
+  onRemoveLastSet,
+  onEdit,
   onDismiss,
 }: {
   exerciseId: string
@@ -44,6 +45,11 @@ export function ExerciseDetailSheet({
   weightUnit: WeightUnit
   distanceUnit: DistanceUnit
   onRemoveFromWorkout?: () => void
+  // Swiping a row is otherwise the only way to delete a set, and a gesture with
+  // no visible control is undiscoverable after the first-run hint retires.
+  onRemoveLastSet?: () => void
+  // Present in the library — opens the edit form for this exercise.
+  onEdit?: () => void
   onDismiss: () => void
 }) {
   const detail = useLiveQuery(() => repo.getExerciseDetail(exerciseId), [exerciseId])
@@ -71,7 +77,7 @@ export function ExerciseDetailSheet({
 
   if (!detail) return null
 
-  const { exercise, primaryMuscle, records, sessions } = detail
+  const { exercise, records, sessions } = detail
   // "This session" must be matched by id; falling back to sessions[0] would show
   // the most recent historical session's numbers before anything is logged here.
   const thisSession = currentWorkoutId
@@ -113,26 +119,33 @@ export function ExerciseDetailSheet({
           <h2 className="truncate text-[18px] font-bold tracking-tight">
             {exercise.name}
           </h2>
-          {primaryMuscle && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-secondary">
-              <span
-                className="size-2 rounded-full"
-                style={{
-                  background: regionVar(primaryMuscle.region as Region),
-                }}
-                aria-hidden
-              />
-              {primaryMuscle.name} · {REGION_LABELS[primaryMuscle.region as Region]}
-            </p>
-          )}
+          <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-secondary">
+            <span
+              className="size-2 rounded-full"
+              style={{ background: regionVar(exercise.region) }}
+              aria-hidden
+            />
+            {REGION_LABELS[exercise.region]}
+          </p>
         </div>
-        <button
-          onClick={onDismiss}
-          aria-label="Close"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-        >
-          <X size={19} />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              aria-label="Edit exercise"
+              className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+            >
+              <Pencil size={17} />
+            </button>
+          )}
+          <button
+            onClick={onDismiss}
+            aria-label="Close"
+            className="flex size-9 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+          >
+            <X size={19} />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-5 px-5 py-4">
@@ -171,6 +184,11 @@ export function ExerciseDetailSheet({
             placeholder="Seat height, pin setting, cues…"
             className="w-full resize-none rounded-xl border border-line bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
           />
+          {workoutExerciseId && (
+            <p className="mt-1.5 text-[11.5px] text-ink-muted">
+              Shows every time you do this exercise.
+            </p>
+          )}
         </Section>
 
         {workoutExerciseId && thisSession && (
@@ -179,12 +197,12 @@ export function ExerciseDetailSheet({
               <Stat label="Sets" value={String(thisSession.sets.length)} />
               <Stat
                 label="Volume"
-                value={displayWeight(thisSession.volumeKg, weightUnit).toLocaleString()}
+                value={`${displayWeight(thisSession.volumeKg, weightUnit).toLocaleString()} ${weightUnit}`}
               />
               {thisSession.bestE1rmKg !== null && (
                 <Stat
-                  label="Best e1RM"
-                  value={String(displayWeight(thisSession.bestE1rmKg, weightUnit))}
+                  label="Best est. 1RM"
+                  value={`${displayWeight(thisSession.bestE1rmKg, weightUnit)} ${weightUnit}`}
                 />
               )}
             </div>
@@ -193,9 +211,7 @@ export function ExerciseDetailSheet({
 
         <Section title="Details">
           <dl className="space-y-1.5 text-[13.5px]">
-            <Row label="Equipment" value={humanizeSlug(exercise.equipment)} />
             <Row label="Tracked as" value={humanizeSlug(exercise.trackingType)} />
-            {exercise.isUnilateral && <Row label="Per side" value="Yes" />}
             {exercise.bodyweightFactor !== null && (
               <Row
                 label="Bodyweight moved"
@@ -212,6 +228,10 @@ export function ExerciseDetailSheet({
                 <div key={record.id} className="flex justify-between gap-3">
                   <dt className="text-ink-secondary">
                     {RECORD_LABELS[record.recordType]}
+                    <span className="text-ink-muted">
+                      {' · '}
+                      {humanizeSlug(record.equipment)}
+                    </span>
                   </dt>
                   <dd className="shrink-0 text-right">
                     <span className="tabular font-semibold">
@@ -238,7 +258,7 @@ export function ExerciseDetailSheet({
                     </p>
                     {session.bestE1rmKg !== null && (
                       <p className="text-[11.5px] text-ink-muted">
-                        e1RM {displayWeight(session.bestE1rmKg, weightUnit)}
+                        est. 1RM {displayWeight(session.bestE1rmKg, weightUnit)}
                       </p>
                     )}
                   </div>
@@ -259,6 +279,18 @@ export function ExerciseDetailSheet({
 
         {onRemoveFromWorkout && (
           <Section title="Actions">
+            {onRemoveLastSet && (
+              <button
+                onClick={() => {
+                  onRemoveLastSet()
+                  onDismiss()
+                }}
+                className="mb-2 flex w-full items-center gap-2.5 rounded-xl border border-line px-3.5 py-3 text-left text-[14.5px] font-medium"
+              >
+                <Undo2 size={17} className="text-ink-muted" />
+                Delete last set
+              </button>
+            )}
             <button
               onClick={() => {
                 onRemoveFromWorkout()
@@ -268,6 +300,25 @@ export function ExerciseDetailSheet({
             >
               <Trash2 size={17} />
               Remove from this workout
+            </button>
+          </Section>
+        )}
+
+        {/* Custom exercises can be deleted; system library rows can't. History
+            keeps the reference, so past workouts still show the name. */}
+        {onEdit && exercise.userId !== null && (
+          <Section title="Actions">
+            <button
+              onClick={() => {
+                if (!window.confirm(`Delete "${exercise.name}"? Past workouts keep it.`))
+                  return
+                void repo.deleteExercise(exercise.id)
+                onDismiss()
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-line px-3.5 py-3 text-left text-[14.5px] font-medium text-critical"
+            >
+              <Trash2 size={17} />
+              Delete this exercise
             </button>
           </Section>
         )}

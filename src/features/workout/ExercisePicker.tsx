@@ -3,40 +3,57 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, Search, X } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
+import { BottomSheet } from '@/components/BottomSheet'
 import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
-import { regionVar } from '@/lib/palette'
-import type { Region } from '@/domain/types'
+import { MovementList } from '@/components/MovementList'
+import { cn } from '@/lib/cn'
+import { humanizeSlug } from '@/lib/labels'
+import {
+  defaultEquipmentForTracking,
+  EQUIPMENT,
+  equipmentIsChosen,
+  type Equipment,
+  type Region,
+} from '@/domain/types'
 import { NewExerciseForm } from './NewExerciseForm'
+
+type SortMode = 'name' | 'recent'
 
 export function ExercisePicker({
   onPick,
   onDismiss,
 }: {
-  onPick: (exerciseId: string) => void
+  onPick: (exerciseId: string, equipment: Equipment) => void
   onDismiss: () => void
 }) {
   const [query, setQuery] = useState('')
   const [regionFilter, setRegionFilter] = useState<Region | null>(null)
-  const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  // Recency first: adding an exercise is nearly always one you train already.
+  const [sort, setSort] = useState<SortMode>('recent')
+  // Once a movement is chosen, the mandatory equipment step takes over.
+  const [chosenId, setChosenId] = useState<string | null>(null)
 
   const data = useLiveQuery(async () => {
     const exercises = await repo.listExercises()
-    const muscles = await db.muscles.toArray()
-    const muscleById = new Map(muscles.map((m) => [m.id, m]))
 
     const recent = await db.workouts.orderBy('startedAt').reverse().limit(30).toArray()
-    const recencyByExerciseId = new Map<string, number>()
+    // The equipment last used for each movement, to pre-highlight it in the sheet.
+    const lastEquipmentByExerciseId = new Map<string, Equipment>()
     for (const workout of recent) {
-      const workoutExercises = await repo.listWorkoutExercises(workout.id)
-      for (const we of workoutExercises) {
-        if (!recencyByExerciseId.has(we.exerciseId)) {
-          recencyByExerciseId.set(we.exerciseId, workout.startedAt)
+      for (const we of await repo.listWorkoutExercises(workout.id)) {
+        if (!lastEquipmentByExerciseId.has(we.exerciseId)) {
+          lastEquipmentByExerciseId.set(we.exerciseId, we.equipment)
         }
       }
     }
 
-    return { exercises, muscleById, recencyByExerciseId }
+    // Same source as the library's, so "last trained" can't disagree between them.
+    return {
+      exercises,
+      lastTrained: await repo.getLastTrainedMap(),
+      lastEquipmentByExerciseId,
+    }
   }, [])
 
   const results = useMemo(() => {
@@ -45,19 +62,16 @@ export function ExercisePicker({
 
     let list = data.exercises
     if (regionFilter) {
-      list = list.filter(
-        (e) => data.muscleById.get(e.primaryMuscleId)?.region === regionFilter,
-      )
-    }
-    if (equipmentFilter) {
-      list = list.filter((e) => e.equipment === equipmentFilter)
+      list = list.filter((e) => e.region === regionFilter)
     }
 
     if (normalized === '') {
       return [...list].sort((a, b) => {
-        const aRecency = data.recencyByExerciseId.get(a.id) ?? 0
-        const bRecency = data.recencyByExerciseId.get(b.id) ?? 0
-        if (aRecency !== bRecency) return bRecency - aRecency
+        if (sort === 'recent') {
+          const aAt = data.lastTrained.get(a.id) ?? 0
+          const bAt = data.lastTrained.get(b.id) ?? 0
+          if (aAt !== bAt) return bAt - aAt
+        }
         return a.name.localeCompare(b.name)
       })
     }
@@ -78,17 +92,33 @@ export function ExercisePicker({
       .filter((r) => r.score >= 0)
       .sort((a, b) => a.score - b.score || a.exercise.name.localeCompare(b.exercise.name))
       .map((r) => r.exercise)
-  }, [data, query, regionFilter, equipmentFilter])
+  }, [data, query, regionFilter, sort])
+
+  // Loaded lifts get the equipment step; bodyweight/assisted/cardio have a fixed
+  // implement, so they're added straight away — no nonsensical "which equipment?".
+  function chooseExercise(exerciseId: string) {
+    const exercise = data?.exercises.find((e) => e.id === exerciseId)
+    if (exercise && !equipmentIsChosen(exercise.trackingType)) {
+      onPick(exerciseId, defaultEquipmentForTracking(exercise.trackingType))
+    } else {
+      setChosenId(exerciseId)
+    }
+  }
 
   if (isCreating) {
     return (
       <NewExerciseForm
         initialName={query.trim()}
-        onCreated={(exerciseId) => onPick(exerciseId)}
+        onCreated={(exerciseId) => {
+          setIsCreating(false)
+          chooseExercise(exerciseId)
+        }}
         onCancel={() => setIsCreating(false)}
       />
     )
   }
+
+  const chosen = chosenId ? data?.exercises.find((e) => e.id === chosenId) : undefined
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-page">
@@ -118,9 +148,7 @@ export function ExercisePicker({
 
       <ExerciseFilterPills
         region={regionFilter}
-        equipment={equipmentFilter}
         onRegionChange={setRegionFilter}
-        onEquipmentChange={setEquipmentFilter}
         className="border-b border-line bg-surface"
       />
 
@@ -137,37 +165,38 @@ export function ExercisePicker({
           </span>
         </button>
 
-        {results.map((exercise) => {
-          const muscle = data?.muscleById.get(exercise.primaryMuscleId)
-          return (
-            <button
-              key={exercise.id}
-              onClick={() => onPick(exercise.id)}
-              className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left active:bg-accent-wash"
-            >
-              {muscle && (
-                <span
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ background: regionVar(muscle.region) }}
-                  aria-hidden
-                />
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-medium">
-                  {exercise.name}
-                </span>
-                <span className="block truncate text-[12.5px] text-ink-muted">
-                  {muscle?.name} · {exercise.equipment.replace(/_/g, ' ')}
-                </span>
-              </span>
-              {exercise.userId !== null && (
-                <span className="shrink-0 rounded-full bg-sunken px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-muted">
-                  Custom
-                </span>
-              )}
-            </button>
-          )
-        })}
+        {/* Only meaningful while browsing: a search is already ranked by match. */}
+        {query.trim() === '' && (
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
+            <span className="text-[12px] text-ink-muted">
+              {results.length} {results.length === 1 ? 'movement' : 'movements'}
+            </span>
+            <div className="flex gap-0.5 rounded-lg bg-sunken p-0.5 text-[12px] font-semibold">
+              {(['recent', 'name'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setSort(mode)}
+                  className={cn(
+                    'rounded-md px-2.5 py-1',
+                    sort === mode
+                      ? 'bg-surface text-ink shadow-sm'
+                      : 'text-ink-secondary',
+                  )}
+                >
+                  {mode === 'name' ? 'A–Z' : 'Recent'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data && (
+          <MovementList
+            exercises={results}
+            lastTrained={data.lastTrained}
+            onChoose={chooseExercise}
+          />
+        )}
 
         {results.length === 0 && query.trim() !== '' && (
           <p className="px-4 py-8 text-center text-[14px] text-ink-muted">
@@ -175,6 +204,73 @@ export function ExercisePicker({
           </p>
         )}
       </div>
+
+      {chosen && (
+        <EquipmentSheet
+          exerciseName={chosen.name}
+          lastUsed={data?.lastEquipmentByExerciseId.get(chosen.id) ?? null}
+          onPick={(equipment) => onPick(chosen.id, equipment)}
+          onDismiss={() => setChosenId(null)}
+        />
+      )}
     </div>
+  )
+}
+
+// The equipment step, as a sheet over the list: you've picked a movement, now say
+// how it's loaded for this workout. A grid (not a filter row) with the equipment
+// you used last time pulled to the front and marked.
+function EquipmentSheet({
+  exerciseName,
+  lastUsed,
+  onPick,
+  onDismiss,
+}: {
+  exerciseName: string
+  lastUsed: Equipment | null
+  onPick: (equipment: Equipment) => void
+  onDismiss: () => void
+}) {
+  const ordered = lastUsed
+    ? [lastUsed, ...EQUIPMENT.filter((e) => e !== lastUsed)]
+    : [...EQUIPMENT]
+
+  return (
+    <BottomSheet onDismiss={onDismiss} panelClassName="px-5">
+      <div className="flex items-center justify-center pt-2.5 pb-1">
+        <span className="h-1 w-9 rounded-full bg-line-strong" aria-hidden />
+      </div>
+      <div className="pb-3 pt-1.5">
+        <h2 className="text-[17px] font-bold tracking-tight">{exerciseName}</h2>
+        <p className="text-[12.5px] text-ink-muted">How are you loading it?</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {ordered.map((equipment) => {
+          const isLast = equipment === lastUsed
+          return (
+            <button
+              key={equipment}
+              onClick={() => onPick(equipment)}
+              className={cn(
+                'flex h-16 flex-col items-center justify-center gap-1 rounded-2xl border text-[13px] font-semibold active:scale-[0.97]',
+                isLast
+                  ? 'border-accent bg-accent-wash text-accent'
+                  : 'border-line bg-sunken text-ink-secondary',
+              )}
+            >
+              {humanizeSlug(equipment)}
+              {isLast && (
+                <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
+                  Last used
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      {/* Breathing room below the grid; the panel itself only carries safe-area pad. */}
+      <div className="h-8" />
+    </BottomSheet>
   )
 }

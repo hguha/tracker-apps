@@ -10,7 +10,7 @@ import { ExercisePicker } from '@/features/workout/ExercisePicker'
 import { regionVar } from '@/lib/palette'
 import { parseNumber, weightFromKg, weightToKg } from '@/lib/units'
 import { useDraftInput } from '@/lib/useDraftInput'
-import type { TemplateExercise, WeightUnit } from '@/domain/types'
+import type { Equipment, TemplateExercise, WeightUnit } from '@/domain/types'
 
 export function TemplateEditorScreen({
   templateId,
@@ -22,6 +22,12 @@ export function TemplateEditorScreen({
   const toast = useToast()
   const [isPickerOpen, setIsPickerOpen] = useState(false)
 
+  // Leaving without adding anything discards the scratch row the + button made,
+  // so it can't linger as an unstartable "New template".
+  function exit() {
+    void repo.discardUntouchedTemplate(templateId).then(onExit)
+  }
+
   const data = useLiveQuery(async () => {
     const template = await repo.getTemplate(templateId)
     if (!template) return null
@@ -30,10 +36,7 @@ export function TemplateEditorScreen({
     const withMeta = await Promise.all(
       rows.map(async (te) => {
         const exercise = await db.exercises.get(te.exerciseId)
-        const muscle = exercise
-          ? await db.muscles.get(exercise.primaryMuscleId)
-          : undefined
-        return { te, exercise, muscle }
+        return { te, exercise }
       }),
     )
     return { template, profile, rows: withMeta }
@@ -54,8 +57,8 @@ export function TemplateEditorScreen({
   const { template, profile, rows } = data
   const orderedIds = rows.map((r) => r.te.id)
 
-  async function addExercise(exerciseId: string) {
-    await repo.addExerciseToTemplate(templateId, exerciseId)
+  async function addExercise(exerciseId: string, equipment: Equipment) {
+    await repo.addExerciseToTemplate(templateId, exerciseId, equipment)
     setIsPickerOpen(false)
   }
 
@@ -63,8 +66,8 @@ export function TemplateEditorScreen({
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
         <button
-          onClick={onExit}
-          aria-label="Done"
+          onClick={exit}
+          aria-label="Back"
           className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
         >
           <ChevronLeft size={22} />
@@ -95,12 +98,12 @@ export function TemplateEditorScreen({
           onReorder={(ids) => void repo.reorderTemplateExercises(ids)}
         >
           <div className="space-y-2.5">
-            {rows.map(({ te, exercise, muscle }, index) => (
+            {rows.map(({ te, exercise }, index) => (
               <DragItem key={te.id} id={te.id} index={index}>
                 <TemplateExerciseRow
                   te={te}
                   name={exercise?.name ?? 'Unknown exercise'}
-                  regionSwatch={muscle ? regionVar(muscle.region) : undefined}
+                  regionSwatch={exercise ? regionVar(exercise.region) : undefined}
                   weightUnit={profile.unitWeight}
                   onChange={(patch) => void repo.updateTemplateExercise(te.id, patch)}
                   onRemove={() => {
@@ -128,14 +131,14 @@ export function TemplateEditorScreen({
           Changes save as you go. This edits the plan — your logged workouts are
           untouched.
         </p>
-        <Button size="lg" className="w-full" onClick={onExit}>
+        <Button size="lg" className="w-full" onClick={exit}>
           Done
         </Button>
       </div>
 
       {isPickerOpen && (
         <ExercisePicker
-          onPick={(exerciseId) => void addExercise(exerciseId)}
+          onPick={(exerciseId, equipment) => void addExercise(exerciseId, equipment)}
           onDismiss={() => setIsPickerOpen(false)}
         />
       )}
@@ -228,12 +231,12 @@ function TemplateExerciseRow({
           onCommit={(n) => onChange({ targetSets: n })}
         />
         <TargetField
-          label="Reps"
+          label="Reps min"
           value={te.targetRepsLow}
           onCommit={(n) => onChange({ targetRepsLow: n })}
         />
         <TargetField
-          label="to"
+          label="Reps max"
           value={te.targetRepsHigh}
           onCommit={(n) => onChange({ targetRepsHigh: n })}
         />

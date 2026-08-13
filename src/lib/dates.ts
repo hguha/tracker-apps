@@ -3,7 +3,6 @@
 
 import {
   differenceInCalendarDays,
-  endOfWeek,
   format,
   isSameDay,
   isSameYear,
@@ -19,10 +18,6 @@ export function dayStart(ts: number): number {
 
 export function weekStart(ts: number, weekStartsOn: WeekStart): number {
   return startOfWeek(ts, { weekStartsOn }).getTime()
-}
-
-export function weekEnd(ts: number, weekStartsOn: WeekStart): number {
-  return endOfWeek(ts, { weekStartsOn }).getTime()
 }
 
 // Sortable string key for weekly buckets.
@@ -55,8 +50,4 @@ export function toDateTimeInputValue(ts: number): string {
 
 export function fromDateTimeInputValue(value: string): number {
   return new Date(value).getTime()
-}
-
-export function daysBetween(a: number, b: number): number {
-  return Math.abs(differenceInCalendarDays(a, b))
 }

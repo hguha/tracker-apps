@@ -25,6 +25,8 @@ export function AccountScreen({
   const [dialog, setDialog] = useState<'none' | 'sign-out' | 'delete'>('none')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
 
+  // Account owns identity + account actions; counts and sync live on Data & sync.
+  // Kept here only for the sign-out/delete safety checks, not shown as stats.
   const stats = useLiveQuery(async () => {
     const workouts = await db.workouts.toArray()
     return {
@@ -32,7 +34,6 @@ export function AccountScreen({
       pendingWrites: (await db.outbox.toArray()).filter(isReadyToPush).length,
       workoutCount: workouts.filter((w) => w.endedAt !== null && w.deletedAt === null)
         .length,
-      setCount: await db.sets.count(),
     }
   }, [])
 
@@ -66,13 +67,16 @@ export function AccountScreen({
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <Card className="p-4">
           <div className="flex items-center gap-3.5">
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-[19px] font-bold text-white">
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-accent text-[19px] font-bold text-accent-contrast">
               {initialsOf(session.displayName)}
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[17px] font-semibold">{session.displayName}</p>
               <p className="truncate text-[13px] text-ink-muted">
                 {session.isVerified ? session.email : 'This device only'}
+              </p>
+              <p className="truncate text-[12px] text-ink-muted">
+                Member since {formatRelativeDay(session.createdAt)}
               </p>
             </div>
           </div>
@@ -134,21 +138,6 @@ export function AccountScreen({
             )}
           </Card>
         )}
-
-        <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Your data</h2>
-          <dl className="mt-2.5 space-y-1.5 text-[13.5px]">
-            <Row label="Member since" value={formatRelativeDay(session.createdAt)} />
-            <Row label="Workouts logged" value={String(stats?.workoutCount ?? 0)} />
-            <Row label="Sets recorded" value={String(stats?.setCount ?? 0)} />
-            <Row
-              label="Waiting to sync"
-              value={
-                hasPendingWrites ? `${stats?.pendingWrites} changes` : 'Nothing pending'
-              }
-            />
-          </dl>
-        </Card>
 
         <Card className="overflow-hidden">
           <button
@@ -230,15 +219,6 @@ export function AccountScreen({
           />
         </Dialog>
       )}
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-ink-secondary">{label}</dt>
-      <dd className="font-semibold">{value}</dd>
     </div>
   )
 }

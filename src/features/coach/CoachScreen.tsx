@@ -41,7 +41,9 @@ export function CoachScreen({
   const [composerText, setComposerText] = useState('')
   const [showData, setShowData] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [answeredBy, setAnsweredBy] = useState(mockCoachProvider.name)
+  // Null until an answer comes back: naming a provider up front told a signed-in
+  // user their reply came from the offline coach before it had replied at all.
+  const [answeredBy, setAnsweredBy] = useState<string | null>(null)
 
   async function ask(request: CoachRequest) {
     if (!summary) return
@@ -80,9 +82,11 @@ export function CoachScreen({
         // A multi-week program groups its days under its name as a folder.
         folder: plan.programName,
       })
+      // Name the skipped exercises: a bare count hid that the coach was proposing
+      // lifts the library no longer had under that name.
       toast.show(
         unmatched.length > 0
-          ? `Saved ${templateIds.length} templates · skipped ${unmatched.length} unknown`
+          ? `Saved ${templateIds.length} templates · couldn't match ${unmatched.slice(0, 2).join(', ')}${unmatched.length > 2 ? ` +${unmatched.length - 2}` : ''}`
           : `Saved ${templateIds.length} templates`,
       )
       onOpenTemplates()
@@ -118,7 +122,7 @@ export function CoachScreen({
             className="flex items-center gap-1 pr-2 text-[12.5px] font-medium text-ink-muted active:opacity-60"
           >
             <Eye size={14} />
-            Data sent
+            What's sent
           </button>
         )}
       </header>
@@ -126,8 +130,10 @@ export function CoachScreen({
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {/* §13: always a suggestion, never medical advice. */}
         <p className="px-1 text-[12px] text-ink-muted">
-          Suggestions from {answeredBy}, based on a de-identified summary of your
-          training. Always a starting point — never medical advice, never auto-applied.
+          {answeredBy === null
+            ? 'Suggestions are based on a de-identified summary of your training.'
+            : `Suggestions from ${answeredBy}, based on a de-identified summary of your training.`}{' '}
+          Always a starting point — never medical advice, never auto-applied.
         </p>
 
         {/* Offer the sign-in upgrade explicitly so it's clear why answers differ. */}
@@ -136,7 +142,7 @@ export function CoachScreen({
             onClick={onSignIn}
             className="flex w-full items-start gap-3 rounded-2xl border border-accent/30 bg-accent-wash p-3.5 text-left active:opacity-80"
           >
-            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-contrast">
               <LogIn size={16} />
             </span>
             <span className="min-w-0 flex-1">
@@ -231,6 +237,7 @@ export function CoachScreen({
         {response?.kind === 'plan' && (
           <PlanView
             plan={response.plan}
+            weightUnit={summary?.unitWeight ?? 'lb'}
             saving={saving}
             onSave={() => void savePlan(response.plan)}
           />
@@ -328,10 +335,12 @@ function Composer({
 
 function PlanView({
   plan,
+  weightUnit,
   saving,
   onSave,
 }: {
   plan: CoachPlan
+  weightUnit: string
   saving: boolean
   onSave: () => void
 }) {
@@ -363,7 +372,7 @@ function PlanView({
                     <span className="tabular shrink-0 text-[12.5px] text-ink-muted">
                       {e.sets} ×{' '}
                       {e.repLow === e.repHigh ? e.repLow : `${e.repLow}-${e.repHigh}`}
-                      {e.weight !== null && ` · ${e.weight}`}
+                      {e.weight !== null && ` · ${e.weight} ${weightUnit}`}
                     </span>
                   </div>
                   {e.note && (

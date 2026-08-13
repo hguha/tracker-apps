@@ -86,7 +86,7 @@ export function TemplatesScreen({
               >
                 <button
                   onClick={() => setPreviewFor(template.id)}
-                  className="min-w-0 flex-1 px-4 py-3.5 text-left active:bg-accent-wash"
+                  className="min-w-0 flex-1 px-4 py-3.5 text-left transition-transform duration-75 active:scale-[0.99] active:bg-accent-wash"
                 >
                   <span className="block truncate text-[15px] font-semibold">
                     {template.name}

@@ -16,7 +16,7 @@ export class SupabaseBackend implements SyncBackend {
 
   async push(row: PushRow): Promise<PushOutcome> {
     const table = tableToPostgres(row.table)
-    const payload = toPostgresRow(row.payload, table)
+    const payload = toPostgresRow(row.payload)
 
     try {
       if (row.op === 'delete') {
@@ -69,22 +69,13 @@ export class SupabaseBackend implements SyncBackend {
   }
 }
 
-// Snake_case keys to strip per table (§4.3): an unmappable field dead-letters the whole row.
-const NON_COLUMN_FIELDS: Record<string, readonly string[]> = {
-  exercises: ['secondary_muscles'],
-}
-
-export function toPostgresRow(
-  row: Record<string, unknown>,
-  table: string,
-): Record<string, unknown> {
+export function toPostgresRow(row: Record<string, unknown>): Record<string, unknown> {
   const snake = keysToSnake(row)
   for (const column of TIMESTAMP_COLUMNS) {
     if (column in snake && typeof snake[column] === 'number') {
       snake[column] = msToIso(snake[column] as number)
     }
   }
-  for (const field of NON_COLUMN_FIELDS[table] ?? []) delete snake[field]
   return snake
 }
 
@@ -106,7 +97,15 @@ export function classify(error: PostgrestError): PushOutcome {
     return { status: 'auth', error: error.message }
   }
 
-  // A real SQLSTATE (RLS, constraint, type, not-null) is a rejection retrying can't fix.
+  // A foreign-key violation means the parent row hasn't landed yet, which is an
+  // ordering problem, not a rejection: the drain stops on transient and resumes
+  // in seq order, which is exactly the repair. Dead-lettering it instead strands
+  // the child permanently behind a parent that was about to arrive.
+  if (code === '23503') {
+    return { status: 'transient', error: error.message }
+  }
+
+  // Any other real SQLSTATE (RLS, unique, type, not-null) is a rejection retrying can't fix.
   if (/^[0-9]/.test(code)) {
     return { status: 'permanent', error: error.message }
   }

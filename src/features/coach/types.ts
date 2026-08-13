@@ -1,6 +1,7 @@
 // The AI coach interface and its structured output (§13): mock and live provider
 // share this contract, and a plan deserializes straight into templates, not prose.
 
+import type { Equipment } from '@/domain/types'
 import type { CoachSummary } from './summary'
 
 export interface PlanExercise {
@@ -11,6 +12,11 @@ export interface PlanExercise {
   repHigh: number
   /** Working weight in the user's unit, or null to let history seed it. */
   weight: number | null
+  /**
+   * How it's loaded. Names are equipment-free movements, so without this a cable
+   * movement gets resolved from its name or the user's own history instead.
+   */
+  equipment?: Equipment | null
   note: string
   /** Set an auto-progression rule on this exercise when saved (§7 Phase 4). */
   autoProgress?: boolean

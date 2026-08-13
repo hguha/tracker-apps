@@ -25,7 +25,6 @@ beforeEach(async () => {
 
 describe('seeding', () => {
   it('creates the system library', async () => {
-    expect(await db.muscles.count()).toBeGreaterThan(25)
     expect(await db.exercises.count()).toBeGreaterThan(90)
     expect(await db.metricDefinitions.count()).toBeGreaterThan(25)
   })
@@ -36,27 +35,22 @@ describe('seeding', () => {
     expect(await db.exercises.count()).toBe(before)
   })
 
-  it('tags the reverse dumbbell fly to rear delt, not chest', async () => {
+  it('tags the reverse dumbbell fly to shoulders, not chest', async () => {
     // The spec's motivating example: it must land in shoulder volume.
-    const exercise = await db.exercises.get('reverse_dumbbell_fly')
+    const exercise = await db.exercises.get('reverse_fly')
     expect(exercise).toBeDefined()
-    const muscle = await db.muscles.get(exercise!.primaryMuscleId)
-    expect(muscle?.id).toBe('rear_delt')
-    expect(muscle?.region).toBe('shoulders')
+    expect(exercise!.region).toBe('shoulders')
   })
 
   it('derives cardio for exactly the cardio exercises, and nothing else', async () => {
     // Cardio switches the whole logging UI to time/distance (§6.4). It used to be
     // a hand-tagged `pattern: 'cardio'` on each seed row; it's now derived from
-    // the primary muscle's region. If that derivation drifts, a treadmill row
-    // silently starts asking for weight and reps.
+    // the exercise's region. If that derivation drifts, a treadmill row silently
+    // starts asking for weight and reps.
     const exercises = await repo.listExercises()
-    const muscles = await db.muscles.toArray()
-    const regionOf = new Map(muscles.map((m) => [m.id, m.region]))
 
     for (const exercise of exercises) {
-      const isCardioRegion = regionOf.get(exercise.primaryMuscleId) === 'cardio'
-      expect(exercise.movementPattern === 'cardio').toBe(isCardioRegion)
+      expect(exercise.movementPattern === 'cardio').toBe(exercise.region === 'cardio')
     }
 
     // And the library really does contain cardio, so the assertion isn't vacuous.
@@ -66,9 +60,9 @@ describe('seeding', () => {
   })
 
   it('derives push and pull, which the session title depends on (§6.7)', async () => {
-    const bench = await db.exercises.get('barbell_bench_press')
-    const row = await db.exercises.get('barbell_row')
-    const squat = await db.exercises.get('barbell_back_squat')
+    const bench = await db.exercises.get('bench_press')
+    const row = await db.exercises.get('row')
+    const squat = await db.exercises.get('back_squat')
     expect(bench?.movementPattern).toBe('push')
     expect(row?.movementPattern).toBe('pull')
     expect(squat?.movementPattern).toBe('other')
@@ -86,7 +80,8 @@ describe('the logging loop', () => {
     const workoutId = await repo.startWorkout({ title: 'Push A' })
     const workoutExerciseId = await repo.addExerciseToWorkout(
       workoutId,
-      'barbell_bench_press',
+      'bench_press',
+      'barbell',
     )
     const setId = await repo.addSet({
       workoutExerciseId,
@@ -112,7 +107,11 @@ describe('the logging loop', () => {
 
   it('queues every mutation in the outbox for later sync', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     await repo.addSet({ workoutExerciseId, weightKg: 150, reps: 5 })
 
     const entries = await db.outbox.orderBy('seq').toArray()
@@ -132,7 +131,7 @@ describe('the logging loop', () => {
     // row violates row-level security policy". Editing a workout produced a pile
     // of those; the retry button then succeeded because it re-reads the full row.
     const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
     const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
     await db.outbox.clear()
 
@@ -156,7 +155,11 @@ describe('the logging loop', () => {
 
   it('soft-deletes rather than removing rows, so deletes can sync', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId, weightKg: 100, reps: 5 })
 
     await repo.deleteSet(setId)
@@ -170,7 +173,11 @@ describe('the logging loop', () => {
 
   it('inserts a duplicated set directly after its source', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     await repo.addSet({ workoutExerciseId, weightKg: 100, reps: 5 })
     const middle = await repo.addSet({ workoutExerciseId, weightKg: 110, reps: 5 })
     await repo.addSet({ workoutExerciseId, weightKg: 120, reps: 5 })
@@ -194,12 +201,12 @@ describe('append order after a delete', () => {
     // deleting one the next add reused a position already taken and the new
     // exercise appeared mid-list instead of at the end.
     const workoutId = await repo.startWorkout()
-    const first = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const middle = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
-    const third = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+    const first = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const middle = await repo.addExerciseToWorkout(workoutId, 'back_squat', 'barbell')
+    const third = await repo.addExerciseToWorkout(workoutId, 'row', 'barbell')
 
     await repo.removeWorkoutExercise(middle)
-    const added = await repo.addExerciseToWorkout(workoutId, 'dumbbell_curl')
+    const added = await repo.addExerciseToWorkout(workoutId, 'curl', 'barbell')
 
     const rows = await repo.listWorkoutExercises(workoutId)
     expect(rows.map((r) => r.id)).toEqual([first, third, added])
@@ -212,7 +219,7 @@ describe('append order after a delete', () => {
 
   it('adds a set at the end even when a middle one was removed', async () => {
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const we = await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
     const first = await repo.addSet({ workoutExerciseId: we, weightKg: 100, reps: 5 })
     const middle = await repo.addSet({ workoutExerciseId: we, weightKg: 110, reps: 5 })
     const third = await repo.addSet({ workoutExerciseId: we, weightKg: 120, reps: 5 })
@@ -230,7 +237,11 @@ describe('append order after a delete', () => {
 describe('placeholder logging semantics (§6.2)', () => {
   it('treats a set with values as performed, with no confirm step', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId })
 
     // Fresh row: nothing typed, so nothing happened.
@@ -242,7 +253,11 @@ describe('placeholder logging semantics (§6.2)', () => {
 
   it('un-logs a set when its values are cleared', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId })
 
     await repo.logSetValues(setId, { weightKg: 150, reps: 5 })
@@ -252,7 +267,11 @@ describe('placeholder logging semantics (§6.2)', () => {
 
   it('requires duration or distance for cardio, not reps', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'treadmill_run')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'treadmill_run',
+      'machine',
+    )
     const setId = await repo.addSet({ workoutExerciseId })
 
     await repo.logSetValues(setId, { distanceM: 5000 })
@@ -261,7 +280,11 @@ describe('placeholder logging semantics (§6.2)', () => {
 
   it('discards untouched placeholder rows on finish', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const used = await repo.addSet({ workoutExerciseId })
     await repo.addSet({ workoutExerciseId })
     await repo.addSet({ workoutExerciseId })
@@ -277,8 +300,8 @@ describe('placeholder logging semantics (§6.2)', () => {
 
   it('drops an exercise that was added but never logged', async () => {
     const workoutId = await repo.startWorkout()
-    await repo.addExerciseToWorkout(workoutId, 'deadlift')
-    const usedId = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown')
+    await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
+    const usedId = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown', 'cable')
     const setId = await repo.addSet({ workoutExerciseId: usedId })
     await repo.logSetValues(setId, { weightKg: 60, reps: 10 })
 
@@ -291,7 +314,7 @@ describe('placeholder logging semantics (§6.2)', () => {
 
   it('copies last time’s numbers via confirmPlaceholder', async () => {
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
+    const firstExercise = await repo.addExerciseToWorkout(first, 'bench_press', 'barbell')
     const firstSet = await repo.addSet({
       workoutExerciseId: firstExercise,
       weightKg: 100,
@@ -301,7 +324,11 @@ describe('placeholder logging semantics (§6.2)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'barbell_bench_press')
+    const secondExercise = await repo.addExerciseToWorkout(
+      second,
+      'bench_press',
+      'barbell',
+    )
     const target = await repo.addSet({ workoutExerciseId: secondExercise })
 
     await repo.confirmPlaceholder(target)
@@ -312,13 +339,13 @@ describe('placeholder logging semantics (§6.2)', () => {
   it('confirmPlaceholder copies the repeated session’s numbers, not the latest (§7.2)', async () => {
     // An older session at 100×8, then a more recent one at 120×5.
     const older = await repo.startWorkout()
-    const olderExercise = await repo.addExerciseToWorkout(older, 'barbell_bench_press')
+    const olderExercise = await repo.addExerciseToWorkout(older, 'bench_press', 'barbell')
     const olderSet = await repo.addSet({ workoutExerciseId: olderExercise })
     await repo.logSetValues(olderSet, { weightKg: 100, reps: 8 })
     await repo.finishWorkout(older)
 
     const newer = await repo.startWorkout()
-    const newerExercise = await repo.addExerciseToWorkout(newer, 'barbell_bench_press')
+    const newerExercise = await repo.addExerciseToWorkout(newer, 'bench_press', 'barbell')
     const newerSet = await repo.addSet({ workoutExerciseId: newerExercise })
     await repo.logSetValues(newerSet, { weightKg: 120, reps: 5 })
     await repo.finishWorkout(newer)
@@ -327,7 +354,8 @@ describe('placeholder logging semantics (§6.2)', () => {
     // even though a heavier, more recent session exists.
     const repeated = await repo.repeatWorkout(older)
     expect(repeated).not.toBeNull()
-    const [target] = await repo.listSetsForWorkout(repeated!.workoutId)
+    const [we] = await repo.listWorkoutExercises(repeated!.workoutId)
+    const [target] = await repo.listSets(we!.id)
 
     await repo.confirmPlaceholder(target!.id)
     const set = await db.sets.get(target!.id)
@@ -341,7 +369,7 @@ describe('placeholder logging semantics (§6.2)', () => {
     // from earlier rows), so where the two disagreed it wrote nothing at all.
     // The row now passes what it displays.
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const we = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     const target = await repo.addSet({ workoutExerciseId: we })
 
     await repo.confirmPlaceholder(target, {
@@ -362,7 +390,7 @@ describe('placeholder logging semantics (§6.2)', () => {
     // A brand-new exercise: set 1 logged by hand, set 2's ghost can only come
     // from carry-forward. Tapping "Same" on set 2 must still fill it in.
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+    const we = await repo.addExerciseToWorkout(workoutId, 'back_squat', 'barbell')
     const first = await repo.addSet({ workoutExerciseId: we })
     await repo.logSetValues(first, { weightKg: 102, reps: 5 })
 
@@ -383,7 +411,7 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
     // numbers in the Last column, because lastPerformance caches the three
     // globally-newest sessions regardless of which workout is open.
     const older = await repo.startWorkout({ startedAt: Date.parse('2026-07-01T10:00Z') })
-    const olderWe = await repo.addExerciseToWorkout(older, 'deadlift')
+    const olderWe = await repo.addExerciseToWorkout(older, 'deadlift', 'barbell')
     await repo.logSetValues(await repo.addSet({ workoutExerciseId: olderWe }), {
       weightKg: 100,
       reps: 5,
@@ -391,7 +419,7 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
     await repo.finishWorkout(older)
 
     const middle = await repo.startWorkout({ startedAt: Date.parse('2026-07-08T10:00Z') })
-    const middleWe = await repo.addExerciseToWorkout(middle, 'deadlift')
+    const middleWe = await repo.addExerciseToWorkout(middle, 'deadlift', 'barbell')
     await repo.logSetValues(await repo.addSet({ workoutExerciseId: middleWe }), {
       weightKg: 120,
       reps: 5,
@@ -399,7 +427,7 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
     await repo.finishWorkout(middle)
 
     const newest = await repo.startWorkout({ startedAt: Date.parse('2026-07-15T10:00Z') })
-    const newestWe = await repo.addExerciseToWorkout(newest, 'deadlift')
+    const newestWe = await repo.addExerciseToWorkout(newest, 'deadlift', 'barbell')
     await repo.logSetValues(await repo.addSet({ workoutExerciseId: newestWe }), {
       weightKg: 140,
       reps: 5,
@@ -407,17 +435,17 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
     await repo.finishWorkout(newest)
 
     // Viewing the middle session: "last" is the older one, not the newest.
-    const forMiddle = await repo.getPreviousSession('deadlift', middle)
+    const forMiddle = await repo.getPreviousSession('deadlift', 'barbell', middle)
     expect(forMiddle?.workoutId).toBe(older)
     expect(forMiddle?.sets[0]?.weightKg).toBe(100)
 
     // Viewing the newest: "last" is the middle one.
-    const forNewest = await repo.getPreviousSession('deadlift', newest)
+    const forNewest = await repo.getPreviousSession('deadlift', 'barbell', newest)
     expect(forNewest?.workoutId).toBe(middle)
     expect(forNewest?.sets[0]?.weightKg).toBe(120)
 
     // The very first session has nothing before it.
-    expect(await repo.getPreviousSession('deadlift', older)).toBeNull()
+    expect(await repo.getPreviousSession('deadlift', 'barbell', older)).toBeNull()
   })
 
   it('never returns the workout being viewed, even mid-session', async () => {
@@ -426,7 +454,7 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
     const previous = await repo.startWorkout({
       startedAt: Date.parse('2026-07-01T10:00Z'),
     })
-    const previousWe = await repo.addExerciseToWorkout(previous, 'lat_pulldown')
+    const previousWe = await repo.addExerciseToWorkout(previous, 'lat_pulldown', 'cable')
     await repo.logSetValues(await repo.addSet({ workoutExerciseId: previousWe }), {
       weightKg: 60,
       reps: 10,
@@ -436,13 +464,13 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
     const current = await repo.startWorkout({
       startedAt: Date.parse('2026-07-08T10:00Z'),
     })
-    const currentWe = await repo.addExerciseToWorkout(current, 'lat_pulldown')
+    const currentWe = await repo.addExerciseToWorkout(current, 'lat_pulldown', 'cable')
     await repo.logSetValues(await repo.addSet({ workoutExerciseId: currentWe }), {
       weightKg: 81.6,
       reps: 8,
     })
 
-    const session = await repo.getPreviousSession('lat_pulldown', current)
+    const session = await repo.getPreviousSession('lat_pulldown', 'cable', current)
     expect(session?.workoutId).toBe(previous)
     expect(session?.sets[0]?.weightKg).toBe(60)
   })
@@ -450,7 +478,7 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
 
 describe('previewRecords — the PR glow (§6.2)', () => {
   it('reports nothing when no record exists yet', async () => {
-    const broken = await repo.previewRecords('deadlift', {
+    const broken = await repo.previewRecords('deadlift', 'barbell', {
       weightKg: 500,
       reps: 5,
       durationSeconds: null,
@@ -461,12 +489,16 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
   it('reports a weight record once one exists to beat', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId, weightKg: 150, reps: 5 })
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(workoutId)
 
-    const broken = await repo.previewRecords('deadlift', {
+    const broken = await repo.previewRecords('deadlift', 'barbell', {
       weightKg: 160,
       reps: 5,
       durationSeconds: null,
@@ -477,7 +509,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
   it('writes nothing — it is a preview', async () => {
     const before = await db.personalRecords.count()
-    await repo.previewRecords('deadlift', {
+    await repo.previewRecords('deadlift', 'barbell', {
       weightKg: 999,
       reps: 5,
       durationSeconds: null,
@@ -491,7 +523,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     // just set the record was then compared against its own value (180 > 180 is
     // false) and the row stopped glowing — a toast with no green row.
     const first = await repo.startWorkout()
-    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
       {},
@@ -500,7 +532,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
     // A heavier set: a genuine record.
     const second = await repo.startWorkout()
-    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
     const prSetId = await repo.addSet({
       workoutExerciseId: secondWe,
       weightKg: 180,
@@ -509,7 +541,11 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     await repo.logSetValues(prSetId, {})
 
     // Passing the set's own id excludes its own record, so it still glows.
-    const withId = await repo.previewRecords('deadlift', (await db.sets.get(prSetId))!)
+    const withId = await repo.previewRecords(
+      'deadlift',
+      'barbell',
+      (await db.sets.get(prSetId))!,
+    )
     expect(withId).toContain('max_weight')
   })
 
@@ -519,7 +555,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     // 225 cleared 185 — so each rung claimed a record on an exercise with no
     // history at all. Nothing here should glow: there is nothing to beat.
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+    const we = await repo.addExerciseToWorkout(workoutId, 'back_squat', 'barbell')
 
     const setIds: string[] = []
     for (const weightKg of [61, 84, 102]) {
@@ -530,7 +566,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
     for (const setId of setIds) {
       const set = (await db.sets.get(setId))!
-      expect(await repo.previewRecords('barbell_back_squat', set)).toEqual([])
+      expect(await repo.previewRecords('back_squat', 'barbell', set)).toEqual([])
     }
   })
 
@@ -538,7 +574,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     // Against a previous best of 150, logging 160 → 170 → 180 lit up all three:
     // each beats history, so each claimed the record while only 180 holds it.
     const first = await repo.startWorkout()
-    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
       {},
@@ -546,7 +582,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
     const ids: string[] = []
     for (const weightKg of [160, 170, 180]) {
       const setId = await repo.addSet({ workoutExerciseId: secondWe, weightKg, reps: 5 })
@@ -556,9 +592,9 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
     const glowing = await Promise.all(
       ids.map(async (id) =>
-        (await repo.previewRecords('deadlift', (await db.sets.get(id))!)).includes(
-          'max_weight',
-        ),
+        (
+          await repo.previewRecords('deadlift', 'barbell', (await db.sets.get(id))!)
+        ).includes('max_weight'),
       ),
     )
     expect(glowing).toEqual([false, false, true])
@@ -571,7 +607,7 @@ describe('personal record reporting (§6.4)', () => {
     // set 3 beats set 2's. Reporting that fired a "New personal record" toast on
     // essentially every set of a normal workout.
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown')
+    const we = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown', 'cable')
 
     const reported: string[][] = []
     for (let i = 0; i < 3; i += 1) {
@@ -591,7 +627,7 @@ describe('personal record reporting (§6.4)', () => {
     // announced a record per rung, because each set beat the running best that
     // the set before it had just written.
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
+    const we = await repo.addExerciseToWorkout(workoutId, 'back_squat', 'barbell')
 
     const reported: string[][] = []
     for (const weightKg of [61, 84, 102]) {
@@ -604,7 +640,7 @@ describe('personal record reporting (§6.4)', () => {
 
   it('announces a session’s record once, not once per improving set', async () => {
     const first = await repo.startWorkout()
-    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
       {},
@@ -612,7 +648,7 @@ describe('personal record reporting (§6.4)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
     const reported: string[][] = []
     for (const weightKg of [160, 170, 180]) {
       const setId = await repo.addSet({ workoutExerciseId: secondWe, weightKg, reps: 5 })
@@ -638,19 +674,19 @@ describe('personal record reporting (§6.4)', () => {
 
   it('does not announce during a bulk repair, which has no session', async () => {
     const workoutId = await repo.startWorkout()
-    const we = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const we = await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: we, weightKg: 200, reps: 5 }),
       {},
     )
     await repo.finishWorkout(workoutId)
 
-    expect(await repo.refreshPersonalRecords('deadlift')).toEqual([])
+    expect(await repo.refreshPersonalRecords('deadlift', 'barbell')).toEqual([])
   })
 
   it('still announces a genuine weight record', async () => {
     const first = await repo.startWorkout()
-    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift')
+    const firstWe = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: firstWe, weightKg: 150, reps: 5 }),
       {},
@@ -658,7 +694,7 @@ describe('personal record reporting (§6.4)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift')
+    const secondWe = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
     const broken = await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: secondWe, weightKg: 180, reps: 5 }),
       {},
@@ -670,9 +706,9 @@ describe('personal record reporting (§6.4)', () => {
 describe('supersets by drag (§6.4)', () => {
   it('groups two exercises and makes them adjacent', async () => {
     const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const middle = await repo.addExerciseToWorkout(workoutId, 'barbell_back_squat')
-    const c = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+    const a = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const middle = await repo.addExerciseToWorkout(workoutId, 'back_squat', 'barbell')
+    const c = await repo.addExerciseToWorkout(workoutId, 'row', 'barbell')
 
     // Drag the third card onto the first.
     await repo.supersetExercises(c, a)
@@ -687,9 +723,9 @@ describe('supersets by drag (§6.4)', () => {
 
   it('extends an existing group rather than starting a new one', async () => {
     const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
-    const c = await repo.addExerciseToWorkout(workoutId, 'dumbbell_curl')
+    const a = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const b = await repo.addExerciseToWorkout(workoutId, 'row', 'barbell')
+    const c = await repo.addExerciseToWorkout(workoutId, 'curl', 'barbell')
 
     await repo.supersetExercises(b, a)
     await repo.supersetExercises(c, b)
@@ -702,8 +738,8 @@ describe('supersets by drag (§6.4)', () => {
 
   it('ungroups the partner when a superset drops to one member', async () => {
     const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+    const a = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const b = await repo.addExerciseToWorkout(workoutId, 'row', 'barbell')
     await repo.supersetExercises(b, a)
 
     await repo.removeFromSuperset(b)
@@ -718,8 +754,8 @@ describe('supersets by drag (§6.4)', () => {
     // badge. Only removeFromSuperset collapsed a group of one; deletion is the
     // other way a group can shrink.
     const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
+    const a = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const b = await repo.addExerciseToWorkout(workoutId, 'row', 'barbell')
     await repo.supersetExercises(b, a)
 
     await repo.removeWorkoutExercise(b)
@@ -731,9 +767,9 @@ describe('supersets by drag (§6.4)', () => {
 
   it('keeps a three-way group intact when one member is deleted', async () => {
     const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
-    const c = await repo.addExerciseToWorkout(workoutId, 'dumbbell_curl')
+    const a = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const b = await repo.addExerciseToWorkout(workoutId, 'row', 'barbell')
+    const c = await repo.addExerciseToWorkout(workoutId, 'curl', 'barbell')
     await repo.supersetExercises(b, a)
     await repo.supersetExercises(c, b)
 
@@ -746,7 +782,7 @@ describe('supersets by drag (§6.4)', () => {
 
   it('ignores a card dropped on itself', async () => {
     const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const a = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     await repo.supersetExercises(a, a)
     const rows = await repo.listWorkoutExercises(workoutId)
     expect(rows[0]!.supersetGroup).toBeNull()
@@ -756,7 +792,7 @@ describe('supersets by drag (§6.4)', () => {
 describe('session title signals (§6.7)', () => {
   it('emits one signal per working set with its region and pattern', async () => {
     const workoutId = await repo.startWorkout()
-    const benchId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const benchId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     for (const reps of [8, 8]) {
       const setId = await repo.addSet({ workoutExerciseId: benchId, weightKg: 100, reps })
       await repo.logSetValues(setId, {})
@@ -775,13 +811,13 @@ describe('getBadgeStats', () => {
   it('reports best big-three e1RMs, cardio totals, and variety', async () => {
     // Bench: 100 kg × 5 → Epley e1RM ≈ 116.7 kg, recorded as a PR.
     const w = await repo.startWorkout({ title: 'Full' })
-    const bench = await repo.addExerciseToWorkout(w, 'barbell_bench_press')
+    const bench = await repo.addExerciseToWorkout(w, 'bench_press', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps: 5 }),
       {},
     )
     // A cardio interval: 5 km in 25 min.
-    const run = await repo.addExerciseToWorkout(w, 'treadmill_run')
+    const run = await repo.addExerciseToWorkout(w, 'treadmill_run', 'machine')
     await repo.logSetValues(await repo.addSet({ workoutExerciseId: run }), {
       distanceM: 5000,
       durationSeconds: 1500,
@@ -831,7 +867,7 @@ describe('createTemplatesFromPlan (§13)', () => {
 
     const tes = await repo.listTemplateExercises(result.templateIds[0]!)
     expect(tes).toHaveLength(1)
-    expect(tes[0]!.exerciseId).toBe('barbell_bench_press')
+    expect(tes[0]!.exerciseId).toBe('bench_press')
     expect(tes[0]!.targetRepsLow).toBe(5)
     // 225 lb stored back as kg (~102).
     expect(tes[0]!.targetWeightKg).toBeCloseTo(102, 0)
@@ -841,7 +877,7 @@ describe('createTemplatesFromPlan (§13)', () => {
 describe('getCoachSummary', () => {
   it('produces a de-identified summary from logged history', async () => {
     const w = await repo.startWorkout({ title: 'Push' })
-    const bench = await repo.addExerciseToWorkout(w, 'barbell_bench_press')
+    const bench = await repo.addExerciseToWorkout(w, 'bench_press', 'barbell')
     for (const reps of [10, 10]) {
       await repo.logSetValues(
         await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps }),
@@ -852,7 +888,7 @@ describe('getCoachSummary', () => {
 
     const summary = await repo.getCoachSummary()
     expect(summary.totalWorkouts).toBe(1)
-    expect(summary.exercises[0]!.name).toBe('Barbell Bench Press')
+    expect(summary.exercises[0]!.name).toBe('Bench Press')
     expect(summary.weeks[0]!.weekOffset).toBe(0)
     // The privacy contract holds end-to-end: nothing identifying serializes.
     const json = JSON.stringify(summary)
@@ -868,12 +904,11 @@ describe('getCoachSummary', () => {
 })
 
 describe('listWorkoutSummaries — batched load', () => {
-  it('matches the per-workout builder exactly for a mixed history', async () => {
+  it('buckets each exercise and its sets to the right workout', async () => {
     // Two sessions of different shapes, so a batching bug (wrong exercise
-    // bucketed to the wrong workout, or unsorted sets) would surface as a
-    // divergence from the trusted single-workout path.
+    // bucketed to the wrong workout, or unsorted sets) would surface here.
     const a = await repo.startWorkout({ title: 'Push' })
-    const bench = await repo.addExerciseToWorkout(a, 'barbell_bench_press')
+    const bench = await repo.addExerciseToWorkout(a, 'bench_press', 'barbell')
     for (const reps of [8, 6]) {
       const id = await repo.addSet({ workoutExerciseId: bench, weightKg: 100, reps })
       await repo.logSetValues(id, {})
@@ -881,19 +916,18 @@ describe('listWorkoutSummaries — batched load', () => {
     await repo.finishWorkout(a)
 
     const b = await repo.startWorkout({ title: 'Pull' })
-    const row = await repo.addExerciseToWorkout(b, 'lat_pulldown')
+    const row = await repo.addExerciseToWorkout(b, 'lat_pulldown', 'cable')
     const setId = await repo.addSet({ workoutExerciseId: row, weightKg: 60, reps: 10 })
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(b)
 
-    const batched = await repo.listWorkoutSummaries(100)
-    // The trusted reference: build each summary one at a time.
-    const oneByOne = await Promise.all(
-      batched.map((s) => repo.getWorkoutSummary(s.workout)),
-    )
-
-    expect(batched).toHaveLength(2)
-    expect(batched).toEqual(oneByOne)
+    const byId = new Map((await repo.listWorkoutSummaries(100)).map((s) => [s.title, s]))
+    expect(byId.size).toBe(2)
+    expect(byId.get('Push')!.exerciseIds).toEqual(['bench_press'])
+    expect(byId.get('Push')!.setCount).toBe(2)
+    expect(byId.get('Push')!.workingSetsByRegion.chest).toBe(2)
+    expect(byId.get('Pull')!.exerciseIds).toEqual(['lat_pulldown'])
+    expect(byId.get('Pull')!.setCount).toBe(1)
   })
 
   it('returns an empty list for an empty history without querying', async () => {
@@ -902,7 +936,7 @@ describe('listWorkoutSummaries — batched load', () => {
 
   it('carries exercise ids so History can filter by a specific lift', async () => {
     const w = await repo.startWorkout({ title: 'Pull' })
-    const row = await repo.addExerciseToWorkout(w, 'lat_pulldown')
+    const row = await repo.addExerciseToWorkout(w, 'lat_pulldown', 'cable')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: row, weightKg: 60, reps: 10 }),
       {},
@@ -917,7 +951,7 @@ describe('listWorkoutSummaries — batched load', () => {
 
   it('carries per-region working-set counts so Home needs no second scan', async () => {
     const w = await repo.startWorkout({ title: 'Push' })
-    const bench = await repo.addExerciseToWorkout(w, 'barbell_bench_press')
+    const bench = await repo.addExerciseToWorkout(w, 'bench_press', 'barbell')
     for (const reps of [8, 8, 8]) {
       await repo.logSetValues(
         await repo.addSet({ workoutExerciseId: bench, weightKg: 80, reps }),
@@ -935,7 +969,11 @@ describe('listWorkoutSummaries — batched load', () => {
 describe('repeating a workout from history (§7.2)', () => {
   it('copies the structure without the numbers', async () => {
     const source = await repo.startWorkout({ title: 'Pull A' })
-    const sourceExercise = await repo.addExerciseToWorkout(source, 'lat_pulldown')
+    const sourceExercise = await repo.addExerciseToWorkout(
+      source,
+      'lat_pulldown',
+      'cable',
+    )
     for (const reps of [10, 9]) {
       const setId = await repo.addSet({
         workoutExerciseId: sourceExercise,
@@ -964,7 +1002,11 @@ describe('repeating a workout from history (§7.2)', () => {
 
   it('creates no template row', async () => {
     const source = await repo.startWorkout({ title: 'Pull A' })
-    const sourceExercise = await repo.addExerciseToWorkout(source, 'lat_pulldown')
+    const sourceExercise = await repo.addExerciseToWorkout(
+      source,
+      'lat_pulldown',
+      'cable',
+    )
     const setId = await repo.addSet({
       workoutExerciseId: sourceExercise,
       weightKg: 60,
@@ -982,7 +1024,7 @@ describe('last performance and pre-fill', () => {
   it('pre-fills from the same set index of the previous session', async () => {
     // Session one: 3 sets of increasing weight.
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
+    const firstExercise = await repo.addExerciseToWorkout(first, 'bench_press', 'barbell')
     for (const [weightKg, reps] of [
       [100, 8],
       [105, 6],
@@ -998,29 +1040,33 @@ describe('last performance and pre-fill', () => {
     await repo.finishWorkout(first)
 
     // Each index should recall that index's numbers, not a session average.
-    expect(await repo.getPrefillForSet('barbell_bench_press', 0)).toMatchObject({
+    expect(await repo.getPrefillForSet('bench_press', 'barbell', 0)).toMatchObject({
       weightKg: 100,
       reps: 8,
     })
-    expect(await repo.getPrefillForSet('barbell_bench_press', 1)).toMatchObject({
+    expect(await repo.getPrefillForSet('bench_press', 'barbell', 1)).toMatchObject({
       weightKg: 105,
       reps: 6,
     })
     // Beyond what was done last time, fall back to the final set.
-    expect(await repo.getPrefillForSet('barbell_bench_press', 5)).toMatchObject({
+    expect(await repo.getPrefillForSet('bench_press', 'barbell', 5)).toMatchObject({
       weightKg: 110,
       reps: 5,
     })
   })
 
   it('has nothing to pre-fill for a first-ever exercise', async () => {
-    expect(await repo.getPrefillForSet('barbell_bench_press', 0)).toBeNull()
+    expect(await repo.getPrefillForSet('bench_press', 'barbell', 0)).toBeNull()
   })
 
   it('keeps only the last three sessions in the cache', async () => {
     for (let session = 0; session < 5; session += 1) {
       const workoutId = await repo.startWorkout()
-      const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+      const workoutExerciseId = await repo.addExerciseToWorkout(
+        workoutId,
+        'deadlift',
+        'barbell',
+      )
       const setId = await repo.addSet({
         workoutExerciseId,
         weightKg: 100 + session * 5,
@@ -1030,7 +1076,7 @@ describe('last performance and pre-fill', () => {
       await repo.finishWorkout(workoutId)
     }
 
-    const cache = await repo.getLastPerformance('deadlift')
+    const cache = await repo.getLastPerformance('deadlift', 'barbell')
     expect(cache?.sessions).toHaveLength(3)
     // Most recent first, so the header reads the latest session.
     expect(cache!.sessions[0]!.sets[0]!.weightKg).toBe(120)
@@ -1042,7 +1088,11 @@ describe('personal records', () => {
     // Technically it sets every record, but there was nothing to beat, and
     // badging it would make the very first set of every exercise a celebration.
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId, weightKg: 150, reps: 5 })
 
     expect(await repo.logSetValues(setId, {})).toEqual([])
@@ -1052,7 +1102,7 @@ describe('personal records', () => {
 
   it('reports a record once a previous one exists to beat', async () => {
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift')
+    const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
     const firstSet = await repo.addSet({
       workoutExerciseId: firstExercise,
       weightKg: 150,
@@ -1062,7 +1112,7 @@ describe('personal records', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'deadlift')
+    const secondExercise = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
     const secondSet = await repo.addSet({
       workoutExerciseId: secondExercise,
       weightKg: 160,
@@ -1078,7 +1128,11 @@ describe('personal records', () => {
     // This is the §6.6 requirement: a correction must be able to invalidate a PR,
     // which an incremental "is this better?" check could never do.
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId, weightKg: 200, reps: 5 })
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(workoutId)
@@ -1088,7 +1142,7 @@ describe('personal records', () => {
 
     // Fat-fingered 200 when it was really 100.
     await repo.updateSet(setId, { weightKg: 100 })
-    await repo.refreshPersonalRecords('deadlift')
+    await repo.refreshPersonalRecords('deadlift', 'barbell')
 
     records = await repo.listPersonalRecords('deadlift')
     expect(records.find((r) => r.recordType === 'max_weight')?.value).toBe(100)
@@ -1096,33 +1150,35 @@ describe('personal records', () => {
 
   it('drops records from a deleted workout', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId, weightKg: 200, reps: 5 })
     await repo.logSetValues(setId, {})
 
     await repo.deleteWorkout(workoutId)
-    await repo.refreshPersonalRecords('deadlift')
+    await repo.refreshPersonalRecords('deadlift', 'barbell')
 
     expect(await repo.listPersonalRecords('deadlift')).toHaveLength(0)
   })
 })
 
 describe('custom exercises', () => {
-  it('derives the movement pattern from the chosen muscle', async () => {
+  it('derives the movement pattern from the chosen body part', async () => {
     // The create form no longer asks for a pattern (§4.3), so this is the only
     // thing standing between a custom cardio exercise and a weight-and-reps UI.
     const treadmill = await repo.createExercise({
       name: 'Rower Intervals',
-      primaryMuscleId: 'cardiovascular',
-      equipment: 'machine',
+      region: 'cardio',
       trackingType: 'distance_time',
     })
     expect((await db.exercises.get(treadmill))?.movementPattern).toBe('cardio')
 
     const press = await repo.createExercise({
       name: 'Landmine Press',
-      primaryMuscleId: 'front_delt',
-      equipment: 'barbell',
+      region: 'shoulders',
       trackingType: 'weight_reps',
     })
     expect((await db.exercises.get(press))?.movementPattern).toBe('push')
@@ -1131,8 +1187,7 @@ describe('custom exercises', () => {
   it('creates one that flows into the library', async () => {
     const exerciseId = await repo.createExercise({
       name: 'Cable Rear Delt Row',
-      primaryMuscleId: 'rear_delt',
-      equipment: 'cable',
+      region: 'shoulders',
       trackingType: 'weight_reps',
     })
 
@@ -1147,7 +1202,11 @@ describe('custom exercises', () => {
 describe('templates', () => {
   it('captures a finished session, targets included', async () => {
     const workoutId = await repo.startWorkout({ title: 'Pull A' })
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'lat_pulldown',
+      'cable',
+    )
     for (const reps of [10, 9, 8]) {
       const setId = await repo.addSet({ workoutExerciseId, weightKg: 60, reps })
       await repo.logSetValues(setId, {})
@@ -1168,7 +1227,11 @@ describe('templates', () => {
 
   it('instantiates as an unchecked checklist', async () => {
     const source = await repo.startWorkout({ title: 'Pull A' })
-    const sourceExercise = await repo.addExerciseToWorkout(source, 'lat_pulldown')
+    const sourceExercise = await repo.addExerciseToWorkout(
+      source,
+      'lat_pulldown',
+      'cable',
+    )
     for (const reps of [10, 10, 10]) {
       const setId = await repo.addSet({
         workoutExerciseId: sourceExercise,
@@ -1194,14 +1257,18 @@ describe('templates', () => {
     expect(sets.every((s) => s.weightKg === null && s.reps === null)).toBe(true)
 
     // …and history still supplies what to suggest for the first set.
-    expect(await repo.getPrefillForSet('lat_pulldown', 0)).toMatchObject({
+    expect(await repo.getPrefillForSet('lat_pulldown', 'cable', 0)).toMatchObject({
       weightKg: 60,
     })
   })
 
   it('records template provenance for adherence charts', async () => {
     const source = await repo.startWorkout()
-    const sourceExercise = await repo.addExerciseToWorkout(source, 'lat_pulldown')
+    const sourceExercise = await repo.addExerciseToWorkout(
+      source,
+      'lat_pulldown',
+      'cable',
+    )
     const setId = await repo.addSet({ workoutExerciseId: sourceExercise })
     await repo.logSetValues(setId, { weightKg: 60, reps: 10 })
     await repo.finishWorkout(source)
@@ -1223,7 +1290,11 @@ describe('empty workouts are never saved (§6.4.1)', () => {
   it('discards a session with exercises but no logged sets', async () => {
     // The common accident: open a workout, add an exercise, put the phone away.
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     await repo.addSet({ workoutExerciseId })
     await repo.addSet({ workoutExerciseId })
 
@@ -1233,7 +1304,11 @@ describe('empty workouts are never saved (§6.4.1)', () => {
 
   it('keeps a session with even one logged set', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId })
     await repo.logSetValues(setId, { weightKg: 100, reps: 5 })
 
@@ -1243,7 +1318,7 @@ describe('empty workouts are never saved (§6.4.1)', () => {
 
   it('leaves an empty discarded session out of history', async () => {
     const kept = await repo.startWorkout()
-    const keptExercise = await repo.addExerciseToWorkout(kept, 'deadlift')
+    const keptExercise = await repo.addExerciseToWorkout(kept, 'deadlift', 'barbell')
     const setId = await repo.addSet({ workoutExerciseId: keptExercise })
     await repo.logSetValues(setId, { weightKg: 100, reps: 5 })
     await repo.finishWorkout(kept)
@@ -1260,7 +1335,7 @@ describe('empty workouts are never saved (§6.4.1)', () => {
 describe('placeholder resolution (§6.2)', () => {
   it('suggests the matching set index from history', async () => {
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
+    const firstExercise = await repo.addExerciseToWorkout(first, 'bench_press', 'barbell')
     for (const [weightKg, reps] of [
       [100, 8],
       [100, 7],
@@ -1275,7 +1350,7 @@ describe('placeholder resolution (§6.2)', () => {
     await repo.finishWorkout(first)
 
     // Set 0 of a fresh session suggests set 0 from history.
-    const prefill = await repo.getPrefillForSet('barbell_bench_press', 0)
+    const prefill = await repo.getPrefillForSet('bench_press', 'barbell', 0)
     expect(prefill).toMatchObject({ weightKg: 100, reps: 8 })
   })
 
@@ -1283,7 +1358,7 @@ describe('placeholder resolution (§6.2)', () => {
     // History has 2 sets; a 3rd should suggest what was just done this session
     // rather than going blank at the moment the user is most tired.
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'barbell_bench_press')
+    const firstExercise = await repo.addExerciseToWorkout(first, 'bench_press', 'barbell')
     for (const [weightKg, reps] of [
       [100, 8],
       [100, 7],
@@ -1298,7 +1373,11 @@ describe('placeholder resolution (§6.2)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'barbell_bench_press')
+    const secondExercise = await repo.addExerciseToWorkout(
+      second,
+      'bench_press',
+      'barbell',
+    )
     for (const [weightKg, reps] of [
       [105, 8],
       [105, 6],
@@ -1314,18 +1393,18 @@ describe('placeholder resolution (§6.2)', () => {
 
     // Index 2 is past the 2 sets of history, so it carries forward set index 1
     // of *this* session (105 × 6).
-    const prefill = await repo.getPrefillForSet('barbell_bench_press', 2, current)
+    const prefill = await repo.getPrefillForSet('bench_press', 'barbell', 2, current)
     expect(prefill).toMatchObject({ weightKg: 105, reps: 6 })
   })
 
   it('has no placeholder for a first-ever exercise', async () => {
-    const prefill = await repo.getPrefillForSet('deadlift', 0)
+    const prefill = await repo.getPrefillForSet('deadlift', 'barbell', 0)
     expect(prefill).toBeNull()
   })
 
   it('addSetWithPlaceholder adds an unlogged row', async () => {
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift')
+    const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
     const seed = await repo.addSet({
       workoutExerciseId: firstExercise,
       weightKg: 150,
@@ -1335,7 +1414,7 @@ describe('placeholder resolution (§6.2)', () => {
     await repo.finishWorkout(first)
 
     const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'deadlift')
+    const secondExercise = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
     const { setId } = await repo.addSetWithPlaceholder(secondExercise, 'deadlift')
 
     // The suggestion is resolved live in the UI — the added row is still unlogged.
@@ -1365,26 +1444,14 @@ describe('body metrics', () => {
   })
 })
 
-describe('supersets', () => {
-  it('groups and ungroups exercises', async () => {
-    const workoutId = await repo.startWorkout()
-    const a = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    const b = await repo.addExerciseToWorkout(workoutId, 'barbell_row')
-
-    await repo.setSupersetGroup([a, b], 1)
-    let rows = await repo.listWorkoutExercises(workoutId)
-    expect(rows.every((r) => r.supersetGroup === 1)).toBe(true)
-
-    await repo.setSupersetGroup([a, b], null)
-    rows = await repo.listWorkoutExercises(workoutId)
-    expect(rows.every((r) => r.supersetGroup === null)).toBe(true)
-  })
-})
-
 describe('cardio', () => {
   it('logs distance and duration without inflating lifting volume', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'treadmill_run')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'treadmill_run',
+      'machine',
+    )
     const setId = await repo.addSet({
       workoutExerciseId,
       durationSeconds: 1800,
@@ -1393,7 +1460,7 @@ describe('cardio', () => {
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(workoutId)
 
-    const cache = await repo.getLastPerformance('treadmill_run')
+    const cache = await repo.getLastPerformance('treadmill_run', 'machine')
     expect(cache?.sessions[0]?.sets[0]).toMatchObject({
       durationSeconds: 1800,
       distanceM: 5000,
@@ -1404,7 +1471,11 @@ describe('cardio', () => {
 
   it('tracks distance and duration records', async () => {
     const first = await repo.startWorkout()
-    const firstExercise = await repo.addExerciseToWorkout(first, 'treadmill_run')
+    const firstExercise = await repo.addExerciseToWorkout(
+      first,
+      'treadmill_run',
+      'machine',
+    )
     const firstSet = await repo.addSet({
       workoutExerciseId: firstExercise,
       durationSeconds: 1800,
@@ -1415,7 +1486,11 @@ describe('cardio', () => {
 
     // A longer run beats the stored distance record.
     const second = await repo.startWorkout()
-    const secondExercise = await repo.addExerciseToWorkout(second, 'treadmill_run')
+    const secondExercise = await repo.addExerciseToWorkout(
+      second,
+      'treadmill_run',
+      'machine',
+    )
     const secondSet = await repo.addSet({
       workoutExerciseId: secondExercise,
       durationSeconds: 2400,
@@ -1431,7 +1506,11 @@ describe('cardio', () => {
 describe('editing a past workout', () => {
   it('applies an edit and refreshes the cached last performance', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const setId = await repo.addSet({ workoutExerciseId, weightKg: 140, reps: 5 })
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(workoutId)
@@ -1440,13 +1519,17 @@ describe('editing a past workout', () => {
     await repo.updateSet(setId, { weightKg: 145 })
     await repo.rebuildLastPerformanceForWorkout(workoutId)
 
-    const cache = await repo.getLastPerformance('deadlift')
+    const cache = await repo.getLastPerformance('deadlift', 'barbell')
     expect(cache?.sessions[0]?.sets[0]?.weightKg).toBe(145)
   })
 
   it('supports adding a set that was forgotten at the time', async () => {
     const workoutId = await repo.startWorkout()
-    const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      'deadlift',
+      'barbell',
+    )
     const first = await repo.addSet({ workoutExerciseId, weightKg: 140, reps: 5 })
     await repo.logSetValues(first, {})
     await repo.finishWorkout(workoutId)
@@ -1470,7 +1553,7 @@ describe('exercise notes', () => {
     // "seat on 4" belongs to the exercise forever. Folding them together meant a
     // one-off observation followed the exercise around.
     const first = await repo.startWorkout()
-    const firstWe = await repo.addExerciseToWorkout(first, 'lat_pulldown')
+    const firstWe = await repo.addExerciseToWorkout(first, 'lat_pulldown', 'cable')
     await repo.updateWorkoutExercise(firstWe, { notes: 'Felt heavy' })
     await repo.updateExercise('lat_pulldown', { notes: 'Seat on 4' })
 
@@ -1478,7 +1561,7 @@ describe('exercise notes', () => {
 
     // A later session starts with no note of its own but keeps the global one.
     const second = await repo.startWorkout()
-    const secondWe = await repo.addExerciseToWorkout(second, 'lat_pulldown')
+    const secondWe = await repo.addExerciseToWorkout(second, 'lat_pulldown', 'cable')
     expect((await repo.getWorkoutExercise(secondWe))?.notes).toBe('')
     expect((await db.exercises.get('lat_pulldown'))?.notes).toBe('Seat on 4')
   })
@@ -1488,7 +1571,7 @@ describe('cancelling an edit to a past workout (§6.6)', () => {
   /** A finished single-set workout, ready to edit. */
   async function loggedWorkout() {
     const workoutId = await repo.startWorkout({ title: 'Pull A' })
-    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
     const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 140, reps: 5 })
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(workoutId)
@@ -1502,7 +1585,11 @@ describe('cancelling an edit to a past workout (§6.6)', () => {
     // The three kinds of damage an accidental tap can do.
     await repo.logSetValues(setId, { weightKg: 999 })
     const added = await repo.addSet({ workoutExerciseId: weId, weightKg: 5, reps: 1 })
-    const addedExercise = await repo.addExerciseToWorkout(workoutId, 'lat_pulldown')
+    const addedExercise = await repo.addExerciseToWorkout(
+      workoutId,
+      'lat_pulldown',
+      'cable',
+    )
     await repo.updateWorkout(workoutId, { title: 'Oops' })
 
     await repo.cancelWorkoutEdits(workoutId)
@@ -1540,6 +1627,42 @@ describe('cancelling an edit to a past workout (§6.6)', () => {
     await repo.commitWorkoutEdits(workoutId)
     const released = await db.outbox.toArray()
     expect(released.every((e) => e.deferredForWorkoutId === undefined)).toBe(true)
+  })
+
+  it('releases a discarded session’s held writes, so its children keep a parent', async () => {
+    // Discarding tombstones the workout, and the tombstone is not itself deferred
+    // — so leaving the inserts held would push a delete for a workout the server
+    // never received, then strand its exercises and sets with no parent row.
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    expect((await db.outbox.toArray()).some((e) => e.deferredForWorkoutId)).toBe(true)
+
+    await repo.deleteWorkout(workoutId)
+
+    expect(await db.outbox.where('deferredForWorkoutId').equals(workoutId).count()).toBe(
+      0,
+    )
+  })
+
+  it('sweeps deferrals stranded by an earlier build, but leaves live ones alone', async () => {
+    const staleId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(staleId, 'bench_press', 'barbell')
+    await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    // Simulate the old bug: the workout is gone but its writes stayed held.
+    await db.workouts.update(staleId, { deletedAt: Date.now() })
+
+    const liveId = await repo.startWorkout()
+    await repo.addExerciseToWorkout(liveId, 'deadlift', 'barbell')
+
+    const released = await repo.releaseStrandedDeferrals()
+
+    expect(released).toBeGreaterThan(0)
+    expect(await db.outbox.where('deferredForWorkoutId').equals(staleId).count()).toBe(0)
+    // The session still in progress keeps its deferral.
+    expect(
+      await db.outbox.where('deferredForWorkoutId').equals(liveId).count(),
+    ).toBeGreaterThan(0)
   })
 
   it('discards the queued writes on cancel, so nothing is ever sent', async () => {
@@ -1585,22 +1708,13 @@ describe('cancelling an edit to a past workout (§6.6)', () => {
 
     expect((await db.sets.get(setId))?.weightKg).toBe(140)
   })
-
-  it('reports whether an edit is open', async () => {
-    const { workoutId } = await loggedWorkout()
-    expect(await repo.isEditingWorkout(workoutId)).toBe(false)
-    await repo.beginWorkoutEdits(workoutId)
-    expect(await repo.isEditingWorkout(workoutId)).toBe(true)
-    await repo.commitWorkoutEdits(workoutId)
-    expect(await repo.isEditingWorkout(workoutId)).toBe(false)
-  })
 })
 
 describe('templates (§7)', () => {
   it('creates, edits, and previews a template without touching workouts', async () => {
     const templateId = await repo.createTemplate('Push A')
     await repo.updateTemplate(templateId, { folder: 'PPL' })
-    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_bench_press')
+    const teId = await repo.addExerciseToTemplate(templateId, 'bench_press', 'barbell')
     await repo.updateTemplateExercise(teId, {
       targetSets: 3,
       targetRepsLow: 8,
@@ -1617,7 +1731,7 @@ describe('templates (§7)', () => {
 
   it('instantiating a template seeds planned sets with target-based placeholders', async () => {
     const templateId = await repo.createTemplate('Legs')
-    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_back_squat')
+    const teId = await repo.addExerciseToTemplate(templateId, 'back_squat', 'barbell')
     await repo.updateTemplateExercise(teId, {
       targetSets: 2,
       targetRepsLow: 5,
@@ -1637,7 +1751,7 @@ describe('templates (§7)', () => {
 
   it('applies a progression rule at instantiation after a top-of-range session', async () => {
     const templateId = await repo.createTemplate('Push')
-    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_bench_press')
+    const teId = await repo.addExerciseToTemplate(templateId, 'bench_press', 'barbell')
     await repo.updateTemplateExercise(teId, {
       targetSets: 2,
       targetRepsLow: 8,
@@ -1664,7 +1778,7 @@ describe('templates (§7)', () => {
 
   it('holds the progression weight after a session that missed the range', async () => {
     const templateId = await repo.createTemplate('Push')
-    const teId = await repo.addExerciseToTemplate(templateId, 'barbell_bench_press')
+    const teId = await repo.addExerciseToTemplate(templateId, 'bench_press', 'barbell')
     await repo.updateTemplateExercise(teId, {
       targetSets: 2,
       targetRepsLow: 8,
@@ -1690,12 +1804,12 @@ describe('templates (§7)', () => {
 
   it('editing a template never rewrites a workout already started from it', async () => {
     const templateId = await repo.createTemplate('Pull')
-    await repo.addExerciseToTemplate(templateId, 'barbell_row')
+    await repo.addExerciseToTemplate(templateId, 'row', 'barbell')
     const workoutId = await repo.startWorkoutFromTemplate(templateId)
     const before = await repo.listWorkoutExercises(workoutId)
 
     // Add another exercise to the *template* after the workout exists.
-    await repo.addExerciseToTemplate(templateId, 'lat_pulldown')
+    await repo.addExerciseToTemplate(templateId, 'lat_pulldown', 'cable')
 
     const after = await repo.listWorkoutExercises(workoutId)
     expect(after.map((r) => r.exerciseId)).toEqual(before.map((r) => r.exerciseId))
@@ -1703,7 +1817,7 @@ describe('templates (§7)', () => {
 
   it('a deleted template disappears from the list but its workouts remain', async () => {
     const templateId = await repo.createTemplate('Throwaway')
-    await repo.addExerciseToTemplate(templateId, 'deadlift')
+    await repo.addExerciseToTemplate(templateId, 'deadlift', 'barbell')
     const workoutId = await repo.startWorkoutFromTemplate(templateId)
 
     await repo.deleteTemplate(templateId)
@@ -1726,8 +1840,7 @@ describe('active user id + local data reset', () => {
 
     const exId = await repo.createExercise({
       name: 'My Lift',
-      primaryMuscleId: 'mid_chest',
-      equipment: 'barbell',
+      region: 'chest',
       trackingType: 'weight_reps',
     })
     expect((await db.exercises.get(exId))?.userId).toBe(
@@ -1740,14 +1853,13 @@ describe('active user id + local data reset', () => {
 
     // A device-only user logs a workout, a set, a template, and a custom lift.
     const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
     await repo.logSetValues(setId, {})
     const templateId = await repo.createTemplate('Push', null)
     const customExId = await repo.createExercise({
       name: 'My Lift',
-      primaryMuscleId: 'mid_chest',
-      equipment: 'barbell',
+      region: 'chest',
       trackingType: 'weight_reps',
     })
 
@@ -1778,7 +1890,7 @@ describe('active user id + local data reset', () => {
       true,
     )
     // A system library row is never re-owned.
-    const benchExists = queued.some((e) => e.rowId === 'barbell_bench_press')
+    const benchExists = queued.some((e) => e.rowId === 'bench_press')
     expect(benchExists).toBe(false)
   })
 
@@ -1794,7 +1906,7 @@ describe('active user id + local data reset', () => {
     await seedIfNeeded()
     expect(await repo.assertDbOwner(A)).toBe(false)
     const workoutId = await repo.startWorkout()
-    await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     expect((await repo.listWorkouts()).length).toBe(1)
 
     // Account B signs in on the same device.
@@ -1885,7 +1997,7 @@ describe('active user id + local data reset', () => {
   it('purgeEmptyWorkouts removes finished sessions with no completed set', async () => {
     // A real session with logged work.
     const realId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(realId, 'barbell_bench_press')
+    const weId = await repo.addExerciseToWorkout(realId, 'bench_press', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
       {},
@@ -1895,7 +2007,7 @@ describe('active user id + local data reset', () => {
     // An empty finished session, as a pull from an older build would produce.
     // (finishWorkout would have discarded it, so write the end directly.)
     const emptyId = await repo.startWorkout()
-    await repo.addExerciseToWorkout(emptyId, 'deadlift')
+    await repo.addExerciseToWorkout(emptyId, 'deadlift', 'barbell')
     await repo.updateWorkout(emptyId, { endedAt: Date.now() })
 
     // An in-progress session must never be touched.
@@ -1908,63 +2020,16 @@ describe('active user id + local data reset', () => {
     expect((await db.workouts.get(activeId))?.deletedAt).toBeNull()
   })
 
-  it('deleteAllTrainingData tombstones everything through the outbox so deletes sync', async () => {
-    const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
-    await repo.logSetValues(
-      await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
-      {},
-    )
-    await repo.finishWorkout(workoutId)
-    const templateId = await repo.createTemplate('Test Push', null)
-    const customExId = await repo.createExercise({
-      name: 'Fake Lift',
-      primaryMuscleId: 'mid_chest',
-      equipment: 'barbell',
-      trackingType: 'weight_reps',
-    })
-
-    await db.outbox.clear() // isolate the deletes' own queue entries
-    const counts = await repo.deleteAllTrainingData()
-
-    expect(counts.workouts).toBe(1)
-    expect(counts.templates).toBe(1)
-    expect(counts.customExercises).toBe(1)
-
-    // Tombstoned, not hard-deleted — that's what lets the delete replicate.
-    expect((await db.workouts.get(workoutId))?.deletedAt).not.toBeNull()
-    expect((await db.templates.get(templateId))?.deletedAt).not.toBeNull()
-    expect((await db.exercises.get(customExId))?.deletedAt).not.toBeNull()
-    // Gone from the read paths.
-    expect(await repo.listTemplates()).toHaveLength(0)
-    expect((await repo.listWorkouts()).some((w) => w.id === workoutId)).toBe(false)
-
-    // Every deletion is queued for the server — the whole point.
-    const queued = await db.outbox.toArray()
-    expect(queued.some((e) => e.table === 'workouts' && e.rowId === workoutId)).toBe(true)
-    expect(queued.some((e) => e.table === 'templates' && e.rowId === templateId)).toBe(
-      true,
-    )
-    expect(queued.some((e) => e.table === 'exercises' && e.rowId === customExId)).toBe(
-      true,
-    )
-
-    // The system library survives — it isn't user data.
-    expect(await db.exercises.get('barbell_bench_press')).toBeDefined()
-    expect((await db.exercises.get('barbell_bench_press'))?.deletedAt).toBeNull()
-  })
-
   it('clearLocalData wipes training data and queues but keeps the system library', async () => {
     const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     await repo.logSetValues(
       await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 }),
       {},
     )
     await repo.createExercise({
       name: 'Custom Move',
-      primaryMuscleId: 'mid_chest',
-      equipment: 'dumbbell',
+      region: 'chest',
       trackingType: 'weight_reps',
     })
 

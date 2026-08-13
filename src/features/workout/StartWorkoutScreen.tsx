@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { playCue } from '@/features/timer/sounds'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { formatRelativeDay } from '@/lib/dates'
@@ -59,6 +60,7 @@ export function StartWorkoutScreen({
   const unit = data?.profile.unitWeight ?? 'lb'
 
   async function startEmpty() {
+    playCue('workout-start')
     onStarted(await repo.startWorkout())
   }
 

@@ -277,10 +277,12 @@ function NumericField({
   const { isEmpty, inputProps } = useDraftInput({
     value,
     selectOnFocus: true,
-    // Parse here so a non-numeric entry becomes null, never a stored NaN.
+    // Parse here so a non-numeric entry becomes null, never a stored NaN. A
+    // negative weight/rep/duration is meaningless, so it reads as no value.
     onCommit: (draft) => {
       const parsed = parseNumber(draft)
-      onCommit(integer && parsed !== null ? Math.round(parsed) : parsed)
+      if (parsed === null || parsed < 0) return onCommit(null)
+      onCommit(integer ? Math.round(parsed) : parsed)
     },
   })
 

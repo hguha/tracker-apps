@@ -13,7 +13,11 @@ import { AccountScreen } from '@/features/auth/AccountScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
 import { BadgesScreen } from '@/features/home/BadgesScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
-import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen'
+import {
+  OnboardingScreen,
+  ONBOARDING_VERSION,
+} from '@/features/onboarding/OnboardingScreen'
+import { AppTour } from '@/features/onboarding/AppTour'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { MeScreen } from '@/features/profile/MeScreen'
 import { SettingsScreen } from '@/features/profile/SettingsScreen'
@@ -86,11 +90,17 @@ function SignedInApp() {
 
   const [tab, setTab] = useState<TabKey>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
+  // Shown once immediately after finishing onboarding; re-openable in Settings.
+  const [showTour, setShowTour] = useState(false)
 
   useSync()
 
   useEffect(() => {
-    void seedIfNeeded().then(() => setIsReady(true))
+    void seedIfNeeded()
+      .then(() => repo.migrateToBaseExercises())
+      .then(() => repo.repointRetiredBaseExercises())
+      .then(() => repo.releaseStrandedDeferrals())
+      .then(() => setIsReady(true))
   }, [])
 
   // Appearance and sound live in the profile, so they follow the same live-query
@@ -105,8 +115,15 @@ function SignedInApp() {
       colorScheme: profile.colorScheme as ColorSchemePreference,
       accentOverride: profile.accentOverride,
       soundEnabled: profile.soundEnabled,
-      onboardedAt: profile.onboardedAt,
+      onboardingVersion: profile.onboardingVersion ?? 0,
     }
+  }, [isReady])
+
+  // Drives the center tab action: mid-session it returns to the workout rather
+  // than starting a new one, and says so with a different glyph.
+  const hasActiveWorkout = useLiveQuery(async () => {
+    if (!isReady) return false
+    return (await repo.getActiveWorkout()) !== undefined
   }, [isReady])
 
   useEffect(() => {
@@ -132,16 +149,23 @@ function SignedInApp() {
     )
   }
 
-  // Local-only accounts skip onboarding — nothing to upload or prime.
+  // First run — and any time the walkthrough is bumped (ONBOARDING_VERSION) or
+  // replayed from Settings. Runs for device-only accounts too; the final sync step
+  // degrades to a local "you're ready" when there's nothing to upload.
   if (
     session &&
-    !session.isLocal &&
     appearance !== undefined &&
-    appearance.onboardedAt === null
+    appearance.onboardingVersion < ONBOARDING_VERSION
   ) {
     return (
       <OnboardingScreen
-        onDone={() => void repo.updateProfile({ onboardedAt: Date.now() })}
+        onDone={() => {
+          setShowTour(true)
+          void repo.updateProfile({
+            onboardedAt: Date.now(),
+            onboardingVersion: ONBOARDING_VERSION,
+          })
+        }}
       />
     )
   }
@@ -267,9 +291,10 @@ function SignedInApp() {
             onStartedCopy={(workoutId) =>
               setView({ kind: 'workout', workoutId, isEditMode: false })
             }
+            onStartWorkout={() => void handleStartWorkout()}
           />
         )}
-        {tab === 'library' && <ExerciseLibraryScreen />}
+        {tab === 'library' && <ExerciseLibraryScreen onBack={() => setTab('me')} />}
         {tab === 'insights' && (
           <Suspense fallback={<div className="p-6 text-ink-muted">Loading charts…</div>}>
             <InsightsScreen />
@@ -292,7 +317,9 @@ function SignedInApp() {
         active={tab}
         onSelect={setTab}
         onStartWorkout={() => void handleStartWorkout()}
+        hasActiveWorkout={hasActiveWorkout ?? false}
       />
+      {showTour && <AppTour onClose={() => setShowTour(false)} />}
     </div>
   )
 }

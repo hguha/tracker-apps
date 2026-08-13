@@ -22,9 +22,13 @@ import { MockBackend } from './mockBackend'
  * releases them, which is what a real user's queue looks like by the time sync
  * matters. Returns the ids so callers can assert on them.
  */
-async function loggedWorkout(exerciseId = 'barbell_bench_press') {
+async function loggedWorkout(exerciseId = 'bench_press') {
   const workoutId = await repo.startWorkout()
-  const workoutExerciseId = await repo.addExerciseToWorkout(workoutId, exerciseId)
+  const workoutExerciseId = await repo.addExerciseToWorkout(
+    workoutId,
+    exerciseId,
+    'barbell',
+  )
   const setId = await repo.addSet({ workoutExerciseId, weightKg: 100, reps: 5 })
   await repo.logSetValues(setId, {})
   await repo.finishWorkout(workoutId)
@@ -98,24 +102,150 @@ describe('outbox drain', () => {
   })
 })
 
-describe('failure classification (§5.5)', () => {
-  it('dead-letters a permanent failure and keeps draining the rest', async () => {
+describe('deferred sessions reach the server as finished sessions', () => {
+  it('never pushes a workout as in-progress, even though it was queued that way', async () => {
+    // The reported "failed to sync": the workouts insert froze `endedAt: null` when
+    // the session started, and the server's one-active-workout index rejects that
+    // permanently — taking every exercise and set under it down with it.
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    // First push is poison, the rest succeed.
-    backend.forceNext({ status: 'permanent', error: 'bad payload' })
+    await loggedWorkout()
+    const result = await engine.drain()
 
+    expect(result.deadLettered).toBe(0)
+    expect(await db.deadLetter.count()).toBe(0)
+    for (const push of backend.pushed.filter((p) => p.table === 'workouts')) {
+      expect((push.payload as { endedAt: number | null }).endedAt).not.toBeNull()
+    }
+  })
+
+  it('drops the placeholder sets a session never filled in', async () => {
+    // A template lays out empty rows; finishing tombstones the unused ones. Sending
+    // an insert and then a tombstone for a row that never held data is pure noise.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const used = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    await repo.addSet({ workoutExerciseId: weId })
+    await repo.addSet({ workoutExerciseId: weId })
+    await repo.logSetValues(used, {})
+    await repo.finishWorkout(workoutId)
+
+    await engine.drain()
+
+    // Only the set that was actually logged.
+    expect(backend.count('sets')).toBe(1)
+    expect(backend.get('sets', used)).toBeDefined()
+  })
+
+  it('sends nothing at all about a discarded session', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
+    await repo.addSet({ workoutExerciseId: weId, weightKg: 150, reps: 5 })
+    await repo.deleteWorkout(workoutId)
+
+    await engine.drain()
+
+    expect(backend.pushed).toEqual([])
+    expect(await db.outbox.count()).toBe(0)
+    expect(await db.deadLetter.count()).toBe(0)
+  })
+
+  it('re-queues the session when a discard is undone', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 150, reps: 5 })
+    await repo.logSetValues(setId, {})
+    await repo.deleteWorkout(workoutId)
+    await repo.restoreWorkout(workoutId)
+    await repo.finishWorkout(workoutId)
+
+    await engine.drain()
+
+    // Dropping the queue on discard must not cost the session its children.
+    expect(backend.get('workouts', workoutId)).toBeDefined()
+    expect(backend.get('workoutExercises', weId)).toBeDefined()
+    expect(backend.get('sets', setId)).toBeDefined()
+  })
+
+  it('forgets a discarded session stranded by an earlier build, rather than reviving it', async () => {
+    // Releasing a stranded queue would push the frozen `endedAt: null` insert and
+    // resurrect the workout as the one active session, so every later session then
+    // collides with it forever.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const abandoned = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(abandoned, 'bench_press', 'barbell')
+    await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    // The old bug: tombstoned locally with its writes left held.
+    await db.workouts.update(abandoned, { deletedAt: Date.now() })
+
+    await repo.releaseStrandedDeferrals()
+    await engine.drain()
+
+    expect(backend.get('workouts', abandoned)).toBeUndefined()
+
+    // And a new session still syncs cleanly afterwards.
+    const { workoutId } = await loggedWorkout()
+    await engine.drain()
+    expect(backend.get('workouts', workoutId)).toBeDefined()
+    expect(await db.deadLetter.count()).toBe(0)
+  })
+})
+
+describe('failure classification (§5.5)', () => {
+  it('dead-letters a permanent failure without blocking unrelated writes', async () => {
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    // The poison push is the workout insert; an unrelated row is queued after it.
+    backend.forceNext({ status: 'permanent', error: 'bad payload' })
     await loggedWorkout('deadlift')
+    await repo.createTemplate('Unrelated', null)
 
     const result = await engine.drain()
 
-    expect(result.deadLettered).toBe(1)
-    expect(await db.deadLetter.count()).toBe(1)
-    // The poison entry didn't block the queue — everything else drained.
+    // The queue drained rather than stalling, and the unrelated row got through.
     expect(await db.outbox.count()).toBe(0)
+    expect(result.pushed).toBeGreaterThan(0)
+    expect(backend.count('templates')).toBe(1)
+
     const dead = await db.deadLetter.toArray()
     expect(dead[0]!.error).toBe('bad payload')
+  })
+
+  it('quarantines the children of a rejected row instead of sending doomed writes', async () => {
+    // A rejected parent used to be followed by every one of its children, each
+    // failing its own RLS/FK check. That buried the real cause under a pile of
+    // "sets" failures and left nothing a single retry could fix.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    backend.forceNext({ status: 'permanent', error: 'bad payload' })
+    const { workoutId, workoutExerciseId } = await loggedWorkout('deadlift')
+
+    await engine.drain()
+
+    // Nothing was sent for the children of the rejected workout.
+    expect(
+      backend.pushed.filter((p) => p.table === 'workoutExercises' || p.table === 'sets'),
+    ).toEqual([])
+
+    const dead = await db.deadLetter.toArray()
+    expect(dead.find((d) => d.rowId === workoutId)!.error).toBe('bad payload')
+    // The children say why they never went, naming the row to fix.
+    expect(dead.find((d) => d.rowId === workoutExerciseId)!.error).toContain(workoutId)
+    expect(dead.some((d) => d.table === 'sets')).toBe(true)
   })
 
   it('retryDeadLettered requeues failed writes so a later drain can push them', async () => {
@@ -126,18 +256,19 @@ describe('failure classification (§5.5)', () => {
     backend.forceNext({ status: 'permanent', error: 'column does not exist' })
     const { workoutId } = await loggedWorkout()
     await engine.drain()
-    expect(await db.deadLetter.count()).toBe(1)
+    // The workout plus the children quarantined behind it.
+    const failedCount = await db.deadLetter.count()
+    expect(failedCount).toBeGreaterThan(1)
     expect(await db.outbox.count()).toBe(0)
 
-    // The root cause is fixed; the user hits "retry". The entry moves back to the
-    // outbox and the next drain (server now healthy) pushes it.
+    // The root cause is fixed; the user hits "retry". Every entry moves back to
+    // the outbox in dependency order and the next drain pushes them.
     const requeued = await engine.retryDeadLettered()
-    expect(requeued).toBe(1)
+    expect(requeued).toBe(failedCount)
     expect(await db.deadLetter.count()).toBe(0)
-    expect(await db.outbox.count()).toBe(1)
 
     const result = await engine.drain()
-    expect(result.pushed).toBe(1)
+    expect(result.pushed).toBe(failedCount)
     expect(await db.outbox.count()).toBe(0)
     expect(
       backend.pushed.some((p) => p.table === 'workouts' && p.rowId === workoutId),
@@ -155,13 +286,14 @@ describe('failure classification (§5.5)', () => {
 
     const { workoutId, workoutExerciseId: weId } = await loggedWorkout()
 
-    // Every push is rejected the way RLS rejects a mis-owned row.
-    backend.forceNext(
-      { status: 'permanent', error: 'new row violates row-level security policy' },
-      99,
-    )
+    // The workout is rejected the way RLS rejects a mis-owned row; its children
+    // are quarantined behind it, so one rejection fails the whole family.
+    backend.forceNext({
+      status: 'permanent',
+      error: 'new row violates row-level security policy',
+    })
     await engine.drain()
-    expect(await db.deadLetter.count()).toBeGreaterThan(0)
+    expect(await db.deadLetter.count()).toBeGreaterThan(1)
 
     // The account upgrade re-owns the local rows.
     setActiveUserId(UID)
@@ -219,7 +351,7 @@ describe('failure classification (§5.5)', () => {
     backend.forceNext({ status: 'permanent', error: 'poison' })
     await loggedWorkout()
     await engine.drain()
-    expect(await db.deadLetter.count()).toBe(1)
+    expect(await db.deadLetter.count()).toBeGreaterThan(0)
     const { workoutId: laterId } = await loggedWorkout('deadlift')
     expect(await db.outbox.count()).toBeGreaterThan(0)
 
@@ -242,7 +374,7 @@ describe('failure classification (§5.5)', () => {
     const engine = new SyncEngine(backend)
 
     const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'barbell_bench_press')
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
     const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
     await repo.logSetValues(setId, {})
 
@@ -267,7 +399,7 @@ describe('failure classification (§5.5)', () => {
     const engine = new SyncEngine(backend)
 
     const workoutId = await repo.startWorkout()
-    await repo.addExerciseToWorkout(workoutId, 'deadlift')
+    await repo.addExerciseToWorkout(workoutId, 'deadlift', 'barbell')
     // An unrelated write, queued after the workout's.
     const templateId = await repo.createTemplate('Push', null)
 
@@ -412,9 +544,10 @@ describe('delta pull (§5.5)', () => {
       id: 'remote-ex-1',
       userId: 'local-user',
       name: 'Remote Lift',
-      primaryMuscleId: 'mid_chest',
+      region: 'chest',
       aliases: [],
-      equipment: 'barbell',
+      equipmentOptions: ['barbell'],
+      unilateralEquipment: [],
       movementPattern: 'push',
       trackingType: 'weight_reps',
       isUnilateral: false,
@@ -508,9 +641,10 @@ describe('delta pull (§5.5)', () => {
       id: 'remote-ex-2',
       userId: null,
       name: 'X',
-      primaryMuscleId: 'mid_chest',
+      region: 'chest',
       aliases: [],
-      equipment: 'barbell',
+      equipmentOptions: ['barbell'],
+      unilateralEquipment: [],
       movementPattern: 'other',
       trackingType: 'weight_reps',
       isUnilateral: false,
