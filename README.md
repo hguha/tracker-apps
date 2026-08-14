@@ -14,7 +14,7 @@ Then open the printed `Network:` URL on your phone — same wifi, no build step,
 no account. Data lives in that browser's IndexedDB.
 
 ```bash
-npm test          # 375 unit tests
+npm test          # 377 unit tests
 npm run typecheck # strict TS, no errors
 npm run build     # production bundle
 ```
@@ -184,6 +184,35 @@ density ceiling, not a target — most functions have none.
 Lives at `hirshguha.com/workout-tracker`, from its own Vercel project that the
 website proxies to. See **DEPLOYING.md** — including the service-worker scope
 trap to avoid before the PWA ships.
+
+## Native apps (iOS / Android)
+
+The iOS and Android apps are the **same web build** wrapped in Capacitor — no
+separate codebase (design: `docs/design-native-app.md`). The `ios/` project is
+committed and pre-configured; `android/` is generated on demand.
+
+**After any web-side change** (a bug fix, a new feature — most work), reship with:
+
+```bash
+npm run native:ios       # rebuild web (BASE_PATH=/) → cap sync → open Xcode
+```
+
+Then in Xcode press **Run** (⌘R) for the simulator, or **Product → Archive** for
+a store build. If Xcode is already open, `npm run native:sync` alone re-copies the
+build and you just hit Run again. That's the whole loop — no `cap add`, no
+re-signing.
+
+You need more than a resync only when:
+
+- **Adding/removing a Capacitor plugin or editing `capacitor.config.ts`** — still
+  just `native:sync` (it runs `cap sync`, which re-resolves plugins).
+- **Changing app icons or the splash** (`resources/`) — run `npm run native:icons`.
+- **Editing native config** (`Info.plist`, entitlements) — those live in `ios/`;
+  just rebuild.
+- **Submitting a new App Store build** — bump Version/Build in Xcode, then Archive.
+
+Full runbook (Xcode signing, App Store Connect, Play Store, Universal Links,
+privacy) is in **DEPLOYING.md → Native builds**.
 
 ## Where the design decisions live
 
