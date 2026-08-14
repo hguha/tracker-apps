@@ -1,7 +1,18 @@
 // Invariant (§11.1): an offline refresh failure must not sign the user out — supabase-js
 // only emits SIGNED_OUT on explicit sign-out or hard token revocation, not a network blip.
 import type { Session as SupabaseSession, SupabaseClient } from '@supabase/supabase-js'
+import { isNativePlatform } from '@/lib/platform'
 import type { AuthProvider, Session, SignInResult } from './types'
+
+// Where the magic link sends the user back. Native uses a custom scheme, not the
+// https URL: Supabase's /auth/v1/verify answers with a 302, and a Universal Link
+// doesn't fire on a redirect (only a direct tap), whereas a custom scheme does —
+// so this is what actually reopens the app. Must be in Supabase's Redirect URL
+// allowlist. On web it's the current origin so previews and the domain both work.
+function authRedirectUrl(): string {
+  if (isNativePlatform()) return 'fitnote://auth-callback'
+  return window.location.origin + import.meta.env.BASE_URL
+}
 
 export class SupabaseAuthProvider implements AuthProvider {
   constructor(private client: SupabaseClient) {}
@@ -19,12 +30,11 @@ export class SupabaseAuthProvider implements AuthProvider {
   }
 
   async signInWithEmail(email: string): Promise<SignInResult> {
-    // emailRedirectTo must pin to this instance's origin+base (not the dashboard Site URL) and be in the Redirect URLs allowlist.
     const { error } = await this.client.auth.signInWithOtp({
       email: email.trim(),
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + import.meta.env.BASE_URL,
+        emailRedirectTo: authRedirectUrl(),
       },
     })
     if (error) return { kind: 'error', message: error.message }

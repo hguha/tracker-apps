@@ -257,7 +257,7 @@ export function SignInScreen({
         <p className="mt-6 text-center text-[11.5px] text-ink-muted">
           By signing in you agree to the{' '}
           <a
-            href="https://github.com/hguha/workoutTracker/blob/main/docs/privacy-policy.md"
+            href="https://hirshguha.com/workout-tracker/privacy.html"
             target="_blank"
             rel="noopener noreferrer"
             className="underline decoration-line-strong underline-offset-2 active:opacity-60"

@@ -173,35 +173,37 @@ provides it, or `git rev-parse HEAD` locally.
 # Native builds (App Store & Play Store)
 
 The iOS and Android apps are the **same web build** wrapped in Capacitor (design:
-`docs/design-native-app.md`). The web infra is in the repo already:
-`capacitor.config.ts`, the `src/platform/*` seam, the `build:native`/`native:*`
-scripts, and icon sources in `resources/`. What's left is generating the native
-projects on a machine with the platform toolchains, then archiving and uploading.
+`docs/design-native-app.md`). Most of it is already in the repo: `capacitor.config.ts`,
+the `src/platform/*` seam, the `build:native`/`native:*` scripts, icon sources in
+`resources/`, and — for iOS — the **generated `ios/` project itself**, with the
+`fitnote://` URL scheme and app icons already baked in. Capacitor 8 uses Swift
+Package Manager, not CocoaPods, so there's nothing to `pod install`.
 
 ## One-time machine setup (macOS)
 
 ```bash
-# Xcode (full IDE, not just Command Line Tools) — from the Mac App Store, then:
+# Xcode (full IDE, not just the Command Line Tools) — install from the Mac App
+# Store, then point the toolchain at it:
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 sudo xcodebuild -license accept
-# CocoaPods (Capacitor iOS uses it):
-brew install cocoapods          # or: sudo gem install cocoapods
 ```
 
 Android (only if shipping to Play): install Android Studio, then set
-`ANDROID_HOME` and install an SDK platform + build-tools via its SDK Manager.
+`ANDROID_HOME` and an SDK platform + build-tools via its SDK Manager, and generate
+the project with `npx cap add android` + `npm run native:icons`.
 
-## One-time project generation
+## iOS — already generated
+
+`ios/` is committed. To build it:
 
 ```bash
-npm install                     # ensure Capacitor deps are present
-npm run build:native            # produces dist/ with BASE_PATH=/
-npx cap add ios                 # generates ios/  (runs pod install)
-npx cap add android             # generates android/  (only if shipping to Play)
-npm run native:icons            # writes app icons + splash into both projects
+npm install                     # restores node_modules the SPM packages point at
+npm run native:ios              # build:native → cap sync → open Xcode
 ```
 
-Commit `ios/` and `android/` (the `.gitignore` already excludes Pods/build noise).
+If you ever need to regenerate from scratch: `rm -rf ios && npx cap add ios &&
+npm run native:icons`, then re-apply the `CFBundleURLTypes` (`fitnote` scheme) in
+`ios/App/App/Info.plist`.
 
 ## Every build after that
 
@@ -268,3 +270,72 @@ The device integration that makes the not-a-website case is real and in the
 build: offline-first IndexedDB, haptics (`@capacitor/haptics`), and locked-screen
 rest notifications (`@capacitor/local-notifications`). Keep them working before
 submitting.
+
+## Universal Links + deep-link sign-in
+
+The native app completes a magic-link sign-in when the link reopens the app. Two
+mechanisms, wired together (`src/platform/deepLinks.ts`, `supabaseAuthProvider.ts`):
+
+- **Custom scheme `fitnote://auth-callback`** — the redirect the magic link
+  targets on native. Supabase's `/auth/v1/verify` answers with a 302, and a
+  Universal Link does NOT fire on a redirect (only a direct tap), whereas a custom
+  scheme does. So this is what actually reopens the app after the email link.
+- **Universal Link `applinks:hirshguha.com`** — lets a *tapped*
+  `https://hirshguha.com/workout-tracker/…` link open the app directly.
+
+The OTP **code** path needs none of this and stays the primary, always-works
+sign-in. Deep links are the "the link itself opens the app" polish.
+
+### 1. Supabase dashboard (Authentication → URL Configuration)
+
+Add to **Redirect URLs**:
+
+```
+fitnote://auth-callback
+https://hirshguha.com/workout-tracker/
+https://hirshguha.com/workout-tracker/*
+```
+
+### 2. Xcode — custom scheme + associated domain (after `cap add ios`)
+
+- **Custom scheme:** target **App → Info → URL Types → +**. Identifier
+  `com.hirshguha.fitnote`, URL Scheme `fitnote`. (Or add `CFBundleURLTypes` to
+  `ios/App/App/Info.plist`.)
+- **Associated domain:** **Signing & Capabilities → + Capability → Associated
+  Domains**, add `applinks:hirshguha.com`. (This requires the Associated Domains
+  entitlement, which automatic signing provisions.)
+
+### 3. Main site (hirshguha.com) — serve the AASA file
+
+This is the ONE change outside this repo — a Universal Link's association file
+must live at the domain root, which only the main site serves. Copy
+`docs/apple-app-site-association.json` (fill in your 10-char **Team ID**, from
+developer.apple.com → Membership) to the main site so it is served at:
+
+```
+https://hirshguha.com/.well-known/apple-app-site-association
+```
+
+In the Next.js site, put the file at `public/.well-known/apple-app-site-association`
+(no extension) and make sure it's served as `application/json`. If the platform
+sets the wrong content type for the extension-less file, add a header rule:
+
+```js
+// next.config.mjs
+async headers() {
+  return [{
+    source: '/.well-known/apple-app-site-association',
+    headers: [{ key: 'Content-Type', value: 'application/json' }],
+  }]
+}
+```
+
+Verify: `curl -sI https://hirshguha.com/.well-known/apple-app-site-association`
+returns `200` with `content-type: application/json`. Apple caches the AASA at
+install time, so reinstall the app after changing it.
+
+### 4. Verify on device
+
+Sign in with email → tap the link on the phone. It should reopen FitNote and land
+you signed in. If it opens Safari and signs you in *there* instead, the AASA/scheme
+isn't resolving — fall back to the code field (still shown) and recheck steps 1–3.

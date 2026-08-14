@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>FitNote — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; background: #fcfcfb; color: #1a1a1a;
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 .5rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 .4rem; }
+  a { color: #2a78d6; }
+  code { background: rgba(0,0,0,.06); padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  hr { border: none; border-top: 1px solid rgba(0,0,0,.12); margin: 2rem 0; }
+  ul { padding-left: 1.25rem; }
+  li { margin: .3rem 0; }
+  em { color: inherit; opacity: .75; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d0d0d; color: #ededed; }
+    code { background: rgba(255,255,255,.1); }
+    hr { border-top-color: rgba(255,255,255,.15); }
+    a { color: #6ea8ff; }
+  }
+</style>
+</head>
+<body><main>
+<h1>Privacy Policy</h1>
+<p><em>Last updated: 2026-08-13</em></p>
+<p>FitNote is a workout tracker built to keep your data on your device by default. This policy describes what the app collects, where it lives, and what you can do with it.</p>
+<h2>What we collect</h2>
+<p>You choose whether to sign in. That choice determines what the app collects.</p>
+<h3>Device-only mode (no sign-in)</h3>
+<p>If you never sign in, <strong>nothing leaves your device</strong>. Everything you log — sessions, sets, templates, body metrics, preferences — lives in that browser's IndexedDB. There is no account, no server round trip, and no analytics.</p>
+<p>If you clear this site's data, uninstall the browser, or switch devices, that history is gone. Export a JSON backup from Settings → Data if you want a copy.</p>
+<h3>Signed-in mode (email account)</h3>
+<p>When you sign in with email, the app stores the following on our server (Supabase Postgres, RLS-scoped to your user id):</p>
+<ul>
+<li><strong>Account:</strong> email address, an internal user id.</li>
+<li><strong>Profile:</strong> display name, units, week-start day, weekly workout goal,</li>
+</ul>
+<p>optional height, optional body-fat and bodyweight caches, optional free-text training goal, appearance preferences.</p>
+<ul>
+<li><strong>Training data:</strong> workouts, exercises within them, individual sets, personal</li>
+</ul>
+<p>records, templates, custom exercises, body metric entries (bodyweight, body fat, waist, resting HR, etc. — whatever you choose to log).</p>
+<ul>
+<li><strong>Sync bookkeeping:</strong> timestamps used to reconcile writes across devices.</li>
+</ul>
+<p>Row-Level Security is enforced at the database, per table, and covered by an automated test suite. Another signed-in user cannot read or write your rows.</p>
+<p>Passwords are never collected. Sign-in uses a single-use email link (with an emailed code as fallback) via Supabase Auth.</p>
+<h3>Error diagnostics</h3>
+<p>When you are signed in, the app may write a scrubbed error record to the server if it hits a bug: the error message, its JavaScript stack trace, the page URL, the browser user agent, and a build identifier. <strong>No request bodies, no form fields, no training data.</strong> The record scopes to your account via the same RLS rules as your other data. Device-only mode reports nothing.</p>
+<p>You cannot read your own error history from within the app; only the developer can, via a service role in the database dashboard. Errors delete with the account.</p>
+<h3>AI coach</h3>
+<p>The AI coach is optional. When you use it, the app sends a <strong>de-identified summary</strong> of your recent training to a Google Gemini endpoint via our backend:</p>
+<ul>
+<li>Aggregates by week, exercise, region, and equipment.</li>
+<li>Weights already converted to your preferred unit.</li>
+<li>Dates only as <strong>week offsets</strong> relative to the current week (e.g. <code>-3</code> for</li>
+</ul>
+<p>three weeks ago). No absolute dates.</p>
+<ul>
+<li>Your bodyweight, height, and free-text training goal, when set.</li>
+</ul>
+<p>No names, no notes, no absolute dates, no session titles. The full contract is in <code>src/features/coach/summary.ts</code> and the "What's sent" button in the coach screen shows the exact payload before you use it.</p>
+<p>Google processes this request under their API terms. We do not train a model on your data.</p>
+<h2>What we do not collect</h2>
+<ul>
+<li>No third-party analytics (no Google Analytics, no Mixpanel, no PostHog).</li>
+<li>No third-party error monitoring (no Sentry). Error diagnostics are</li>
+</ul>
+<p>first-party, above.</p>
+<ul>
+<li>No advertising, ad IDs, or trackers.</li>
+<li>No location.</li>
+<li>No contacts, calendars, photos, microphone, or camera.</li>
+</ul>
+<h2>Where your data lives</h2>
+<ul>
+<li>On your device: IndexedDB in your browser, and (in signed-in mode) session</li>
+</ul>
+<p>tokens in <code>localStorage</code> for auth.</p>
+<ul>
+<li>On the server: Supabase (Postgres + Auth + Edge Functions), deployed in the</li>
+</ul>
+<p>region of the project. AI-coach requests transit Google's Gemini API.</p>
+<ul>
+<li>Static hosting: Vercel serves the app; the site is proxied under</li>
+</ul>
+<p><code>hirshguha.com/workout-tracker</code>.</p>
+<h2>What you can do</h2>
+<ul>
+<li><strong>Export.</strong> Settings → Data → Export downloads a versioned JSON file</li>
+</ul>
+<p>containing every one of your rows.</p>
+<ul>
+<li><strong>Import.</strong> Settings → Data → Import restores from that file.</li>
+<li><strong>Local wipe.</strong> Settings → Data → Clear this device's data removes</li>
+</ul>
+<p>everything in this browser's IndexedDB. Synced accounts re-download from the server; device-only accounts lose their history.</p>
+<ul>
+<li><strong>Delete account.</strong> Account → Delete account removes your auth user and</li>
+</ul>
+<p>cascades to every row you own on the server. This is not reversible.</p>
+<h2>Data retention</h2>
+<p>Rows persist until you delete them, delete your account, or clear local storage. Diagnostic error records are retained for developer troubleshooting and delete with the account.</p>
+<h2>Children</h2>
+<p>FitNote is not directed at children under 13. Do not create an account for a child under 13.</p>
+<h2>Changes</h2>
+<p>We may update this policy. Material changes will be reflected in the "Last updated" date at the top and, when relevant, announced in-app.</p>
+<h2>Contact</h2>
+<p>Questions: open an issue at <a href="https://github.com/hguha/workoutTracker">github.com/hguha/workoutTracker</a> or email the address listed in Account → Settings.</p>
+</main></body>
+</html>

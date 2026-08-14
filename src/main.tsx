@@ -5,6 +5,7 @@ import { ErrorBoundary } from './app/ErrorBoundary'
 import { installGlobalErrorHandlers } from './lib/errorReporter'
 import { registerServiceWorker } from './lib/serviceWorker'
 import { applyDefaultAppearance } from './lib/theme'
+import { initDeepLinks } from './platform/deepLinks'
 import { initNativeShell } from './platform/native'
 import './styles/index.css'
 
@@ -13,6 +14,7 @@ import './styles/index.css'
 applyDefaultAppearance()
 installGlobalErrorHandlers()
 initNativeShell()
+initDeepLinks()
 void registerServiceWorker()
 
 const container = document.getElementById('root')

@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.hirshguha.fitnote"],
+        "components": [
+          {
+            "/": "/workout-tracker/*",
+            "comment": "Open FitNote for its own paths; the rest of hirshguha.com stays in the browser."
+          }
+        ]
+      }
+    ]
+  }
+}
