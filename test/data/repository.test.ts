@@ -135,22 +135,24 @@ describe('the logging loop', () => {
     const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
     await db.outbox.clear()
 
-    // A plain field edit — the case that was failing.
+    // A plain field edit — the case that was failing. The queue names the dirty
+    // row; the drain sends the row itself, so the fields RLS checks are whatever
+    // the row currently holds.
     await repo.updateWorkout(workoutId, { title: 'Renamed' })
     const workoutEntry = (await db.outbox.toArray()).find((e) => e.table === 'workouts')!
-    const workoutPayload = workoutEntry.payload as Record<string, unknown>
-    expect(workoutPayload.title).toBe('Renamed')
+    expect(workoutEntry.rowId).toBe(workoutId)
+    const workout = (await db.workouts.get(workoutId))!
+    expect(workout.title).toBe('Renamed')
     // The ownership column RLS checks must be present.
-    expect(workoutPayload.userId).toBe(LOCAL_USER_ID)
-    expect(workoutPayload.id).toBe(workoutId)
+    expect(workout.userId).toBe(LOCAL_USER_ID)
 
     // Chained rows carry the parent key their ownership walk depends on.
     await db.outbox.clear()
     await repo.logSetValues(setId, { reps: 6 })
-    const setPayload = (await db.outbox.toArray()).find((e) => e.table === 'sets')!
-      .payload as Record<string, unknown>
-    expect(setPayload.workoutExerciseId).toBe(weId)
-    expect(setPayload.reps).toBe(6)
+    expect((await db.outbox.toArray()).some((e) => e.table === 'sets')).toBe(true)
+    const set = (await db.sets.get(setId))!
+    expect(set.workoutExerciseId).toBe(weId)
+    expect(set.reps).toBe(6)
   })
 
   it('soft-deletes rather than removing rows, so deletes can sync', async () => {
@@ -1985,9 +1987,8 @@ describe('active user id + local data reset', () => {
     // It's queued for the server like any other profile field, which is what
     // carries it to the second device.
     const queued = await db.outbox.toArray()
-    const payload = queued.find((e) => e.table === 'profiles')?.payload as
-      Record<string, unknown> | undefined
-    expect(payload?.onboardedAt).toEqual(expect.any(Number))
+    expect(queued.some((e) => e.table === 'profiles')).toBe(true)
+    expect((await repo.getProfile()).onboardedAt).toEqual(expect.any(Number))
   })
 
   it('claimLocalData is a no-op for the local id and when there is nothing to claim', async () => {
@@ -2001,10 +2002,7 @@ describe('active user id + local data reset', () => {
     await db.exercises.update('leg_press', { userId: 'some-user-uuid' })
     await db.outbox.add({
       table: 'exercises',
-      op: 'update',
       rowId: 'leg_press',
-      payload: { id: 'leg_press' },
-      clientRev: 2,
       queuedAt: Date.now(),
       attempts: 0,
     })
@@ -2023,12 +2021,11 @@ describe('active user id + local data reset', () => {
     expect((await db.exercises.get('leg_press'))?.userId).toBeNull()
     await db.deadLetter.add({
       table: 'exercises',
-      op: 'update',
       rowId: 'leg_press',
-      payload: { id: 'leg_press' },
-      clientRev: 2,
+      row: { id: 'leg_press' },
       queuedAt: Date.now(),
       failedAt: Date.now(),
+      attempts: 1,
       error: 'new row violates row-level security policy',
     })
 
@@ -2060,30 +2057,6 @@ describe('active user id + local data reset', () => {
     await db.outbox.clear()
     expect(await repo.claimLocalData(UID)).toBe(0)
     expect(await db.outbox.count()).toBe(0)
-  })
-
-  it('reenqueueOrphanedParents re-queues the parent of a stranded set', async () => {
-    // The stuck state: a set is queued but its parent workout_exercise (and the
-    // workout above it) have no queued write, so the set FK-fails forever.
-    const workoutId = await repo.startWorkout()
-    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
-    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
-    await repo.logSetValues(setId, {})
-    await repo.finishWorkout(workoutId)
-
-    // Drop everything except the set's write — the parents went missing.
-    const setEntries = (await db.outbox.toArray()).filter(
-      (e) => e.table === 'sets' && e.rowId === setId,
-    )
-    await db.outbox.clear()
-    for (const e of setEntries) await db.outbox.add({ ...e, seq: undefined })
-
-    const repaired = await repo.reenqueueOrphanedParents()
-
-    expect(repaired).toBe(2) // the workout_exercise and the workout above it
-    const tables = (await db.outbox.toArray()).map((e) => e.table)
-    expect(tables).toContain('workoutExercises')
-    expect(tables).toContain('workouts')
   })
 
   it('purgeEmptyWorkouts removes finished sessions with no completed set', async () => {

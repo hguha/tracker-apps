@@ -99,6 +99,9 @@ function SignedInApp() {
     void seedIfNeeded()
       .then(() => repo.migrateToBaseExercises())
       .then(() => repo.repointRetiredBaseExercises())
+      // Order matters: end any edit session this launch inherited, then free the
+      // writes it was holding.
+      .then(() => repo.endStaleEditSessions())
       .then(() => repo.releaseStrandedDeferrals())
       .then(() => setIsReady(true))
   }, [])

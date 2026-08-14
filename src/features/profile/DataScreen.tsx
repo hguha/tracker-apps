@@ -254,18 +254,22 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                   label="Waiting to upload"
                   entries={queue.pending.map((e) => ({
                     key: String(e.seq),
-                    heading: `${e.op} · ${e.table}`,
-                    sub: e.rowId,
-                    payload: e.payload,
+                    heading: e.table,
+                    // The retry state is what explains a row that isn't moving.
+                    sub:
+                      e.attempts > 0
+                        ? `${e.rowId} · ${e.attempts} attempt(s): ${e.lastError ?? 'unknown error'}`
+                        : e.rowId,
+                    payload: null,
                   }))}
                 />
                 <QueueGroup
                   label="Held until you finish the workout"
                   entries={queue.held.map((e) => ({
                     key: String(e.seq),
-                    heading: `${e.op} · ${e.table}`,
+                    heading: e.table,
                     sub: e.rowId,
-                    payload: e.payload,
+                    payload: null,
                   }))}
                 />
                 <QueueGroup
@@ -273,9 +277,9 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                   tone="serious"
                   entries={queue.failed.map((e) => ({
                     key: String(e.seq),
-                    heading: `${e.op} · ${e.table}`,
+                    heading: `${e.table} · ${e.attempts} attempt(s)`,
                     sub: e.error,
-                    payload: e.payload,
+                    payload: e.row,
                   }))}
                 />
                 <p className="text-[12px] text-ink-muted">
@@ -469,9 +473,11 @@ function QueueGroup({
                 {entry.sub}
               </span>
             </summary>
-            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface p-2 text-[11px] leading-snug text-ink-secondary">
-              {JSON.stringify(entry.payload, null, 2)}
-            </pre>
+            {entry.payload !== null && (
+              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface p-2 text-[11px] leading-snug text-ink-secondary">
+                {JSON.stringify(entry.payload, null, 2)}
+              </pre>
+            )}
           </details>
         ))}
       </div>

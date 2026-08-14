@@ -1,8 +1,7 @@
-// The durable write queue and the shared row-write helpers every domain module
-// builds on: enqueue, the in-progress-workout deferral, and the finish/discard
-// release logic that decides what actually reaches the server (§5.5).
+// The durable write queue and the row-write helper every domain module builds on.
+// One entry per dirty row (§5.5); the drain reads the row itself at push time.
 
-import { type OutboxEntry, db, touch } from '@/db/database'
+import { db, touch } from '@/db/database'
 
 export function newId(): string {
   // randomUUID is only defined in a secure context; dev over http://<lan-ip>
@@ -11,85 +10,77 @@ export function newId(): string {
   return 'id-' + crypto.getRandomValues(new Uint32Array(4)).join('-')
 }
 
-export async function enqueue(
-  table: string,
-  op: OutboxEntry['op'],
-  rowId: string,
-  payload: object,
-  clientRev: number,
-): Promise<void> {
+/**
+ * Marks a row as needing to reach the server.
+ *
+ * Idempotent per row: a second edit refreshes the existing entry rather than
+ * appending, keeping its original `seq` so push order (parents before children)
+ * is stable, and resetting the retry state because a fresh edit deserves a fresh
+ * attempt. `deletedAt` needs no special case — a tombstone is just the row's
+ * current state.
+ */
+export async function enqueue(table: string, rowId: string): Promise<void> {
+  const deferredForWorkoutId = await deferralFor(table, rowId)
+  const existing = await db.outbox.where('[table+rowId]').equals([table, rowId]).first()
+
+  if (existing) {
+    await db.outbox.update(existing.seq!, {
+      deferredForWorkoutId,
+      attempts: 0,
+      lastError: undefined,
+      nextAttemptAt: undefined,
+    })
+    return
+  }
+
   await db.outbox.add({
     table,
-    op,
     rowId,
-    payload,
-    clientRev,
     queuedAt: Date.now(),
     attempts: 0,
-    // Hold this write back if it belongs to a session still in progress (§5.5).
-    ...(await deferralFor(table, rowId, payload)),
+    deferredForWorkoutId,
   })
 }
 
-// Exported for the sync engine's retry path, which re-queues rows directly and
-// must not hand a live session's writes back to the drain undeferred.
-
+/**
+ * The workout whose writes this row belongs to, if that workout is still being
+ * written — an in-progress session or one open for editing (§5.5, §6.6). Held
+ * writes don't reach the server until Finish, so a live session doesn't publish
+ * half a workout and a cancelled edit publishes nothing.
+ */
 export async function deferralFor(
   table: string,
   rowId: string,
-  payload: object,
-): Promise<{ deferredForWorkoutId?: string }> {
-  let workoutId: string | undefined
+): Promise<string | undefined> {
+  const workoutId = await owningWorkoutId(table, rowId)
+  if (!workoutId) return undefined
 
-  if (table === 'workouts') {
-    workoutId = rowId
-  } else if (table === 'workoutExercises') {
-    workoutId =
-      (payload as { workoutId?: string }).workoutId ??
-      (await db.workoutExercises.get(rowId))?.workoutId
-  } else if (table === 'sets') {
-    const workoutExerciseId =
-      (payload as { workoutExerciseId?: string }).workoutExerciseId ??
-      (await db.sets.get(rowId))?.workoutExerciseId
-    if (workoutExerciseId) {
-      workoutId = (await db.workoutExercises.get(workoutExerciseId))?.workoutId
-    }
-  }
-
-  if (!workoutId) return {}
-
-  // A workout open for editing holds its writes too, so a cancelled edit never publishes (§6.6).
-  if ((await db.editSnapshots.get(workoutId)) !== undefined) {
-    return { deferredForWorkoutId: workoutId }
-  }
+  if ((await db.editSnapshots.get(workoutId)) !== undefined) return workoutId
 
   const workout = await db.workouts.get(workoutId)
-  if (!workout || workout.endedAt !== null || workout.deletedAt !== null) return {}
-  return { deferredForWorkoutId: workoutId }
+  if (!workout || workout.endedAt !== null || workout.deletedAt !== null) return undefined
+  return workoutId
 }
 
-// The stores a deferred write can belong to, for re-reading a row at release time.
-
-const DEFERRABLE_STORES = {
-  workouts: db.workouts,
-  workoutExercises: db.workoutExercises,
-  sets: db.sets,
-} as const
-
-async function currentRowFor(
+// Walks a chained row up to its workout. Everything else stands alone.
+async function owningWorkoutId(
   table: string,
   rowId: string,
-): Promise<{ deletedAt: number | null; clientRev: number } | undefined> {
-  const store = DEFERRABLE_STORES[table as keyof typeof DEFERRABLE_STORES]
-  if (!store) return undefined
-  return store.get(rowId) as Promise<
-    { deletedAt: number | null; clientRev: number } | undefined
-  >
+): Promise<string | undefined> {
+  if (table === 'workouts') return rowId
+  if (table === 'workoutExercises') {
+    return (await db.workoutExercises.get(rowId))?.workoutId
+  }
+  if (table === 'sets') {
+    const set = await db.sets.get(rowId)
+    if (!set) return undefined
+    return (await db.workoutExercises.get(set.workoutExerciseId))?.workoutId
+  }
+  return undefined
 }
 
-/** Every outbox entry belonging to a workout, its exercises, and their sets. */
-
-async function queuedWritesFor(workoutId: string): Promise<OutboxEntry[]> {
+/** Every queued write belonging to a workout, its exercises, and their sets. */
+async function queuedWritesFor(workoutId: string) {
   const workoutExerciseIds = new Set(
     (await db.workoutExercises.where('workoutId').equals(workoutId).toArray()).map(
       (we) => we.id,
@@ -114,11 +105,10 @@ async function queuedWritesFor(workoutId: string): Promise<OutboxEntry[]> {
 /**
  * Forgets every queued write about a workout, so nothing of it is ever sent.
  *
- * For a discarded session that never reached the server, an insert followed by a
+ * For a discarded session the server never saw, sending an insert and then a
  * tombstone is not just wasted round trips — the insert carries `endedAt: null`
  * and collides with the server's one-active-workout index.
  */
-
 export async function dropQueuedWrites(workoutId: string): Promise<number> {
   const entries = await queuedWritesFor(workoutId)
   await db.outbox.bulkDelete(entries.map((e) => e.seq!))
@@ -130,69 +120,30 @@ export async function dropQueuedWrites(workoutId: string): Promise<number> {
  *
  * Deferral is the signal, not the queued op: the drain only ever sees a workout
  * after it finished, which is what releases its writes. So while any of them is
- * still held, nothing about the session has been sent. (Checking for a queued
- * `insert` instead would misread a discard-then-undo, which re-queues as `update`.)
+ * still held, nothing about the session has been sent.
  */
-
 export async function isWorkoutUnsent(workoutId: string): Promise<boolean> {
-  const entries = await db.outbox.where('rowId').equals(workoutId).toArray()
-  return entries.some(
-    (e) => e.table === 'workouts' && e.deferredForWorkoutId === workoutId,
-  )
+  const held = await db.outbox
+    .where('deferredForWorkoutId')
+    .equals(workoutId)
+    .filter((e) => e.table === 'workouts' && e.rowId === workoutId)
+    .count()
+  return held > 0
 }
 
 /**
- * Releases a finished workout's held writes, collapsing them first.
+ * Releases a finished workout's held writes.
  *
- * Two things made the naive version wrong. A payload is frozen at enqueue time,
- * so the `workouts` insert captured while the session was live still claimed
- * `endedAt: null` — and the server's partial unique index on "one active workout"
- * rejected it permanently, which dead-lettered the workout and quarantined every
- * exercise and set under it. And a placeholder set that was never filled in queued
- * both an insert and a tombstone, so rows that never held data still made two
- * round trips each.
- *
- * Re-reading each row at release time fixes both: one entry per row, carrying what
- * the row actually says now, and nothing at all for rows that came and went.
+ * Just clears the deferral: the drain re-reads each row, so there is nothing to
+ * collapse or rewrite. A row that came and went during the session has no local
+ * row left, and the drain drops it.
  */
-
 export async function releaseDeferredWrites(workoutId: string): Promise<number> {
   const held = await db.outbox.where('deferredForWorkoutId').equals(workoutId).toArray()
-  if (held.length === 0) return 0
-
-  const groups = new Map<string, OutboxEntry[]>()
-  for (const entry of [...held].sort((a, b) => a.seq! - b.seq!)) {
-    const key = `${entry.table}:${entry.rowId}`
-    const list = groups.get(key)
-    if (list) list.push(entry)
-    else groups.set(key, [entry])
+  for (const entry of held) {
+    await db.outbox.update(entry.seq!, { deferredForWorkoutId: undefined })
   }
-
-  let released = 0
-  for (const entries of groups.values()) {
-    const first = entries[0]!
-    const current = await currentRowFor(first.table, first.rowId)
-    const isNew = entries.some((e) => e.op === 'insert')
-
-    // Gone, or tombstoned before the server ever saw it: say nothing.
-    if (current === undefined || (isNew && current.deletedAt !== null)) {
-      await db.outbox.bulkDelete(entries.map((e) => e.seq!))
-      continue
-    }
-
-    // Keep the earliest entry so parents still precede their children, but give it
-    // the row as it stands now rather than as it stood mid-session.
-    await db.outbox.update(first.seq!, {
-      op: isNew ? 'insert' : 'update',
-      payload: current as object,
-      clientRev: current.clientRev,
-      deferredForWorkoutId: undefined,
-    })
-    const superseded = entries.slice(1).map((e) => e.seq!)
-    if (superseded.length > 0) await db.outbox.bulkDelete(superseded)
-    released += 1
-  }
-  return released
+  return held.length
 }
 
 type SyncFields = {
@@ -214,32 +165,34 @@ export async function patchRow<T extends SyncFields>(
 ): Promise<void> {
   const current = await store.get(id)
   if (!current) return
-  const next = { ...patch, ...touch(current.clientRev) } as Partial<T>
-  await store.update(id, next)
-  // Enqueue the FULL row, not just changed fields, or the upsert's RLS WITH CHECK rejects the partial tuple.
-  await enqueue(table, 'update', id, { ...current, ...next }, current.clientRev + 1)
+  await store.update(id, { ...patch, ...touch(current.clientRev) } as Partial<T>)
+  await enqueue(table, id)
 }
 
-// ----- profile -----
-
+/**
+ * Frees deferrals whose workout is no longer being written — a held write is
+ * invisible: it never pushes and nothing retries it, so a workout left in that
+ * state after a crash would never sync. Runs at boot.
+ */
 export async function releaseStrandedDeferrals(): Promise<number> {
-  const held = await db.outbox.toArray()
   const workoutIds = new Set(
-    held
+    (await db.outbox.toArray())
       .map((e) => e.deferredForWorkoutId)
       .filter((id): id is string => id !== undefined),
   )
 
   let cleared = 0
   for (const workoutId of workoutIds) {
+    // Snapshots don't outlive the session that created them (App clears them at
+    // boot), so one here means an edit really is open.
     if (await db.editSnapshots.get(workoutId)) continue
     const workout = await db.workouts.get(workoutId)
     // Still genuinely in progress: the deferral is doing its job.
     if (workout && workout.endedAt === null && workout.deletedAt === null) continue
 
-    // Discarded or gone. Releasing these would push a frozen `endedAt: null`
-    // insert and resurrect the workout server-side as the one active session,
-    // which then collides with every session after it.
+    // Discarded or gone. Releasing these would push a workout the server never
+    // saw and then tombstone it, and the insert would collide with the
+    // one-active-workout index on the way through.
     if (!workout || workout.deletedAt !== null) {
       cleared += await dropQueuedWrites(workoutId)
       continue
@@ -249,9 +202,29 @@ export async function releaseStrandedDeferrals(): Promise<number> {
   return cleared
 }
 
-// Whether an open edit has actually changed anything. The writes it holds back
-// ARE the edit, so an empty held queue means leaving costs nothing and needs no
-// "you'll lose this" prompt.
+/** Drops the queued write for a row, for when the row is removed outright. */
+export async function forgetQueuedWrite(table: string, rowId: string): Promise<void> {
+  const entry = await db.outbox.where('[table+rowId]').equals([table, rowId]).first()
+  if (entry) await db.outbox.delete(entry.seq!)
+}
+
+/**
+ * Ends any edit session left over from a previous launch, keeping the edits.
+ *
+ * A snapshot exists so Cancel can restore a workout, which only makes sense while
+ * the user is still on that screen — it can't survive being force-quit. But
+ * `deferralFor` reads the snapshot as "this workout is being written", so one left
+ * behind by a crash held that workout's writes forever, and nothing retried them:
+ * the workout looked synced while its sets sat pending on a parent that could
+ * never be sent. Dropping the snapshot keeps what's on screen (the local rows are
+ * the edited state) and lets releaseStrandedDeferrals free the writes. Runs at boot.
+ */
+export async function endStaleEditSessions(): Promise<number> {
+  const snapshots = await db.editSnapshots.toArray()
+  if (snapshots.length === 0) return 0
+  await db.editSnapshots.clear()
+  return snapshots.length
+}
 
 export async function requeueWorkoutSubtree(workoutId: string): Promise<void> {
   const workoutExercises = await db.workoutExercises
@@ -259,49 +232,9 @@ export async function requeueWorkoutSubtree(workoutId: string): Promise<void> {
     .equals(workoutId)
     .toArray()
   for (const we of workoutExercises) {
-    await enqueue('workoutExercises', 'update', we.id, we, we.clientRev)
+    await enqueue('workoutExercises', we.id)
     for (const set of await db.sets.where('workoutExerciseId').equals(we.id).toArray()) {
-      await enqueue('sets', 'update', set.id, set, set.clientRev)
+      await enqueue('sets', set.id)
     }
   }
-}
-
-/**
- * Re-queues the parent of any pending chained write whose parent isn't already
- * queued, reading it from the local row. Heals a set (or workout-exercise) whose
- * server parent went missing — dead-lettered then purged, say — so it FK-fails
- * forever with nothing to retry against. Idempotent: the parent upserts, and an
- * already-synced parent is a harmless no-op. Returns how many parents it added.
- */
-export async function reenqueueOrphanedParents(): Promise<number> {
-  const queued = new Set(
-    (await db.outbox.toArray()).map((e) => `${e.table}:${e.rowId}`),
-  )
-  let repaired = 0
-
-  for (const entry of await db.outbox.where('table').equals('sets').toArray()) {
-    const weId =
-      (entry.payload as { workoutExerciseId?: string }).workoutExerciseId ??
-      (await db.sets.get(entry.rowId))?.workoutExerciseId
-    if (!weId || queued.has(`workoutExercises:${weId}`)) continue
-    const we = await db.workoutExercises.get(weId)
-    if (!we || we.deletedAt !== null) continue
-    await enqueue('workoutExercises', 'update', we.id, we, we.clientRev)
-    queued.add(`workoutExercises:${weId}`)
-    repaired += 1
-  }
-
-  // Re-read: a workout_exercise just re-queued above needs its workout too.
-  for (const entry of await db.outbox.where('table').equals('workoutExercises').toArray()) {
-    const workoutId =
-      (entry.payload as { workoutId?: string }).workoutId ??
-      (await db.workoutExercises.get(entry.rowId))?.workoutId
-    if (!workoutId || queued.has(`workouts:${workoutId}`)) continue
-    const workout = await db.workouts.get(workoutId)
-    if (!workout || workout.deletedAt !== null) continue
-    await enqueue('workouts', 'update', workout.id, workout, workout.clientRev)
-    queued.add(`workouts:${workoutId}`)
-    repaired += 1
-  }
-  return repaired
 }

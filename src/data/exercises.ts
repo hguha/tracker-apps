@@ -55,7 +55,7 @@ export async function createExercise(input: NewExerciseInput): Promise<string> {
     ...syncStamp(),
   }
   await db.exercises.add(exercise)
-  await enqueue('exercises', 'insert', exercise.id, exercise, exercise.clientRev)
+  await enqueue('exercises', exercise.id)
   return exercise.id
 }
 
@@ -89,7 +89,7 @@ export async function saveExerciseEdits(
     ...syncStamp(),
   }
   await db.exercises.add(clone)
-  await enqueue('exercises', 'insert', clone.id, clone, clone.clientRev)
+  await enqueue('exercises', clone.id)
 
   await repointExerciseReferences(id, clone.id)
   // Hide the shared original for this device; system rows can't sync a change.
@@ -252,7 +252,7 @@ export async function migrateToBaseExercises(): Promise<void> {
       ...touch(we.clientRev),
     })
     const full = await db.workoutExercises.get(we.id)
-    if (full) await enqueue('workoutExercises', 'update', full.id, full, full.clientRev)
+    if (full) await enqueue('workoutExercises', full.id)
   }
   for (const te of await db.templateExercises.toArray()) {
     if ((te as { equipment?: Equipment }).equipment !== undefined) continue
@@ -263,7 +263,7 @@ export async function migrateToBaseExercises(): Promise<void> {
       ...touch(te.clientRev),
     })
     const full = await db.templateExercises.get(te.id)
-    if (full) await enqueue('templateExercises', 'update', full.id, full, full.clientRev)
+    if (full) await enqueue('templateExercises', full.id)
   }
 
   // Hide the retired equipment-named system rows locally (they can't sync a change).
@@ -313,7 +313,7 @@ export async function repointRetiredBaseExercises(): Promise<void> {
       })
       const full = await db.workoutExercises.get(we.id)
       if (full) {
-        await enqueue('workoutExercises', 'update', full.id, full, full.clientRev)
+        await enqueue('workoutExercises', full.id)
         touched.add(`${newId}:${full.equipment}`)
       }
     }
@@ -326,7 +326,7 @@ export async function repointRetiredBaseExercises(): Promise<void> {
       })
       const full = await db.templateExercises.get(te.id)
       if (full)
-        await enqueue('templateExercises', 'update', full.id, full, full.clientRev)
+        await enqueue('templateExercises', full.id)
     }
 
     // The old system row can't sync a change, so hide it locally instead.

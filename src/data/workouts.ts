@@ -5,6 +5,7 @@ import { type SetSignal } from '@/lib/sessionTitle'
 import {
   dropQueuedWrites,
   enqueue,
+  forgetQueuedWrite,
   isWorkoutUnsent,
   newId,
   patchRow,
@@ -42,7 +43,7 @@ export async function startWorkout(
     ...syncStamp(),
   }
   await db.workouts.add(workout)
-  await enqueue('workouts', 'insert', workout.id, workout, workout.clientRev)
+  await enqueue('workouts', workout.id)
   return workout.id
 }
 
@@ -189,12 +190,27 @@ export async function discardEmptySets(workoutId: string): Promise<number> {
   const workoutExercises = await listWorkoutExercises(workoutId)
   let discarded = 0
 
+  // A placeholder row from a session the server has never seen is removed rather
+  // than tombstoned: a row nobody has heard of doesn't need a delete propagated,
+  // and sending it as one is two round trips for something that never held data.
+  const unsent = await isWorkoutUnsent(workoutId)
+  const discardRow = async (table: 'sets' | 'workoutExercises', id: string) => {
+    if (!unsent) {
+      if (table === 'sets') await deleteSet(id)
+      else await removeWorkoutExercise(id)
+      return
+    }
+    if (table === 'sets') await db.sets.delete(id)
+    else await db.workoutExercises.delete(id)
+    await forgetQueuedWrite(table, id)
+  }
+
   for (const we of workoutExercises) {
     const exercise = await db.exercises.get(we.exerciseId)
     if (!exercise) continue
     for (const set of await listSets(we.id)) {
       if (!setHasValues(set, exercise)) {
-        await deleteSet(set.id)
+        await discardRow('sets', set.id)
         discarded += 1
       }
     }
@@ -202,7 +218,7 @@ export async function discardEmptySets(workoutId: string): Promise<number> {
 
   for (const we of workoutExercises) {
     if ((await listSets(we.id)).length === 0) {
-      await removeWorkoutExercise(we.id)
+      await discardRow('workoutExercises', we.id)
     }
   }
 
@@ -225,7 +241,7 @@ export async function deleteWorkout(id: string): Promise<void> {
   if (!isUnsent) {
     const workout = await db.workouts.get(id)
     if (workout) {
-      await enqueue('workouts', 'update', id, workout, workout.clientRev)
+      await enqueue('workouts', id)
     }
   }
   await rebuildLastPerformanceForWorkout(id)
@@ -269,7 +285,7 @@ export async function addExerciseToWorkout(
     ...syncStamp(),
   }
   await db.workoutExercises.add(row)
-  await enqueue('workoutExercises', 'insert', row.id, row, row.clientRev)
+  await enqueue('workoutExercises', row.id)
   return row.id
 }
 

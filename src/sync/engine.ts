@@ -2,10 +2,10 @@
 // server. Backend-agnostic (§5.6): talks only to `SyncBackend`.
 
 import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
-import type { PushRow, SyncBackend } from './backend'
+import type { SyncBackend } from './backend'
 import { syncLog } from './log'
 import { reportError } from '@/lib/errorReporter'
-import { deferralFor } from '@/data/repository'
+import { enqueue } from '@/data/repository'
 
 // Tables that participate in sync, in dependency order for the initial pull.
 // `personalRecords` is absent: PRs are derived from sets and recomputed per device.
@@ -30,6 +30,19 @@ export function backoffMs(attempts: number, jitter = 0.5): number {
   return Math.round(base + spread)
 }
 
+/**
+ * How many times a row may fail transiently before it is dead-lettered.
+ *
+ * There has to be a ceiling. A row can be *permanently* broken in a way the
+ * server reports as retryable — a foreign key to a parent that will never exist,
+ * say — and without a cap that row retries every five minutes for the life of the
+ * install, which is the "sync runs forever" failure. Reaching the cap turns an
+ * invisible infinite retry into one visible, reportable failure the user can act
+ * on. Eight attempts spans roughly 20 minutes of backoff, so a genuine outage
+ * still clears on its own.
+ */
+const MAX_ATTEMPTS = 8
+
 export interface DrainResult {
   pushed: number
   deadLettered: number
@@ -41,120 +54,121 @@ export class SyncEngine {
 
   constructor(private backend: SyncBackend) {}
 
-  // Drains the outbox oldest first. One failure no longer stalls the rest: a
-  // transiently-failed row is left to back off and the drain moves on to
-  // independent rows, so a single stuck write can't block every later one (the
-  // "nothing syncs behind the bad row" bug). Only a child of a failed row is
-  // held back, to keep parents ahead of children. Re-entrant-safe.
+  /**
+   * Pushes every ready row, parents before children.
+   *
+   * Ordering is by table dependency (SYNCED_TABLES) and then by `seq`, so a set
+   * can never reach the server ahead of its workout — the foreign key holds by
+   * construction rather than by failing and retrying. A row that fails only
+   * blocks its own descendants; everything independent still goes, so one bad
+   * write can't stall the queue behind it. Re-entrant-safe.
+   */
   async drain(now = Date.now()): Promise<DrainResult> {
     if (this.draining) return { pushed: 0, deadLettered: 0, stoppedBecause: null }
     this.draining = true
+
     let pushed = 0
     let deadLettered = 0
-    // Rows the server rejected outright: their children can only fail too, so
-    // they're dead-lettered rather than sent, and the cause isn't buried under a
-    // pile of child failures.
-    const rejectedRowIds = new Set<string>()
-    // Rows that failed transiently OR whose parent did: skip their children this
-    // pass so a child never races ahead of a parent that hasn't landed.
-    const blockedRowIds = new Set<string>()
-    // Entries examined this pass, so re-querying the head can't loop on one we've
-    // already handled but didn't delete (a transient failure or a skip).
-    const handledSeqs = new Set<number>()
-    let sawTransient = false
+    let stoppedBecause: DrainResult['stoppedBecause'] = null
+    // Rows the server refused outright. A descendant can never land while its
+    // parent is missing, so it's dead-lettered alongside it, naming the row to
+    // fix — otherwise the real cause is buried under a pile of child failures.
+    const rejected = new Set<string>()
+    // Rows that failed for a reason that may pass later. A descendant is left
+    // queued, not sent: the request would only fail on the foreign key and burn
+    // an attempt on someone else's problem.
+    const blocked = new Set<string>()
 
     try {
-      // Ordered by seq so dependent writes replay in insertion order; re-read each
-      // iteration to pick up mid-drain entries. Deferred entries are skipped so a
-      // live workout doesn't stall others.
-      while (true) {
-        const entry = await db.outbox
-          .orderBy('seq')
-          .filter((e) => isReadyToPush(e) && !handledSeqs.has(e.seq!))
-          .first()
-        if (!entry) break
-        handledSeqs.add(entry.seq!)
+      const ready = (await db.outbox.toArray())
+        .filter(isReadyToPush)
+        .sort((a, b) => tableRank(a.table) - tableRank(b.table) || a.seq! - b.seq!)
 
-        // Still backing off — not due yet. Leave it; try again on a later drain.
-        if (entry.attempts > 0 && entry.nextAttemptAt && entry.nextAttemptAt > now) {
-          sawTransient = true
+      for (const entry of ready) {
+        if (entry.nextAttemptAt !== undefined && entry.nextAttemptAt > now) {
+          stoppedBecause = 'transient'
           continue
         }
 
-        // A row is held back if it, its parent, or an earlier entry for the same
-        // row failed this pass — so children never precede parents and a row's
-        // own insert/update stay in order.
-        const parent = parentRowIdOf(entry)
-        const rejectedBy = rejectedRowIds.has(entry.rowId)
-          ? entry.rowId
-          : parent !== undefined && rejectedRowIds.has(parent)
-            ? parent
-            : undefined
-        if (rejectedBy !== undefined) {
-          syncLog.warn(
-            `SKIPPED ${entry.op} ${entry.table}/${entry.rowId} — ${rejectedBy} was rejected`,
-          )
+        const row = await currentRow(entry.table, entry.rowId)
+        // Gone locally — a placeholder that was never filled in, or a discarded
+        // row. There is nothing to send, so stop tracking it.
+        if (row === undefined) {
+          await db.outbox.delete(entry.seq!)
+          syncLog.info(`dropped ${entry.table}/${entry.rowId} — no local row`)
+          continue
+        }
+
+        const parentId = parentRowId(entry.table, row)
+        if (parentId !== undefined && rejected.has(parentId)) {
+          rejected.add(entry.rowId)
           await this.deadLetter(
             entry,
-            `Skipped: row ${rejectedBy} was rejected by the server.`,
+            row,
+            `Not sent: its parent row ${parentId} was rejected by the server.`,
+            entry.attempts,
             now,
-            false,
           )
-          rejectedRowIds.add(entry.rowId)
           deadLettered += 1
           continue
         }
-        if (
-          blockedRowIds.has(entry.rowId) ||
-          (parent !== undefined && blockedRowIds.has(parent))
-        ) {
-          // Something it depends on failed transiently this pass; hold it.
-          blockedRowIds.add(entry.rowId)
+        if (parentId !== undefined && blocked.has(parentId)) {
+          blocked.add(entry.rowId)
+          stoppedBecause = 'transient'
+          syncLog.info(
+            `held ${entry.table}/${entry.rowId} — parent ${parentId} hasn't landed`,
+          )
           continue
         }
 
-        const outcome = await this.backend.push(toPushRow(entry))
+        const outcome = await this.backend.push({
+          table: entry.table,
+          rowId: entry.rowId,
+          row,
+        })
 
         if (outcome.status === 'ok') {
           await db.outbox.delete(entry.seq!)
           pushed += 1
-          syncLog.info(`pushed ${entry.op} ${entry.table}/${entry.rowId}`)
+          syncLog.info(`pushed ${entry.table}/${entry.rowId}`)
           continue
         }
 
+        // Every push carries the same token, so one auth failure means they all
+        // fail. Stop the pass and leave the queue intact for after re-auth.
         if (outcome.status === 'auth') {
-          // Every push needs the same token, so stop the whole pass to re-auth.
           syncLog.warn(
-            `auth failure on ${entry.op} ${entry.table}/${entry.rowId} — pausing drain for re-auth`,
+            `auth failure on ${entry.table}/${entry.rowId} — pausing for re-auth`,
             outcome.error,
           )
           return { pushed, deadLettered, stoppedBecause: 'auth' }
         }
 
-        if (outcome.status === 'permanent') {
-          syncLog.warn(
-            `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
-            outcome.error,
-          )
-          await this.deadLetter(entry, outcome.error, now, true)
-          rejectedRowIds.add(entry.rowId)
+        const attempts = entry.attempts + 1
+        // Out of attempts counts as refused: retrying has stopped being a plan.
+        if (outcome.status === 'permanent' || attempts >= MAX_ATTEMPTS) {
+          const reason =
+            outcome.status === 'permanent'
+              ? outcome.error
+              : `still failing after ${attempts} attempts: ${outcome.error}`
+          rejected.add(entry.rowId)
+          await this.deadLetter(entry, row, reason, attempts, now)
           deadLettered += 1
           continue
         }
 
-        // Transient: back it off and move on to independent rows.
-        const attempts = entry.attempts + 1
+        // Worth another go later: back it off and let the rest of the pass run.
         const nextAttemptAt = now + backoffMs(attempts, Math.random())
         await db.outbox.update(entry.seq!, {
           attempts,
           lastError: outcome.error,
           nextAttemptAt,
         })
-        blockedRowIds.add(entry.rowId)
-        sawTransient = true
+        blocked.add(entry.rowId)
+        stoppedBecause = 'transient'
         syncLog.warn(
-          `transient failure on ${entry.op} ${entry.table}/${entry.rowId} ` +
-            `(attempt ${attempts}) — retrying in ${Math.round((nextAttemptAt - now) / 1000)}s`,
+          `transient failure on ${entry.table}/${entry.rowId} (attempt ${attempts}` +
+            `/${MAX_ATTEMPTS}) — retrying in ${Math.round((nextAttemptAt - now) / 1000)}s`,
           outcome.error,
         )
       }
@@ -165,36 +179,40 @@ export class SyncEngine {
     if (pushed > 0 || deadLettered > 0) {
       syncLog.info(`drain done — pushed ${pushed}, dead-lettered ${deadLettered}`)
     }
-    return { pushed, deadLettered, stoppedBecause: sawTransient ? 'transient' : null }
+    return { pushed, deadLettered, stoppedBecause }
   }
 
   private async deadLetter(
     entry: OutboxEntry,
+    row: Record<string, unknown>,
     error: string,
+    attempts: number,
     failedAt: number,
-    report: boolean,
   ): Promise<void> {
+    syncLog.warn(`DEAD-LETTERED ${entry.table}/${entry.rowId}`, error)
     await db.transaction('rw', db.outbox, db.deadLetter, async () => {
       await db.deadLetter.add({
         table: entry.table,
-        op: entry.op,
         rowId: entry.rowId,
-        payload: entry.payload,
-        clientRev: entry.clientRev,
+        row,
         queuedAt: entry.queuedAt,
         failedAt,
+        attempts,
         error,
       })
       await db.outbox.delete(entry.seq!)
     })
-    // Surface the real rejections (not the skip cascade) to client_errors so a
-    // dead-letter is diagnosable from the server side, not just on the device.
-    if (report) {
-      void reportError(
-        'sync-dead-letter',
-        new Error(`${entry.table}/${entry.op} ${entry.rowId}: ${error}`),
-      )
-    }
+    // Every dead-letter is reported: this is the only failure the user can't
+    // resolve by waiting, so it needs to be diagnosable from the server side.
+    // Age matters — a row queued days ago is a different story from a fresh one.
+    const ageMinutes = Math.round((failedAt - entry.queuedAt) / 60_000)
+    void reportError(
+      'sync-dead-letter',
+      new Error(
+        `${entry.table}/${entry.rowId} after ${attempts} attempt(s), ` +
+          `queued ${ageMinutes}m ago: ${error}`,
+      ),
+    )
   }
 
   // Pulls deltas into IndexedDB. Merge rule (§5.5): the server row wins unless a local outbox entry for that row is still pending.
@@ -250,7 +268,15 @@ export class SyncEngine {
     return { drain, pull }
   }
 
-  // Drains repeatedly until the queue settles, waiting out each backoff. Stops early on `auth` and gives up after `maxRounds`.
+  /**
+   * Drains repeatedly until the queue empties or nothing more can be done,
+   * waiting out backoffs in between.
+   *
+   * Termination is guaranteed three ways: each round either makes progress or
+   * ends the loop, every wait advances the clock past the soonest due time, and
+   * `maxRounds` caps the whole thing regardless. Without all three this is the
+   * natural place for a spin.
+   */
   async drainUntilSettled(
     opts: {
       maxRounds?: number
@@ -264,7 +290,8 @@ export class SyncEngine {
 
     let pushed = 0
     let deadLettered = 0
-    // The clock the drain sees, advanced past each backoff waited out; carrying it explicitly lets a test stub `sleep`.
+    // The clock the drain sees, advanced past each backoff waited out, so a test
+    // can stub `sleep` without real time passing.
     let clock = Date.now()
 
     for (let round = 0; round < maxRounds; round += 1) {
@@ -275,23 +302,19 @@ export class SyncEngine {
       const ready = (await db.outbox.toArray()).filter(isReadyToPush)
       opts.onProgress?.({ pushed, remaining: ready.length })
 
-      if (ready.length === 0) break
-      if (result.stoppedBecause === 'auth') break
+      if (ready.length === 0 || result.stoppedBecause === 'auth') break
 
-      // Wait out the head entry's backoff specifically — it's the one blocking the drain; a min across all ready entries would pick up never-failed ones (nextAttemptAt 0) and exit immediately.
-      const head = ready.reduce((a, b) => ((a.seq ?? 0) <= (b.seq ?? 0) ? a : b))
-      const dueAt = head.nextAttemptAt ?? 0
-      const waitMs = Math.max(0, dueAt - clock)
+      // The soonest any remaining row is due. Anything already due was tried this
+      // round and failed, so waiting for the earliest future one is the only way
+      // forward; if nothing is scheduled, another round would repeat this one.
+      const dueTimes = ready
+        .map((e) => e.nextAttemptAt ?? 0)
+        .filter((at) => at > clock)
+      if (dueTimes.length === 0) break
 
-      // Nothing moved and the head is already due — it's failing outright, not backing off, so stop instead of spinning.
-      if (result.pushed === 0 && result.deadLettered === 0 && waitMs === 0) break
-
-      if (waitMs > 0) {
-        await sleep(Math.min(waitMs, 30_000))
-        clock = Math.max(Date.now(), dueAt)
-      } else {
-        clock = Date.now()
-      }
+      const dueAt = Math.min(...dueTimes)
+      await sleep(Math.min(dueAt - clock, 30_000))
+      clock = Math.max(Date.now(), dueAt)
     }
 
     const remaining = (await db.outbox.toArray()).filter(isReadyToPush).length
@@ -352,52 +375,29 @@ export class SyncEngine {
     return { discarded, applied }
   }
 
-  // User-driven "try again": requeue dead-lettered writes onto the outbox. Two invariants,
-  // both from RLS failures after a device-only → account upgrade: (1) re-read the current row
-  // rather than replay the frozen payload, whose `user_id: 'local-user'` RLS rejects forever;
-  // (2) requeue in SYNCED_TABLES (dependency) order, or a chained row can go ahead of its
-  // parent and fail RLS again. A row that no longer exists locally is dropped, not requeued.
+  /**
+   * User-driven "try again": moves dead-lettered rows back onto the outbox.
+   *
+   * `enqueue` is what re-queues them, so they pick up the same deferral rule as
+   * any other write (a row whose workout is open for editing stays held) and the
+   * same one-entry-per-row collapse. A row that no longer exists locally is
+   * dropped rather than requeued — there's nothing left to send.
+   */
   async retryDeadLettered(): Promise<number> {
     const failed = await db.deadLetter.toArray()
     if (failed.length === 0) return 0
 
-    const rank = (table: string) => {
-      const index = (SYNCED_TABLES as readonly string[]).indexOf(table)
-      return index === -1 ? SYNCED_TABLES.length : index
-    }
-    const ordered = [...failed].sort(
-      (a, b) => rank(a.table) - rank(b.table) || (a.seq ?? 0) - (b.seq ?? 0),
-    )
-
     let requeued = 0
     let dropped = 0
 
-    for (const entry of ordered) {
-      const current = await currentRow(entry.table, entry.rowId)
-      if (current === undefined) {
+    for (const entry of failed) {
+      if ((await currentRow(entry.table, entry.rowId)) === undefined) {
         await db.deadLetter.delete(entry.seq!)
         dropped += 1
         continue
       }
-
-      // Re-apply deferral: a retried child of a session that is live again must be
-      // held, not handed straight back to the drain. Resolved before the
-      // transaction opens — it reads workout tables that aren't in its scope.
-      const deferral = await deferralFor(entry.table, entry.rowId, current)
-
-      await db.transaction('rw', db.outbox, db.deadLetter, async () => {
-        await db.outbox.add({
-          table: entry.table,
-          op: 'update',
-          rowId: entry.rowId,
-          payload: current,
-          clientRev: Number((current as { clientRev?: unknown }).clientRev ?? 1),
-          queuedAt: entry.queuedAt,
-          ...deferral,
-          attempts: 0,
-        })
-        await db.deadLetter.delete(entry.seq!)
-      })
+      await enqueue(entry.table, entry.rowId)
+      await db.deadLetter.delete(entry.seq!)
       requeued += 1
     }
 
@@ -409,6 +409,13 @@ export class SyncEngine {
   }
 }
 
+// Push order: parents before children, so a foreign key can't be violated by
+// ordering. SYNCED_TABLES is already in dependency order.
+function tableRank(table: string): number {
+  const index = (SYNCED_TABLES as readonly string[]).indexOf(table)
+  return index === -1 ? SYNCED_TABLES.length : index
+}
+
 async function currentRow(
   table: string,
   rowId: string,
@@ -417,22 +424,13 @@ async function currentRow(
   return tableStore(table as SyncedTable).get(rowId)
 }
 
-// The row this one is a child of, read off the payload. Only the two chained
+// The row this one hangs off, read from the row itself. Only the two chained
 // workout tables have a parent; everything else stands alone.
-function parentRowIdOf(entry: OutboxEntry): string | undefined {
-  const payload = entry.payload as { workoutId?: string; workoutExerciseId?: string }
-  if (entry.table === 'workoutExercises') return payload.workoutId
-  if (entry.table === 'sets') return payload.workoutExerciseId
-  return undefined
-}
-
-function toPushRow(entry: OutboxEntry): PushRow {
-  return {
-    table: entry.table,
-    op: entry.op,
-    rowId: entry.rowId,
-    payload: entry.payload as Record<string, unknown>,
-  }
+function parentRowId(table: string, row: Record<string, unknown>): string | undefined {
+  const key = table === 'workoutExercises' ? 'workoutId' : table === 'sets' ? 'workoutExerciseId' : null
+  if (key === null) return undefined
+  const value = row[key]
+  return typeof value === 'string' ? value : undefined
 }
 
 // Backfills domain fields a pulled row can't carry from Postgres — e.g. a missing `aliases`

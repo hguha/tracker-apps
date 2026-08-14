@@ -66,7 +66,7 @@ export async function addSet(input: NewSetInput): Promise<string> {
     ...syncStamp(),
   }
   await db.sets.add(set)
-  await enqueue('sets', 'insert', set.id, set, set.clientRev)
+  await enqueue('sets', set.id)
   return set.id
 }
 

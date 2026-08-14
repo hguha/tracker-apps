@@ -61,7 +61,7 @@ export async function createTemplate(
     ...syncStamp(),
   }
   await db.templates.add(template)
-  await enqueue('templates', 'insert', template.id, template, template.clientRev)
+  await enqueue('templates', template.id)
   return template.id
 }
 
@@ -117,7 +117,7 @@ export async function addExerciseToTemplate(
     ...syncStamp(),
   }
   await db.templateExercises.add(row)
-  await enqueue('templateExercises', 'insert', row.id, row, row.clientRev)
+  await enqueue('templateExercises', row.id)
   return row.id
 }
 
@@ -271,7 +271,7 @@ export async function saveWorkoutAsTemplate(
     ...syncStamp(),
   }
   await db.templates.add(template)
-  await enqueue('templates', 'insert', template.id, template, template.clientRev)
+  await enqueue('templates', template.id)
 
   const workoutExercises = await listWorkoutExercises(workoutId)
   for (const we of workoutExercises) {
@@ -297,7 +297,7 @@ export async function saveWorkoutAsTemplate(
       ...syncStamp(),
     }
     await db.templateExercises.add(row)
-    await enqueue('templateExercises', 'insert', row.id, row, row.clientRev)
+    await enqueue('templateExercises', row.id)
   }
 
   return template.id

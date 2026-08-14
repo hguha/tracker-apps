@@ -74,7 +74,7 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         }
         await db.profiles.put(merged)
         await db.profiles.delete(LOCAL_USER_ID)
-        await enqueue('profiles', 'update', newUserId, merged, merged.clientRev)
+        await enqueue('profiles', newUserId)
         claimed += 1
       }
 
@@ -95,7 +95,7 @@ export async function claimLocalData(newUserId: string): Promise<number> {
             clientRev: row.clientRev + 1,
           }
           await store.put(next)
-          await enqueue(table, 'update', row.id, next, next.clientRev)
+          await enqueue(table, row.id)
           track?.add(row.id)
           claimed += 1
         }
@@ -115,7 +115,7 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         if (!claimedWorkoutIds.has(we.workoutId)) continue
         const next = { ...we, updatedAt: now, clientRev: we.clientRev + 1 }
         await db.workoutExercises.put(next)
-        await enqueue('workoutExercises', 'update', we.id, next, next.clientRev)
+        await enqueue('workoutExercises', we.id)
         claimed += 1
       }
 
@@ -129,7 +129,7 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         if (!workoutId || !claimedWorkoutIds.has(workoutId)) continue
         const next = { ...set, updatedAt: now, clientRev: set.clientRev + 1 }
         await db.sets.put(next)
-        await enqueue('sets', 'update', set.id, next, next.clientRev)
+        await enqueue('sets', set.id)
         claimed += 1
       }
 
@@ -138,7 +138,7 @@ export async function claimLocalData(newUserId: string): Promise<number> {
         if (!claimedTemplateIds.has(te.templateId)) continue
         const next = { ...te, updatedAt: now, clientRev: te.clientRev + 1 }
         await db.templateExercises.put(next)
-        await enqueue('templateExercises', 'update', te.id, next, next.clientRev)
+        await enqueue('templateExercises', te.id)
         claimed += 1
       }
     },

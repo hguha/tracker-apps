@@ -30,8 +30,21 @@ export class MockBackend implements SyncBackend {
     for (let i = 0; i < times; i += 1) this.forced.push(outcome)
   }
 
+  /**
+   * Fail every push to one table. Push order is by table dependency, not by when
+   * a row was queued, so a test that wants a *particular* row to fail says which
+   * table rather than counting pushes.
+   */
+  private failingTables = new Map<string, PushOutcome>()
+
+  failTable(table: string, outcome: PushOutcome): void {
+    this.failingTables.set(table, outcome)
+  }
+
   async push(row: PushRow): Promise<PushOutcome> {
     this.pushed.push(row)
+    const byTable = this.failingTables.get(row.table)
+    if (byTable) return byTable
     const forced = this.forced.shift()
     if (forced && forced.status !== 'ok') return forced
 
@@ -41,7 +54,7 @@ export class MockBackend implements SyncBackend {
     // ordering guarantees can't be tested at all.
     const parent = PARENTS[row.table]
     if (parent) {
-      const parentId = (row.payload as Record<string, unknown>)[parent.field]
+      const parentId = row.row[parent.field]
       if (typeof parentId === 'string' && !this.store.get(parent.table)?.has(parentId)) {
         return {
           status: 'transient',
@@ -55,7 +68,7 @@ export class MockBackend implements SyncBackend {
     // a stale "in progress" payload violates it permanently, which is what used to
     // dead-letter a whole finished session. Without this the mock accepts it.
     if (row.table === 'workouts') {
-      const payload = row.payload as { endedAt?: unknown; deletedAt?: unknown }
+      const payload = row.row as { endedAt?: unknown; deletedAt?: unknown }
       if (payload.endedAt === null && payload.deletedAt === null) {
         for (const [id, existing] of this.store.get('workouts') ?? []) {
           if (id === row.rowId) continue
@@ -74,7 +87,7 @@ export class MockBackend implements SyncBackend {
     const table = this.store.get(row.table) ?? new Map()
     // Upsert on rowId — idempotent, so a replay is harmless.
     const existing = table.get(row.rowId) ?? {}
-    table.set(row.rowId, { ...existing, ...row.payload, id: row.rowId })
+    table.set(row.rowId, { ...existing, ...row.row, id: row.rowId })
     this.store.set(row.table, table)
     return { status: 'ok' }
   }

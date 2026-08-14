@@ -8,7 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { db } from '@/db/database'
+import { db, isReadyToPush } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import * as repo from '@/data/repository'
 import { SyncEngine } from '@/sync/engine'
@@ -89,10 +89,7 @@ describe('outbox drain', () => {
     // Re-enqueue the same insert (as a replay would) and drain again.
     await db.outbox.add({
       table: 'workouts',
-      op: 'insert',
       rowId: workoutId,
-      payload: { id: workoutId, title: 'again' },
-      clientRev: 1,
       queuedAt: Date.now(),
       attempts: 0,
     })
@@ -116,7 +113,7 @@ describe('deferred sessions reach the server as finished sessions', () => {
     expect(result.deadLettered).toBe(0)
     expect(await db.deadLetter.count()).toBe(0)
     for (const push of backend.pushed.filter((p) => p.table === 'workouts')) {
-      expect((push.payload as { endedAt: number | null }).endedAt).not.toBeNull()
+      expect((push.row as { endedAt: number | null }).endedAt).not.toBeNull()
     }
   })
 
@@ -177,6 +174,33 @@ describe('deferred sessions reach the server as finished sessions', () => {
     expect(backend.get('sets', setId)).toBeDefined()
   })
 
+  it('frees writes held by an edit session the app never closed', async () => {
+    // The deadlock that made a device unsyncable: an edit snapshot marks a workout
+    // as still being written, so its writes are held. Force-quitting mid-edit left
+    // the snapshot behind, and nothing released it — the workout looked synced
+    // while its sets sat pending on a parent that could never be sent.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const { workoutId, setId } = await loggedWorkout()
+    await engine.drain()
+
+    await repo.beginWorkoutEdits(workoutId)
+    await repo.logSetValues(setId, { reps: 8 })
+    // Held, so nothing about the open edit reaches the server yet.
+    expect((await db.outbox.toArray()).every((e) => !isReadyToPush(e))).toBe(true)
+    await engine.drain()
+    expect((await db.sets.get(setId))!.reps).toBe(8)
+
+    // Relaunch: the edit session is over, and its writes must be freed.
+    await repo.endStaleEditSessions()
+    await repo.releaseStrandedDeferrals()
+    await engine.drain()
+
+    expect(await db.outbox.count()).toBe(0)
+    expect((backend.get('sets', setId) as { reps: number }).reps).toBe(8)
+  })
+
   it('forgets a discarded session stranded by an earlier build, rather than reviving it', async () => {
     // Releasing a stranded queue would push the frozen `endedAt: null` insert and
     // resurrect the workout as the one active session, so every later session then
@@ -208,8 +232,8 @@ describe('failure classification (§5.5)', () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)
 
-    // The poison push is the workout insert; an unrelated row is queued after it.
-    backend.forceNext({ status: 'permanent', error: 'bad payload' })
+    // The workout is the poison row; the template is unrelated to it.
+    backend.failTable('workouts', { status: 'permanent', error: 'bad payload' })
     await loggedWorkout('deadlift')
     await repo.createTemplate('Unrelated', null)
 
@@ -308,7 +332,7 @@ describe('failure classification (§5.5)', () => {
     const pushedWorkout = backend.pushed
       .filter((p) => p.table === 'workouts' && p.rowId === workoutId)
       .pop()
-    expect(pushedWorkout?.payload.userId).toBe(UID)
+    expect(pushedWorkout?.row.userId).toBe(UID)
     // The chained row is queued after its parent, so its RLS check can pass.
     const order = backend.pushed.map((p) => p.table)
     expect(order.lastIndexOf('workouts')).toBeLessThan(
@@ -538,6 +562,50 @@ describe('failure classification (§5.5)', () => {
     // ...but B synced end to end despite A failing ahead of it.
     expect(backend.get('workouts', b.workoutId)).toBeDefined()
     expect(backend.get('sets', b.setId)).toBeDefined()
+  })
+
+  it('gives up on a row that never stops failing, instead of retrying forever', async () => {
+    // Without a ceiling this is an infinite loop: a row can fail in a way the
+    // server calls retryable but that will never pass (a foreign key to a parent
+    // that no longer exists), and it would retry every five minutes for the life
+    // of the install, invisibly. The cap turns that into one visible failure.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    backend.failTable('workouts', { status: 'transient', error: 'always 503' })
+    const { workoutId } = await loggedWorkout()
+
+    // No real waiting: the stub advances the clock past each backoff.
+    const result = await engine.drainUntilSettled({ maxRounds: 40, sleep: async () => {} })
+
+    expect(result.remaining).toBe(0)
+    const dead = await db.deadLetter.toArray()
+    const workout = dead.find((d) => d.rowId === workoutId)!
+    expect(workout.error).toContain('always 503')
+    expect(workout.attempts).toBeGreaterThan(1)
+    // And it is off the retry path, so nothing loops on it.
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('pushes parents before children even when the child was queued first', async () => {
+    // Order is by table dependency, not by when a row was queued, so a foreign
+    // key can't be violated by ordering alone.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const { workoutId, workoutExerciseId, setId } = await loggedWorkout()
+    // Re-queue in the worst possible order: deepest child first.
+    await db.outbox.clear()
+    await repo.enqueue('sets', setId)
+    await repo.enqueue('workoutExercises', workoutExerciseId)
+    await repo.enqueue('workouts', workoutId)
+
+    const result = await engine.drain()
+
+    expect(result.stoppedBecause).toBeNull()
+    const order = backend.pushed.map((p) => p.table)
+    expect(order.indexOf('workouts')).toBeLessThan(order.indexOf('workoutExercises'))
+    expect(order.indexOf('workoutExercises')).toBeLessThan(order.indexOf('sets'))
   })
 
   it('pauses (does not dead-letter) on an auth failure', async () => {

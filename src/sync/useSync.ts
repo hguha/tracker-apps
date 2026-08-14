@@ -100,10 +100,6 @@ export function useSync(): SyncStatus {
     if (!active || !engine) return
     setPhase('syncing')
     try {
-      // Heal any orphaned child whose parent went missing, then settle rather
-      // than run one pass — a re-queued parent + its FK-failing children need a
-      // post-backoff round to go through.
-      await repo.reenqueueOrphanedParents()
       const { remaining } = await engine.drainUntilSettled()
       await engine.pull()
       setPhase(remaining > 0 ? 'error' : 'idle')
@@ -122,10 +118,8 @@ export function useSync(): SyncStatus {
         console.info(`[sync] re-owned ${claimed} rows to ${session.userId} before retry`)
       }
       const count = await engine.retryDeadLettered()
-      await repo.reenqueueOrphanedParents()
-      // drainUntilSettled, not one pass: re-queuing a dead-lettered parent lands
-      // it, but its FK-failing children need another round (after backoff) to go
-      // through. Settling here clears the whole subtree in one tap.
+      // Settle rather than run one pass: a re-queued parent lands first, and its
+      // children need the next round to follow it.
       const { remaining } = await engine.drainUntilSettled()
       await engine.pull()
       setPhase(remaining > 0 ? 'error' : 'idle')

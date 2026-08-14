@@ -15,15 +15,21 @@ import type {
   WorkoutSet,
 } from '@/domain/types'
 
-// Durable mutation queue (§5.5): every write goes through it so turning on sync is implementing the drain.
+/**
+ * Durable mutation queue (§5.5): one entry per dirty row, not a log of edits.
+ *
+ * The entry records *that* a row changed, never a copy of it — the drain reads
+ * the row at push time. A frozen payload was the source of a whole class of bug
+ * (a workout captured mid-session pushed `endedAt: null` after it had finished),
+ * and re-reading makes a replay idempotent by construction. It also means a
+ * second edit to the same row refreshes its entry instead of appending, so the
+ * queue is bounded by the number of dirty rows and the count the user sees is
+ * the number of rows behind, not round trips.
+ */
 export interface OutboxEntry {
   seq?: number
   table: string
-  op: 'insert' | 'update' | 'delete'
   rowId: string
-  // The full row, not a diff: the upsert re-checks the INSERT policy, so a partial payload lacks user_id and RLS rejects it.
-  payload: object
-  clientRev: number
   queuedAt: number
   attempts: number
   lastError?: string
@@ -41,16 +47,17 @@ export interface SyncState {
   lastPulledAt: number
 }
 
-// A permanently-failed entry (§5.5), moved off the drain path so a poison write can't block the queue.
+// A write the server refused, or that ran out of attempts (§5.5) — moved off the
+// drain path so a poison write can't block the queue. Carries the row as it stood
+// when it failed, plus how hard we tried, because that's what makes it diagnosable.
 export interface DeadLetterEntry {
   seq?: number
   table: string
-  op: 'insert' | 'update' | 'delete'
   rowId: string
-  payload: object
-  clientRev: number
+  row: object
   queuedAt: number
   failedAt: number
+  attempts: number
   error: string
 }
 
@@ -179,6 +186,47 @@ export class WorkoutDatabase extends Dexie {
             exercise.region =
               (muscleId !== undefined ? regionOf.get(muscleId) : undefined) ?? 'core'
             delete exercise.primaryMuscleId
+          })
+      })
+
+    // v9 makes the outbox one entry per dirty row instead of a log of edits: the
+    // [table+rowId] index is what lets enqueue refresh in place. Existing queues
+    // are collapsed to their earliest entry per row (seq order is the push order,
+    // so the earliest keeps parents ahead of children) and the frozen payload /
+    // op / clientRev are dropped — the drain reads the live row now.
+    this.version(9)
+      .stores({
+        outbox: '++seq, table, rowId, [table+rowId], deferredForWorkoutId',
+      })
+      .upgrade(async (tx) => {
+        const outbox = tx.table('outbox')
+        const seen = new Set<string>()
+        const duplicates: number[] = []
+        for (const entry of (await outbox.orderBy('seq').toArray()) as {
+          seq: number
+          table: string
+          rowId: string
+        }[]) {
+          const key = `${entry.table}:${entry.rowId}`
+          if (seen.has(key)) duplicates.push(entry.seq)
+          else seen.add(key)
+        }
+        await outbox.bulkDelete(duplicates)
+        await outbox.toCollection().modify((entry: Record<string, unknown>) => {
+          delete entry.op
+          delete entry.payload
+          delete entry.clientRev
+        })
+
+        await tx
+          .table('deadLetter')
+          .toCollection()
+          .modify((entry: Record<string, unknown>) => {
+            entry.row = entry.payload ?? {}
+            entry.attempts = entry.attempts ?? 0
+            delete entry.payload
+            delete entry.op
+            delete entry.clientRev
           })
       })
   }

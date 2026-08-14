@@ -16,22 +16,13 @@ export class SupabaseBackend implements SyncBackend {
 
   async push(row: PushRow): Promise<PushOutcome> {
     const table = tableToPostgres(row.table)
-    const payload = toPostgresRow(row.payload)
-
     try {
-      if (row.op === 'delete') {
-        // Soft delete (§4.11): a hard delete can't be represented in a pull-based sync.
-        const { error } = await this.client
-          .from(table)
-          .update({ deleted_at: new Date().toISOString() })
-          .eq('id', row.rowId)
-        return error ? classify(error) : { status: 'ok' }
-      }
-
       // Upsert on the client-generated id, so a replayed write is idempotent (§5.5).
+      // The full row, not a diff: the upsert re-checks the INSERT policy, and a
+      // partial tuple lacks user_id, which RLS then rejects.
       const { error } = await this.client
         .from(table)
-        .upsert({ ...payload, id: row.rowId }, { onConflict: 'id' })
+        .upsert({ ...toPostgresRow(row.row), id: row.rowId }, { onConflict: 'id' })
       return error ? classify(error) : { status: 'ok' }
     } catch (cause) {
       // A thrown error (network down, DNS) is always transient.

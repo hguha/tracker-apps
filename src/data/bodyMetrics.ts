@@ -39,7 +39,7 @@ export async function addMetricEntry(input: {
     ...syncStamp(),
   }
   await db.metricEntries.add(entry)
-  await enqueue('metricEntries', 'insert', entry.id, entry, entry.clientRev)
+  await enqueue('metricEntries', entry.id)
 
   // Bodyweight feeds volume math for bodyweight exercises, so cache the latest.
   if (input.definitionId === 'bodyweight') {

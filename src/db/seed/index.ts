@@ -113,7 +113,7 @@ async function repairExerciseTaxonomy(): Promise<void> {
     })
     if (row.userId !== null) {
       const fixed = await db.exercises.get(row.id)
-      if (fixed) await enqueue('exercises', 'update', fixed.id, fixed, fixed.clientRev)
+      if (fixed) await enqueue('exercises', fixed.id)
     }
   }
 }

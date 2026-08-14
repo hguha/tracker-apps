@@ -1,10 +1,12 @@
 // The one interface all server access goes through, so swapping Supabase is reimplementing this (§5.6).
 
+// The row as it stands locally, read at push time. There is no insert/update
+// distinction — the push is an upsert — and no delete: a soft-deleted row carries
+// its own `deletedAt`, so a tombstone is just its current state.
 export interface PushRow {
   table: string
-  op: 'insert' | 'update' | 'delete'
   rowId: string
-  payload: Record<string, unknown>
+  row: Record<string, unknown>
 }
 
 export type PushOutcome =
@@ -20,7 +22,7 @@ export interface PulledRow {
 }
 
 export interface SyncBackend {
-  /** Upsert or soft-delete; idempotent on rowId so a replayed push is harmless. */
+  /** Upsert on rowId, so a replayed push is harmless. */
   push(row: PushRow): Promise<PushOutcome>
 
   /** Every row with updated_at strictly greater than `since` (epoch ms), ascending. */
