@@ -2062,6 +2062,30 @@ describe('active user id + local data reset', () => {
     expect(await db.outbox.count()).toBe(0)
   })
 
+  it('reenqueueOrphanedParents re-queues the parent of a stranded set', async () => {
+    // The stuck state: a set is queued but its parent workout_exercise (and the
+    // workout above it) have no queued write, so the set FK-fails forever.
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    await repo.logSetValues(setId, {})
+    await repo.finishWorkout(workoutId)
+
+    // Drop everything except the set's write — the parents went missing.
+    const setEntries = (await db.outbox.toArray()).filter(
+      (e) => e.table === 'sets' && e.rowId === setId,
+    )
+    await db.outbox.clear()
+    for (const e of setEntries) await db.outbox.add({ ...e, seq: undefined })
+
+    const repaired = await repo.reenqueueOrphanedParents()
+
+    expect(repaired).toBe(2) // the workout_exercise and the workout above it
+    const tables = (await db.outbox.toArray()).map((e) => e.table)
+    expect(tables).toContain('workoutExercises')
+    expect(tables).toContain('workouts')
+  })
+
   it('purgeEmptyWorkouts removes finished sessions with no completed set', async () => {
     // A real session with logged work.
     const realId = await repo.startWorkout()

@@ -265,3 +265,43 @@ export async function requeueWorkoutSubtree(workoutId: string): Promise<void> {
     }
   }
 }
+
+/**
+ * Re-queues the parent of any pending chained write whose parent isn't already
+ * queued, reading it from the local row. Heals a set (or workout-exercise) whose
+ * server parent went missing — dead-lettered then purged, say — so it FK-fails
+ * forever with nothing to retry against. Idempotent: the parent upserts, and an
+ * already-synced parent is a harmless no-op. Returns how many parents it added.
+ */
+export async function reenqueueOrphanedParents(): Promise<number> {
+  const queued = new Set(
+    (await db.outbox.toArray()).map((e) => `${e.table}:${e.rowId}`),
+  )
+  let repaired = 0
+
+  for (const entry of await db.outbox.where('table').equals('sets').toArray()) {
+    const weId =
+      (entry.payload as { workoutExerciseId?: string }).workoutExerciseId ??
+      (await db.sets.get(entry.rowId))?.workoutExerciseId
+    if (!weId || queued.has(`workoutExercises:${weId}`)) continue
+    const we = await db.workoutExercises.get(weId)
+    if (!we || we.deletedAt !== null) continue
+    await enqueue('workoutExercises', 'update', we.id, we, we.clientRev)
+    queued.add(`workoutExercises:${weId}`)
+    repaired += 1
+  }
+
+  // Re-read: a workout_exercise just re-queued above needs its workout too.
+  for (const entry of await db.outbox.where('table').equals('workoutExercises').toArray()) {
+    const workoutId =
+      (entry.payload as { workoutId?: string }).workoutId ??
+      (await db.workoutExercises.get(entry.rowId))?.workoutId
+    if (!workoutId || queued.has(`workouts:${workoutId}`)) continue
+    const workout = await db.workouts.get(workoutId)
+    if (!workout || workout.deletedAt !== null) continue
+    await enqueue('workouts', 'update', workout.id, workout, workout.clientRev)
+    queued.add(`workouts:${workoutId}`)
+    repaired += 1
+  }
+  return repaired
+}
