@@ -14,6 +14,8 @@ import {
   parseBackup,
   BackupParseError,
 } from '@/data/backup'
+import { isNativePlatform } from '@/lib/platform'
+import { exportBackup, pickBackupText } from '@/platform/files'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -57,14 +59,10 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
     setIsExporting(true)
     try {
       const json = await exportToJson()
-      const blob = new Blob([json], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = backupFilename(new Date().toISOString().slice(0, 10))
-      link.click()
-      URL.revokeObjectURL(url)
-      toast.show('Backup downloaded')
+      const filename = backupFilename(new Date().toISOString().slice(0, 10))
+      // Native: OS share sheet. Web: a download. Same JSON either way.
+      const shared = await exportBackup(json, filename)
+      if (shared) toast.show('Backup saved')
     } catch {
       toast.show('Could not export')
     } finally {
@@ -72,10 +70,12 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
     }
   }
 
-  async function handleImportFile(file: File) {
+  async function handleImportFile(file?: File) {
     setIsImporting(true)
     try {
-      const backup = parseBackup(await file.text())
+      const text = await pickBackupText(file)
+      if (text === null) return
+      const backup = parseBackup(text)
       const counts = countsOf(backup)
       const ok = window.confirm(
         `Import ${counts.workouts} workouts, ${counts.templates} templates, ` +
@@ -301,7 +301,11 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               variant="secondary"
               className="flex-1"
               disabled={isImporting}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() =>
+                isNativePlatform()
+                  ? void handleImportFile()
+                  : fileInputRef.current?.click()
+              }
             >
               <Upload size={16} />
               {isImporting ? 'Importing…' : 'Import'}

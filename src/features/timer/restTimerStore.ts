@@ -3,6 +3,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { cancelRestDone, scheduleRestDone } from '@/platform/notify'
 
 interface RestTimerState {
   // Wall-clock ms when rest is up. null = no timer running.
@@ -33,13 +34,16 @@ export const useRestTimer = create<RestTimerState>()(
 
       start: (seconds, ctx) => {
         const now = Date.now()
+        const targetAt = now + seconds * 1000
         set({
-          targetAt: now + seconds * 1000,
+          targetAt,
           plannedSeconds: seconds,
           startedAt: now,
           setId: ctx.setId,
           exerciseId: ctx.exerciseId,
         })
+        // Native only: fire a locked-screen alert when rest is up (§rest timer).
+        scheduleRestDone(targetAt)
       },
 
       extend: (seconds) => {
@@ -47,7 +51,9 @@ export const useRestTimer = create<RestTimerState>()(
         if (targetAt === null) return
         // Extend from now if already expired, so "+30s" always gives a full 30s.
         const base = Math.max(targetAt, Date.now())
-        set({ targetAt: base + seconds * 1000 })
+        const next = base + seconds * 1000
+        set({ targetAt: next })
+        scheduleRestDone(next)
       },
 
       cancel: () => {
@@ -58,6 +64,7 @@ export const useRestTimer = create<RestTimerState>()(
           setId: null,
           exerciseId: null,
         })
+        cancelRestDone()
       },
 
       elapsedSeconds: () => {

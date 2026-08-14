@@ -5,6 +5,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:native": "tsc --noEmit && BASE_PATH=/ vite build",
+    "native:sync": "npm run build:native && cap sync",
+    "native:ios": "npm run native:sync && cap open ios",
+    "native:android": "npm run native:sync && cap open android",
+    "native:icons": "capacitor-assets generate --assetPath resources",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -15,6 +20,14 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@supabase/supabase-js": "^2.112.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -28,6 +41,10 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.17",

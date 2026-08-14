@@ -167,3 +167,104 @@ select occurred_at, app_version, context, message, url
 The build stamp lives in `VITE_APP_VERSION` and is `<pkg>.<version>+<git-sha>`,
 set at build time by `vite.config.ts` from `VERCEL_GIT_COMMIT_SHA` when Vercel
 provides it, or `git rev-parse HEAD` locally.
+
+---
+
+# Native builds (App Store & Play Store)
+
+The iOS and Android apps are the **same web build** wrapped in Capacitor (design:
+`docs/design-native-app.md`). The web infra is in the repo already:
+`capacitor.config.ts`, the `src/platform/*` seam, the `build:native`/`native:*`
+scripts, and icon sources in `resources/`. What's left is generating the native
+projects on a machine with the platform toolchains, then archiving and uploading.
+
+## One-time machine setup (macOS)
+
+```bash
+# Xcode (full IDE, not just Command Line Tools) — from the Mac App Store, then:
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -license accept
+# CocoaPods (Capacitor iOS uses it):
+brew install cocoapods          # or: sudo gem install cocoapods
+```
+
+Android (only if shipping to Play): install Android Studio, then set
+`ANDROID_HOME` and install an SDK platform + build-tools via its SDK Manager.
+
+## One-time project generation
+
+```bash
+npm install                     # ensure Capacitor deps are present
+npm run build:native            # produces dist/ with BASE_PATH=/
+npx cap add ios                 # generates ios/  (runs pod install)
+npx cap add android             # generates android/  (only if shipping to Play)
+npm run native:icons            # writes app icons + splash into both projects
+```
+
+Commit `ios/` and `android/` (the `.gitignore` already excludes Pods/build noise).
+
+## Every build after that
+
+```bash
+npm run native:ios              # build:native → cap sync → open Xcode
+# or
+npm run native:android          # → open Android Studio
+```
+
+`cap sync` copies the fresh `dist/` into the native project and updates plugins.
+Always run it (via the scripts) after any web change.
+
+## Shipping to the App Store — exact steps
+
+Assumes the Apple Developer Program membership is active.
+
+**A. App Store Connect — create the app record** (do once)
+1. https://appstoreconnect.apple.com → **Apps → + → New App**.
+2. Platform **iOS**; Name **FitNote** (must be globally unique — have a fallback
+   like "FitNote Workout Log"); Primary language; Bundle ID
+   **com.hirshguha.fitnote** (create it in the picker if it's not listed — it
+   maps to an App ID in the Developer portal); SKU any string (e.g. `fitnote-ios`).
+
+**B. Xcode — signing & version**
+3. `npm run native:ios` opens the workspace. Select the **App** target →
+   **Signing & Capabilities**.
+4. Check **Automatically manage signing**; pick your **Team**. Xcode creates the
+   provisioning profile. Confirm the bundle id reads `com.hirshguha.fitnote`.
+5. Under **General**, set **Version** (e.g. `1.0.0`) and **Build** (`1`).
+6. Add **Push Notifications** capability only if you later add remote push — the
+   rest-timer notification is *local* and needs no capability. Local
+   Notifications require no entitlement.
+
+**C. Archive & upload**
+7. Top device selector → **Any iOS Device (arm64)** (not a simulator).
+8. **Product → Archive**. When the Organizer opens, select the archive →
+   **Distribute App → App Store Connect → Upload**. Accept the defaults
+   (automatic signing, symbols). This uploads the build.
+   - Alternative: **Product → Archive → Distribute → Export**, then upload the
+     `.ipa` with the **Transporter** app from the Mac App Store.
+
+**D. App Store Connect — fill the listing** (while the build processes, ~10–30 min)
+9. **App Privacy**: declare Email (account), Health & Fitness (workouts, body
+   metrics — stored for the user's own sync), and diagnostics (first-party error
+   log). Not used for tracking; not sold. See `docs/privacy-policy.md`.
+10. **Privacy Policy URL**: a public page (host the rendered
+    `docs/privacy-policy.md`).
+11. Screenshots: at least 6.7" and 6.5" iPhone sizes. Description, keywords,
+    support URL, category **Health & Fitness**.
+12. **Age rating** questionnaire.
+13. Under the version, **Build** → select the processed upload.
+14. Confirm **account deletion** is described (it's in-app: Account → Delete
+    account — Guideline 5.1.1(v)).
+
+**E. Submit**
+15. **Add for Review → Submit**. First review is typically 24–48h. If it bounces
+    on Guideline 4.2 ("just a website"), the review notes should point out the
+    offline-first local database, haptic feedback, and local rest notifications —
+    those are the device integrations that clear it.
+
+## Guideline 4.2 note
+
+The device integration that makes the not-a-website case is real and in the
+build: offline-first IndexedDB, haptics (`@capacitor/haptics`), and locked-screen
+rest notifications (`@capacitor/local-notifications`). Keep them working before
+submitting.

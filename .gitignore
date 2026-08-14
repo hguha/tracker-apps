@@ -24,3 +24,16 @@ screenshots
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Capacitor native builds — the ios/ and android/ projects ARE committed, but
+# their generated/build artifacts are not.
+ios/App/Pods/
+ios/App/build/
+ios/App/App/public/
+ios/.gitignore
+android/build/
+android/app/build/
+android/.gradle/
+android/app/src/main/assets/public/
+android/local.properties
+.gradle/

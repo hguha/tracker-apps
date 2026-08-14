@@ -11,6 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
+import { haptic } from '@/platform/haptics'
 
 /** Fraction of a card's height, centered, that counts as "onto" rather than "between". */
 const SUPERSET_BAND = 0.5
@@ -248,7 +249,7 @@ export function DragList({
         setState({ activeId: id, intent: { kind: 'none' } })
         paint(lastY)
         autoScroll.current = requestAnimationFrame(stepAutoScroll)
-        if ('vibrate' in navigator) navigator.vibrate(18)
+        haptic(18)
       }, LONG_PRESS_MS)
 
       window.addEventListener('pointermove', onMove, { passive: false })

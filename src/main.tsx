@@ -5,12 +5,14 @@ import { ErrorBoundary } from './app/ErrorBoundary'
 import { installGlobalErrorHandlers } from './lib/errorReporter'
 import { registerServiceWorker } from './lib/serviceWorker'
 import { applyDefaultAppearance } from './lib/theme'
+import { initNativeShell } from './platform/native'
 import './styles/index.css'
 
 // Theme tokens must exist before the first paint — the sign-in screen is drawn
 // before any profile has loaded, and unset variables render as transparent.
 applyDefaultAppearance()
 installGlobalErrorHandlers()
+initNativeShell()
 void registerServiceWorker()
 
 const container = document.getElementById('root')

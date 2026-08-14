@@ -17,6 +17,8 @@
 //     starts suspended and is materially harder to resume, so only the gesture
 //     handlers construct one; every other path may resume but never create.
 
+import { haptic as deviceHaptic, hapticSuccess } from '@/platform/haptics'
+
 export type SoundCue =
   | 'set-logged'
   | 'pr'
@@ -246,8 +248,11 @@ export function playCue(cue: SoundCue): void {
   if (!isEnabled) return
   // Haptics are worth firing even when the context is asleep, and they're the only
   // feedback that survives a silenced phone.
-  const haptic = CUE_HAPTICS[cue]
-  if (haptic !== undefined) vibrate(haptic)
+  if (cue === 'pr') hapticSuccess()
+  else {
+    const pattern = CUE_HAPTICS[cue]
+    if (pattern !== undefined) vibrate(pattern)
+  }
 
   const ctx = context
   const out = master
@@ -268,9 +273,7 @@ export function playCue(cue: SoundCue): void {
 
 /** Haptics where available. Independent of the sound toggle. */
 export function vibrate(pattern: number | number[]): void {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    navigator.vibrate(pattern)
-  }
+  deviceHaptic(pattern)
 }
 
 export function signalRestComplete(): void {

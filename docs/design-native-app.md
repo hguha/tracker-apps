@@ -1,8 +1,9 @@
 # Design: FitNote on the App Store and Play Store
 
-**Status:** designed, not built · **Supersedes spec §18**, which was iOS-only and
-referenced abstractions that don't exist yet. This doc is grounded in the code as
-it stands and covers both stores.
+**Status:** web-side infrastructure built (Capacitor deps, `capacitor.config.ts`,
+the `src/platform/*` seam, wiring, build scripts, icon assets). The `ios/` and
+`android/` projects are generated on a machine with Xcode / Android Studio — see
+DEPLOYING.md → "Native builds". **Supersedes spec §18.**
 
 ## The decision
 

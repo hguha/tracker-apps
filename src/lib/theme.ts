@@ -2,6 +2,8 @@
 // hex used on both light and dark surfaces, so it's nudged to clear the contrast
 // floor rather than rejected.
 
+import { applyStatusBarStyle } from '@/platform/statusBar'
+
 export const THEME_PRESETS = [
   { id: 'default', label: 'Default', swatch: '#2a78d6' },
   { id: 'slate', label: 'Slate', swatch: '#4f46c9' },
@@ -135,6 +137,7 @@ export function applyAppearance(settings: AppearanceSettings): void {
 
   root.dataset.theme = resolveTheme(settings.theme)
   root.dataset.scheme = scheme
+  applyStatusBarStyle(scheme)
 
   if (settings.accentOverride) {
     const rgb = parseHex(settings.accentOverride)
