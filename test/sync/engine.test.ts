@@ -518,6 +518,28 @@ describe('failure classification (§5.5)', () => {
     expect(await db.outbox.count()).toBe(0)
   })
 
+  it('a transient failure on one row does not block an independent row', async () => {
+    // The reported bug: with a ton of data queued, one failing row stalled the
+    // whole drain and nothing behind it synced. Now a transient failure holds
+    // only that row's own subtree; unrelated rows still go through.
+    const backend = new MockBackend()
+    const engine = new SyncEngine(backend)
+
+    const a = await loggedWorkout('bench_press')
+    const b = await loggedWorkout('deadlift')
+
+    // The first push is workout A's insert; force it to fail transiently.
+    backend.forceNext({ status: 'transient', error: '503' })
+    const result = await engine.drain()
+
+    expect(result.stoppedBecause).toBe('transient')
+    // A's subtree is held (its workout never landed)...
+    expect(backend.get('workouts', a.workoutId)).toBeUndefined()
+    // ...but B synced end to end despite A failing ahead of it.
+    expect(backend.get('workouts', b.workoutId)).toBeDefined()
+    expect(backend.get('sets', b.setId)).toBeDefined()
+  })
+
   it('pauses (does not dead-letter) on an auth failure', async () => {
     const backend = new MockBackend()
     const engine = new SyncEngine(backend)

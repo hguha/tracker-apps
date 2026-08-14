@@ -185,7 +185,11 @@ export async function refreshPersonalRecords(
     setId: best.setId,
     ...syncStamp(),
   }))
-  if (records.length > 0) await db.personalRecords.bulkAdd(records)
+  // bulkPut, not bulkAdd: the delete above should have cleared this pair's rows,
+  // but an orphaned PR whose stored equipment disagrees with its id would survive
+  // it and make bulkAdd throw ConstraintError. The ids are deterministic, so
+  // overwriting is exactly right.
+  if (records.length > 0) await db.personalRecords.bulkPut(records)
 
   if (triggeringSetId === undefined) return []
   const triggering = await db.sets.get(triggeringSetId)

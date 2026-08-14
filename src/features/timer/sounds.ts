@@ -1,19 +1,18 @@
 // All audio (§6.8). Synthesized, so there are no assets to load.
 //
-// Most of the complexity here is iOS. Three separate things silence a PWA there,
-// and none of them reports an error:
+// The session category is `ambient`: our cues MIX with other apps, so playing
+// music keeps going when a set logs. The trade is that `ambient` is silenced by
+// the hardware ringer switch — the right call for an app whose sounds are
+// incidental, not the point. (An earlier version claimed the exclusive
+// `playback` session, which played through the mute switch but hard-paused the
+// user's music — not worth it.)
 //
-//  1. **The ringer switch.** A page that only ever uses Web Audio gets the
-//     *ambient* audio session, which the hardware silent switch hard-mutes. The
-//     context still says `running` and the oscillators still run — you just hear
-//     nothing. Claiming the `playback` session fixes it; on iOS < 16.4 the only
-//     lever is an `<audio>` element that is actually playing, so a silent loop is
-//     started during the unlock gesture to promote the session.
-//  2. **`'interrupted'`.** WebKit has a fourth, non-standard AudioContext state.
+// Two iOS quirks remain:
+//  1. **`'interrupted'`.** WebKit has a fourth, non-standard AudioContext state.
 //     Backgrounding the app, locking the screen, or taking a call moves the
 //     context there — constantly, mid-workout. Resuming only on `'suspended'`
 //     leaves it stuck and every later cue is dropped.
-//  3. **Gesture-bound construction.** A context built outside a user gesture
+//  2. **Gesture-bound construction.** A context built outside a user gesture
 //     starts suspended and is materially harder to resume, so only the gesture
 //     handlers construct one; every other path may resume but never create.
 
@@ -36,9 +35,6 @@ type ExtendedState = AudioContextState | 'interrupted'
 let context: AudioContext | null = null
 let master: GainNode | null = null
 let isEnabled = true
-// Kept alive for the whole session: pausing it drops the audio session back to
-// ambient and the silent switch starts muting us again.
-let sessionKeeper: HTMLAudioElement | null = null
 
 export function setSoundEnabled(enabled: boolean): void {
   isEnabled = enabled
@@ -47,14 +43,6 @@ export function setSoundEnabled(enabled: boolean): void {
 function stateOf(ctx: AudioContext): ExtendedState {
   return ctx.state as ExtendedState
 }
-
-// A half-second of silence. Played (looping) to claim a non-ambient audio session
-// on iOS versions without navigator.audioSession.
-const SILENCE_MP3 =
-  'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA' +
-  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC' +
-  'AgICAgICAgICAgICAgICAgICAgICAgICAgIAAAAA8TEFNRTMuMTAwBK8AAAAAAAAAABUgJAUHQQ' +
-  'AB9AAAAnGMHkkIAAgAAAAAAAAAAAAAAAAA'
 
 // Only a real gesture may reach this: iOS ties a usable context to user activation.
 function ensureContext(): AudioContext | null {
@@ -74,25 +62,12 @@ function ensureContext(): AudioContext | null {
   return context
 }
 
-// iOS 16.4+. 'playback' is the category that ignores the ringer switch.
-function claimPlaybackSession(): void {
+// iOS 16.4+. 'ambient' mixes with other apps' audio (music keeps playing) and is
+// silenced by the ringer switch — the opposite of 'playback', which we don't want.
+function configureAudioSession(): void {
   const session = (navigator as unknown as { audioSession?: { type: string } })
     .audioSession
-  if (session) session.type = 'playback'
-}
-
-// For iOS < 16.4, where audioSession doesn't exist: a *playing* media element is
-// the only way to get out of the ambient category.
-function startSessionKeeper(): void {
-  if (sessionKeeper || typeof Audio === 'undefined') return
-  const element = new Audio(SILENCE_MP3)
-  element.loop = true
-  element.volume = 0.0001
-  // Otherwise iOS takes the element fullscreen when it starts.
-  element.setAttribute('playsinline', '')
-  sessionKeeper = element
-  // Must be called inside the gesture; a rejection just means no session bump.
-  void element.play().catch(() => {})
+  if (session) session.type = 'ambient'
 }
 
 // Resume without constructing. Safe to call from timers, promises and lifecycle
@@ -109,8 +84,7 @@ export function unlockAudio(): void {
   const ctx = ensureContext()
   if (!ctx) return
 
-  claimPlaybackSession()
-  startSessionKeeper()
+  configureAudioSession()
   void resumeContext()
 
   // Starting a source inside the gesture is what WebKit's unlock heuristic

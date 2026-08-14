@@ -46,11 +46,22 @@ export function useSync(): SyncStatus {
 
     const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
 
+    // One drain loop at a time; the outbox observer fires on every write and we
+    // don't want overlapping loops racing.
+    let draining = false
     const push = () => {
-      if (cancelled || isOffline()) return
-      engine.drain().catch((error) => {
-        console.warn('[sync] drain threw', error)
-      })
+      if (cancelled || isOffline() || draining) return
+      draining = true
+      // drainUntilSettled, not a single drain: a big burst (e.g. claiming a ton
+      // of local data on sign-in) can hit transient blips, and this waits out
+      // each backoff and keeps going instead of leaving the rest stuck until the
+      // next foreground.
+      void engine
+        .drainUntilSettled()
+        .catch((error) => console.warn('[sync] drain threw', error))
+        .finally(() => {
+          draining = false
+        })
     }
 
     // Pull + push only on open/foreground, never on a timer (see file header).

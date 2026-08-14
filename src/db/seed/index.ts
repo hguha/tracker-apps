@@ -1,8 +1,10 @@
 // Populates the system library on first run; idempotent and additive, safe to run every launch.
 
-import { db, syncStamp } from '@/db/database'
+import { db, syncStamp, touch } from '@/db/database'
+import { REGIONS, type Region } from '@/domain/types'
 import type { Exercise, MetricDefinition, Profile } from '@/domain/types'
 import { patternForRegion } from '@/domain/movement'
+import { enqueue } from '@/data/outbox'
 import { BASE_EXERCISES } from './bases'
 import { METRIC_SEEDS } from './metrics'
 
@@ -34,22 +36,36 @@ async function runSeed(): Promise<void> {
   await seedProfile()
   await seedExercises()
   await seedMetricDefinitions()
-  await repairRetiredRegions()
+  await repairExerciseTaxonomy()
 }
 
-// 'arms' was split into 'biceps'/'triceps' (§10.2). Exercise rows written before
-// that split still carry it, and no enum guards a Dexie value.
-async function repairRetiredRegions(): Promise<void> {
-  const stale = await db.exercises
-    .filter((e) => (e.region as string) === 'arms')
-    .toArray()
-  if (stale.length === 0) return
-  for (const row of stale) {
-    const region = row.movementPattern === 'push' ? 'triceps' : 'biceps'
+// Old custom exercises can carry taxonomy values the current server enums reject,
+// which fail their upsert permanently (a real one seen in the logs: a
+// pre-collapse `movement_pattern` like `horizontal_press`, gone since migration
+// 0013). Two coercions make them syncable again: a retired `arms` region splits
+// into biceps/triceps, and `movement_pattern` is re-derived from the region
+// (it's derived, not authoritative — §4.3). User-owned fixes are re-enqueued so
+// the corrected row reaches the server; system rows are already correct.
+async function repairExerciseTaxonomy(): Promise<void> {
+  const validRegion = new Set<string>(REGIONS)
+  for (const row of await db.exercises.toArray()) {
+    let region = row.region as string
+    // 'arms' predates the biceps/triceps split; recover the side from the pattern.
+    if (!validRegion.has(region)) {
+      region = row.movementPattern === 'push' ? 'triceps' : 'biceps'
+    }
+    const movementPattern = patternForRegion(region as Region)
+    if (region === row.region && movementPattern === row.movementPattern) continue
+
     await db.exercises.update(row.id, {
-      region,
-      movementPattern: patternForRegion(region),
+      region: region as Region,
+      movementPattern,
+      ...touch(row.clientRev),
     })
+    if (row.userId !== null) {
+      const fixed = await db.exercises.get(row.id)
+      if (fixed) await enqueue('exercises', 'update', fixed.id, fixed, fixed.clientRev)
+    }
   }
 }
 

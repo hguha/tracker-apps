@@ -10,6 +10,7 @@ export type ErrorContext =
   | 'error-boundary'
   | 'window-error'
   | 'unhandled-rejection'
+  | 'sync-dead-letter'
 
 const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev'
 

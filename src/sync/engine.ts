@@ -4,6 +4,7 @@
 import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
 import type { PushRow, SyncBackend } from './backend'
 import { syncLog } from './log'
+import { reportError } from '@/lib/errorReporter'
 import { deferralFor } from '@/data/repository'
 
 // Tables that participate in sync, in dependency order for the initial pull.
@@ -40,42 +41,75 @@ export class SyncEngine {
 
   constructor(private backend: SyncBackend) {}
 
-  // Drains the outbox oldest first; returns when it empties or a transient/auth failure halts it. Re-entrant-safe.
+  // Drains the outbox oldest first. One failure no longer stalls the rest: a
+  // transiently-failed row is left to back off and the drain moves on to
+  // independent rows, so a single stuck write can't block every later one (the
+  // "nothing syncs behind the bad row" bug). Only a child of a failed row is
+  // held back, to keep parents ahead of children. Re-entrant-safe.
   async drain(now = Date.now()): Promise<DrainResult> {
     if (this.draining) return { pushed: 0, deadLettered: 0, stoppedBecause: null }
     this.draining = true
     let pushed = 0
     let deadLettered = 0
-    // Rows the server rejected outright during this drain. Their children can
-    // only fail too, so they're quarantined rather than sent — otherwise one bad
-    // parent becomes a pile of confusing child failures that no single retry can
-    // clear, and the cause is buried under its own consequences.
+    // Rows the server rejected outright: their children can only fail too, so
+    // they're dead-lettered rather than sent, and the cause isn't buried under a
+    // pile of child failures.
     const rejectedRowIds = new Set<string>()
+    // Rows that failed transiently OR whose parent did: skip their children this
+    // pass so a child never races ahead of a parent that hasn't landed.
+    const blockedRowIds = new Set<string>()
+    // Entries examined this pass, so re-querying the head can't loop on one we've
+    // already handled but didn't delete (a transient failure or a skip).
+    const handledSeqs = new Set<number>()
+    let sawTransient = false
 
     try {
-      // Ordered by seq so dependent writes replay in insertion order; re-read each iteration
-      // to pick up mid-drain entries. Deferred entries are skipped so a live workout doesn't stall others.
+      // Ordered by seq so dependent writes replay in insertion order; re-read each
+      // iteration to pick up mid-drain entries. Deferred entries are skipped so a
+      // live workout doesn't stall others.
       while (true) {
-        const entry = await db.outbox.orderBy('seq').filter(isReadyToPush).first()
+        const entry = await db.outbox
+          .orderBy('seq')
+          .filter((e) => isReadyToPush(e) && !handledSeqs.has(e.seq!))
+          .first()
         if (!entry) break
+        handledSeqs.add(entry.seq!)
 
-        // Stop the whole drain if the head entry is still backing off, so order holds.
+        // Still backing off — not due yet. Leave it; try again on a later drain.
         if (entry.attempts > 0 && entry.nextAttemptAt && entry.nextAttemptAt > now) {
-          return { pushed, deadLettered, stoppedBecause: 'transient' }
+          sawTransient = true
+          continue
         }
 
-        const rejectedParent = parentRowIdOf(entry)
-        if (rejectedParent !== undefined && rejectedRowIds.has(rejectedParent)) {
+        // A row is held back if it, its parent, or an earlier entry for the same
+        // row failed this pass — so children never precede parents and a row's
+        // own insert/update stay in order.
+        const parent = parentRowIdOf(entry)
+        const rejectedBy = rejectedRowIds.has(entry.rowId)
+          ? entry.rowId
+          : parent !== undefined && rejectedRowIds.has(parent)
+            ? parent
+            : undefined
+        if (rejectedBy !== undefined) {
           syncLog.warn(
-            `SKIPPED ${entry.op} ${entry.table}/${entry.rowId} — its parent ${rejectedParent} was rejected`,
+            `SKIPPED ${entry.op} ${entry.table}/${entry.rowId} — ${rejectedBy} was rejected`,
           )
           await this.deadLetter(
             entry,
-            `Skipped: its parent row ${rejectedParent} was rejected by the server.`,
+            `Skipped: row ${rejectedBy} was rejected by the server.`,
             now,
+            false,
           )
           rejectedRowIds.add(entry.rowId)
           deadLettered += 1
+          continue
+        }
+        if (
+          blockedRowIds.has(entry.rowId) ||
+          (parent !== undefined && blockedRowIds.has(parent))
+        ) {
+          // Something it depends on failed transiently this pass; hold it.
+          blockedRowIds.add(entry.rowId)
           continue
         }
 
@@ -89,6 +123,7 @@ export class SyncEngine {
         }
 
         if (outcome.status === 'auth') {
+          // Every push needs the same token, so stop the whole pass to re-auth.
           syncLog.warn(
             `auth failure on ${entry.op} ${entry.table}/${entry.rowId} — pausing drain for re-auth`,
             outcome.error,
@@ -101,13 +136,13 @@ export class SyncEngine {
             `DROPPED ${entry.op} ${entry.table}/${entry.rowId} (permanent) — dead-lettered`,
             outcome.error,
           )
-          await this.deadLetter(entry, outcome.error, now)
+          await this.deadLetter(entry, outcome.error, now, true)
           rejectedRowIds.add(entry.rowId)
           deadLettered += 1
           continue
         }
 
-        // Transient: schedule a backoff and stop so order holds — pushing past this could order a child before its parent.
+        // Transient: back it off and move on to independent rows.
         const attempts = entry.attempts + 1
         const nextAttemptAt = now + backoffMs(attempts, Math.random())
         await db.outbox.update(entry.seq!, {
@@ -115,12 +150,13 @@ export class SyncEngine {
           lastError: outcome.error,
           nextAttemptAt,
         })
+        blockedRowIds.add(entry.rowId)
+        sawTransient = true
         syncLog.warn(
           `transient failure on ${entry.op} ${entry.table}/${entry.rowId} ` +
             `(attempt ${attempts}) — retrying in ${Math.round((nextAttemptAt - now) / 1000)}s`,
           outcome.error,
         )
-        return { pushed, deadLettered, stoppedBecause: 'transient' }
       }
     } finally {
       this.draining = false
@@ -129,13 +165,14 @@ export class SyncEngine {
     if (pushed > 0 || deadLettered > 0) {
       syncLog.info(`drain done — pushed ${pushed}, dead-lettered ${deadLettered}`)
     }
-    return { pushed, deadLettered, stoppedBecause: null }
+    return { pushed, deadLettered, stoppedBecause: sawTransient ? 'transient' : null }
   }
 
   private async deadLetter(
     entry: OutboxEntry,
     error: string,
     failedAt: number,
+    report: boolean,
   ): Promise<void> {
     await db.transaction('rw', db.outbox, db.deadLetter, async () => {
       await db.deadLetter.add({
@@ -150,6 +187,14 @@ export class SyncEngine {
       })
       await db.outbox.delete(entry.seq!)
     })
+    // Surface the real rejections (not the skip cascade) to client_errors so a
+    // dead-letter is diagnosable from the server side, not just on the device.
+    if (report) {
+      void reportError(
+        'sync-dead-letter',
+        new Error(`${entry.table}/${entry.op} ${entry.rowId}: ${error}`),
+      )
+    }
   }
 
   // Pulls deltas into IndexedDB. Merge rule (§5.5): the server row wins unless a local outbox entry for that row is still pending.
