@@ -5,14 +5,13 @@
  */
 
 import { getSupabase } from '@/sync/supabaseClient'
+import { APP_VERSION } from '@/lib/version'
 
 export type ErrorContext =
   | 'error-boundary'
   | 'window-error'
   | 'unhandled-rejection'
   | 'sync-dead-letter'
-
-const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev'
 
 // Same-payload dedupe so a render loop can't flood the table.
 const recentKeys = new Map<string, number>()

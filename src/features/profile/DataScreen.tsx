@@ -15,6 +15,7 @@ import {
   BackupParseError,
 } from '@/data/backup'
 import { isNativePlatform } from '@/lib/platform'
+import { APP_VERSION } from '@/lib/version'
 import { exportBackup, pickBackupText } from '@/platform/files'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -150,6 +151,10 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               <dd className="font-semibold">
                 {sync.enabled ? 'On — syncs to your account' : 'This device only'}
               </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-ink-secondary">App version</dt>
+              <dd className="tabular font-semibold text-ink-muted">{APP_VERSION}</dd>
             </div>
           </dl>
 

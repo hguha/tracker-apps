@@ -117,8 +117,12 @@ export function useSync(): SyncStatus {
         console.info(`[sync] re-owned ${claimed} rows to ${session.userId} before retry`)
       }
       const count = await engine.retryDeadLettered()
-      const { drain } = await engine.sync()
-      setPhase(drain.stoppedBecause === null ? 'idle' : 'error')
+      // drainUntilSettled, not one pass: re-queuing a dead-lettered parent lands
+      // it, but its FK-failing children need another round (after backoff) to go
+      // through. Settling here clears the whole subtree in one tap.
+      const { remaining } = await engine.drainUntilSettled()
+      await engine.pull()
+      setPhase(remaining > 0 ? 'error' : 'idle')
       return count + claimed
     } catch {
       setPhase('error')
