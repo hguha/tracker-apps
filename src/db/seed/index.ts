@@ -36,7 +36,39 @@ async function runSeed(): Promise<void> {
   await seedProfile()
   await seedExercises()
   await seedMetricDefinitions()
+  await repairSystemRowOwnership()
   await repairExerciseTaxonomy()
+}
+
+// Shared-library rows (exercises, metric definitions with a seed id) must stay
+// unowned — `user_id = null` server-side. A base-id row that picked up a userId
+// (an old seed/claim bug owned it to the account) makes the client try to UPDATE
+// a row RLS won't let it write, which is rejected forever and orphans the sets
+// under it. Reset such rows to unowned and drop their poisoned queue entries.
+async function repairSystemRowOwnership(): Promise<void> {
+  const exerciseIds = new Set(BASE_EXERCISES.map((b) => b.id))
+  for (const row of await db.exercises.toArray()) {
+    if (exerciseIds.has(row.id) && row.userId !== null) {
+      await db.exercises.update(row.id, { userId: null })
+      await dropQueuedWritesFor('exercises', row.id)
+    }
+  }
+  const metricIds = new Set(METRIC_SEEDS.map((m) => m.key))
+  for (const row of await db.metricDefinitions.toArray()) {
+    if (metricIds.has(row.id) && row.userId !== null) {
+      await db.metricDefinitions.update(row.id, { userId: null })
+      await dropQueuedWritesFor('metricDefinitions', row.id)
+    }
+  }
+}
+
+async function dropQueuedWritesFor(table: string, rowId: string): Promise<void> {
+  for (const store of [db.outbox, db.deadLetter]) {
+    const entries = (await store.where('rowId').equals(rowId).toArray()).filter(
+      (e) => e.table === table,
+    )
+    await store.bulkDelete(entries.map((e) => e.seq!))
+  }
 }
 
 // Old custom exercises can carry taxonomy values the current server enums reject,

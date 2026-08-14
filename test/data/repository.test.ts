@@ -1994,6 +1994,28 @@ describe('active user id + local data reset', () => {
     expect(await repo.claimLocalData(LOCAL_USER_ID)).toBe(0)
   })
 
+  it('seeding resets a wrongly-owned system exercise and drops its poisoned writes', async () => {
+    // The bug: a base-id row (leg_press) locally carried a userId, so the client
+    // tried to UPDATE a shared library row — rejected by RLS forever, orphaning
+    // its sets. Seeding must reset it to unowned and drop the queued write.
+    await db.exercises.update('leg_press', { userId: 'some-user-uuid' })
+    await db.outbox.add({
+      table: 'exercises',
+      op: 'update',
+      rowId: 'leg_press',
+      payload: { id: 'leg_press' },
+      clientRev: 2,
+      queuedAt: Date.now(),
+      attempts: 0,
+    })
+
+    await seedIfNeeded()
+
+    expect((await db.exercises.get('leg_press'))?.userId).toBeNull()
+    const leftover = (await db.outbox.toArray()).filter((e) => e.rowId === 'leg_press')
+    expect(leftover).toHaveLength(0)
+  })
+
   it('claimLocalData enqueues nothing when every local row already belongs to the caller', async () => {
     // Regression: chained rows have no userId, so a spurious upgrade used to
     // re-enqueue every set/we/te on the device — surfacing as "N items to sync"
