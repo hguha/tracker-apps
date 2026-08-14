@@ -42,32 +42,49 @@ async function runSeed(): Promise<void> {
 
 // Shared-library rows (exercises, metric definitions with a seed id) must stay
 // unowned — `user_id = null` server-side. A base-id row that picked up a userId
-// (an old seed/claim bug owned it to the account) makes the client try to UPDATE
-// a row RLS won't let it write, which is rejected forever and orphans the sets
-// under it. Reset such rows to unowned and drop their poisoned queue entries.
+// (an old seed/claim bug owned it to the account) makes the client try to write
+// a row RLS won't let it, which is rejected forever and orphans the sets under
+// it. Reset such rows to unowned, then purge every queued/dead-lettered library
+// write the server can never accept: one targeting a seed id, or one whose local
+// row is unowned or gone. Unconditional, because the poisoned write outlives the
+// ownership flag — a leftover entry keeps re-failing even after the row is fixed.
 async function repairSystemRowOwnership(): Promise<void> {
   const exerciseIds = new Set(BASE_EXERCISES.map((b) => b.id))
   for (const row of await db.exercises.toArray()) {
     if (exerciseIds.has(row.id) && row.userId !== null) {
       await db.exercises.update(row.id, { userId: null })
-      await dropQueuedWritesFor('exercises', row.id)
     }
   }
   const metricIds = new Set(METRIC_SEEDS.map((m) => m.key))
   for (const row of await db.metricDefinitions.toArray()) {
     if (metricIds.has(row.id) && row.userId !== null) {
       await db.metricDefinitions.update(row.id, { userId: null })
-      await dropQueuedWritesFor('metricDefinitions', row.id)
     }
   }
+
+  await purgeUnwritableLibraryWrites('exercises', db.exercises, exerciseIds)
+  await purgeUnwritableLibraryWrites('metricDefinitions', db.metricDefinitions, metricIds)
 }
 
-async function dropQueuedWritesFor(table: string, rowId: string): Promise<void> {
-  for (const store of [db.outbox, db.deadLetter]) {
-    const entries = (await store.where('rowId').equals(rowId).toArray()).filter(
-      (e) => e.table === table,
-    )
-    await store.bulkDelete(entries.map((e) => e.seq!))
+// Drops outbox + dead-letter entries for a library table that RLS will always
+// reject: the row is a seed id, or the local row is missing/unowned. A client
+// can only write rows it owns, so any such queued write is dead weight that
+// blocks retries.
+async function purgeUnwritableLibraryWrites(
+  table: string,
+  store: { get(id: string): Promise<{ userId: string | null } | undefined> },
+  seedIds: Set<string>,
+): Promise<void> {
+  for (const queue of [db.outbox, db.deadLetter]) {
+    const doomed: number[] = []
+    for (const entry of await queue.toArray()) {
+      if (entry.table !== table) continue
+      const row = await store.get(entry.rowId)
+      if (seedIds.has(entry.rowId) || !row || row.userId === null) {
+        doomed.push(entry.seq!)
+      }
+    }
+    if (doomed.length > 0) await queue.bulkDelete(doomed)
   }
 }
 

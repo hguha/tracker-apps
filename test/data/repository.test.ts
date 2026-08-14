@@ -1996,7 +1996,7 @@ describe('active user id + local data reset', () => {
 
   it('seeding resets a wrongly-owned system exercise and drops its poisoned writes', async () => {
     // The bug: a base-id row (leg_press) locally carried a userId, so the client
-    // tried to UPDATE a shared library row — rejected by RLS forever, orphaning
+    // tried to write a shared library row — rejected by RLS forever, orphaning
     // its sets. Seeding must reset it to unowned and drop the queued write.
     await db.exercises.update('leg_press', { userId: 'some-user-uuid' })
     await db.outbox.add({
@@ -2013,6 +2013,28 @@ describe('active user id + local data reset', () => {
 
     expect((await db.exercises.get('leg_press'))?.userId).toBeNull()
     const leftover = (await db.outbox.toArray()).filter((e) => e.rowId === 'leg_press')
+    expect(leftover).toHaveLength(0)
+  })
+
+  it('seeding drops a leftover library write even after ownership is already null', async () => {
+    // The subtler case that kept re-failing: the row is correctly unowned, but a
+    // dead-lettered write from when it *was* owned lingers. retryDeadLettered
+    // re-queues it and RLS rejects it forever. The purge must be unconditional.
+    expect((await db.exercises.get('leg_press'))?.userId).toBeNull()
+    await db.deadLetter.add({
+      table: 'exercises',
+      op: 'update',
+      rowId: 'leg_press',
+      payload: { id: 'leg_press' },
+      clientRev: 2,
+      queuedAt: Date.now(),
+      failedAt: Date.now(),
+      error: 'new row violates row-level security policy',
+    })
+
+    await seedIfNeeded()
+
+    const leftover = (await db.deadLetter.toArray()).filter((e) => e.rowId === 'leg_press')
     expect(leftover).toHaveLength(0)
   })
 
