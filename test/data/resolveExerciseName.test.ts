@@ -62,9 +62,11 @@ describe('equipment', () => {
       equipment: 'bodyweight',
       confidence: 'tracking',
     })
+    // "Assisted" is now a load mode of Pull-up, not a separate movement, so the
+    // name resolves to pull_up (bodyweight); the mode is chosen when it's added.
     expect(resolve('Assisted Pull-up')).toMatchObject({
-      exerciseId: 'assisted_pull_up',
-      equipment: 'machine',
+      exerciseId: 'pull_up',
+      equipment: 'bodyweight',
       confidence: 'tracking',
     })
   })

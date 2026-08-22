@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Exercise, WorkoutSet } from '@/domain/types'
 import {
+  bestEffectiveOneRepMaxKg,
   bestOneRepMaxKg,
+  effectiveTopSetKg,
   effectiveWeightKg,
   estimatedOneRepMaxKg,
   isWorkingSet,
@@ -58,59 +60,70 @@ describe('isWorkingSet', () => {
 
 describe('effectiveWeightKg', () => {
   it('is the entered weight for a loaded barbell movement', () => {
-    expect(effectiveWeightKg(set(), exercise(), 80)).toBe(100)
+    expect(effectiveWeightKg(set(), exercise(), 80, null)).toBe(100)
   })
 
-  it('is a fraction of bodyweight for a push-up', () => {
+  it('is a fraction of bodyweight for a bodyweight-mode movement', () => {
     const pushup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 0.64 })
-    expect(effectiveWeightKg(set({ weightKg: null }), pushup, 80)).toBeCloseTo(51.2)
+    expect(effectiveWeightKg(set({ weightKg: null }), pushup, 80, 'bodyweight')).toBeCloseTo(
+      51.2,
+    )
   })
 
-  it('adds the belt weight for a weighted pull-up', () => {
-    const pullup = exercise({ trackingType: 'weighted_bodyweight', bodyweightFactor: 1 })
-    expect(effectiveWeightKg(set({ weightKg: 20 }), pullup, 80)).toBe(100)
+  it('adds the belt weight in weighted mode', () => {
+    const pullup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 1 })
+    expect(effectiveWeightKg(set({ weightKg: 20 }), pullup, 80, 'weighted')).toBe(100)
   })
 
-  it('subtracts machine assistance', () => {
-    const dip = exercise({ trackingType: 'assisted_bodyweight', bodyweightFactor: 0.95 })
-    expect(effectiveWeightKg(set({ weightKg: 30 }), dip, 80)).toBeCloseTo(46)
+  it('subtracts machine assistance in assisted mode', () => {
+    const dip = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 0.95 })
+    expect(effectiveWeightKg(set({ weightKg: 30 }), dip, 80, 'assisted')).toBeCloseTo(46)
   })
 
   it('never goes negative when assistance exceeds bodyweight', () => {
-    const dip = exercise({ trackingType: 'assisted_bodyweight', bodyweightFactor: 1 })
-    expect(effectiveWeightKg(set({ weightKg: 200 }), dip, 80)).toBe(0)
+    const dip = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 1 })
+    expect(effectiveWeightKg(set({ weightKg: 200 }), dip, 80, 'assisted')).toBe(0)
   })
 
   it('is null for cardio and rep-only work', () => {
     expect(
-      effectiveWeightKg(set(), exercise({ trackingType: 'distance_time' }), 80),
+      effectiveWeightKg(set(), exercise({ trackingType: 'distance_time' }), 80, null),
     ).toBeNull()
     expect(
-      effectiveWeightKg(set(), exercise({ trackingType: 'reps_only' }), 80),
+      effectiveWeightKg(set(), exercise({ trackingType: 'reps_only' }), 80, null),
     ).toBeNull()
-    expect(effectiveWeightKg(set(), exercise({ trackingType: 'time' }), 80)).toBeNull()
+    expect(
+      effectiveWeightKg(set(), exercise({ trackingType: 'time' }), 80, null),
+    ).toBeNull()
   })
 
   it('is null when bodyweight is unknown for a bodyweight movement', () => {
     const pushup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 0.64 })
-    expect(effectiveWeightKg(set({ weightKg: null }), pushup, null)).toBeNull()
+    expect(effectiveWeightKg(set({ weightKg: null }), pushup, null, 'bodyweight')).toBeNull()
   })
 
   it('takes the entered weight at face value for a dumbbell lift — no doubling (§6)', () => {
     // Equipment no longer affects the effective weight: the user logs the weight
     // they intend, so a 40 kg dumbbell entry is 40 kg of effective load, not 80.
-    expect(effectiveWeightKg(set({ weightKg: 40 }), exercise(), 80)).toBe(40)
+    expect(effectiveWeightKg(set({ weightKg: 40 }), exercise(), 80, null)).toBe(40)
   })
 })
 
 describe('volumeLoadKg', () => {
   it('sums weight times reps', () => {
-    expect(volumeLoadKg([set(), set()], exercise(), 80)).toBe(1000)
+    expect(volumeLoadKg([set(), set()], exercise(), 80, null)).toBe(1000)
   })
 
   it('leaves planned-but-unperformed sets out of the total', () => {
     const sets = [set({ isCompleted: false, weightKg: 60, reps: 10 }), set()]
-    expect(volumeLoadKg(sets, exercise(), 80)).toBe(500)
+    expect(volumeLoadKg(sets, exercise(), 80, null)).toBe(500)
+  })
+
+  it('counts effective bodyweight load, so assisted work is not zero volume', () => {
+    const dip = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 0.95 })
+    // (80×0.95 − 20) × 5 = 280
+    const sets = [set({ weightKg: 20, reps: 5 })]
+    expect(volumeLoadKg(sets, dip, 80, 'assisted')).toBeCloseTo(280)
   })
 
   it('contributes nothing for cardio, so a run never inflates lifting volume', () => {
@@ -118,7 +131,7 @@ describe('volumeLoadKg', () => {
     const sets = [
       set({ weightKg: null, reps: null, durationSeconds: 1800, distanceM: 5000 }),
     ]
-    expect(volumeLoadKg(sets, treadmill, 80)).toBe(0)
+    expect(volumeLoadKg(sets, treadmill, 80, null)).toBe(0)
   })
 })
 
@@ -185,6 +198,39 @@ describe('bestOneRepMaxKg', () => {
 describe('topSetWeightKg', () => {
   it('finds the heaviest working set', () => {
     expect(topSetWeightKg([set({ weightKg: 100 }), set({ weightKg: 120 })])).toBe(120)
+  })
+})
+
+describe('effective-load e1RM / top-set (the canonical read-path helpers)', () => {
+  const pullup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 1 })
+
+  it('pure bodyweight uses bodyweight×factor, not the (null/0) entered weight', () => {
+    const sets = [set({ weightKg: null, reps: 10 })]
+    // topSetWeightKg on raw weight would be null; effective is bodyweight.
+    expect(topSetWeightKg(sets)).toBeNull()
+    expect(effectiveTopSetKg(sets, pullup, 80, 'bodyweight')).toBe(80)
+    // e1RM on raw weight is null; effective ≈ 80 × (1 + 10/30).
+    expect(bestOneRepMaxKg(sets)).toBeNull()
+    expect(bestEffectiveOneRepMaxKg(sets, pullup, 80, 'bodyweight')).toBeCloseTo(
+      80 * (1 + 10 / 30),
+      5,
+    )
+  })
+
+  it('weighted mode adds the entered weight to bodyweight', () => {
+    const sets = [set({ weightKg: 20, reps: 5 })]
+    expect(effectiveTopSetKg(sets, pullup, 80, 'weighted')).toBe(100)
+    expect(bestEffectiveOneRepMaxKg(sets, pullup, 80, 'weighted')).toBeCloseTo(
+      100 * (1 + 5 / 30),
+      5,
+    )
+  })
+
+  it('a plain weighted lift matches the raw helpers (no bodyweight added)', () => {
+    const sets = [set({ weightKg: 140, reps: 3 })]
+    const barbell = exercise({ trackingType: 'weight_reps' })
+    expect(effectiveTopSetKg(sets, barbell, 80, null)).toBe(topSetWeightKg(sets))
+    expect(bestEffectiveOneRepMaxKg(sets, barbell, 80, null)).toBe(bestOneRepMaxKg(sets))
   })
 })
 

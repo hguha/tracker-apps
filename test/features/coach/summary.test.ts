@@ -4,13 +4,13 @@ import {
   SUMMARY_VERSION,
   type SummaryInput,
   type SummarySession,
-} from '@/features/coach/summary'
+} from '@/data/coachSummary'
 
 function session(
   weekOffset: number,
   exercises: SummarySession['exercises'],
 ): SummarySession {
-  return { weekOffset, exercises }
+  return { weekOffset, bodyweightKg: null, exercises }
 }
 
 function bench(sets: { weightKg: number; reps: number; rpe?: number }[]) {
@@ -21,6 +21,9 @@ function bench(sets: { weightKg: number; reps: number; rpe?: number }[]) {
     pattern: 'push' as const,
     equipment: 'barbell' as const,
     isCardio: false,
+    trackingType: 'weight_reps' as const,
+    bodyweightFactor: null,
+    loadMode: null,
     sets: sets.map((s) => ({
       weightKg: s.weightKg,
       reps: s.reps,
@@ -95,6 +98,9 @@ describe('buildCoachSummary — aggregation', () => {
       pattern: 'other' as const,
       equipment: 'barbell' as const,
       isCardio: false,
+      trackingType: 'weight_reps' as const,
+      bodyweightFactor: null,
+      loadMode: null,
       sets: [
         { weightKg: 140, reps: 5, rpe: null, durationSeconds: null, distanceM: null },
         { weightKg: 140, reps: 5, rpe: null, durationSeconds: null, distanceM: null },
@@ -123,6 +129,9 @@ describe('buildCoachSummary — aggregation', () => {
       pattern: 'cardio' as const,
       equipment: 'other' as const,
       isCardio: true,
+      trackingType: 'distance_time' as const,
+      bodyweightFactor: null,
+      loadMode: null,
       sets: [
         {
           weightKg: null,

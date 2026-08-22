@@ -480,7 +480,7 @@ describe('getPreviousSession — what "Last" means (§6.3)', () => {
 
 describe('previewRecords — the PR glow (§6.2)', () => {
   it('reports nothing when no record exists yet', async () => {
-    const broken = await repo.previewRecords('deadlift', 'barbell', {
+    const broken = await repo.previewRecords('deadlift', 'barbell', null, null, {
       weightKg: 500,
       reps: 5,
       durationSeconds: null,
@@ -500,7 +500,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     await repo.logSetValues(setId, {})
     await repo.finishWorkout(workoutId)
 
-    const broken = await repo.previewRecords('deadlift', 'barbell', {
+    const broken = await repo.previewRecords('deadlift', 'barbell', null, null, {
       weightKg: 160,
       reps: 5,
       durationSeconds: null,
@@ -511,7 +511,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
   it('writes nothing — it is a preview', async () => {
     const before = await db.personalRecords.count()
-    await repo.previewRecords('deadlift', 'barbell', {
+    await repo.previewRecords('deadlift', 'barbell', null, null, {
       weightKg: 999,
       reps: 5,
       durationSeconds: null,
@@ -543,11 +543,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     await repo.logSetValues(prSetId, {})
 
     // Passing the set's own id excludes its own record, so it still glows.
-    const withId = await repo.previewRecords(
-      'deadlift',
-      'barbell',
-      (await db.sets.get(prSetId))!,
-    )
+    const withId = await repo.previewRecords('deadlift', 'barbell', null, null, (await db.sets.get(prSetId))!)
     expect(withId).toContain('max_weight')
   })
 
@@ -568,7 +564,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
 
     for (const setId of setIds) {
       const set = (await db.sets.get(setId))!
-      expect(await repo.previewRecords('back_squat', 'barbell', set)).toEqual([])
+      expect(await repo.previewRecords('back_squat', 'barbell', null, null, set)).toEqual([])
     }
   })
 
@@ -595,7 +591,7 @@ describe('previewRecords — the PR glow (§6.2)', () => {
     const glowing = await Promise.all(
       ids.map(async (id) =>
         (
-          await repo.previewRecords('deadlift', 'barbell', (await db.sets.get(id))!)
+          await repo.previewRecords('deadlift', 'barbell', null, null, (await db.sets.get(id))!)
         ).includes('max_weight'),
       ),
     )

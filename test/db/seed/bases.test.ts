@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { deriveBases, BASE_EXERCISES, VARIANT_MAPPINGS } from '@/db/seed/bases'
+import {
+  deriveBases,
+  BASE_EXERCISES,
+  EXERCISE_MERGES,
+  VARIANT_MAPPINGS,
+} from '@/db/seed/bases'
 import { EXERCISE_SEEDS } from '@/db/seed/exercises'
 
 describe('deriveBases', () => {
@@ -57,6 +62,35 @@ describe('deriveBases', () => {
   it('exposes the same data via the module-level constants', () => {
     expect(BASE_EXERCISES.length).toBe(bases.length)
     expect(VARIANT_MAPPINGS.length).toBe(mappings.length)
+  })
+
+  it('no longer derives the merged-away duplicate movements', () => {
+    // These collapsed into a canonical base; the seed must not recreate them.
+    for (const merge of EXERCISE_MERGES) {
+      expect(baseById.has(merge.from)).toBe(false)
+      expect(baseById.has(merge.to)).toBe(true)
+    }
+  })
+
+  it('folds the machine chest/incline/shoulder presses into their canonical base', () => {
+    expect(equipmentByBase.get('bench_press')).toEqual(
+      expect.arrayContaining(['machine']),
+    )
+    expect(equipmentByBase.get('incline_bench_press')).toEqual(
+      expect.arrayContaining(['machine']),
+    )
+    expect(equipmentByBase.get('overhead_press')).toEqual(
+      expect.arrayContaining(['machine', 'dumbbell']),
+    )
+  })
+
+  it('has no bodyweight tracking type left but the single bodyweight_reps', () => {
+    const retired = bases.filter(
+      (b) =>
+        b.trackingType === ('weighted_bodyweight' as string) ||
+        b.trackingType === ('assisted_bodyweight' as string),
+    )
+    expect(retired).toEqual([])
   })
 })
 

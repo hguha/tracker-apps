@@ -74,7 +74,7 @@ describe('v8 — region replaces the muscles table', () => {
     const upgraded = new WorkoutDatabase(NAME)
     await upgraded.open()
 
-    expect(upgraded.verno).toBe(9)
+    expect(upgraded.verno).toBe(10)
     const rows = await upgraded.exercises.toArray()
     const byId = new Map(rows.map((e) => [e.id, e]))
     expect(byId.get('reverse_fly')!.region).toBe('shoulders')
@@ -94,7 +94,7 @@ describe('v8 — region replaces the muscles table', () => {
   it('opens a brand-new database straight at the current version', async () => {
     const fresh = new WorkoutDatabase(NAME)
     await fresh.open()
-    expect(fresh.verno).toBe(9)
+    expect(fresh.verno).toBe(10)
     expect(fresh.tables.map((t) => t.name)).not.toContain('muscles')
     fresh.close()
   })
