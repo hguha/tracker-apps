@@ -1,7 +1,5 @@
-// Training-cadence math over session timestamps: which days and times the user
-// trains, and how much rest falls between sessions. Extracted so both the insights
-// charts (filter-scoped) and the AI coach (whole-history) share one implementation
-// rather than each re-deriving day-of-week / hour / gap buckets.
+// Training-cadence math over session timestamps (day-of-week, time-of-day, rest
+// gaps), shared by the insights charts and the coach so it's derived one way.
 
 import type { Workout } from '@/domain/types'
 import { DAY_MS } from '@/lib/dates'

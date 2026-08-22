@@ -17,10 +17,8 @@
 
 // @ts-nocheck — Deno runtime; typed against the Deno std lib at deploy time.
 
-// Pinned GA model, not a floating `-latest` preview alias (that one routed to a
-// low-capacity preview that 503'd on demand spikes and capped free tier at 5 RPM).
-// 2.5-flash is now closed to new projects, so we're on the current 3.6-flash — still
-// a thinking model, so functionCall thoughtSignatures still apply (see the chat path).
+// Pinned GA model (a `-latest` alias 503'd under load and capped free tier at 5 RPM).
+// A thinking model, so functionCall thoughtSignatures apply — see the chat path.
 const GEMINI_MODEL = 'gemini-3.6-flash'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
@@ -291,8 +289,7 @@ Deno.serve(async (req: Request) => {
   if (rateLimited(userId)) return json({ error: 'Too many requests — slow down' }, 429)
 
   // Bound the body so an authenticated client can't inflate Gemini token cost.
-  // Chat carries the full context bundle + conversation, so this is larger than the
-  // one-shot summary era; still small enough to cap runaway payloads.
+  // Chat carries the full context + conversation, so larger than the one-shot era.
   const MAX_BODY_BYTES = 256 * 1024
   const declaredLength = Number(req.headers.get('Content-Length') ?? '0')
   if (declaredLength > MAX_BODY_BYTES) return json({ error: 'Request too large' }, 413)
@@ -321,9 +318,8 @@ Deno.serve(async (req: Request) => {
     const rawTools = Array.isArray(payload.tools) ? payload.tools : []
     if (!contents) return json({ error: 'Missing conversation' }, 400)
 
-    // Gemini rejects a function declaration whose parameters is an OBJECT with no
-    // properties ("should be non-empty for OBJECT type"). No-arg tools must omit
-    // `parameters` entirely, so drop it when the properties map is empty.
+    // Gemini rejects an OBJECT-typed parameters with no properties, so no-arg tools
+    // must omit `parameters` entirely — drop it when the properties map is empty.
     const functionDeclarations = rawTools.map((decl: Record<string, unknown>) => {
       const params = decl.parameters as { properties?: Record<string, unknown> } | undefined
       if (!params?.properties || Object.keys(params.properties).length === 0) {
@@ -346,9 +342,7 @@ Deno.serve(async (req: Request) => {
       },
       contents,
       tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
-      // 3.6-flash is a thinking model; unbounded thinking made every turn slow.
-      // It rejects budget 0 (can't fully disable thinking), so cap it low — enough
-      // to choose tools/plans, far less than the default. Raise if answers slip.
+      // Cap thinking low for latency (0 is rejected); raise if answers slip.
       generationConfig: { temperature: 0.6, thinkingConfig: { thinkingBudget: 128 } },
     }
 
@@ -402,9 +396,8 @@ Deno.serve(async (req: Request) => {
       .join('')
       .trim()
 
-    // Return the model's raw parts too: each functionCall carries a thoughtSignature
-    // the client must echo back verbatim next turn, so it appends these as-is rather
-    // than rebuilding {functionCall:{name,args}} and dropping the signature.
+    // Return the raw parts too — each functionCall's thoughtSignature must be echoed
+    // back verbatim next turn, so the client appends these rather than rebuilding them.
     if (calls.length > 0) return json({ kind: 'toolCalls', calls, modelParts: parts, text })
     return json({
       kind: 'message',

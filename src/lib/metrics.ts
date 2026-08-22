@@ -122,13 +122,9 @@ export function topSetWeightKg(sets: VolumeInput[]): number | null {
   return best
 }
 
-// ── Effective-load twins ─────────────────────────────────────────────────────
-// e1RM and top-set on EFFECTIVE weight (bodyweight × factor ± entered), so a
-// bodyweight/assisted/weighted movement's numbers reflect what was actually moved
-// rather than the bare entered weight (0 for pure bodyweight). These are the
-// canonical read-path helpers — records, insights, and the coach must all use them
-// so a lift's e1RM/top-set is identical everywhere it appears.
-
+// e1RM/top-set on effective weight (bw×factor ± entered), so a bodyweight lift's
+// numbers reflect what was moved. The canonical read-path helpers — records,
+// insights, and the coach all use them so a lift reads the same everywhere.
 export function bestEffectiveOneRepMaxKg(
   sets: VolumeInput[],
   exercise: VolumeExercise,

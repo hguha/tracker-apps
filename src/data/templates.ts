@@ -207,12 +207,9 @@ export async function createTemplatesFromPlan(plan: {
   return { templateIds, unmatched }
 }
 
-// Applies a coach-proposed session to an EXISTING template (§13 template update):
-// the session fully replaces the template's exercises. Diffed by (exercise +
-// equipment) so a lift that's staying keeps its row (and id) and only its targets
-// and position move; new lifts are added, dropped lifts removed. Unmatched names
-// are skipped and returned, same contract as createTemplatesFromPlan.
-
+// Applies a coach session to an existing template, replacing its exercises. Diffed
+// by (exercise + equipment) so a kept lift retains its row/id and only retargets;
+// unmatched names are skipped and returned, as in createTemplatesFromPlan.
 export async function applyPlanSessionToTemplate(
   templateId: string,
   session: {

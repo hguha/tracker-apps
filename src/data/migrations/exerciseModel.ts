@@ -1,7 +1,5 @@
-// One-time, boot-run data migrations for the exercise model (§4.3, §4.4). Split
-// out of data/exercises.ts so the CRUD/query surface isn't mixed with heavy
-// history-repointing code. Wired into the launch chain in app/App.tsx and re-run
-// exactly once per device (see EXERCISE_MODEL_MIGRATION_VERSION). Idempotent.
+// One-time, boot-run data migrations for the exercise model (§4.3, §4.4), split
+// out of data/exercises.ts. Wired into the launch chain in app/App.tsx; idempotent.
 
 import { db, touch } from '@/db/database'
 import { EXERCISE_MERGES, RETIRED_BASE_IDS, VARIANT_MAPPINGS } from '@/db/seed/bases'
@@ -152,13 +150,10 @@ async function rebuildCachePairs(pairs: Iterable<string>): Promise<void> {
   }
 }
 
-// Persisted marker so the model migration runs exactly once per device and every
-// later launch is free. A data-shape guard (as migrateToBaseExercises uses) can't
-// cheaply detect the self-heal case — a row wrongly stamped 'bodyweight' that
-// should be 'weighted' — so the marker is the honest way to bound the work.
+// Persisted run-once marker: a data-shape guard can't detect the self-heal case (a
+// row wrongly stamped 'bodyweight' that should be 'weighted'), so bound it by version.
 const EXERCISE_MODEL_MIGRATED_KEY = 'fitnote.exercise-model-migrated'
-// Bump when the migration's logic changes so it re-runs once on already-migrated
-// devices (v2 added the historical bodyweight backfill).
+// Bump to re-run once on already-migrated devices (v2 added the bodyweight backfill).
 const EXERCISE_MODEL_MIGRATION_VERSION = '2'
 
 function migrationApplied(key: string, version: string): boolean {
@@ -170,25 +165,14 @@ function migrationApplied(key: string, version: string): boolean {
 }
 
 /**
- * Moves the library onto the current exercise model, once (see the marker above).
- *
- *  0. Backfills `workout.bodyweightKg` on any session that snapshotted null (begun
- *     before a bodyweight was on file), from the bodyweight measurement nearest its
- *     date — so bodyweight-lift volume is corrected in the data rather than by a
- *     runtime fallback on every read.
- *  1. Stamps `loadMode` on bodyweight workout/template exercises. Weighted-vs-
- *     bodyweight is read from the *logged data* — a weight can only be entered in
- *     weighted mode — which is self-healing and immune to a sync pull flipping the
- *     library row's tracking type mid-migration. Assisted is taken from the
- *     pre-collapse tracking type (data can't tell assist weight from added weight);
- *     a custom assisted exercise whose type a pull already flipped is the one gap,
- *     and it degrades to 'weighted', not a crash.
- *  2. Merges the duplicate movements (EXERCISE_MERGES): repoints history to the
- *     canonical base, overriding equipment/mode where the merge changes them, and
- *     hides the old system rows locally.
- *  3. Coerces any exercise still on a retired bodyweight tracking type to
- *     `bodyweight_reps`, giving it a bodyweight factor if it lacked one.
- *  4. Rebuilds the caches for the (exercise + equipment) pairs it actually changed.
+ * Moves the library onto the current exercise model, once (see the marker above):
+ *  0. Backfill missing `workout.bodyweightKg` from the nearest measurement.
+ *  1. Stamp `loadMode` on bodyweight rows — derived from logged weight (self-healing
+ *     and immune to a sync pull flipping the tracking type mid-migration); assisted
+ *     comes from the pre-collapse type, degrading to 'weighted' in the one gap.
+ *  2. Merge duplicate movements (EXERCISE_MERGES) into their canonical base.
+ *  3. Coerce retired bodyweight tracking types to `bodyweight_reps`.
+ *  4. Rebuild caches for the (exercise + equipment) pairs actually changed.
  */
 export async function migrateExerciseModel(): Promise<void> {
   if (migrationApplied(EXERCISE_MODEL_MIGRATED_KEY, EXERCISE_MODEL_MIGRATION_VERSION)) {
@@ -230,10 +214,9 @@ export async function migrateExerciseModel(): Promise<void> {
     return current ?? 'bodyweight'
   }
 
-  // 1. Set loadMode on rows that predate the field. A bodyweight row's mode is
-  //    derived (and self-healed) from the logged weight and re-enqueued to sync;
-  //    a non-bodyweight row never reads loadMode, so it's just normalised from
-  //    absent to null locally — matching the server's default, so no touch/push.
+  // 1. Set loadMode on rows that predate the field: a bodyweight row's mode is
+  //    derived from logged weight and pushed; a non-bodyweight row is just
+  //    normalised absent→null locally (matches the server default, so no push).
   for (const we of allWorkoutExercises) {
     const current = (we as { loadMode?: LoadMode | null }).loadMode
     if (!isBodyweightTracking(trackingOf.get(we.exerciseId))) {

@@ -1,16 +1,7 @@
-// Architecture + consistency guard (run by `npm run lint`).
-//
-// Enforces the layering and the specific divergences we consolidated, so a future
-// edit that re-introduces one fails CI instead of shipping. This is a purpose-built
-// import/literal checker rather than ESLint because typescript-eslint does not yet
-// support this repo's TypeScript 7 (tracking: typescript-eslint#10940); the rules
-// here are path/literal based and need no type information. Swap to ESLint's
-// import-boundary rules once TS 7 is supported.
-//
-// Layers may import only themselves + lower:
-//   domain → (nothing)   lib → domain   platform/backend/db → domain, lib
-//   data → +db,+backend   sync → +data   auth → +backend
-//   components → +platform   features → everything except @/db*   app → everything
+// Architecture + consistency guard (npm run lint): fails on an upward cross-layer
+// import, a feature reaching into @/db, or a raw ms literal instead of DAY_MS/WEEK_MS.
+// A checker rather than ESLint because typescript-eslint doesn't yet support this
+// repo's TypeScript 7 (typescript-eslint#10940).
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'

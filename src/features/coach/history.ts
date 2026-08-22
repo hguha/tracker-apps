@@ -1,13 +1,11 @@
-// Local persistence for full-screen coach chats (§13). Stored in IndexedDB only —
-// never synced — since a conversation is device UI state, not domain data. Kept in
-// the coach feature (not the repo/data layer) because it's coach-specific and talks
-// to Dexie directly, like the rest-timer store's transient state.
+// Local persistence for full-screen coach chats (§13): IndexedDB only, never synced
+// — a conversation is device UI state, not domain data (hence Dexie here directly,
+// like the rest-timer store).
 
 import { db } from '@/db/database'
 import type { CoachAction, GeminiContent } from './types'
 
-// The display-side of a message: a bubble or an action card. Mirrors CoachChat's
-// item shape without the render-only numeric id.
+// A displayed message (bubble or action card), sans CoachChat's render-only id.
 export type StoredMessage =
   | { role: 'user'; text: string }
   | { role: 'assistant'; text: string }

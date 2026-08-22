@@ -563,9 +563,8 @@ export const mockCoachProvider: CoachProvider = {
         return { kind: 'answer', text: encouragement(summary) }
     }
   },
-  // Offline chat can't do multi-turn tool retrieval, but it still answers each
-  // message as a one-shot from the de-identified summary — a plan-like ask returns
-  // a draft card, anything else a heuristic reply.
+  // No multi-turn tools offline: answer each message as a one-shot from the summary
+  // — a plan-like ask returns a draft card, anything else a heuristic reply.
   async chat(contents: GeminiContent[], _context: CoachContext): Promise<CoachChatResult> {
     const text = lastUserText(contents)
     const summary = await repo.getCoachSummary()

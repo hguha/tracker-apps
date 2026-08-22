@@ -213,9 +213,8 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
             name: exercise.name,
             points: [],
           } as ExerciseSeries)
-        // e1RM/top-set on EFFECTIVE load (bodyweight ± added), so bodyweight lifts
-        // match the stored PRs and exercise detail. The e1rmSet weight is therefore
-        // the effective load behind the estimate, not the bare entered number.
+        // e1RM/top-set on effective load (bw ± entered), so bodyweight lifts match
+        // the stored PRs; e1rmSet therefore carries the effective weight, not raw.
         const effectiveSets = sets.map((s) => ({
           weightKg: effectiveWeightKg(s, exercise, workout.bodyweightKg, we.loadMode),
           reps: s.reps,

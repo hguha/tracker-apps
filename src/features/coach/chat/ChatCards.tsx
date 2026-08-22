@@ -1,7 +1,6 @@
 // Presentational pieces of the coach chat, split out of CoachChat.tsx: message
-// bubbles, the interactive action cards (plan / template-update / accessories),
-// the conversation-history sheet, and the "what's sent" disclosure. CoachChat owns
-// the conversation state and loop; these just render and fire their own actions.
+// bubbles, the plan/template-update/accessory cards, the history sheet, and the
+// "what's sent" disclosure. CoachChat owns the loop; these just render and act.
 
 import { useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -340,8 +339,7 @@ export function HistorySheet({
   )
 }
 
-// The exact bundle that would leave the device — the §13 consent disclosure, now
-// showing the full context (dated history, templates, live session) the chat sends.
+// The exact bundle that leaves the device — the §13 consent disclosure.
 export function ContextDisclosure({
   variant,
   onDismiss,

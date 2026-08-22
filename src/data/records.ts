@@ -23,10 +23,8 @@ import { WEEK_MS } from '@/lib/dates'
 import { listSets } from './sets'
 import { listWorkoutExercises } from './workouts'
 
-// The records that mean a lift "got stronger" — the same ones the PR toast
-// celebrates. "Stalled" is defined off these so a raw-weight or rep PR can never
-// read as stalled just because the estimated-1RM didn't move (the deadlift case:
-// 375×1 is a max_weight PR even though 345×3 estimates a higher 1RM).
+// The records that mean a lift "got stronger". "Stalled" keys off these so a raw
+// weight/rep PR isn't reported as stalled just because estimated-1RM didn't move.
 export const PROGRESS_RECORD_TYPES: readonly RecordType[] = [
   'max_weight',
   'max_est_1rm',

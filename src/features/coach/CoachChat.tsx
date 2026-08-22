@@ -33,8 +33,7 @@ import {
 } from './chat/ChatCards'
 import type { CoachAction, GeminiContent } from './types'
 
-// The display item and the persisted StoredMessage are the same shape; the id is a
-// render-only key added on top.
+// A StoredMessage plus a render-only key.
 type ChatItemInput = StoredMessage
 type ChatItem = ChatItemInput & { id: number }
 
@@ -75,9 +74,8 @@ export function CoachChat({
 
   // The Gemini conversation, kept in a ref so the loop never reads a stale copy.
   const contentsRef = useRef<GeminiContent[]>([])
-  // Building context scans a lot of history, so cache it: the full-screen chat
-  // builds once and reuses it across follow-ups; the in-workout chat rebuilds each
-  // send since the live session changes as sets are logged.
+  // Context is expensive to build, so the full-screen chat caches it across turns;
+  // the in-workout chat rebuilds each send since the live session changes.
   const contextRef = useRef<CoachContext | null>(null)
   const idRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -107,8 +105,8 @@ export function CoachChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persist])
 
-  // Persist after every change once a conversation exists. Local Dexie writes are
-  // cheap, and contentsRef is updated before setItems, so it's current here.
+  // Persist on every change once a conversation exists (contentsRef is current here,
+  // updated before setItems).
   useEffect(() => {
     if (!persist || conversationId === null || items.length === 0) return
     void saveConversation({

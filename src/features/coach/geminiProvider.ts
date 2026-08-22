@@ -23,13 +23,11 @@ import {
   toolToAction,
 } from './tools'
 
-// A user message can drive at most this many tool rounds before the coach must
-// answer, so one message can't runaway-consume the shared free-tier quota (§cost).
+// Cap tool rounds per message so one turn can't exhaust the shared free-tier quota.
 const MAX_TOOL_ROUNDS = 4
 
-// supabase-js wraps a non-2xx function response in a FunctionsHttpError whose body
-// isn't parsed. Pull out the server's `error` string so the real cause (e.g. a
-// Gemini schema rejection) surfaces instead of a generic "non-2xx status".
+// supabase-js hides the server's error body in a FunctionsHttpError; pull out its
+// `error` string so the real cause (e.g. a Gemini schema rejection) surfaces.
 async function describeInvokeError(error: unknown): Promise<Error> {
   const context = (error as { context?: Response }).context
   if (context && typeof context.json === 'function') {
@@ -68,9 +66,8 @@ export const geminiCoachProvider: CoachProvider = {
     throw new Error('Malformed coach response')
   },
 
-  // One user-message→reply cycle. `contents` already ends with the new user turn.
-  // Retrieval tool calls loop (execute locally → feed result back); an action tool
-  // is terminal — it surfaces a card and ends the turn, saving a round trip.
+  // One user-message→reply cycle: retrieval tool calls loop (run locally, feed the
+  // result back); an action tool is terminal — surfaces a card and ends the turn.
   async chat(
     contents: GeminiContent[],
     context: CoachContext,

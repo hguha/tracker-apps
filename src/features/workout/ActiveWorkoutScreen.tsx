@@ -540,8 +540,7 @@ export function ActiveWorkoutScreen({
           dismissOnBackdrop={false}
           labelledBy="coach-sheet"
         >
-          {/* The chat sees the live session via includeActiveWorkout (variant="sheet"),
-              so it can suggest accessories for what's in progress. */}
+          {/* variant="sheet" feeds the chat the live session, so it can suggest accessories. */}
           <div className="flex h-full min-h-0 flex-col">
             <CoachChat variant="sheet" />
           </div>

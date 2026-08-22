@@ -128,10 +128,8 @@ export function applyDefaultAppearance(): void {
   applyAppearance({ theme: 'default', colorScheme: 'system', accentOverride: null })
 }
 
-// Applies theme/scheme/accent to the document and returns the resolved scheme, so
-// the caller can drive platform side-effects (e.g. the native status bar) — kept
-// out of here so this module stays a pure, platform-free leaf. Returns null when
-// there's no document (SSR/tests).
+// Returns the resolved scheme so the caller can drive platform side-effects (the
+// native status bar) — kept out of here so this module stays a pure leaf.
 export function applyAppearance(settings: AppearanceSettings): 'light' | 'dark' | null {
   if (typeof document === 'undefined') return null
   const root = document.documentElement

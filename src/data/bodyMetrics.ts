@@ -45,10 +45,8 @@ export async function addMetricEntry(input: {
   await db.metricEntries.add(entry)
   await enqueue('metricEntries', entry.id)
 
-  // Bodyweight feeds volume math for bodyweight exercises, so cache the latest —
-  // and fill it into a session already in progress that began before any weight
-  // was on file (the live twin of the historical backfill in migrateExerciseModel;
-  // finished sessions are the migration's job, not a runtime concern).
+  // Bodyweight feeds bodyweight-exercise volume, so cache the latest and stamp it
+  // onto any in-progress session that lacks one (finished sessions are the migration's job).
   if (input.definitionId === 'bodyweight') {
     await updateProfile({ bodyweightCacheKg: input.value })
     const active = await db.workouts

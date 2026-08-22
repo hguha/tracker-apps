@@ -12,8 +12,7 @@ import {
 
 export type WeekStart = 0 | 1
 
-// Canonical time spans in ms — one definition, so week/day math never drifts
-// between the copies that used to inline `7 * 24 * 3600 * 1000` / `86_400_000`.
+// Canonical ms spans, so week/day math never drifts between inlined copies.
 export const DAY_MS = 24 * 60 * 60 * 1000
 export const WEEK_MS = 7 * DAY_MS
 
@@ -25,7 +24,7 @@ export function weekStart(ts: number, weekStartsOn: WeekStart): number {
   return startOfWeek(ts, { weekStartsOn }).getTime()
 }
 
-// Whole-week offset of `ts` from the week containing `now`: 0 = this week, −1 = last.
+// Whole-week offset from the week containing `now`: 0 = this week, −1 = last.
 export function weekOffset(ts: number, weekStartsOn: WeekStart, now = Date.now()): number {
   return Math.round((weekStart(ts, weekStartsOn) - weekStart(now, weekStartsOn)) / WEEK_MS)
 }

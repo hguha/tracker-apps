@@ -138,13 +138,11 @@ export interface Profile extends SyncColumns {
   heightCm: number | null
   // Fed to the coach for tailoring; free text. Empty = unset.
   trainingGoal: string
-  // Demographics the coach uses to tailor loads, volume, and progression pacing.
-  // All null until the user provides them — the coach must tolerate their absence.
+  // Coach-tailoring demographics; all null until provided (the coach tolerates absence).
+  // birthYear (not a full date) → age, avoiding extra PII/timezone edge cases.
   sex: 'male' | 'female' | null
-  // Birth year (not a full birthdate) → age, without the extra PII or timezone edge cases.
   birthYear: number | null
   experienceLevel: 'beginner' | 'intermediate' | 'advanced' | null
-  // How many days per week the user can train — lets plans fit their real schedule.
   trainingDaysPerWeek: number | null
   // Null until first-run setup completes. On the profile so it follows the
   // account across devices rather than re-running per device (§11.1.3).

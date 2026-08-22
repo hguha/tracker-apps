@@ -1,8 +1,6 @@
-// The context bundle the conversational coach receives each turn. Unlike the old
-// de-identified CoachSummary (§13), this carries dated history, the templates the
-// user already has, and — mid-workout — the live session, by explicit user choice
-// (see the "What's sent" disclosure). Deep/open-ended lookups are served on demand
-// by the retrieval tools (tools.ts) rather than dumped here, so this stays bounded.
+// The context bundle sent to the coach each turn: dated history, existing
+// templates, and — mid-workout — the live session. Deeper lookups go through the
+// retrieval tools (tools.ts), so this stays bounded.
 
 import * as repo from '@/data/repository'
 import { computeTrainingPatterns } from '@/data/patterns'
@@ -13,8 +11,7 @@ import type { WeightUnit } from '@/domain/types'
 
 export const COACH_CONTEXT_VERSION = 1
 
-// How much dated history to inline; older/broader lookups go through findWorkouts.
-// Kept small so the per-message payload (and model prefill latency) stays lean.
+// Dated history inlined per message; older/broader lookups go through findWorkouts.
 const RECENT_WORKOUTS = 10
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -100,10 +97,8 @@ export async function buildCoachContext(
   const profile = await repo.getProfile()
   const unit = profile.unitWeight
 
-  // Reuse the aggregate rollup for key lifts + region sets, but NOT for volume —
-  // its volume ignores bodyweight/loadMode work (§ discrepancy). Weekly and per-
-  // workout volume come from the workout summaries, which use volumeLoadKg, so the
-  // coach's numbers match Home and Insights.
+  // Aggregate rollup for key lifts + region sets only — volume comes from the
+  // summaries (volumeLoadKg), since the rollup's volume ignores bodyweight work.
   const [summary, finishedSummaries, templates] = await Promise.all([
     repo.getCoachSummary(),
     repo.listFinishedWorkoutSummaries(150),
@@ -144,8 +139,7 @@ export async function buildCoachContext(
     exercises: s.exerciseNames,
   }))
 
-  // Per-week totals aggregated from the same volumeLoadKg-based summaries as Home,
-  // grouped by the user's week start so "this week" (offset 0) lines up with the app.
+  // Per-week totals from the same summaries as Home, grouped by the user's week start.
   const weekTotals = new Map<number, { workouts: number; sets: number; volumeKg: number }>()
   for (const s of finishedSummaries) {
     const offset = weekOffset(s.workout.startedAt, profile.weekStartsOn)

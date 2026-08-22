@@ -36,8 +36,7 @@ export interface SummaryExerciseInstance {
   pattern: MovementPattern
   equipment: Equipment
   isCardio: boolean
-  // Tracking facts + mode, so volume/e1RM/top-set run through the canonical
-  // effective-load math (bodyweight × factor ± added), not raw weight×reps.
+  // Tracking facts + mode, so volume/e1RM use effective load, not raw weight×reps.
   trackingType: TrackingType
   bodyweightFactor: number | null
   loadMode: LoadMode | null

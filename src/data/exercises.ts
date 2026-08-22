@@ -27,9 +27,8 @@ export async function listExercises(): Promise<Exercise[]> {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// A single exercise by id (archived/deleted included — callers resolving a logged
-// row need it regardless of visibility). The repository read behind UI lookups so
-// features don't reach into Dexie directly.
+// Single exercise by id, archived included — a logged row must resolve regardless
+// of visibility. The repository read behind UI lookups (features don't touch Dexie).
 export async function getExercise(id: string): Promise<Exercise | undefined> {
   return db.exercises.get(id)
 }

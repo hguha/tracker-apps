@@ -1,13 +1,8 @@
-// The coach's tool registry: typed function-calling tools the model may invoke.
-//
-// RETRIEVAL tools run locally against IndexedDB and return structured JSON to the
-// model (that's how the coach answers open-ended history questions without a vector
-// store — precise, and data stays local until a specific lookup needs it). ACTION
-// tools are terminal: instead of returning data, they surface an interactive card
-// (a plan, a template edit, accessory suggestions) for the user to accept.
-//
-// Declarations are the single source of truth and are sent to the edge each turn,
-// so the model and the client can never disagree about the available tools.
+// The coach's function-calling tools. RETRIEVAL tools run locally against
+// IndexedDB and return JSON to the model (structured local retrieval instead of a
+// vector store); ACTION tools are terminal and surface an interactive card for the
+// user to accept. Declarations are sent to the edge each turn as the single source
+// of truth for what the model may call.
 
 import * as repo from '@/data/repository'
 import { buildExerciseResolver } from '@/data/resolveExerciseName'
