@@ -1,15 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import {
   bestOneRepMaxSet,
+  effectiveTopSetKg,
+  effectiveWeightKg,
   isWorkingSet,
-  topSetWeightKg,
   volumeLoadKg,
 } from '@/lib/metrics'
-import { weekKey, weekStart } from '@/lib/dates'
+import { bucketByDayOfWeek, bucketByHour } from '@/data/patterns'
+import { WEEK_MS, weekKey, weekStart } from '@/lib/dates'
 import { format } from 'date-fns'
 import type { Profile, Region, WorkoutSet } from '@/domain/types'
+import type { StalledLift } from '@/data/records'
 import { isCardioPattern } from '@/domain/movement'
 
 export interface InsightsFilters {
@@ -58,6 +60,9 @@ export interface InsightsData {
   regionVolumeByWeek: Map<string, Map<Region, number>>
   // Only exercises with data in range.
   exerciseSeries: ExerciseSeries[]
+  // Lifts trained in range that haven't set a progress record (max_weight /
+  // e1RM / reps) in 2+ weeks — the PR-consistent definition of "stalled".
+  stalledLifts: StalledLift[]
   sessions: SessionPoint[]
   repBuckets: Map<string, number>
   dayOfWeekCounts: number[]
@@ -67,7 +72,6 @@ export interface InsightsData {
   volumeByDay: Map<string, number>
   // Every exercise trained ever (not just in range), for the filter sheet.
   exerciseOptions: { id: string; name: string; region: Region | undefined }[]
-  bodyMetrics: Map<string, { at: number; value: number }[]>
   workoutCount: number
   totalVolumeKg: number
   totalSets: number
@@ -90,7 +94,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
   return useLiveQuery(async () => {
     const profile = await repo.getProfile()
 
-    const cutoff = Date.now() - filters.weeks * 7 * 24 * 3600 * 1000
+    const cutoff = Date.now() - filters.weeks * WEEK_MS
     const allWorkouts = (await repo.listWorkouts(500)).filter((w) => w.endedAt !== null)
     const workouts = allWorkouts.filter((w) => w.startedAt >= cutoff)
 
@@ -106,8 +110,8 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
     const setsByEquipment = new Map<string, number>()
     const regionVolumeByWeek = new Map<string, Map<Region, number>>()
     const repBuckets = new Map<string, number>()
-    const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]
-    const hourCounts = new Array<number>(24).fill(0)
+    // Start times of workouts matching the active filter; bucketed after the loop.
+    const matchedStarts: number[] = []
     const volumeByDay = new Map<string, number>()
     const sessions: SessionPoint[] = []
     const seriesByExercise = new Map<string, ExerciseSeries>()
@@ -125,7 +129,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
     for (const workout of allWorkouts) {
       for (const we of await repo.listWorkoutExercises(workout.id)) {
         if (exerciseOptions.has(we.exerciseId)) continue
-        const exercise = await db.exercises.get(we.exerciseId)
+        const exercise = await repo.getExercise(we.exerciseId)
         if (!exercise) continue
         exerciseOptions.set(we.exerciseId, {
           id: exercise.id,
@@ -145,7 +149,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       let matchedFilter = false
 
       for (const we of workoutExercises) {
-        const exercise = await db.exercises.get(we.exerciseId)
+        const exercise = await repo.getExercise(we.exerciseId)
         if (!exercise) continue
 
         const region = exercise.region
@@ -157,7 +161,12 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         if (sets.length === 0) continue
 
         const working = sets.filter((s) => isWorkingSet(s))
-        const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
+        const exerciseVolume = volumeLoadKg(
+          sets,
+          exercise,
+          workout.bodyweightKg,
+          we.loadMode,
+        )
 
         sessionVolume += exerciseVolume
         sessionSets += working.length
@@ -204,12 +213,19 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
             name: exercise.name,
             points: [],
           } as ExerciseSeries)
-        const bestE1rm = bestOneRepMaxSet(sets)
+        // e1RM/top-set on EFFECTIVE load (bodyweight ± added), so bodyweight lifts
+        // match the stored PRs and exercise detail. The e1rmSet weight is therefore
+        // the effective load behind the estimate, not the bare entered number.
+        const effectiveSets = sets.map((s) => ({
+          weightKg: effectiveWeightKg(s, exercise, workout.bodyweightKg, we.loadMode),
+          reps: s.reps,
+        }))
+        const bestE1rm = bestOneRepMaxSet(effectiveSets)
         series.points.push({
           at: workout.startedAt,
           e1rmKg: bestE1rm?.e1rmKg ?? null,
           e1rmSet: bestE1rm && { weightKg: bestE1rm.weightKg, reps: bestE1rm.reps },
-          topSetKg: topSetWeightKg(sets),
+          topSetKg: effectiveTopSetKg(sets, exercise, workout.bodyweightKg, we.loadMode),
           volumeKg: exerciseVolume,
           repRange: computeRepRange(working),
         })
@@ -219,9 +235,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       if (!matchedFilter) continue
 
       workoutsByWeek.set(key, (workoutsByWeek.get(key) ?? 0) + 1)
-      const started = new Date(workout.startedAt)
-      dayOfWeekCounts[started.getDay()]! += 1
-      hourCounts[started.getHours()]! += 1
+      matchedStarts.push(workout.startedAt)
       const dayKey = format(workout.startedAt, 'yyyy-MM-dd')
       volumeByDay.set(dayKey, (volumeByDay.get(dayKey) ?? 0) + sessionVolume)
       sessions.push({
@@ -243,19 +257,12 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       const end = weekStart(Date.now(), profile.weekStartsOn)
       while (cursor <= end) {
         weeks.push(format(cursor, 'yyyy-MM-dd'))
-        cursor += 7 * 24 * 3600 * 1000
+        cursor += WEEK_MS
       }
     }
 
-    const bodyMetrics = new Map<string, { at: number; value: number }[]>()
-    for (const key of ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']) {
-      const entries = await repo.listMetricEntries(key, 400)
-      const inRange = entries
-        .filter((e) => e.measuredAt >= cutoff)
-        .map((e) => ({ at: e.measuredAt, value: e.value }))
-        .sort((a, b) => a.at - b.at)
-      if (inRange.length > 0) bodyMetrics.set(key, inRange)
-    }
+    const dayOfWeekCounts = bucketByDayOfWeek(matchedStarts)
+    const hourCounts = bucketByHour(matchedStarts)
 
     const exerciseSeries = [...seriesByExercise.values()]
       .map((series) => ({
@@ -263,6 +270,13 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         points: [...series.points].sort((a, b) => a.at - b.at),
       }))
       .sort((a, b) => b.points.length - a.points.length)
+
+    // Stalled = no new progress record in 2+ weeks, defined off the PR records (so
+    // it agrees with the log's PR toast); narrowed to lifts trained in this window.
+    const trainedIds = new Set(exerciseSeries.map((s) => s.exerciseId))
+    const stalledLifts = (await repo.listStalledLifts(2)).filter((l) =>
+      trainedIds.has(l.exerciseId),
+    )
 
     return {
       profile,
@@ -276,6 +290,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       setsByEquipment,
       regionVolumeByWeek,
       exerciseSeries,
+      stalledLifts,
       sessions: sessions.sort((a, b) => a.at - b.at),
       repBuckets,
       dayOfWeekCounts,
@@ -284,7 +299,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       exerciseOptions: [...exerciseOptions.values()].sort((a, b) =>
         a.name.localeCompare(b.name),
       ),
-      bodyMetrics,
       workoutCount: sessions.length,
       totalVolumeKg,
       totalSets,

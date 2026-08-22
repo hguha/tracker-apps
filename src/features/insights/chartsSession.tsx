@@ -8,7 +8,14 @@ import { useAppearanceKey } from '@/lib/useColorScheme'
 import { format } from 'date-fns'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { DAY_LABELS, SET_COUNT_BUCKETS, formatHour, weekLabels } from './chartShared'
+import {
+  DAY_LABELS,
+  movingAverage,
+  SET_COUNT_BUCKETS,
+  formatHour,
+  weekLabels,
+} from './chartShared'
+import { sessionGapsDays } from '@/data/patterns'
 
 export function DayOfWeekChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
@@ -161,10 +168,7 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
     const withDuration = data.sessions.filter((s) => s.durationSeconds !== null)
     const labels = withDuration.map((s) => format(s.at, 'MMM d'))
     const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
-    const average = minutes.map((_, index) => {
-      const window = minutes.slice(Math.max(0, index - 3), index + 1)
-      return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
-    })
+    const average = movingAverage(minutes)
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
@@ -331,11 +335,7 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
   const buckets = ['0-1', '2', '3', '4-6', '7+']
 
   const { option, tally, gaps } = useMemo(() => {
-    const times = data.sessions.map((s) => s.at).sort((a, b) => a - b)
-    const gaps: number[] = []
-    for (let i = 1; i < times.length; i += 1) {
-      gaps.push(Math.round((times[i]! - times[i - 1]!) / 86_400_000))
-    }
+    const gaps = sessionGapsDays(data.sessions.map((s) => s.at))
     const tally = new Array<number>(SET_COUNT_BUCKETS.length).fill(0)
     for (const g of gaps) {
       const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4

@@ -5,6 +5,7 @@ import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 import { useInsightsData, type InsightsFilters } from './useInsightsData'
 import { CHART_CATALOG, SUB_TABS, filtersForSubTab, type ChartContext } from './catalog'
+import { ExerciseFilterSheet } from './ExerciseFilterSheet'
 import { cn } from '@/lib/cn'
 
 const RANGES = [
@@ -168,12 +169,12 @@ export function InsightsScreen() {
         />
       )}
 
+      {/* Single-select: the strength charts each plot exactly one lift. */}
       {openSheet === 'exercise' && (
-        <FilterSheet
-          title="Exercise"
-          options={groupExercisesByRegion(data.exerciseOptions)}
-          selected={exerciseIds}
-          onChange={setExerciseIds}
+        <ExerciseFilterSheet
+          options={data.exerciseOptions}
+          selectedId={activeExerciseId}
+          onSelect={(id) => setExerciseIds(id === null ? [] : [id])}
           onDismiss={() => setOpenSheet(null)}
         />
       )}
@@ -189,23 +190,4 @@ function summarize(
   if (selected.length === 0) return `All ${noun.toLowerCase()}s`
   if (selected.length === 1) return labelOf(selected[0]!)
   return `${labelOf(selected[0]!)} +${selected.length - 1}`
-}
-
-function groupExercisesByRegion(
-  options: { id: string; name: string; region: Region | undefined }[],
-) {
-  // Region order matches the palette's fixed slot order, so the sheet matches every chart legend.
-  const ordered = [...options].sort((a, b) => {
-    const aIndex = a.region ? REGIONS.indexOf(a.region) : REGIONS.length
-    const bIndex = b.region ? REGIONS.indexOf(b.region) : REGIONS.length
-    if (aIndex !== bIndex) return aIndex - bIndex
-    return a.name.localeCompare(b.name)
-  })
-
-  return ordered.map((option) => ({
-    value: option.id,
-    label: option.name,
-    swatch: option.region ? regionVar(option.region) : undefined,
-    group: option.region ? REGION_LABELS[option.region] : 'Other',
-  }))
 }

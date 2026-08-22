@@ -70,3 +70,13 @@ export function formatHour(hour: number): string {
   const twelve = hour % 12 === 0 ? 12 : hour % 12
   return `${twelve}${period}`
 }
+
+// Trailing moving average (inclusive, last `window` points), one value per input —
+// shared by the weekly-volume and session-duration trend lines so the smoothing is
+// identical. Empty in → empty out; the slice is always non-empty so no ÷0.
+export function movingAverage(values: number[], window = 4): number[] {
+  return values.map((_, index) => {
+    const slice = values.slice(Math.max(0, index - (window - 1)), index + 1)
+    return Math.round(slice.reduce((sum, v) => sum + v, 0) / slice.length)
+  })
+}

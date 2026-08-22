@@ -7,7 +7,7 @@ import { Card } from '@/components/Card'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { SummaryStat, weekLabels } from './chartShared'
+import { movingAverage as movingAvg, SummaryStat, weekLabels } from './chartShared'
 
 export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
@@ -19,10 +19,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
     const points = data.weeks.map((week) =>
       displayWeight(data.volumeByWeek.get(week) ?? 0, unit),
     )
-    const movingAverage = points.map((_, index) => {
-      const window = points.slice(Math.max(0, index - 3), index + 1)
-      return Math.round(window.reduce((a, b) => a + b, 0) / window.length)
-    })
+    const movingAverage = movingAvg(points)
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),

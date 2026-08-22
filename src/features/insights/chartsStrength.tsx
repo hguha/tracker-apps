@@ -105,7 +105,6 @@ export function TopSetChart({
         {
           name: `Top set (${unit})`,
           type: 'line',
-          step: 'end',
           data: points.map((p) => Math.round(weightFromKg(p.topSetKg!, unit))),
           symbol: 'circle',
           symbolSize: 6,
@@ -143,7 +142,7 @@ export function TopSetChart({
       }}
     >
       {active.toggle}
-      <Chart option={option} ariaLabel="Step chart of heaviest set per session" />
+      <Chart option={option} ariaLabel="Line chart of heaviest set per session" />
     </ChartCard>
   )
 }
@@ -270,51 +269,33 @@ export function PerExerciseVolumeChart({
 // C-25
 
 export function StalledLiftsChart({ data }: { data: InsightsData }) {
-  const unit = data.profile.unitWeight
-  const rows = data.exerciseSeries
-    .map((series) => {
-      const withE1rm = series.points.filter((p) => p.e1rmKg !== null)
-      if (withE1rm.length < 2) return null
-      const best = Math.max(...withE1rm.map((p) => p.e1rmKg!))
-      const bestAt = withE1rm.find((p) => p.e1rmKg === best)!.at
-      const weeksStalled = Math.round((Date.now() - bestAt) / (7 * 86_400_000))
-      const current = withE1rm[withE1rm.length - 1]!.e1rmKg!
-      return { name: series.name, best, current, weeksStalled }
-    })
-    .filter((r): r is NonNullable<typeof r> => r !== null && r.weeksStalled >= 2)
-    .sort((a, b) => b.weeksStalled - a.weeksStalled)
-    .slice(0, 8)
+  // Backed by the PR records (max_weight / e1RM / reps), so a lift that set any PR
+  // recently is never "stalled" — this agrees with the log's PR toast by construction.
+  const rows = data.stalledLifts.slice(0, 8)
 
   return (
     <ChartCard
       title="Stalled lifts"
-      subtitle="No new e1RM in 2+ weeks"
+      subtitle="No new PR (weight, e1RM, or reps) in 2+ weeks"
       isEmpty={rows.length === 0}
-      emptyMessage="Nothing stalled — every tracked lift set a recent best."
+      emptyMessage="Nothing stalled — every tracked lift set a recent PR."
       table={{
-        columns: ['Lift', 'Weeks', `Best (${unit})`],
-        rows: rows.map((r) => [
-          r.name,
-          r.weeksStalled,
-          displayWeight(r.best, unit).toLocaleString(),
-        ]),
+        columns: ['Lift', 'Weeks since PR'],
+        rows: rows.map((r) => [r.name, r.weeksStalled]),
       }}
     >
       <div className="space-y-1.5 px-2 py-2">
         {rows.map((r) => (
           <div
-            key={r.name}
+            key={r.exerciseId}
             className="flex items-center justify-between gap-2 text-[13.5px]"
           >
             <span className="min-w-0 flex-1 truncate">{r.name}</span>
-            <span className="tabular shrink-0 text-ink-muted">
-              {displayWeight(r.best, unit)} {unit}
-            </span>
             <span
-              className="tabular w-16 shrink-0 text-right font-semibold"
+              className="tabular w-24 shrink-0 text-right font-semibold"
               style={{ color: 'var(--status-warning)' }}
             >
-              {r.weeksStalled}w
+              {r.weeksStalled}w since PR
             </span>
           </div>
         ))}

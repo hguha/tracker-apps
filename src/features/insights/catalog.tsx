@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import type { InsightsData } from './useInsightsData'
 import {
-  BodyweightChart,
   CardioChart,
   DayOfWeekChart,
   DurationTrendChart,
@@ -44,37 +43,37 @@ export interface ChartDef {
 export const CHART_CATALOG: Record<string, ChartDef> = {
   summary: {
     key: 'summary',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data, rangeLabel }) => <SummaryCard data={data} rangeLabel={rangeLabel} />,
   },
   weeklyVolume: {
     key: 'weeklyVolume',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <WeeklyVolumeChart data={data} />,
   },
   setsByRegion: {
     key: 'setsByRegion',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <SetsByRegionChart data={data} />,
   },
   regionShare: {
     key: 'regionShare',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <RegionShareChart data={data} />,
   },
   regionVolumeOverTime: {
     key: 'regionVolumeOverTime',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <RegionVolumeOverTimeChart data={data} />,
   },
   patternCoverage: {
     key: 'patternCoverage',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <PatternCoverageChart data={data} />,
   },
   equipmentMix: {
     key: 'equipmentMix',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <EquipmentMixChart data={data} />,
   },
   setsPerSession: {
@@ -119,14 +118,18 @@ export const CHART_CATALOG: Record<string, ChartDef> = {
       <PerExerciseVolumeChart data={data} activeExerciseId={activeExerciseId} />
     ),
   },
+  // Rep ranges belong under Volume — a distribution across the whole range, scoped
+  // by region, not a single-lift strength readout.
   repRange: {
     key: 'repRange',
-    filters: ['region', 'exercise'],
+    filters: ['region'],
     render: ({ data }) => <RepRangeChart data={data} />,
   },
+  // No region filter: Strength shows only an exercise filter, so this stays an
+  // unfiltered overview of every stalled lift.
   stalledLifts: {
     key: 'stalledLifts',
-    filters: ['region'],
+    filters: [],
     render: ({ data }) => <StalledLiftsChart data={data} />,
   },
 
@@ -160,12 +163,6 @@ export const CHART_CATALOG: Record<string, ChartDef> = {
     filters: [],
     render: ({ data }) => <CardioChart data={data} />,
   },
-
-  bodyweight: {
-    key: 'bodyweight',
-    filters: [],
-    render: ({ data }) => <BodyweightChart data={data} />,
-  },
 }
 
 export interface SubTab {
@@ -188,7 +185,6 @@ export const SUB_TABS: SubTab[] = [
       'strengthProgression',
       'topSet',
       'perExerciseVolume',
-      'repRange',
       'stalledLifts',
     ],
   },
@@ -199,6 +195,7 @@ export const SUB_TABS: SubTab[] = [
       'regionVolumeOverTime',
       'regionShare',
       'setsByRegion',
+      'repRange',
       'patternCoverage',
       'equipmentMix',
       'setsPerSession',
@@ -217,11 +214,6 @@ export const SUB_TABS: SubTab[] = [
       'gapDistribution',
       'cardio',
     ],
-  },
-  {
-    key: 'body',
-    label: 'Body',
-    charts: ['bodyweight'],
   },
 ]
 
