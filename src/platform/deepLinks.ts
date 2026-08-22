@@ -11,7 +11,7 @@
 // The OTP code path stays the primary, no-deep-link sign-in; this is the polish
 // that lets the link itself open the app.
 import { isNativePlatform } from '@/lib/platform'
-import { getSupabase } from '@/sync/supabaseClient'
+import { getSupabase } from '@/backend/supabaseClient'
 
 async function completeFromUrl(url: string): Promise<void> {
   const client = getSupabase()

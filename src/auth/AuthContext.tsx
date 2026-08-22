@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { LocalAuthProvider } from './localAuthProvider'
 import { CompositeAuthProvider } from './compositeAuthProvider'
-import { getSupabase } from '@/sync/supabaseClient'
+import { getSupabase } from '@/backend/supabaseClient'
 import { setActiveUserId, LOCAL_USER_ID } from '@/db/seed'
 import { setDbOwner } from '@/db/owner'
 import * as repo from '@/data/repository'
