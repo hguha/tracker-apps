@@ -4,7 +4,7 @@
  * short of a signed-in caller with a working network drops the report silently.
  */
 
-import { getSupabase } from '@/sync/supabaseClient'
+import { getSupabase } from '@/backend/supabaseClient'
 import { APP_VERSION } from '@/lib/version'
 
 export type ErrorContext =

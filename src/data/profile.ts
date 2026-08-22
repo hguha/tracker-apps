@@ -66,6 +66,11 @@ export async function claimLocalData(newUserId: string): Promise<number> {
           bodyweightCacheKg: localProfile.bodyweightCacheKg,
           heightCm: existing?.heightCm ?? localProfile.heightCm ?? null,
           trainingGoal: localProfile.trainingGoal || (existing?.trainingGoal ?? ''),
+          sex: existing?.sex ?? localProfile.sex ?? null,
+          birthYear: existing?.birthYear ?? localProfile.birthYear ?? null,
+          experienceLevel: existing?.experienceLevel ?? localProfile.experienceLevel ?? null,
+          trainingDaysPerWeek:
+            existing?.trainingDaysPerWeek ?? localProfile.trainingDaysPerWeek ?? null,
           onboardedAt: existing?.onboardedAt ?? localProfile.onboardedAt ?? null,
           id: newUserId,
           updatedAt: now,

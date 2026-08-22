@@ -4,7 +4,7 @@
 import { db, isReadyToPush, type OutboxEntry } from '@/db/database'
 import type { SyncBackend } from './backend'
 import { syncLog } from './log'
-import { reportError } from '@/lib/errorReporter'
+import { reportError } from '@/backend/errorReporter'
 import { enqueue } from '@/data/repository'
 
 // Tables that participate in sync, in dependency order for the initial pull.
@@ -450,6 +450,10 @@ function normalizeRow(
       showAvatar: row.showAvatar ?? false,
       heightCm: row.heightCm ?? null,
       trainingGoal: row.trainingGoal ?? '',
+      sex: row.sex ?? null,
+      birthYear: row.birthYear ?? null,
+      experienceLevel: row.experienceLevel ?? null,
+      trainingDaysPerWeek: row.trainingDaysPerWeek ?? null,
       onboardedAt: row.onboardedAt ?? null,
       onboardingVersion: row.onboardingVersion ?? 0,
     }

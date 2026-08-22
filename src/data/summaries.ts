@@ -18,8 +18,8 @@ import {
   SUMMARY_WEEKS,
   type SummarySession,
   buildCoachSummary,
-} from '@/features/coach/summary'
-import { weekStart } from '@/lib/dates'
+} from './coachSummary'
+import { WEEK_MS, weekOffset } from '@/lib/dates'
 import { composeExerciseName } from '@/lib/labels'
 import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
 import { type SetSignal, sessionTitle } from '@/lib/sessionTitle'
@@ -73,7 +73,7 @@ function buildWorkoutSummary(
 
     const logged = (setsByWe.get(we.id) ?? []).filter((s) => s.isCompleted)
     setCount += logged.length
-    volumeKg += volumeLoadKg(logged, exercise, workout.bodyweightKg)
+    volumeKg += volumeLoadKg(logged, exercise, workout.bodyweightKg, we.loadMode)
 
     if (isCardioPattern(exercise.movementPattern)) {
       cardioSeconds += logged.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
@@ -231,8 +231,7 @@ export async function getBadgeStats(): Promise<BadgeStats> {
 export async function getCoachSummary(): Promise<CoachSummary> {
   const profile = await getProfile()
 
-  const cutoff = Date.now() - SUMMARY_WEEKS * 7 * 24 * 3600 * 1000
-  const thisWeekStart = weekStart(Date.now(), profile.weekStartsOn)
+  const cutoff = Date.now() - SUMMARY_WEEKS * WEEK_MS
   const workouts = (await listWorkouts(1000)).filter(
     (w) => w.endedAt !== null && w.startedAt >= cutoff,
   )
@@ -280,11 +279,8 @@ export async function getCoachSummary(): Promise<CoachSummary> {
     else weByWorkout.set(we.workoutId, [we])
   }
 
-  const WEEK_MS = 7 * 24 * 3600 * 1000
   const sessions: SummarySession[] = workouts.map((w) => {
-    const weekOffset = Math.round(
-      (weekStart(w.startedAt, profile.weekStartsOn) - thisWeekStart) / WEEK_MS,
-    )
+    const offset = weekOffset(w.startedAt, profile.weekStartsOn)
     const exerciseInstances = (weByWorkout.get(w.id) ?? [])
       .map((we) => {
         const exercise = exercisesById.get(we.exerciseId)
@@ -296,6 +292,9 @@ export async function getCoachSummary(): Promise<CoachSummary> {
           pattern: exercise.movementPattern,
           equipment: we.equipment,
           isCardio: isCardioPattern(exercise.movementPattern),
+          trackingType: exercise.trackingType,
+          bodyweightFactor: exercise.bodyweightFactor,
+          loadMode: we.loadMode,
           sets: (setsByWe.get(we.id) ?? []).map((s) => ({
             weightKg: s.weightKg,
             reps: s.reps,
@@ -306,7 +305,7 @@ export async function getCoachSummary(): Promise<CoachSummary> {
         }
       })
       .filter((e): e is NonNullable<typeof e> => e !== null)
-    return { weekOffset, exercises: exerciseInstances }
+    return { weekOffset: offset, bodyweightKg: w.bodyweightKg, exercises: exerciseInstances }
   })
 
   return buildCoachSummary({

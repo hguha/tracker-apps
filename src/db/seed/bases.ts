@@ -13,7 +13,12 @@
 // equipment, and the choice lives on the workout. The variant mapping keeps the
 // old row's equipment only so history can be backfilled during migration.
 
-import { type Equipment, type Region, type TrackingType } from '@/domain/types'
+import {
+  type Equipment,
+  type LoadMode,
+  type Region,
+  type TrackingType,
+} from '@/domain/types'
 import { movementFor } from '@/domain/movement'
 import { EXERCISE_SEEDS, type ExerciseSeed } from './exercises'
 
@@ -51,6 +56,28 @@ export const RETIRED_BASE_IDS: Record<string, string> = {
   curl: 'biceps_curl',
   fly: 'chest_fly',
 }
+
+// Duplicate movements collapsed into a canonical base, migrated once. Unlike
+// RETIRED_BASE_IDS this isn't a permanent naming layer: `mergeExercises` at boot
+// repoints local history off these ids and the new seeds carry the old names as
+// aliases, so nothing needs to keep resolving them afterward. `equipment`/
+// `loadMode` are set on the repointed rows only when the merge changes them
+// (the assisted movements fold into a load mode of the base).
+export interface ExerciseMerge {
+  from: string
+  to: string
+  equipment?: Equipment
+  loadMode?: LoadMode
+}
+
+export const EXERCISE_MERGES: ExerciseMerge[] = [
+  { from: 'incline_press', to: 'incline_bench_press' },
+  { from: 'chest_press', to: 'bench_press' },
+  { from: 'shoulder_press', to: 'overhead_press' },
+  { from: 'seated_shoulder_press', to: 'overhead_press' },
+  { from: 'assisted_dip', to: 'dip', equipment: 'bodyweight', loadMode: 'assisted' },
+  { from: 'assisted_pull_up', to: 'pull_up', equipment: 'bodyweight', loadMode: 'assisted' },
+]
 
 // Builds bases + mapping from an arbitrary variant list, so tests can exercise it
 // on fixtures as well as the real seed.

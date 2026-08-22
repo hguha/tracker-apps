@@ -2,7 +2,9 @@ import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import {
   type Equipment,
+  type Exercise,
   type LastPerformance,
+  type LoadMode,
   type PerformedSession,
   type PerformedSet,
   type PersonalRecord,
@@ -11,21 +13,76 @@ import {
   type WorkoutExercise,
   type WorkoutSet,
 } from '@/domain/types'
-import { bestOneRepMaxKg, estimatedOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
+import {
+  bestEffectiveOneRepMaxKg,
+  effectiveWeightKg,
+  estimatedOneRepMaxKg,
+  volumeLoadKg,
+} from '@/lib/metrics'
+import { WEEK_MS } from '@/lib/dates'
 import { listSets } from './sets'
 import { listWorkoutExercises } from './workouts'
+
+// The records that mean a lift "got stronger" — the same ones the PR toast
+// celebrates. "Stalled" is defined off these so a raw-weight or rep PR can never
+// read as stalled just because the estimated-1RM didn't move (the deadlift case:
+// 375×1 is a max_weight PR even though 345×3 estimates a higher 1RM).
+export const PROGRESS_RECORD_TYPES: readonly RecordType[] = [
+  'max_weight',
+  'max_est_1rm',
+  'max_reps_any_weight',
+]
+
+export interface StalledLift {
+  exerciseId: string
+  name: string
+  weeksStalled: number
+  lastProgressAt: number
+}
+
+// Per exercise, weeks since it last set ANY progress record, most-stalled first.
+// One definition shared with the PR system, so "stalled" and "new PR" can't disagree.
+export async function listStalledLifts(
+  minWeeks = 2,
+  now = Date.now(),
+): Promise<StalledLift[]> {
+  const progressTypes = new Set<RecordType>(PROGRESS_RECORD_TYPES)
+  const lastProgressByExercise = new Map<string, number>()
+  for (const pr of await db.personalRecords.toArray()) {
+    if (pr.deletedAt !== null || !progressTypes.has(pr.recordType)) continue
+    const prev = lastProgressByExercise.get(pr.exerciseId) ?? 0
+    if (pr.achievedAt > prev) lastProgressByExercise.set(pr.exerciseId, pr.achievedAt)
+  }
+
+  const rows: StalledLift[] = []
+  for (const [exerciseId, lastProgressAt] of lastProgressByExercise) {
+    const weeksStalled = Math.floor((now - lastProgressAt) / WEEK_MS)
+    if (weeksStalled < minWeeks) continue
+    const exercise = await db.exercises.get(exerciseId)
+    if (!exercise || exercise.isArchived) continue
+    rows.push({ exerciseId, name: exercise.name, weeksStalled, lastProgressAt })
+  }
+  return rows.sort((a, b) => b.weeksStalled - a.weeksStalled)
+}
 
 export async function previewRecords(
   exerciseId: string,
   equipment: Equipment,
+  // The current instance's load mode + the session's bodyweight, so a bodyweight
+  // movement's weight/e1RM compare on effective load, same as the stored records.
+  loadMode: LoadMode | null,
+  bodyweightKg: number | null,
   candidate: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'> & {
     id?: string
   },
 ): Promise<RecordType[]> {
-  const { history, siblings } = await recordBars(exerciseId, equipment, candidate.id)
+  const exercise = await db.exercises.get(exerciseId)
+  if (!exercise) return []
+  const { history, siblings } = await recordBars(exercise, equipment, candidate.id)
+  const effective = effectiveWeightKg(candidate, exercise, bodyweightKg, loadMode)
 
   const broken: RecordType[] = []
-  for (const [type, value] of perSetRecordValues(candidate)) {
+  for (const [type, value] of perSetRecordValues(candidate, effective)) {
     if (!isRecordValue(value)) continue
     // No previous session to beat means no record — keeps a first-ever exercise quiet.
     const previous = history.get(type)
@@ -43,13 +100,17 @@ function isRecordValue(value: number | null): value is number {
 
 // The record types a single set can hold. `max_volume_session` is absent by design: it's a session aggregate, not a per-set property.
 
+// `weightForRecords` is the value the weight/e1RM records compare on: the raw
+// entered weight for loaded lifts, but the effective load (bodyweight ± entered)
+// for bodyweight movements, so a bodyweight/weighted/assisted dip rank on one scale.
 function perSetRecordValues(
-  set: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>,
+  set: Pick<WorkoutSet, 'reps' | 'durationSeconds' | 'distanceM'>,
+  weightForRecords: number | null,
 ): [RecordType, number | null][] {
   return [
-    ['max_weight', set.weightKg],
+    ['max_weight', weightForRecords],
     ['max_reps_any_weight', set.reps],
-    ['max_est_1rm', estimatedOneRepMaxKg(set.weightKg, set.reps)],
+    ['max_est_1rm', estimatedOneRepMaxKg(weightForRecords, set.reps)],
     ['max_duration', set.durationSeconds],
     ['max_distance', set.distanceM],
   ]
@@ -60,7 +121,7 @@ function perSetRecordValues(
 // set's own session, excluding itself. With no `setId`, every session is history.
 
 async function recordBars(
-  exerciseId: string,
+  exercise: Exercise,
   equipment: Equipment,
   setId: string | undefined,
 ): Promise<{ history: Map<RecordType, number>; siblings: Map<RecordType, number> }> {
@@ -73,15 +134,21 @@ async function recordBars(
   const history = new Map<RecordType, number>()
   const siblings = new Map<RecordType, number>()
 
-  for (const { workout, sets } of await completedSessionsForExercise(
-    exerciseId,
+  for (const { workout, workoutExercise, sets } of await completedSessionsForExercise(
+    exercise.id,
     equipment,
   )) {
     const isOwnSession = ownWorkoutId !== undefined && workout.id === ownWorkoutId
     const into = isOwnSession ? siblings : history
     for (const candidate of sets) {
       if (candidate.id === setId) continue
-      for (const [type, value] of perSetRecordValues(candidate)) {
+      const effective = effectiveWeightKg(
+        candidate,
+        exercise,
+        workout.bodyweightKg,
+        workoutExercise.loadMode,
+      )
+      for (const [type, value] of perSetRecordValues(candidate, effective)) {
         if (!isRecordValue(value)) continue
         const previous = into.get(type)
         if (previous === undefined || value > previous) into.set(type, value)
@@ -152,19 +219,30 @@ export async function refreshPersonalRecords(
     if (!existing || value > existing.value) candidates.set(type, { value, at, setId })
   }
 
-  for (const { workout, sets } of await completedSessionsForExercise(
+  for (const { workout, workoutExercise, sets } of await completedSessionsForExercise(
     exerciseId,
     equipment,
   )) {
     const at = workout.startedAt
 
     for (const set of sets) {
-      for (const [type, value] of perSetRecordValues(set)) {
+      const effective = effectiveWeightKg(
+        set,
+        exercise,
+        workout.bodyweightKg,
+        workoutExercise.loadMode,
+      )
+      for (const [type, value] of perSetRecordValues(set, effective)) {
         consider(type, value, at, set.id)
       }
     }
 
-    const sessionVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
+    const sessionVolume = volumeLoadKg(
+      sets,
+      exercise,
+      workout.bodyweightKg,
+      workoutExercise.loadMode,
+    )
     consider('max_volume_session', sessionVolume, at, sets[0]!.id)
   }
 
@@ -194,9 +272,17 @@ export async function refreshPersonalRecords(
   if (triggeringSetId === undefined) return []
   const triggering = await db.sets.get(triggeringSetId)
   if (!triggering || !triggering.isCompleted) return []
+  const we = await db.workoutExercises.get(triggering.workoutExerciseId)
+  const workout = we ? await db.workouts.get(we.workoutId) : undefined
 
   // The glow rule verbatim, so toast and green row can't disagree; max_volume_session is left out (it grows every set).
-  return previewRecords(exerciseId, equipment, triggering)
+  return previewRecords(
+    exerciseId,
+    equipment,
+    we?.loadMode ?? null,
+    workout?.bodyweightKg ?? null,
+    triggering,
+  )
 }
 
 // Every record for the base exercise, across all equipment.
@@ -239,13 +325,26 @@ export async function getPreviousSession(
   const previous = earlier[0]
   if (!previous) return null
 
+  const { loadMode } = previous.workoutExercise
+  const bw = previous.workout.bodyweightKg
   return {
     workoutId: previous.workout.id,
     performedAt: previous.workout.startedAt,
     sets: previous.sets.map(toPlaceholderSet),
-    bestE1rmKg: bestOneRepMaxKg(previous.sets),
-    volumeKg: volumeLoadKg(previous.sets, exercise, previous.workout.bodyweightKg),
+    bestE1rmKg: bestEffectiveE1rmKg(previous.sets, exercise, bw, loadMode),
+    volumeKg: volumeLoadKg(previous.sets, exercise, bw, loadMode),
   }
+}
+
+// Kept as a thin alias for the canonical helper in lib/metrics, so existing
+// callers keep their name while the implementation lives in one place.
+export function bestEffectiveE1rmKg(
+  sets: WorkoutSet[],
+  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor'>,
+  bodyweightKg: number | null,
+  loadMode: LoadMode | null,
+): number | null {
+  return bestEffectiveOneRepMaxKg(sets, exercise, bodyweightKg, loadMode)
 }
 
 export async function rebuildLastPerformance(
@@ -257,12 +356,17 @@ export async function rebuildLastPerformance(
 
   const sessions: PerformedSession[] = (
     await completedSessionsForExercise(exerciseId, equipment)
-  ).map(({ workout, sets }) => ({
+  ).map(({ workout, workoutExercise, sets }) => ({
     workoutId: workout.id,
     performedAt: workout.startedAt,
     sets: sets.map(toPlaceholderSet),
-    bestE1rmKg: bestOneRepMaxKg(sets),
-    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
+    bestE1rmKg: bestEffectiveE1rmKg(
+      sets,
+      exercise,
+      workout.bodyweightKg,
+      workoutExercise.loadMode,
+    ),
+    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg, workoutExercise.loadMode),
   }))
 
   await db.lastPerformance.put({

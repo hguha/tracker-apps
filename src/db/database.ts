@@ -86,6 +86,19 @@ export interface EditSnapshot {
   createdAt: number
 }
 
+// A persisted coach chat (local-only, never synced — it's device UI state, not
+// domain data). `contents` is the Gemini conversation and `items` the display
+// messages/cards; both are structured-clone-safe, typed loose here to keep the db
+// layer decoupled from the coach feature types.
+export interface StoredCoachConversation {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  contents: unknown[]
+  items: unknown[]
+}
+
 export class WorkoutDatabase extends Dexie {
   profiles!: EntityTable<Profile, 'id'>
   exercises!: EntityTable<Exercise, 'id'>
@@ -103,6 +116,7 @@ export class WorkoutDatabase extends Dexie {
   syncState!: EntityTable<SyncState, 'table'>
   placeholderOverrides!: EntityTable<PlaceholderOverrides, 'workoutId'>
   editSnapshots!: EntityTable<EditSnapshot, 'workoutId'>
+  coachConversations!: EntityTable<StoredCoachConversation, 'id'>
 
   constructor(name = 'workout-tracker') {
     super(name)
@@ -229,6 +243,11 @@ export class WorkoutDatabase extends Dexie {
             delete entry.clientRev
           })
       })
+
+    // v10 adds local-only persisted coach conversations (§13). Not synced.
+    this.version(10).stores({
+      coachConversations: 'id, updatedAt',
+    })
   }
 }
 

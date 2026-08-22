@@ -3,6 +3,7 @@
 
 import { db } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
+import { RETIRED_BODYWEIGHT_TRACKING } from './migrations/exerciseModel'
 import type {
   Exercise,
   MetricEntry,
@@ -109,6 +110,16 @@ export function backupFilename(isoDate: string): string {
 
 export class BackupParseError extends Error {}
 
+function isRetiredBodyweightTracking(value: unknown): boolean {
+  return typeof value === 'string' && RETIRED_BODYWEIGHT_TRACKING.has(value)
+}
+
+function normalizeTrackingType(value: unknown): Exercise['trackingType'] {
+  return isRetiredBodyweightTracking(value)
+    ? 'bodyweight_reps'
+    : (value as Exercise['trackingType'])
+}
+
 // Strict about the envelope but lenient about extra fields, so a newer minor still imports.
 export function parseBackup(json: string): BackupFile {
   let parsed: unknown
@@ -158,6 +169,13 @@ export function parseBackup(json: string): BackupFile {
       exercises: rows<Exercise>(d.exercises).map((e) => ({
         ...e,
         aliases: Array.isArray(e.aliases) ? e.aliases : [],
+        // A backup made before the bodyweight tracking types were collapsed can
+        // carry a retired value; coerce it so it never reaches a tracking-type
+        // switch. The load mode itself is backfilled by migrateExerciseModel.
+        trackingType: normalizeTrackingType(e.trackingType),
+        bodyweightFactor: isRetiredBodyweightTracking(e.trackingType)
+          ? (e.bodyweightFactor ?? 1)
+          : e.bodyweightFactor,
       })),
       templates: rows<Template>(d.templates),
       templateExercises: rows<TemplateExercise>(d.templateExercises),

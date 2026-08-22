@@ -3,6 +3,7 @@ import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import {
   type Equipment,
+  type LoadMode,
   type Template,
   type TemplateExercise,
   type WeightUnit,
@@ -19,6 +20,7 @@ import {
   addExerciseToWorkout,
   getWorkout,
   listWorkoutExercises,
+  resolveDefaultLoadMode,
   savePlaceholderOverrides,
   startWorkout,
   updateWorkoutExercise,
@@ -97,6 +99,8 @@ export async function addExerciseToTemplate(
   templateId: string,
   exerciseId: string,
   equipment: Equipment,
+  // Omit to default from the exercise's tracking type; see addExerciseToWorkout.
+  loadMode?: LoadMode | null,
 ): Promise<string> {
   const existing = await listTemplateExercises(templateId)
   const row: TemplateExercise = {
@@ -104,6 +108,7 @@ export async function addExerciseToTemplate(
     templateId,
     exerciseId,
     equipment,
+    loadMode: loadMode !== undefined ? loadMode : await resolveDefaultLoadMode(exerciseId),
     position: existing.length,
     supersetGroup: null,
     targetSets: 3,
@@ -202,6 +207,68 @@ export async function createTemplatesFromPlan(plan: {
   return { templateIds, unmatched }
 }
 
+// Applies a coach-proposed session to an EXISTING template (§13 template update):
+// the session fully replaces the template's exercises. Diffed by (exercise +
+// equipment) so a lift that's staying keeps its row (and id) and only its targets
+// and position move; new lifts are added, dropped lifts removed. Unmatched names
+// are skipped and returned, same contract as createTemplatesFromPlan.
+
+export async function applyPlanSessionToTemplate(
+  templateId: string,
+  session: {
+    exercises: {
+      name: string
+      sets: number
+      repLow: number
+      repHigh: number
+      weight: number | null
+      equipment?: Equipment | null
+      autoProgress?: boolean
+    }[]
+  },
+  unitWeight: WeightUnit,
+): Promise<{ unmatched: string[] }> {
+  const resolve = buildExerciseResolver(await listExercises(), await lastEquipmentMap())
+  const incrementKg = unitWeight === 'kg' ? 2.5 : weightToKg(5, 'lb')
+
+  const unmatched: string[] = []
+  const desired = session.exercises
+    .map((pe) => ({ pe, hit: resolve(pe.name, pe.equipment ?? null) }))
+    .filter((m) => {
+      if (!m.hit) unmatched.push(m.pe.name)
+      return m.hit !== null
+    }) as { pe: (typeof session.exercises)[number]; hit: { exerciseId: string; equipment: Equipment } }[]
+
+  const current = await listTemplateExercises(templateId)
+  const keyOf = (exerciseId: string, equipment: Equipment) => `${exerciseId}:${equipment}`
+  const currentByKey = new Map(current.map((te) => [keyOf(te.exerciseId, te.equipment), te]))
+  const desiredKeys = new Set(desired.map((d) => keyOf(d.hit.exerciseId, d.hit.equipment)))
+
+  // Drop lifts the new session no longer includes.
+  for (const te of current) {
+    if (!desiredKeys.has(keyOf(te.exerciseId, te.equipment))) {
+      await removeTemplateExercise(te.id)
+    }
+  }
+
+  // Add or retarget each desired lift, in the session's order.
+  for (const [position, { pe, hit }] of desired.entries()) {
+    const existing = currentByKey.get(keyOf(hit.exerciseId, hit.equipment))
+    const teId =
+      existing?.id ?? (await addExerciseToTemplate(templateId, hit.exerciseId, hit.equipment))
+    await updateTemplateExercise(teId, {
+      position,
+      targetSets: pe.sets,
+      targetRepsLow: pe.repLow,
+      targetRepsHigh: pe.repHigh,
+      targetWeightKg: pe.weight === null ? null : weightToKg(pe.weight, unitWeight),
+      progression: pe.autoProgress ? { kind: 'double', incrementKg, maxRpe: 8 } : null,
+    })
+  }
+
+  return { unmatched }
+}
+
 export async function getTemplatePreview(
   templateId: string,
 ): Promise<WorkoutPreview | null> {
@@ -284,6 +351,7 @@ export async function saveWorkoutAsTemplate(
       templateId: template.id,
       exerciseId: we.exerciseId,
       equipment: we.equipment,
+      loadMode: we.loadMode,
       position: we.position,
       supersetGroup: we.supersetGroup,
       targetSets: sets.length || null,
@@ -318,6 +386,7 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
       workoutId,
       te.exerciseId,
       te.equipment,
+      te.loadMode,
     )
     if (te.supersetGroup !== null) {
       await updateWorkoutExercise(workoutExerciseId, {

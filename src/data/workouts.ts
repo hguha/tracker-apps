@@ -1,6 +1,12 @@
 import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
-import { type Equipment, type Workout, type WorkoutExercise } from '@/domain/types'
+import {
+  defaultLoadModeForTracking,
+  type Equipment,
+  type LoadMode,
+  type Workout,
+  type WorkoutExercise,
+} from '@/domain/types'
 import { type SetSignal } from '@/lib/sessionTitle'
 import {
   dropQueuedWrites,
@@ -55,6 +61,10 @@ export async function getWorkout(id: string): Promise<Workout | undefined> {
 export async function listWorkouts(limit = 100): Promise<Workout[]> {
   const all = await db.workouts.orderBy('startedAt').reverse().limit(limit).toArray()
   return all.filter((w) => w.deletedAt === null)
+}
+
+export async function countFinishedWorkouts(): Promise<number> {
+  return db.workouts.filter((w) => w.endedAt !== null && w.deletedAt === null).count()
 }
 
 export async function updateWorkout(id: string, patch: Partial<Workout>): Promise<void> {
@@ -269,6 +279,9 @@ export async function addExerciseToWorkout(
   workoutId: string,
   exerciseId: string,
   equipment: Equipment,
+  // Omit to default from the exercise's tracking type ('bodyweight' for a
+  // bodyweight movement, null otherwise); pass explicitly to carry a chosen mode.
+  loadMode?: LoadMode | null,
 ): Promise<string> {
   const existing = await listWorkoutExercises(workoutId)
   // One past the highest position, not the row count — counting collides when positions aren't contiguous.
@@ -278,6 +291,7 @@ export async function addExerciseToWorkout(
     workoutId,
     exerciseId,
     equipment,
+    loadMode: loadMode !== undefined ? loadMode : await resolveDefaultLoadMode(exerciseId),
     position: lastPosition + 1,
     supersetGroup: null,
     restSeconds: null,
@@ -287,6 +301,16 @@ export async function addExerciseToWorkout(
   await db.workoutExercises.add(row)
   await enqueue('workoutExercises', row.id)
   return row.id
+}
+
+// The load mode a movement defaults to when the caller doesn't pick one — used by
+// repeats, templates, and the coach so a bodyweight lift lands in 'bodyweight'
+// mode rather than a null that would blank its volume.
+export async function resolveDefaultLoadMode(
+  exerciseId: string,
+): Promise<LoadMode | null> {
+  const exercise = await db.exercises.get(exerciseId)
+  return exercise ? defaultLoadModeForTracking(exercise.trackingType) : null
 }
 
 export async function getWorkoutExercise(
@@ -417,6 +441,7 @@ export async function repeatWorkout(
       workoutId,
       we.exerciseId,
       we.equipment,
+      we.loadMode,
     )
     if (we.supersetGroup !== null) {
       await updateWorkoutExercise(newWorkoutExerciseId, {

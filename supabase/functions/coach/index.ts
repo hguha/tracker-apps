@@ -17,8 +17,29 @@
 
 // @ts-nocheck — Deno runtime; typed against the Deno std lib at deploy time.
 
-const GEMINI_MODEL = 'gemini-flash-latest'
+// Pinned GA model, not a floating `-latest` preview alias (that one routed to a
+// low-capacity preview that 503'd on demand spikes and capped free tier at 5 RPM).
+// 2.5-flash is now closed to new projects, so we're on the current 3.6-flash — still
+// a thinking model, so functionCall thoughtSignatures still apply (see the chat path).
+const GEMINI_MODEL = 'gemini-3.6-flash'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+
+// 503 = transient model overload. A couple of spaced retries usually clears it;
+// kept small so it can't multiply requests-per-minute against the free-tier cap.
+async function fetchGeminiWithRetry(body: unknown, apiKey: string): Promise<Response> {
+  let last: Response | null = null
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+    })
+    if (res.status !== 503) return res
+    last = res
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
+  }
+  return last!
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -136,6 +157,30 @@ const SYSTEM = [
   '  concise and concrete.',
 ].join('\n')
 
+// The conversational coach's system instruction. Unlike SYSTEM (one-shot, de-
+// identified summary), this drives a multi-turn, tool-using chat over the user's
+// full context. Tools execute on the client; the model only sees their results.
+const CHAT_SYSTEM = [
+  'You are FitNote Coach, an expert strength & conditioning coach chatting with the user inside their workout app.',
+  "You are given CONTEXT: the user's profile (sex, age, experience, bodyweight, height, goal, weekly availability), recent dated training history, their saved templates, key lifts, training day/time patterns, and — if they are mid-workout — the live session.",
+  '',
+  'CONTEXT already contains a lot: recent dated workouts, your key lifts and best e1RMs, per-region volume, training day/time patterns, and the full list of the user\'s saved templates (names, exercises, and targets). Read it FIRST and answer directly from it whenever you can.',
+  '',
+  'You also have TOOLS for facts CONTEXT lacks (deeper per-lift history/trends, searching old workouts, one template in full, body-metric series). Use them sparingly — a tool round is slow.',
+  '',
+  'RULES:',
+  '- SPEED MATTERS. Answer straight from CONTEXT when it has what you need; only call a tool for a specific missing fact. NEVER re-call a tool for data you already fetched earlier in this conversation — reuse it. Most follow-up questions need no tool at all.',
+  '- Be warm, concise, and specific — talk like a knowledgeable coach, not a document. A sentence or two is usually enough.',
+  '- If a request is ambiguous (goal, days available, equipment, experience), ASK one short clarifying question before committing to a plan. Never invent constraints.',
+  '- Tailor everything to their sex, age, experience, bodyweight and demonstrated lifts (relative-strength framing, sensible loads, appropriate volume/progression). Never comment on appearance or weight judgmentally.',
+  '- Exercise names are MOVEMENTS only and carry no equipment: use "Face Pull", not "Cable Face Pull". Equipment is a separate field.',
+  "- The user's existing templates are in CONTEXT.templates — reference them by name directly. To CHANGE one, CALL proposeTemplateUpdate with its EXACT name (the session you give replaces that template's exercises).",
+  '- To propose a NEW plan, CALL proposePlan (do not write the full plan as plain text — the app can only save it via the tool). Mid-workout, CALL suggestAccessories to recommend add-on work for the current session.',
+  '- When advising WHEN to train, ground it in their actual day/time patterns (getTrainingPatterns).',
+  '- Weights are in the user\'s unit. Use null weight to let the app seed from history; give a real number for a lift new to them.',
+  '- Never give medical or injury advice; never phrase anything as certainty.',
+].join('\n')
+
 function promptFor(
   request: { kind: string; goal?: string; question?: string },
   summaryJson: string,
@@ -199,8 +244,10 @@ function promptFor(
 }
 
 // ── Minimal per-user rate limit (best-effort; resets on cold start). ─────────
+// Chat drives up to MAX_TOOL_ROUNDS+1 invocations per user message, so the ceiling
+// is well above the one-shot era's 8 — it bounds messages/min, not round trips.
 const RATE_WINDOW_MS = 60_000
-const RATE_MAX = 8
+const RATE_MAX = 40
 const hits = new Map<string, number[]>()
 
 function rateLimited(userId: string): boolean {
@@ -243,16 +290,21 @@ Deno.serve(async (req: Request) => {
   if (!userId) return json({ error: 'Unauthorized' }, 401)
   if (rateLimited(userId)) return json({ error: 'Too many requests — slow down' }, 429)
 
-  // Bound the body so an authenticated client can't inflate Gemini token cost with
-  // a giant summary/question. A real de-identified summary is a few KB.
-  const MAX_BODY_BYTES = 64 * 1024
+  // Bound the body so an authenticated client can't inflate Gemini token cost.
+  // Chat carries the full context bundle + conversation, so this is larger than the
+  // one-shot summary era; still small enough to cap runaway payloads.
+  const MAX_BODY_BYTES = 256 * 1024
   const declaredLength = Number(req.headers.get('Content-Length') ?? '0')
   if (declaredLength > MAX_BODY_BYTES) return json({ error: 'Request too large' }, 413)
 
   let payload: {
+    mode?: string
     summary?: unknown
     library?: unknown
     request?: { kind?: string; goal?: string; question?: string }
+    contents?: unknown
+    context?: unknown
+    tools?: unknown
   }
   try {
     const raw = await req.text()
@@ -260,6 +312,104 @@ Deno.serve(async (req: Request) => {
     payload = JSON.parse(raw)
   } catch {
     return json({ error: 'Invalid JSON' }, 400)
+  }
+
+  // ── Conversational chat: a stateless relay of one Gemini round with tools. The
+  // client holds the conversation and runs the tools; this only forwards. ────────
+  if (payload.mode === 'chat') {
+    const contents = Array.isArray(payload.contents) ? payload.contents : null
+    const rawTools = Array.isArray(payload.tools) ? payload.tools : []
+    if (!contents) return json({ error: 'Missing conversation' }, 400)
+
+    // Gemini rejects a function declaration whose parameters is an OBJECT with no
+    // properties ("should be non-empty for OBJECT type"). No-arg tools must omit
+    // `parameters` entirely, so drop it when the properties map is empty.
+    const functionDeclarations = rawTools.map((decl: Record<string, unknown>) => {
+      const params = decl.parameters as { properties?: Record<string, unknown> } | undefined
+      if (!params?.properties || Object.keys(params.properties).length === 0) {
+        const { parameters: _drop, ...rest } = decl
+        return rest
+      }
+      return decl
+    })
+
+    const chatBody = {
+      systemInstruction: {
+        parts: [
+          {
+            text:
+              CHAT_SYSTEM +
+              "\n\nCONTEXT (the user's training; JSON):\n" +
+              JSON.stringify(payload.context ?? {}),
+          },
+        ],
+      },
+      contents,
+      tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
+      // 3.6-flash is a thinking model; unbounded thinking made every turn slow.
+      // It rejects budget 0 (can't fully disable thinking), so cap it low — enough
+      // to choose tools/plans, far less than the default. Raise if answers slip.
+      generationConfig: { temperature: 0.6, thinkingConfig: { thinkingBudget: 128 } },
+    }
+
+    let chatRes: Response
+    try {
+      chatRes = await fetchGeminiWithRetry(chatBody, apiKey)
+    } catch {
+      return json({ error: 'Coach is unreachable' }, 502)
+    }
+
+    // Quota/overload: return a friendly assistant turn (200) rather than an error,
+    // so the chat shows "resting" instead of breaking or falling back to the mock.
+    // (Diagnostic: include Gemini's exact reason + status while we investigate.)
+    if (chatRes.status === 429 || chatRes.status === 503) {
+      let detail = ''
+      try {
+        const body = await chatRes.json()
+        detail = String(body?.error?.message ?? '').slice(0, 400)
+      } catch {
+        // ignore
+      }
+      return json({
+        kind: 'message',
+        text: `⚠️ Gemini ${chatRes.status}: ${detail || 'rate limited / overloaded'}`,
+      })
+    }
+    if (!chatRes.ok) {
+      // Surface Gemini's own error message — safe, since the key travels in a
+      // header, not the body — so a bad request/schema is diagnosable client-side.
+      let detail = ''
+      try {
+        const body = await chatRes.json()
+        detail = String(body?.error?.message ?? '').slice(0, 300)
+      } catch {
+        // ignore
+      }
+      return json({ error: `Coach upstream error (${chatRes.status}): ${detail}` }, 502)
+    }
+
+    const chatData = await chatRes.json()
+    const parts = chatData?.candidates?.[0]?.content?.parts ?? []
+    const calls = parts
+      .filter((p: { functionCall?: unknown }) => p.functionCall)
+      .map((p: { functionCall: { name: string; args?: unknown } }) => ({
+        name: p.functionCall.name,
+        args: p.functionCall.args ?? {},
+      }))
+    const text = parts
+      .filter((p: { text?: unknown }) => typeof p.text === 'string')
+      .map((p: { text: string }) => p.text)
+      .join('')
+      .trim()
+
+    // Return the model's raw parts too: each functionCall carries a thoughtSignature
+    // the client must echo back verbatim next turn, so it appends these as-is rather
+    // than rebuilding {functionCall:{name,args}} and dropping the signature.
+    if (calls.length > 0) return json({ kind: 'toolCalls', calls, modelParts: parts, text })
+    return json({
+      kind: 'message',
+      text: text || "I'm not sure how to help with that — could you rephrase?",
+    })
   }
 
   const request = payload.request

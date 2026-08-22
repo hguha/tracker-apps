@@ -1,6 +1,5 @@
-import { db, syncStamp, touch } from '@/db/database'
+import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
-import { RETIRED_BASE_IDS, VARIANT_MAPPINGS } from '@/db/seed/bases'
 import { patternForRegion } from '@/domain/movement'
 import {
   type Equipment,
@@ -9,9 +8,10 @@ import {
   type Region,
   type WorkoutSet,
 } from '@/domain/types'
-import { bestOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
+import { volumeLoadKg } from '@/lib/metrics'
 import { enqueue, newId, patchRow } from './outbox'
 import {
+  bestEffectiveE1rmKg,
   completedSessionsForExercise,
   listPersonalRecords,
   rebuildLastPerformance,
@@ -25,6 +25,13 @@ export async function listExercises(): Promise<Exercise[]> {
   return all
     .filter((e) => e.deletedAt === null && !e.isArchived)
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// A single exercise by id (archived/deleted included — callers resolving a logged
+// row need it regardless of visibility). The repository read behind UI lookups so
+// features don't reach into Dexie directly.
+export async function getExercise(id: string): Promise<Exercise | undefined> {
+  return db.exercises.get(id)
 }
 
 export interface NewExerciseInput {
@@ -157,12 +164,17 @@ export async function getExerciseDetail(
 
   const sessions: ExerciseDetail['sessions'] = (
     await completedSessionsForExercise(exerciseId)
-  ).map(({ workout, sets }) => ({
+  ).map(({ workout, workoutExercise, sets }) => ({
     workoutId: workout.id,
     performedAt: workout.startedAt,
     sets,
-    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg),
-    bestE1rmKg: bestOneRepMaxKg(sets),
+    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg, workoutExercise.loadMode),
+    bestE1rmKg: bestEffectiveE1rmKg(
+      sets,
+      exercise,
+      workout.bodyweightKg,
+      workoutExercise.loadMode,
+    ),
   }))
 
   return {
@@ -216,134 +228,3 @@ export async function getLastTrainedMap(): Promise<Map<string, number>> {
   return lastTrained
 }
 
-// ----- workouts -----
-
-// Scanned not indexed: IndexedDB can't index the null endedAt that "unfinished" means (§4.4).
-
-export async function migrateToBaseExercises(): Promise<void> {
-  const staleWe = await db.workoutExercises
-    .filter((we) => (we as { equipment?: Equipment }).equipment === undefined)
-    .count()
-  const staleTe = await db.templateExercises
-    .filter((te) => (te as { equipment?: Equipment }).equipment === undefined)
-    .count()
-  if (staleWe === 0 && staleTe === 0) return
-
-  const variantToBase = new Map(VARIANT_MAPPINGS.map((m) => [m.oldId, m]))
-
-  async function resolve(
-    oldExerciseId: string,
-  ): Promise<{ baseId: string; equipment: Equipment }> {
-    const mapped = variantToBase.get(oldExerciseId)
-    if (mapped) return { baseId: mapped.baseId, equipment: mapped.equipment }
-    // Custom or unknown row keeps its own id; read its old scalar equipment.
-    const legacy = (await db.exercises.get(oldExerciseId)) as
-      { equipment?: Equipment } | undefined
-    return { baseId: oldExerciseId, equipment: legacy?.equipment ?? 'other' }
-  }
-
-  // Repoint workout + template exercises to (base, equipment).
-  for (const we of await db.workoutExercises.toArray()) {
-    if ((we as { equipment?: Equipment }).equipment !== undefined) continue
-    const { baseId, equipment } = await resolve(we.exerciseId)
-    await db.workoutExercises.update(we.id, {
-      exerciseId: baseId,
-      equipment,
-      ...touch(we.clientRev),
-    })
-    const full = await db.workoutExercises.get(we.id)
-    if (full) await enqueue('workoutExercises', full.id)
-  }
-  for (const te of await db.templateExercises.toArray()) {
-    if ((te as { equipment?: Equipment }).equipment !== undefined) continue
-    const { baseId, equipment } = await resolve(te.exerciseId)
-    await db.templateExercises.update(te.id, {
-      exerciseId: baseId,
-      equipment,
-      ...touch(te.clientRev),
-    })
-    const full = await db.templateExercises.get(te.id)
-    if (full) await enqueue('templateExercises', full.id)
-  }
-
-  // Hide the retired equipment-named system rows locally (they can't sync a change).
-  for (const { oldId, baseId } of VARIANT_MAPPINGS) {
-    if (oldId === baseId) continue
-    const row = await db.exercises.get(oldId)
-    if (row && row.userId === null && !row.isArchived) {
-      await db.exercises.update(oldId, { isArchived: true })
-    }
-  }
-
-  // Rebuild the derived caches for every (exercise + equipment) now in history.
-  await db.personalRecords.clear()
-  await db.lastPerformance.clear()
-  const pairs = new Map<string, { exerciseId: string; equipment: Equipment }>()
-  for (const we of await db.workoutExercises.toArray()) {
-    if (we.deletedAt !== null) continue
-    pairs.set(`${we.exerciseId}:${we.equipment}`, {
-      exerciseId: we.exerciseId,
-      equipment: we.equipment,
-    })
-  }
-  for (const { exerciseId, equipment } of pairs.values()) {
-    await rebuildLastPerformance(exerciseId, equipment)
-    await refreshPersonalRecords(exerciseId, equipment)
-  }
-}
-
-// A base whose seed label got clearer changed id with it ('curl' → 'biceps_curl'),
-// so history pointing at the old id has to follow or it orphans. Runs after
-// seeding, which has already created the new row. A no-op once nothing refers to
-// the old id.
-
-export async function repointRetiredBaseExercises(): Promise<void> {
-  const touched = new Set<string>()
-
-  for (const [oldId, newId] of Object.entries(RETIRED_BASE_IDS)) {
-    if ((await db.exercises.get(newId)) === undefined) continue
-
-    for (const we of await db.workoutExercises
-      .where('exerciseId')
-      .equals(oldId)
-      .toArray()) {
-      await db.workoutExercises.update(we.id, {
-        exerciseId: newId,
-        ...touch(we.clientRev),
-      })
-      const full = await db.workoutExercises.get(we.id)
-      if (full) {
-        await enqueue('workoutExercises', full.id)
-        touched.add(`${newId}:${full.equipment}`)
-      }
-    }
-
-    for (const te of await db.templateExercises.toArray()) {
-      if (te.exerciseId !== oldId) continue
-      await db.templateExercises.update(te.id, {
-        exerciseId: newId,
-        ...touch(te.clientRev),
-      })
-      const full = await db.templateExercises.get(te.id)
-      if (full)
-        await enqueue('templateExercises', full.id)
-    }
-
-    // The old system row can't sync a change, so hide it locally instead.
-    const stale = await db.exercises.get(oldId)
-    if (stale && stale.userId === null && !stale.isArchived) {
-      await db.exercises.update(oldId, { isArchived: true })
-    }
-    await db.personalRecords.where('exerciseId').equals(oldId).delete()
-    await db.lastPerformance.where('exerciseId').equals(oldId).delete()
-  }
-
-  for (const key of touched) {
-    const [exerciseId, equipment] = key.split(':') as [string, Equipment]
-    await rebuildLastPerformance(exerciseId, equipment)
-    await refreshPersonalRecords(exerciseId, equipment)
-  }
-}
-
-// Wipes local training data and sync queues (IndexedDB only; nothing on the server).
-// The caller must reload — library and profile are re-seeded by seedIfNeeded() at boot.

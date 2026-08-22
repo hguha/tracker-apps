@@ -18,6 +18,10 @@ export async function listSets(workoutExerciseId: string): Promise<WorkoutSet[]>
   return rows.filter((r) => r.deletedAt === null).sort((a, b) => a.position - b.position)
 }
 
+export async function getSet(id: string): Promise<WorkoutSet | undefined> {
+  return db.sets.get(id)
+}
+
 export interface NewSetInput {
   workoutExerciseId: string
   weightKg?: number | null
@@ -116,8 +120,6 @@ export function setHasValues(
 ): boolean {
   switch (exercise.trackingType) {
     case 'weight_reps':
-    case 'weighted_bodyweight':
-    case 'assisted_bodyweight':
     case 'bodyweight_reps':
     case 'reps_only':
       return set.reps !== null

@@ -12,3 +12,7 @@ export * from './records'
 export * from './templates'
 export * from './bodyMetrics'
 export * from './maintenance'
+export * from './migrations/exerciseModel'
+// The active-account id lives in the db layer; surface it here so features can key
+// per-user state (e.g. caches) without importing @/db directly.
+export { getActiveUserId } from '@/db/seed'

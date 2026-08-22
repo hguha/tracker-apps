@@ -2,8 +2,6 @@
 // hex used on both light and dark surfaces, so it's nudged to clear the contrast
 // floor rather than rejected.
 
-import { applyStatusBarStyle } from '@/platform/statusBar'
-
 export const THEME_PRESETS = [
   { id: 'default', label: 'Default', swatch: '#2a78d6' },
   { id: 'slate', label: 'Slate', swatch: '#4f46c9' },
@@ -130,14 +128,17 @@ export function applyDefaultAppearance(): void {
   applyAppearance({ theme: 'default', colorScheme: 'system', accentOverride: null })
 }
 
-export function applyAppearance(settings: AppearanceSettings): void {
-  if (typeof document === 'undefined') return
+// Applies theme/scheme/accent to the document and returns the resolved scheme, so
+// the caller can drive platform side-effects (e.g. the native status bar) — kept
+// out of here so this module stays a pure, platform-free leaf. Returns null when
+// there's no document (SSR/tests).
+export function applyAppearance(settings: AppearanceSettings): 'light' | 'dark' | null {
+  if (typeof document === 'undefined') return null
   const root = document.documentElement
   const scheme = resolveScheme(settings.colorScheme)
 
   root.dataset.theme = resolveTheme(settings.theme)
   root.dataset.scheme = scheme
-  applyStatusBarStyle(scheme)
 
   if (settings.accentOverride) {
     const rgb = parseHex(settings.accentOverride)
@@ -152,11 +153,12 @@ export function applyAppearance(settings: AppearanceSettings): void {
         accentWash(safe, scheme === 'dark' ? 0.18 : 0.1),
       )
       root.style.setProperty('--accent-contrast', contrastingInk(safe))
-      return
+      return scheme
     }
   }
 
   root.style.removeProperty('--accent')
   root.style.removeProperty('--accent-wash')
   root.style.removeProperty('--accent-contrast')
+  return scheme
 }

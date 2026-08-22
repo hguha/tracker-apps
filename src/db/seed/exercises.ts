@@ -93,6 +93,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Chest Press Machine',
     region: 'chest',
     equipment: 'machine',
+    // A machine chest press is a machine bench press — same movement, so it's a
+    // variant of Bench Press rather than its own base.
+    movement: 'Bench Press',
+    aliases: ['chest press'],
   },
   {
     name: 'Smith Machine Bench Press',
@@ -111,16 +115,9 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Dip',
     region: 'chest',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 0.95,
-    aliases: ['chest dip'],
-  },
-  {
-    name: 'Assisted Dip',
-    region: 'chest',
-    equipment: 'machine',
-    tracking: 'assisted_bodyweight',
-    bodyweightFactor: 0.95,
+    aliases: ['chest dip', 'assisted dip', 'weighted dip'],
   },
 
   // ----------------------------------------------------------------- back
@@ -184,31 +181,24 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Inverted Row',
     region: 'back',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 0.55,
   },
   {
     name: 'Pull-up',
     region: 'back',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 1.0,
-    aliases: ['pullup'],
+    aliases: ['pullup', 'assisted pull-up', 'weighted pull-up'],
   },
   {
     name: 'Chin-up',
     region: 'back',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 1.0,
     aliases: ['chinup'],
-  },
-  {
-    name: 'Assisted Pull-up',
-    region: 'back',
-    equipment: 'machine',
-    tracking: 'assisted_bodyweight',
-    bodyweightFactor: 1.0,
   },
   {
     name: 'Lat Pulldown',
@@ -240,7 +230,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Back Extension',
     region: 'back',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 0.5,
     aliases: ['hyperextension'],
   },
@@ -261,7 +251,10 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Seated Dumbbell Shoulder Press',
     region: 'shoulders',
     equipment: 'dumbbell',
-    aliases: ['db shoulder press'],
+    // The dumbbell variant of Overhead Press (kept distinct from the seated
+    // *barbell* press, which has real leg-drive differences).
+    movement: 'Overhead Press',
+    aliases: ['db shoulder press', 'shoulder press'],
   },
   {
     name: 'Arnold Press',
@@ -272,6 +265,8 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Machine Shoulder Press',
     region: 'shoulders',
     equipment: 'machine',
+    // The machine variant of Overhead Press.
+    movement: 'Overhead Press',
   },
   {
     name: 'Dumbbell Lateral Raise',
@@ -388,7 +383,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Triceps Dip',
     region: 'triceps',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 0.9,
   },
   {
@@ -490,7 +485,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Glute Bridge',
     region: 'legs',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 0.4,
   },
   {
@@ -543,7 +538,7 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Hanging Leg Raise',
     region: 'core',
     equipment: 'bodyweight',
-    tracking: 'weighted_bodyweight',
+    tracking: 'bodyweight_reps',
     bodyweightFactor: 0.5,
   },
   {
@@ -684,6 +679,9 @@ export const EXERCISE_SEEDS: ExerciseSeed[] = [
     name: 'Incline Machine Press',
     region: 'chest',
     equipment: 'machine',
+    // The machine variant of Incline Bench Press, not a distinct movement.
+    movement: 'Incline Bench Press',
+    aliases: ['incline press'],
   },
   {
     name: 'Svend Press',

@@ -26,18 +26,36 @@ export const REGION_LABELS: Record<Region, string> = {
   cardio: 'Cardio',
 }
 
-// Picks the set-input UI: one component switches on this value.
+// Picks the set-input UI: one component switches on this value. Bodyweight
+// movements are a single type (`bodyweight_reps`); whether weight is added,
+// assisted off, or none is the per-instance `loadMode`, not a separate type.
 export const TRACKING_TYPES = [
   'weight_reps',
   'bodyweight_reps',
-  'weighted_bodyweight',
-  'assisted_bodyweight',
   'reps_only',
   'time',
   'distance_time',
   'weight_time',
 ] as const
 export type TrackingType = (typeof TRACKING_TYPES)[number]
+
+// How a bodyweight movement is loaded, chosen when it's added to a workout the
+// same way equipment is (§4.3). Drives the set-input columns and volume sign:
+// weighted adds the entered weight, assisted subtracts it, bodyweight uses neither.
+export const LOAD_MODES = ['bodyweight', 'weighted', 'assisted'] as const
+export type LoadMode = (typeof LOAD_MODES)[number]
+
+export const LOAD_MODE_LABELS: Record<LoadMode, string> = {
+  bodyweight: 'Bodyweight',
+  weighted: 'Weighted',
+  assisted: 'Assisted',
+}
+
+// Bodyweight movements pick a load mode instead of equipment; every other type
+// either chooses equipment (weight_reps/weight_time) or has a fixed implement.
+export function loadModeIsChosen(trackingType: TrackingType): boolean {
+  return trackingType === 'bodyweight_reps'
+}
 
 // Equipment only varies for externally-loaded lifts (a bench can be barbell or
 // dumbbell). Bodyweight, assisted, and cardio movements have a fixed implement, so
@@ -63,10 +81,7 @@ export type Equipment = (typeof EQUIPMENT)[number]
 // under, so records still scope consistently per (exercise + equipment).
 export function defaultEquipmentForTracking(trackingType: TrackingType): Equipment {
   switch (trackingType) {
-    case 'assisted_bodyweight':
-      return 'machine'
     case 'bodyweight_reps':
-    case 'weighted_bodyweight':
     case 'reps_only':
       return 'bodyweight'
     case 'time':
@@ -76,6 +91,12 @@ export function defaultEquipmentForTracking(trackingType: TrackingType): Equipme
     case 'weight_time':
       return 'barbell'
   }
+}
+
+// The load mode a freshly-added bodyweight movement starts in; bodyweight is the
+// common case and needs no weight field. null for every non-bodyweight type.
+export function defaultLoadModeForTracking(trackingType: TrackingType): LoadMode | null {
+  return trackingType === 'bodyweight_reps' ? 'bodyweight' : null
 }
 
 // Derived from the primary muscle's region (domain/movement.ts), not asked for.
@@ -117,6 +138,14 @@ export interface Profile extends SyncColumns {
   heightCm: number | null
   // Fed to the coach for tailoring; free text. Empty = unset.
   trainingGoal: string
+  // Demographics the coach uses to tailor loads, volume, and progression pacing.
+  // All null until the user provides them — the coach must tolerate their absence.
+  sex: 'male' | 'female' | null
+  // Birth year (not a full birthdate) → age, without the extra PII or timezone edge cases.
+  birthYear: number | null
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | null
+  // How many days per week the user can train — lets plans fit their real schedule.
+  trainingDaysPerWeek: number | null
   // Null until first-run setup completes. On the profile so it follows the
   // account across devices rather than re-running per device (§11.1.3).
   onboardedAt: number | null
@@ -179,6 +208,9 @@ export interface WorkoutExercise extends SyncColumns {
   // The equipment chosen for this instance of the base exercise. Drives the log
   // UI, volume math, and per-equipment records.
   equipment: Equipment
+  // For bodyweight movements only: bodyweight / weighted / assisted, chosen the
+  // way equipment is. null for every other tracking type.
+  loadMode: LoadMode | null
   position: number
   // Same value = same superset.
   supersetGroup: number | null
@@ -225,6 +257,8 @@ export interface TemplateExercise extends SyncColumns {
   templateId: string
   exerciseId: string
   equipment: Equipment
+  // See WorkoutExercise.loadMode.
+  loadMode: LoadMode | null
   position: number
   supersetGroup: number | null
   targetSets: number | null

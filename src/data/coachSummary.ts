@@ -1,9 +1,20 @@
 // Privacy contract (§13, §2): the summary sent to the coach must never carry raw
 // rows or anything identifying — only week-offset aggregates, no names/notes/dates.
 
-import type { Equipment, MovementPattern, Region } from '@/domain/types'
-import { estimatedOneRepMaxKg } from '@/lib/metrics'
-import { displayWeightOrNull } from '@/lib/units'
+import type {
+  Equipment,
+  LoadMode,
+  MovementPattern,
+  Region,
+  TrackingType,
+} from '@/domain/types'
+import {
+  bestEffectiveOneRepMaxKg,
+  effectiveTopSetKg,
+  isWorkingSet,
+  volumeLoadKg,
+} from '@/lib/metrics'
+import { displayWeightOrNull, lengthFromCm } from '@/lib/units'
 
 export const SUMMARY_WEEKS = 12
 
@@ -25,12 +36,19 @@ export interface SummaryExerciseInstance {
   pattern: MovementPattern
   equipment: Equipment
   isCardio: boolean
+  // Tracking facts + mode, so volume/e1RM/top-set run through the canonical
+  // effective-load math (bodyweight × factor ± added), not raw weight×reps.
+  trackingType: TrackingType
+  bodyweightFactor: number | null
+  loadMode: LoadMode | null
   sets: SummarySet[]
 }
 
 export interface SummarySession {
   /** Week offset from the current week: 0 = this week, −1 = last week, … */
   weekOffset: number
+  /** The session's bodyweight, needed for bodyweight-movement effective load. */
+  bodyweightKg: number | null
   exercises: SummaryExerciseInstance[]
 }
 
@@ -84,20 +102,6 @@ export interface CoachSummary {
   exercises: ExerciseAgg[]
 }
 
-// Whether a row is non-empty — not the canonical volume predicate (metrics.isWorkingSet).
-function hasValue(s: SummarySet): boolean {
-  return s.reps !== null || s.durationSeconds !== null || s.distanceM !== null
-}
-
-/** Σ weight×reps; bodyweight/cardio contribute nothing here. */
-function volumeOf(sets: SummarySet[]): number {
-  let total = 0
-  for (const s of sets) {
-    if (s.weightKg !== null && s.reps !== null) total += s.weightKg * s.reps
-  }
-  return total
-}
-
 export function buildCoachSummary(input: SummaryInput): CoachSummary {
   const { sessions } = input
 
@@ -131,11 +135,15 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
     week.workouts += 1
 
     for (const ex of session.exercises) {
-      const working = ex.sets.filter(hasValue)
+      const exerciseFacts = {
+        trackingType: ex.trackingType,
+        bodyweightFactor: ex.bodyweightFactor,
+      }
+      const working = ex.sets.filter(isWorkingSet)
       if (working.length === 0) continue
 
       week.sets += working.length
-      week.volumeKg += volumeOf(working)
+      week.volumeKg += volumeLoadKg(ex.sets, exerciseFacts, session.bodyweightKg, ex.loadMode)
       if (ex.region)
         regionMap.set(ex.region, (regionMap.get(ex.region) ?? 0) + working.length)
 
@@ -159,26 +167,38 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
       acc.sessions += 1
       acc.totalSets += working.length
 
+      // e1RM off effective load, same helper the PR system and Insights use.
+      const e1rm = bestEffectiveOneRepMaxKg(
+        ex.sets,
+        exerciseFacts,
+        session.bodyweightKg,
+        ex.loadMode,
+      )
+      if (e1rm !== null && (acc.bestE1rmKg === null || e1rm > acc.bestE1rmKg)) {
+        acc.bestE1rmKg = e1rm
+      }
       for (const s of working) {
-        const e1rm = estimatedOneRepMaxKg(s.weightKg, s.reps)
-        if (e1rm !== null && (acc.bestE1rmKg === null || e1rm > acc.bestE1rmKg)) {
-          acc.bestE1rmKg = e1rm
-        }
         if (s.reps !== null) {
           acc.repMin = acc.repMin === null ? s.reps : Math.min(acc.repMin, s.reps)
           acc.repMax = acc.repMax === null ? s.reps : Math.max(acc.repMax, s.reps)
         }
       }
 
-      // Most recent session's heaviest set: a later week (offset closer to 0) wins.
+      // Most recent session's heaviest EFFECTIVE set: a later week wins.
       if (session.weekOffset >= acc.recentWeek) {
-        const topThisSession = Math.max(
-          ...working.map((s) => s.weightKg ?? -Infinity),
-          acc.recentWeek === session.weekOffset
-            ? (acc.recentTopSetKg ?? -Infinity)
-            : -Infinity,
+        const topThisSession = effectiveTopSetKg(
+          ex.sets,
+          exerciseFacts,
+          session.bodyweightKg,
+          ex.loadMode,
         )
-        acc.recentTopSetKg = Number.isFinite(topThisSession) ? topThisSession : null
+        const prior = acc.recentWeek === session.weekOffset ? acc.recentTopSetKg : null
+        acc.recentTopSetKg =
+          topThisSession === null
+            ? prior
+            : prior === null
+              ? topThisSession
+              : Math.max(prior, topThisSession)
         acc.recentWeek = session.weekOffset
       }
 
@@ -223,7 +243,7 @@ export function buildCoachSummary(input: SummaryInput): CoachSummary {
     input.heightCm === null
       ? null
       : input.unitLength === 'in'
-        ? Math.round((input.heightCm / 2.54) * 10) / 10
+        ? Math.round(lengthFromCm(input.heightCm, 'in') * 10) / 10
         : Math.round(input.heightCm)
 
   return {

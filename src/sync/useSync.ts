@@ -7,7 +7,7 @@ import { liveQuery } from 'dexie'
 import { db, isReadyToPush } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
-import { getSupabase } from './supabaseClient'
+import { getSupabase } from '@/backend/supabaseClient'
 import { SupabaseBackend } from './supabaseBackend'
 import { SyncEngine } from './engine'
 

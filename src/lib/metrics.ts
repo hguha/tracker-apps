@@ -1,7 +1,7 @@
 // Derived training metrics (§8.1). Pure functions; each gets a SQL twin that must
 // agree with it on a shared fixture when the Postgres side lands (§8.3).
 
-import type { Exercise, PerformedSet, WorkoutSet } from '@/domain/types'
+import type { Exercise, LoadMode, PerformedSet, WorkoutSet } from '@/domain/types'
 
 type VolumeInput = Pick<
   WorkoutSet,
@@ -18,12 +18,16 @@ export function isWorkingSet(set: VolumeInput): boolean {
 
 // Weight actually moved. The entered weight is taken at face value — for two-hand
 // implements (a pair of dumbbells) the user logs the combined weight, so there's
-// no equipment-specific doubling. Bodyweight movements add a fraction of bodyweight.
-// Drives volume load only — max-weight and e1RM PRs use raw entered weight.
+// no equipment-specific doubling. Bodyweight movements add a fraction of
+// bodyweight, and the load mode decides whether the entered weight adds to that
+// (weighted), subtracts from it (assisted), or is absent (bodyweight). Used for
+// volume and — for bodyweight movements — the weight/e1RM records too, so all
+// three modes compare on one effective-load scale.
 export function effectiveWeightKg(
   set: Pick<VolumeInput, 'weightKg'>,
   exercise: VolumeExercise,
   bodyweightKg: number | null,
+  loadMode: LoadMode | null,
 ): number | null {
   const entered = set.weightKg ?? 0
   const factor = exercise.bodyweightFactor ?? 1
@@ -33,13 +37,14 @@ export function effectiveWeightKg(
     case 'weight_reps':
     case 'weight_time':
       return set.weightKg
-    case 'bodyweight_reps':
-      return bw === null ? null : bw * factor
-    case 'weighted_bodyweight':
-      return bw === null ? null : bw * factor + entered
-    case 'assisted_bodyweight':
+    case 'bodyweight_reps': {
+      if (bw === null) return null
+      const base = bw * factor
+      if (loadMode === 'weighted') return base + entered
       // The machine takes weight off, so assistance subtracts.
-      return bw === null ? null : Math.max(0, bw * factor - entered)
+      if (loadMode === 'assisted') return Math.max(0, base - entered)
+      return base
+    }
     case 'reps_only':
     case 'time':
     case 'distance_time':
@@ -51,11 +56,12 @@ export function volumeLoadKg(
   sets: VolumeInput[],
   exercise: VolumeExercise,
   bodyweightKg: number | null,
+  loadMode: LoadMode | null,
 ): number {
   let total = 0
   for (const set of sets) {
     if (!isWorkingSet(set)) continue
-    const weight = effectiveWeightKg(set, exercise, bodyweightKg)
+    const weight = effectiveWeightKg(set, exercise, bodyweightKg, loadMode)
     if (weight === null || set.reps === null) continue
     total += weight * set.reps
   }
@@ -106,12 +112,49 @@ export function bestOneRepMaxKg(
   return bestOneRepMaxSet(sets)?.e1rmKg ?? null
 }
 
-/** Heaviest completed working set, for the top-set line chart (B-9). */
+/** Heaviest completed working set by raw entered weight, for the top-set line chart (B-9). */
 export function topSetWeightKg(sets: VolumeInput[]): number | null {
   let best: number | null = null
   for (const set of sets) {
     if (!isWorkingSet(set) || set.weightKg === null) continue
     if (best === null || set.weightKg > best) best = set.weightKg
+  }
+  return best
+}
+
+// ── Effective-load twins ─────────────────────────────────────────────────────
+// e1RM and top-set on EFFECTIVE weight (bodyweight × factor ± entered), so a
+// bodyweight/assisted/weighted movement's numbers reflect what was actually moved
+// rather than the bare entered weight (0 for pure bodyweight). These are the
+// canonical read-path helpers — records, insights, and the coach must all use them
+// so a lift's e1RM/top-set is identical everywhere it appears.
+
+export function bestEffectiveOneRepMaxKg(
+  sets: VolumeInput[],
+  exercise: VolumeExercise,
+  bodyweightKg: number | null,
+  loadMode: LoadMode | null,
+): number | null {
+  return bestOneRepMaxKg(
+    sets.map((set) => ({
+      weightKg: effectiveWeightKg(set, exercise, bodyweightKg, loadMode),
+      reps: set.reps,
+    })),
+  )
+}
+
+export function effectiveTopSetKg(
+  sets: VolumeInput[],
+  exercise: VolumeExercise,
+  bodyweightKg: number | null,
+  loadMode: LoadMode | null,
+): number | null {
+  let best: number | null = null
+  for (const set of sets) {
+    if (!isWorkingSet(set)) continue
+    const weight = effectiveWeightKg(set, exercise, bodyweightKg, loadMode)
+    if (weight === null) continue
+    if (best === null || weight > best) best = weight
   }
   return best
 }

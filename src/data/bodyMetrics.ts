@@ -1,8 +1,12 @@
-import { db, syncStamp } from '@/db/database'
+import { db, syncStamp, touch } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
-import { type MetricEntry } from '@/domain/types'
+import { type MetricDefinition, type MetricEntry } from '@/domain/types'
 import { enqueue, newId } from './outbox'
 import { updateProfile } from './profile'
+
+export async function listMetricDefinitions(): Promise<MetricDefinition[]> {
+  return db.metricDefinitions.toArray()
+}
 
 export async function listMetricEntries(
   definitionId: string,
@@ -41,9 +45,22 @@ export async function addMetricEntry(input: {
   await db.metricEntries.add(entry)
   await enqueue('metricEntries', entry.id)
 
-  // Bodyweight feeds volume math for bodyweight exercises, so cache the latest.
+  // Bodyweight feeds volume math for bodyweight exercises, so cache the latest —
+  // and fill it into a session already in progress that began before any weight
+  // was on file (the live twin of the historical backfill in migrateExerciseModel;
+  // finished sessions are the migration's job, not a runtime concern).
   if (input.definitionId === 'bodyweight') {
     await updateProfile({ bodyweightCacheKg: input.value })
+    const active = await db.workouts
+      .filter((w) => w.endedAt === null && w.deletedAt === null && w.bodyweightKg === null)
+      .toArray()
+    for (const workout of active) {
+      await db.workouts.update(workout.id, {
+        bodyweightKg: input.value,
+        ...touch(workout.clientRev),
+      })
+      await enqueue('workouts', workout.id)
+    }
   }
 
   return entry.id
