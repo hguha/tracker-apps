@@ -3,15 +3,30 @@
 
 import { REGION_LABELS, type Equipment, type Region } from '@/domain/types'
 import { displayWeight, displayWeightOrNull } from '@/lib/units'
-import type { CoachSummary, ExerciseAgg } from './summary'
+import * as repo from '@/data/repository'
+import type { CoachSummary, ExerciseAgg } from '@/data/coachSummary'
+import type { CoachContext } from './context'
 import type {
+  CoachChatResult,
   CoachCritique,
   CoachPlan,
   CoachProvider,
   CoachRequest,
   CoachResponse,
+  GeminiContent,
   PlanSession,
 } from './types'
+
+// The last thing the user typed, for the degraded offline chat.
+function lastUserText(contents: GeminiContent[]): string {
+  for (let i = contents.length - 1; i >= 0; i -= 1) {
+    const content = contents[i]
+    if (content?.role !== 'user') continue
+    const text = content.parts.find((p) => typeof p.text === 'string')?.text
+    if (text) return text
+  }
+  return ''
+}
 
 /** Regions a balanced program should touch each week — cardio excluded. */
 const CORE_REGIONS: Region[] = [
@@ -548,6 +563,34 @@ export const mockCoachProvider: CoachProvider = {
         return { kind: 'answer', text: encouragement(summary) }
     }
   },
+  // Offline chat can't do multi-turn tool retrieval, but it still answers each
+  // message as a one-shot from the de-identified summary — a plan-like ask returns
+  // a draft card, anything else a heuristic reply.
+  async chat(contents: GeminiContent[], _context: CoachContext): Promise<CoachChatResult> {
+    const text = lastUserText(contents)
+    const summary = await repo.getCoachSummary()
+    const reply = (body: string): CoachChatResult => ({
+      contents: [...contents, { role: 'model', parts: [{ text: body }] }],
+      text: body,
+    })
+
+    if (looksLikePlanRequest(text)) {
+      const drafted = plan(summary, text || summary.trainingGoal)
+      const note = "Here's a draft from your history — you're on the offline coach, so I can't chat back and forth, but you can save or tweak this."
+      return {
+        contents: [...contents, { role: 'model', parts: [{ text: note }] }],
+        text: note,
+        action: { kind: 'plan', plan: drafted },
+      }
+    }
+    if (text.trim() === '') {
+      return reply(
+        "I'm the offline coach — sign in for the full back-and-forth. Ask me what to work on or for a plan and I'll do my best from your recent training.",
+      )
+    }
+    return reply(answer(summary, text))
+  },
+
   async isAvailable() {
     return true
   },

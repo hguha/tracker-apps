@@ -1,10 +1,47 @@
 // Live coach via the `coach` Edge Function, which holds the Gemini key server-side
 // (§13, §2); throws on any failure so the caller can fall back to the offline mock.
 
-import { getSupabase } from '@/sync/supabaseClient'
+import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
-import type { CoachSummary } from './summary'
-import type { CoachProvider, CoachRequest, CoachResponse } from './types'
+import type { CoachSummary } from '@/data/coachSummary'
+import type { CoachContext } from './context'
+import type {
+  CoachChatHooks,
+  CoachChatResult,
+  CoachProvider,
+  CoachRequest,
+  CoachResponse,
+  CoachTurn,
+  GeminiContent,
+  GeminiPart,
+} from './types'
+import {
+  executeRetrievalTool,
+  isActionTool,
+  TOOL_DECLARATIONS,
+  toolLabel,
+  toolToAction,
+} from './tools'
+
+// A user message can drive at most this many tool rounds before the coach must
+// answer, so one message can't runaway-consume the shared free-tier quota (§cost).
+const MAX_TOOL_ROUNDS = 4
+
+// supabase-js wraps a non-2xx function response in a FunctionsHttpError whose body
+// isn't parsed. Pull out the server's `error` string so the real cause (e.g. a
+// Gemini schema rejection) surfaces instead of a generic "non-2xx status".
+async function describeInvokeError(error: unknown): Promise<Error> {
+  const context = (error as { context?: Response }).context
+  if (context && typeof context.json === 'function') {
+    try {
+      const body = await context.json()
+      if (body?.error) return new Error(String(body.error))
+    } catch {
+      // fall through to the generic message
+    }
+  }
+  return error instanceof Error ? error : new Error('Coach request failed')
+}
 
 export const geminiCoachProvider: CoachProvider = {
   name: 'FitNote Coach (Gemini)',
@@ -29,6 +66,63 @@ export const geminiCoachProvider: CoachProvider = {
       return data as CoachResponse
     }
     throw new Error('Malformed coach response')
+  },
+
+  // One user-message→reply cycle. `contents` already ends with the new user turn.
+  // Retrieval tool calls loop (execute locally → feed result back); an action tool
+  // is terminal — it surfaces a card and ends the turn, saving a round trip.
+  async chat(
+    contents: GeminiContent[],
+    context: CoachContext,
+    hooks?: CoachChatHooks,
+  ): Promise<CoachChatResult> {
+    const supabase = getSupabase()
+    if (!supabase) throw new Error('Backend not configured')
+
+    const working = [...contents]
+
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
+      const { data, error } = await supabase.functions.invoke('coach', {
+        body: { mode: 'chat', contents: working, context, tools: TOOL_DECLARATIONS },
+      })
+      if (error) throw await describeInvokeError(error)
+      const turn = data as CoachTurn
+      if (!turn?.kind) throw new Error('Malformed coach response')
+
+      if (turn.kind === 'message') {
+        working.push({ role: 'model', parts: [{ text: turn.text }] })
+        return { contents: working, text: turn.text }
+      }
+
+      // Append the model's turn EXACTLY as Gemini returned it — the functionCall
+      // parts carry a thoughtSignature that must be sent back verbatim next round.
+      working.push({ role: 'model', parts: turn.modelParts })
+
+      // An action tool ends the turn with a card for the user to act on.
+      const action = turn.calls.find((c) => isActionTool(c.name))
+      if (action) {
+        return {
+          contents: working,
+          text: turn.text,
+          action: (await toolToAction(action.name, action.args)) ?? undefined,
+        }
+      }
+
+      // Retrieval tools: run each locally, feed the results back, and loop.
+      const responseParts: GeminiPart[] = []
+      for (const call of turn.calls) {
+        hooks?.onTool?.(toolLabel(call.name, call.args))
+        const response = await executeRetrievalTool(call.name, call.args)
+        responseParts.push({ functionResponse: { name: call.name, response } })
+      }
+      working.push({ role: 'user', parts: responseParts })
+    }
+
+    // Hit the tool-round cap without a final answer — return gracefully.
+    return {
+      contents: working,
+      text: "I looked through your training but couldn't pull that together — try asking a bit more specifically.",
+    }
   },
 
   async isAvailable(): Promise<boolean> {

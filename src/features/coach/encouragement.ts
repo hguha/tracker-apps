@@ -1,8 +1,7 @@
 // The Home coach greeting (§5.2.1, §13): regenerated only when the finished-workout
 // count changes, so it costs at most one generation per workout, cached per user.
 
-import { getActiveUserId } from '@/db/seed'
-import { getCoachSummary } from '@/data/repository'
+import { getActiveUserId, getCoachSummary } from '@/data/repository'
 import { geminiCoachProvider } from './geminiProvider'
 import { mockCoachProvider } from './mockProvider'
 
