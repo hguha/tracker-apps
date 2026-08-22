@@ -10,7 +10,6 @@ import { useDraftInput } from '@/lib/useDraftInput'
 import { playCue, setSoundEnabled, unlockAudio } from '@/features/timer/sounds'
 import { AppTour } from '@/features/onboarding/AppTour'
 import { AppearanceSection } from './AppearanceSection'
-import { lengthFromCm, lengthToCm, parseNumber } from '@/lib/units'
 import type { DistanceUnit, LengthUnit, Profile, WeightUnit } from '@/domain/types'
 
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
@@ -199,24 +198,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   )
 }
 
-// Height + goal, the profile fields the coach personalizes against (§13).
+// The free-text training goal the coach personalizes against (§13). The demographics
+// it also uses — height, age, sex, experience — live on the Body screen.
 function CoachingCard({ profile }: { profile: Profile }) {
-  const unit = profile.unitLength
-  const heightValue =
-    profile.heightCm === null ? '' : String(lengthFromCm(profile.heightCm, unit))
-
-  const height = useDraftInput({
-    value: heightValue,
-    onCommit: (draft) => {
-      const trimmed = draft.trim()
-      if (trimmed === '') return void repo.updateProfile({ heightCm: null })
-      const parsed = parseNumber(trimmed)
-      if (parsed !== null && parsed > 0) {
-        void repo.updateProfile({ heightCm: lengthToCm(parsed, unit) })
-      }
-    },
-  })
-
   const goal = useDraftInput({
     value: profile.trainingGoal ?? '',
     onCommit: (draft) => void repo.updateProfile({ trainingGoal: draft.trim() }),
@@ -229,38 +213,20 @@ function CoachingCard({ profile }: { profile: Profile }) {
         Coaching
       </h2>
       <p className="mt-0.5 text-[12px] text-ink-muted">
-        Helps the AI coach tailor advice. Shared with the coach only — you can see exactly
-        what's sent from the coach screen.
+        What you're training for — the coach builds toward it. Your height, age, sex, and
+        experience live on the Body screen.
       </p>
 
-      <div className="mt-3 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="me-height" className="text-[13.5px] font-medium">
-            Height
-          </label>
-          <div className="flex items-center gap-1.5">
-            <input
-              id="me-height"
-              inputMode="decimal"
-              placeholder="—"
-              {...height.inputProps}
-              className="h-10 w-24 rounded-lg border border-line bg-surface px-3 text-right text-[15px] outline-none focus:border-accent"
-            />
-            <span className="w-6 text-[13px] text-ink-muted">{unit}</span>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="me-goal" className="text-[13.5px] font-medium">
-            Training goal
-          </label>
-          <input
-            id="me-goal"
-            placeholder='e.g. "gain strength", "lean out for summer"'
-            {...goal.inputProps}
-            className="mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-[15px] outline-none focus:border-accent"
-          />
-        </div>
+      <div className="mt-3">
+        <label htmlFor="me-goal" className="text-[13.5px] font-medium">
+          Training goal
+        </label>
+        <input
+          id="me-goal"
+          placeholder='e.g. "gain strength", "lean out for summer"'
+          {...goal.inputProps}
+          className="mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-[15px] outline-none focus:border-accent"
+        />
       </div>
     </Card>
   )

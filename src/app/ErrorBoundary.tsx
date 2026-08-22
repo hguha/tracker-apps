@@ -8,7 +8,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { clearLocalData } from '@/data/repository'
-import { reportError } from '@/lib/errorReporter'
+import { reportError } from '@/backend/errorReporter'
 
 interface State {
   error: Error | null

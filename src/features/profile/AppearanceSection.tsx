@@ -1,28 +1,9 @@
 import { Card } from '@/components/Card'
+import { AccentPicker } from '@/components/AccentPicker'
 import { cn } from '@/lib/cn'
-import {
-  THEME_PRESETS,
-  contrastRatio,
-  ensureContrast,
-  parseHex,
-  toHex,
-  type ColorSchemePreference,
-} from '@/lib/theme'
+import { THEME_PRESETS, type ColorSchemePreference } from '@/lib/theme'
 import { REGION_LABELS, REGIONS } from '@/domain/types'
 import { regionVar } from '@/lib/palette'
-
-const ACCENT_SWATCHES = [
-  '#2a78d6',
-  '#4f46c9',
-  '#7a3fbd',
-  '#b0247e',
-  '#c1291f',
-  '#c1521b',
-  '#a8790d',
-  '#1f7a47',
-  '#0f7a86',
-  '#3d4654',
-]
 
 const SCHEME_OPTIONS: { value: ColorSchemePreference; label: string }[] = [
   { value: 'system', label: 'Auto' },
@@ -103,48 +84,10 @@ export function AppearanceSection({
         <p className="mt-4 mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
           Accent color
         </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => onChange({ accentOverride: null })}
-            className={cn(
-              'h-9 rounded-full border px-3 text-[13px] font-semibold',
-              accentOverride === null
-                ? 'border-accent bg-accent-wash text-accent'
-                : 'border-line text-ink-secondary',
-            )}
-          >
-            Theme default
-          </button>
-          {ACCENT_SWATCHES.map((hex) => (
-            <button
-              key={hex}
-              onClick={() => onChange({ accentOverride: hex })}
-              aria-label={`Accent ${hex}`}
-              className={cn(
-                'size-9 rounded-full ring-1 ring-inset ring-black/10',
-                accentOverride?.toLowerCase() === hex.toLowerCase() &&
-                  'ring-2 ring-offset-2 ring-offset-[var(--surface-1)]',
-              )}
-              style={{
-                background: hex,
-                ...(accentOverride?.toLowerCase() === hex.toLowerCase()
-                  ? { ['--tw-ring-color' as string]: hex }
-                  : {}),
-              }}
-            />
-          ))}
-          <label className="flex h-9 cursor-pointer items-center gap-2 rounded-full border border-line px-3 text-[13px] font-semibold text-ink-secondary">
-            Custom
-            <input
-              type="color"
-              value={accentOverride ?? '#2a78d6'}
-              onChange={(event) => onChange({ accentOverride: event.target.value })}
-              className="size-6 cursor-pointer rounded border-0 bg-transparent p-0"
-            />
-          </label>
-        </div>
-
-        {accentOverride && <AccentNotice hex={accentOverride} />}
+        <AccentPicker
+          accentOverride={accentOverride}
+          onChange={(next) => onChange({ accentOverride: next })}
+        />
       </Card>
 
       <Card className="p-4">
@@ -167,33 +110,5 @@ export function AppearanceSection({
         </div>
       </Card>
     </>
-  )
-}
-
-function AccentNotice({ hex }: { hex: string }) {
-  const rgb = parseHex(hex)
-  if (!rgb) return null
-
-  const lightSurface = { r: 252, g: 252, b: 251 }
-  const darkSurface = { r: 26, g: 26, b: 25 }
-
-  const lightAdjusted = toHex(ensureContrast(rgb, lightSurface))
-  const darkAdjusted = toHex(ensureContrast(rgb, darkSurface))
-  const wasAdjusted =
-    lightAdjusted.toLowerCase() !== hex.toLowerCase() ||
-    darkAdjusted.toLowerCase() !== hex.toLowerCase()
-
-  if (!wasAdjusted) return null
-
-  const ratio = Math.min(
-    contrastRatio(rgb, lightSurface),
-    contrastRatio(rgb, darkSurface),
-  )
-
-  return (
-    <p className="mt-2.5 text-[12px] text-ink-muted">
-      This color measures {ratio.toFixed(1)}:1 against one of the backgrounds, below the
-      3:1 minimum, so it's darkened or lightened slightly where needed to stay legible.
-    </p>
   )
 }

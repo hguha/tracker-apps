@@ -3,8 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, FileText, MoreHorizontal, Plus } from 'lucide-react'
-import { db } from '@/db/database'
+import { ChevronLeft, FileText, MoreHorizontal, Plus, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -15,12 +14,13 @@ import { useRestTimer } from '@/features/timer/restTimerStore'
 import { playCue } from '@/features/timer/sounds'
 import { formatDuration } from '@/lib/units'
 import { sessionTitle } from '@/lib/sessionTitle'
-import type { Equipment, WorkoutSet } from '@/domain/types'
+import type { Equipment, LoadMode, WorkoutSet } from '@/domain/types'
 import { ExerciseCard } from './ExerciseCard'
 import { ExerciseDetailSheet } from './ExerciseDetailSheet'
 import { ExercisePicker } from './ExercisePicker'
 import { FinishSheet } from './FinishSheet'
 import { SessionMenu } from './SessionMenu'
+import { CoachChat } from '@/features/coach/CoachChat'
 import { isCardioPattern } from '@/domain/movement'
 
 // How many finished sessions before the swipe hint retires. Deleting and reusing a
@@ -42,6 +42,7 @@ export function ActiveWorkoutScreen({
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isFinishOpen, setIsFinishOpen] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isCoachOpen, setIsCoachOpen] = useState(false)
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
   // The template this session stopped following, held just long enough to say so.
   const [detachedFrom, setDetachedFrom] = useState<string | null>(null)
@@ -60,7 +61,7 @@ export function ActiveWorkoutScreen({
     const rows = await Promise.all(
       workoutExercises.map(async (we) => ({
         workoutExercise: we,
-        exercise: await db.exercises.get(we.exerciseId),
+        exercise: await repo.getExercise(we.exerciseId),
         sets: await repo.listSets(we.id),
         // Relative to *this* workout, so editing an older session shows what
         // came before it rather than the newest session overall.
@@ -79,9 +80,7 @@ export function ActiveWorkoutScreen({
     const placeholderOverrides = await repo.getPlaceholderOverrides(workoutId)
     // Swipe is the only way to delete or reuse a set, so the hint stays until the
     // gestures have plausibly been learned rather than showing exactly once.
-    const finishedWorkouts = await db.workouts
-      .filter((w) => w.endedAt !== null && w.deletedAt === null)
-      .count()
+    const finishedWorkouts = await repo.countFinishedWorkouts()
 
     return {
       workout,
@@ -110,7 +109,7 @@ export function ActiveWorkoutScreen({
   // and PR feedback (§6.2).
   const handleSetChange = useCallback(
     async (setId: string, patch: Partial<WorkoutSet>, exerciseId: string) => {
-      const before = await db.sets.get(setId)
+      const before = await repo.getSet(setId)
       const wasLogged = before?.isCompleted ?? false
 
       // Measured rest can't be reconstructed later, so capture it now or lose it.
@@ -120,7 +119,7 @@ export function ActiveWorkoutScreen({
         ...(measured !== null && !wasLogged ? { restTakenSeconds: measured } : {}),
       })
 
-      const after = await db.sets.get(setId)
+      const after = await repo.getSet(setId)
       const isNowLogged = after?.isCompleted ?? false
 
       // Only a transition into "logged" plays the cue — correcting an
@@ -187,11 +186,12 @@ export function ActiveWorkoutScreen({
   }, [])
 
   const handleAddExercise = useCallback(
-    async (exerciseId: string, equipment: Equipment) => {
+    async (exerciseId: string, equipment: Equipment, loadMode: LoadMode | null) => {
       const workoutExerciseId = await repo.addExerciseToWorkout(
         workoutId,
         exerciseId,
         equipment,
+        loadMode,
       )
 
       // One row is enough: its placeholder comes from history and "Add set"
@@ -329,6 +329,15 @@ export function ActiveWorkoutScreen({
             </span>
           </p>
         </div>
+        {!isEditMode && (
+          <button
+            onClick={() => setIsCoachOpen(true)}
+            aria-label="Ask the coach"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-accent active:bg-sunken"
+          >
+            <Sparkles size={19} />
+          </button>
+        )}
         <button
           onClick={() => setIsMenuOpen(true)}
           aria-label="Workout options"
@@ -374,6 +383,8 @@ export function ActiveWorkoutScreen({
                   <ExerciseCard
                     exercise={row.exercise}
                     equipment={row.workoutExercise.equipment}
+                    loadMode={row.workoutExercise.loadMode}
+                    bodyweightKg={workout.bodyweightKg}
                     asOf={workout.startedAt}
                     isPastSession={isEditMode}
                     sets={row.sets}
@@ -464,8 +475,8 @@ export function ActiveWorkoutScreen({
 
       {isPickerOpen && (
         <ExercisePicker
-          onPick={(exerciseId, equipment) =>
-            void handleAddExercise(exerciseId, equipment)
+          onPick={(exerciseId, equipment, loadMode) =>
+            void handleAddExercise(exerciseId, equipment, loadMode)
           }
           onDismiss={() => setIsPickerOpen(false)}
         />
@@ -520,6 +531,21 @@ export function ActiveWorkoutScreen({
             onExit()
           }}
         />
+      )}
+
+      {isCoachOpen && (
+        <BottomSheet
+          onDismiss={() => setIsCoachOpen(false)}
+          panelClassName="h-[88%]"
+          dismissOnBackdrop={false}
+          labelledBy="coach-sheet"
+        >
+          {/* The chat sees the live session via includeActiveWorkout (variant="sheet"),
+              so it can suggest accessories for what's in progress. */}
+          <div className="flex h-full min-h-0 flex-col">
+            <CoachChat variant="sheet" />
+          </div>
+        </BottomSheet>
       )}
 
       {detachedFrom !== null && (

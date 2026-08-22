@@ -8,6 +8,7 @@ import type {
   DistanceUnit,
   Equipment,
   Exercise,
+  LoadMode,
   PerformedSession,
   PerformedSet,
   WeightUnit,
@@ -16,7 +17,7 @@ import type {
 import { regionVar } from '@/lib/palette'
 import { composeExerciseName } from '@/lib/labels'
 import { CardioEntry } from './CardioEntry'
-import { SetRow, hasLoggedValues } from './SetRow'
+import { SetRow, hasLoggedValues, setFields } from './SetRow'
 import { hasValue, resolvePlaceholders } from './resolvePlaceholders'
 import { isCardioPattern } from '@/domain/movement'
 
@@ -30,6 +31,9 @@ export interface SetPlaceholderHint {
 export interface ExerciseCardProps {
   exercise: Exercise
   equipment: Equipment
+  loadMode: LoadMode | null
+  // The signed-in user's bodyweight at the time of this session, for bodyweight volume.
+  bodyweightKg: number | null
   // The workout being viewed, so a date gap is measured from it and not from today.
   asOf: number
   // True when this is a past session opened from history rather than a live one.
@@ -57,6 +61,8 @@ export function ExerciseCard(props: ExerciseCardProps) {
   const {
     exercise,
     equipment,
+    loadMode,
+    bodyweightKg,
     asOf,
     isPastSession,
     sets,
@@ -82,10 +88,16 @@ export function ExerciseCard(props: ExerciseCardProps) {
     void (async () => {
       const matches = new Set<string>()
       for (const set of sets) {
-        if (!hasLoggedValues(set, exercise)) continue
+        if (!hasLoggedValues(set, exercise, loadMode)) continue
         // Pass the whole set (id included) so a row already holding the record
         // isn't compared against itself and stops glowing.
-        const broken = await repo.previewRecords(exercise.id, equipment, set)
+        const broken = await repo.previewRecords(
+          exercise.id,
+          equipment,
+          loadMode,
+          bodyweightKg,
+          set,
+        )
         if (broken.length > 0) matches.add(set.id)
       }
       if (!cancelled) setRecordSetIds(matches)
@@ -93,7 +105,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
     return () => {
       cancelled = true
     }
-  }, [sets, exercise, equipment])
+  }, [sets, exercise, equipment, loadMode, bodyweightKg])
 
   const isCardio = isCardioPattern(exercise.movementPattern)
 
@@ -207,7 +219,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
               Last
             </span>
             <span className="flex min-w-0 flex-1 gap-1.5">
-              {columnLabels(exercise, weightUnit, distanceUnit).map((label) => (
+              {columnLabels(exercise, loadMode, weightUnit, distanceUnit).map((label) => (
                 <span
                   key={label}
                   className="flex-1 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted"
@@ -231,6 +243,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
                 set={set}
                 index={index}
                 exercise={exercise}
+                loadMode={loadMode}
                 previous={placeholderAt(index)}
                 lastSession={previousSets[index]}
                 weightUnit={weightUnit}
@@ -268,29 +281,26 @@ function loggingHint(equipment: Equipment, weightUnit: WeightUnit): string | nul
   return null
 }
 
-// Must stay in sync with the layout switch in SetRow's inputLayoutFor.
+// Header labels for the set-input columns, derived from the same field spec the
+// input row uses (SetRow's setFields), so the two can't disagree.
 function columnLabels(
   exercise: Exercise,
+  loadMode: LoadMode | null,
   weightUnit: WeightUnit,
   distanceUnit: DistanceUnit,
 ): string[] {
-  switch (exercise.trackingType) {
-    case 'weight_reps':
-      return [weightUnit, 'reps']
-    case 'bodyweight_reps':
-    case 'reps_only':
-      return ['reps']
-    case 'weighted_bodyweight':
-      return [`+${weightUnit}`, 'reps']
-    case 'assisted_bodyweight':
-      return [`−${weightUnit}`, 'reps']
-    case 'time':
-      return ['time']
-    case 'distance_time':
-      return ['time', distanceUnit]
-    case 'weight_time':
-      return [weightUnit, 'time']
-  }
+  return setFields(exercise, loadMode).map((field) => {
+    switch (field.kind) {
+      case 'weight':
+        return `${field.sign ?? ''}${weightUnit}`
+      case 'reps':
+        return 'reps'
+      case 'duration':
+        return 'time'
+      case 'distance':
+        return distanceUnit
+    }
+  })
 }
 
 // Says WHEN you last did this, and nothing else. The numbers used to be repeated

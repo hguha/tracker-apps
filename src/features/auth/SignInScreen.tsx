@@ -4,7 +4,7 @@ import { Button } from '@/components/Button'
 import { useAuth } from '@/auth/AuthContext'
 import { CODE_MAX_LENGTH, isSubmittableCode, isValidEmail } from '@/auth/types'
 import { LOCAL_DEV_CODE } from '@/auth/localAuthProvider'
-import { isBackendConfigured } from '@/sync/supabaseClient'
+import { isBackendConfigured } from '@/backend/supabaseClient'
 import { cn } from '@/lib/cn'
 
 const RESEND_SECONDS = 30

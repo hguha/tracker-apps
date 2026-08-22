@@ -29,6 +29,8 @@ import { StartWorkoutScreen } from '@/features/workout/StartWorkoutScreen'
 import { TemplatesScreen } from '@/features/templates/TemplatesScreen'
 import { TemplateEditorScreen } from '@/features/templates/TemplateEditorScreen'
 import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
+import { useColorScheme } from '@/lib/useColorScheme'
+import { applyStatusBarStyle } from '@/platform/statusBar'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
 import { useSync } from '@/sync/useSync'
 
@@ -99,6 +101,9 @@ function SignedInApp() {
     void seedIfNeeded()
       .then(() => repo.migrateToBaseExercises())
       .then(() => repo.repointRetiredBaseExercises())
+      // Fold duplicate movements together and move bodyweight lifts onto the
+      // load-mode model. Idempotent, so it's a no-op once a device is migrated.
+      .then(() => repo.migrateExerciseModel())
       // Order matters: end any edit session this launch inherited, then free the
       // writes it was holding.
       .then(() => repo.endStaleEditSessions())
@@ -129,20 +134,15 @@ function SignedInApp() {
     return (await repo.getActiveWorkout()) !== undefined
   }, [isReady])
 
+  // The live OS scheme, via the shared hook (which owns the single media-query
+  // listener) — re-applies appearance on an OS light/dark switch while on "Auto".
+  const osScheme = useColorScheme()
   useEffect(() => {
     if (!appearance) return
-    applyAppearance(appearance)
+    const scheme = applyAppearance(appearance)
+    if (scheme) applyStatusBarStyle(scheme)
     setSoundEnabled(appearance.soundEnabled)
-  }, [appearance])
-
-  // Re-apply on OS scheme change, which only matters while set to "Auto".
-  useEffect(() => {
-    if (!appearance || appearance.colorScheme !== 'system') return
-    const query = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => applyAppearance(appearance)
-    query.addEventListener('change', handler)
-    return () => query.removeEventListener('change', handler)
-  }, [appearance])
+  }, [appearance, osScheme])
 
   if (!isReady) {
     return (

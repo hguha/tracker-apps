@@ -14,7 +14,7 @@ import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { ProgressRing } from '@/components/ProgressRing'
 import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
-import { formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
+import { DAY_MS, WEEK_MS, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
@@ -30,8 +30,6 @@ import {
 import { TrainingAvatar } from './TrainingAvatar'
 import { computeStreaks } from './streaks'
 import { getHomeGreeting } from '@/features/coach/encouragement'
-
-const WEEK_MS = 7 * 24 * 3600 * 1000
 
 export function HomeScreen({
   onResumeWorkout,
@@ -69,7 +67,7 @@ export function HomeScreen({
     const setsByRegion = new Map<Region, number>()
     const setsByRegionWindow = new Map<Region, number>()
 
-    const avatarWindowStart = Date.now() - AVATAR_WINDOW_DAYS * 24 * 3600 * 1000
+    const avatarWindowStart = Date.now() - AVATAR_WINDOW_DAYS * DAY_MS
 
     for (const summary of finished) {
       if (summary.workout.startedAt < avatarWindowStart) continue
@@ -99,7 +97,7 @@ export function HomeScreen({
         daysSinceTrained:
           lastAt === undefined
             ? null
-            : Math.floor((Date.now() - lastAt) / (24 * 3600 * 1000)),
+            : Math.floor((Date.now() - lastAt) / DAY_MS),
       })
     }
     const avatar = evaluateAvatar(avatarInputs)

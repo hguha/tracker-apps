@@ -9,6 +9,7 @@ import { displayWeight, formatDuration, distanceFromM, weightFromKg } from '@/li
 import { regionVar } from '@/lib/palette'
 import { humanizeSlug } from '@/lib/labels'
 import {
+  LOAD_MODE_LABELS,
   REGION_LABELS,
   type DistanceUnit,
   type RecordType,
@@ -212,6 +213,9 @@ export function ExerciseDetailSheet({
         <Section title="Details">
           <dl className="space-y-1.5 text-[13.5px]">
             <Row label="Tracked as" value={humanizeSlug(exercise.trackingType)} />
+            {sessionRow?.loadMode != null && (
+              <Row label="Load" value={LOAD_MODE_LABELS[sessionRow.loadMode]} />
+            )}
             {exercise.bodyweightFactor !== null && (
               <Row
                 label="Bodyweight moved"

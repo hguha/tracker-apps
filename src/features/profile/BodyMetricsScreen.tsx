@@ -4,15 +4,15 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Check, ChevronLeft } from 'lucide-react'
-import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
 import { formatRelativeDay } from '@/lib/dates'
 import { bodyWeightFromKg, lengthFromCm, lengthToCm, weightToKg } from '@/lib/units'
+import { AboutYouCard } from './AboutYouCard'
 
-const QUICK_METRIC_KEYS = ['bodyweight', 'body_fat_pct', 'waist', 'resting_hr']
+const QUICK_METRIC_KEYS = ['bodyweight']
 
 export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
   const toast = useToast()
@@ -20,7 +20,7 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
 
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
-    const definitions = await db.metricDefinitions.toArray()
+    const definitions = await repo.listMetricDefinitions()
 
     const quick = await Promise.all(
       QUICK_METRIC_KEYS.map(async (key) => {
@@ -90,6 +90,8 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        <AboutYouCard profile={profile} />
+
         <Card className="p-4">
           <h2 className="text-[15px] font-semibold tracking-tight">Measurements</h2>
           <p className="mt-0.5 text-[12px] text-ink-muted">

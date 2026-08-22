@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
-import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
@@ -10,7 +9,7 @@ import { ExercisePicker } from '@/features/workout/ExercisePicker'
 import { regionVar } from '@/lib/palette'
 import { parseNumber, weightFromKg, weightToKg } from '@/lib/units'
 import { useDraftInput } from '@/lib/useDraftInput'
-import type { Equipment, TemplateExercise, WeightUnit } from '@/domain/types'
+import type { Equipment, LoadMode, TemplateExercise, WeightUnit } from '@/domain/types'
 
 export function TemplateEditorScreen({
   templateId,
@@ -35,7 +34,7 @@ export function TemplateEditorScreen({
     const rows = await repo.listTemplateExercises(templateId)
     const withMeta = await Promise.all(
       rows.map(async (te) => {
-        const exercise = await db.exercises.get(te.exerciseId)
+        const exercise = await repo.getExercise(te.exerciseId)
         return { te, exercise }
       }),
     )
@@ -57,8 +56,12 @@ export function TemplateEditorScreen({
   const { template, profile, rows } = data
   const orderedIds = rows.map((r) => r.te.id)
 
-  async function addExercise(exerciseId: string, equipment: Equipment) {
-    await repo.addExerciseToTemplate(templateId, exerciseId, equipment)
+  async function addExercise(
+    exerciseId: string,
+    equipment: Equipment,
+    loadMode: LoadMode | null,
+  ) {
+    await repo.addExerciseToTemplate(templateId, exerciseId, equipment, loadMode)
     setIsPickerOpen(false)
   }
 
@@ -138,7 +141,9 @@ export function TemplateEditorScreen({
 
       {isPickerOpen && (
         <ExercisePicker
-          onPick={(exerciseId, equipment) => void addExercise(exerciseId, equipment)}
+          onPick={(exerciseId, equipment, loadMode) =>
+            void addExercise(exerciseId, equipment, loadMode)
+          }
           onDismiss={() => setIsPickerOpen(false)}
         />
       )}

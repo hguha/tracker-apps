@@ -4,6 +4,7 @@ import { Copy, Trash2, Trophy } from 'lucide-react'
 import type {
   DistanceUnit,
   Exercise,
+  LoadMode,
   PerformedSet,
   WeightUnit,
   WorkoutSet,
@@ -24,6 +25,7 @@ export interface SetRowProps {
   set: WorkoutSet
   index: number
   exercise: Exercise
+  loadMode: LoadMode | null
   previous: PerformedSet | undefined
   // Must reflect only the previous session, never the current one: sharing this
   // with `previous` made the column echo the row's own carry-forward values.
@@ -38,32 +40,58 @@ export interface SetRowProps {
   onDuplicate: () => void
 }
 
-export function inputLayoutFor(exercise: Exercise): {
-  weight: boolean
-  reps: boolean
-  duration: boolean
-  distance: boolean
-} {
+export type SetFieldKind = 'weight' | 'reps' | 'duration' | 'distance'
+// The ordered numeric fields a set row shows, and the sign on the weight field
+// (`+` added, `−` assisted). This is the single source both the input row
+// (inputLayoutFor) and the header (columnLabels) derive from, so they can't drift.
+export interface SetField {
+  kind: SetFieldKind
+  sign?: '+' | '−'
+}
+
+export function setFields(
+  exercise: Pick<Exercise, 'trackingType'>,
+  loadMode: LoadMode | null,
+): SetField[] {
   switch (exercise.trackingType) {
     case 'weight_reps':
-    case 'weighted_bodyweight':
-    case 'assisted_bodyweight':
-      return { weight: true, reps: true, duration: false, distance: false }
+      return [{ kind: 'weight' }, { kind: 'reps' }]
     case 'bodyweight_reps':
+      // A weight box only when there's a weight to enter: added or assisted.
+      if (loadMode === 'weighted') return [{ kind: 'weight', sign: '+' }, { kind: 'reps' }]
+      if (loadMode === 'assisted') return [{ kind: 'weight', sign: '−' }, { kind: 'reps' }]
+      return [{ kind: 'reps' }]
     case 'reps_only':
-      return { weight: false, reps: true, duration: false, distance: false }
+      return [{ kind: 'reps' }]
     case 'time':
-      return { weight: false, reps: false, duration: true, distance: false }
+      return [{ kind: 'duration' }]
     case 'distance_time':
-      return { weight: false, reps: false, duration: true, distance: true }
+      return [{ kind: 'duration' }, { kind: 'distance' }]
     case 'weight_time':
-      return { weight: true, reps: false, duration: true, distance: false }
+      return [{ kind: 'weight' }, { kind: 'duration' }]
+  }
+}
+
+export function inputLayoutFor(
+  exercise: Pick<Exercise, 'trackingType'>,
+  loadMode: LoadMode | null,
+): { weight: boolean; reps: boolean; duration: boolean; distance: boolean } {
+  const kinds = new Set(setFields(exercise, loadMode).map((f) => f.kind))
+  return {
+    weight: kinds.has('weight'),
+    reps: kinds.has('reps'),
+    duration: kinds.has('duration'),
+    distance: kinds.has('distance'),
   }
 }
 
 // Values present means logged; a row with nothing typed is ignored everywhere (§6.2).
-export function hasLoggedValues(set: WorkoutSet, exercise: Exercise): boolean {
-  const layout = inputLayoutFor(exercise)
+export function hasLoggedValues(
+  set: WorkoutSet,
+  exercise: Pick<Exercise, 'trackingType'>,
+  loadMode: LoadMode | null,
+): boolean {
+  const layout = inputLayoutFor(exercise, loadMode)
   if (layout.reps && set.reps !== null) return true
   if (layout.duration && set.durationSeconds !== null) return true
   if (layout.distance && set.distanceM !== null) return true
@@ -79,6 +107,7 @@ export function SetRow(props: SetRowProps) {
     set,
     index,
     exercise,
+    loadMode,
     previous,
     lastSession,
     weightUnit,
@@ -91,8 +120,8 @@ export function SetRow(props: SetRowProps) {
     onDuplicate,
   } = props
 
-  const layout = inputLayoutFor(exercise)
-  const isLogged = hasLoggedValues(set, exercise)
+  const layout = inputLayoutFor(exercise, loadMode)
+  const isLogged = hasLoggedValues(set, exercise, loadMode)
 
   return (
     <SwipeableRow

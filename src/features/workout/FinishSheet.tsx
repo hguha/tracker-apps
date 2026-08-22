@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -39,7 +38,7 @@ export function FinishSheet({
     const byRegionMap = new Map<Region, number>()
 
     for (const we of workoutExercises) {
-      const exercise = await db.exercises.get(we.exerciseId)
+      const exercise = await repo.getExercise(we.exerciseId)
       if (!exercise) continue
       const sets = (await repo.listSets(we.id)).filter((s) => s.isCompleted)
       completedSets += sets.length
@@ -49,7 +48,7 @@ export function FinishSheet({
         cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
       }
 
-      const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg)
+      const exerciseVolume = volumeLoadKg(sets, exercise, workout.bodyweightKg, we.loadMode)
       totalVolumeKg += exerciseVolume
 
       const region = exercise.region

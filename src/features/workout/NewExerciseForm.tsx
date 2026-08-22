@@ -18,9 +18,7 @@ import {
 
 const TRACKING_LABELS: Record<TrackingType, string> = {
   weight_reps: 'Weight & reps',
-  bodyweight_reps: 'Bodyweight reps',
-  weighted_bodyweight: 'Bodyweight + added weight',
-  assisted_bodyweight: 'Assisted bodyweight',
+  bodyweight_reps: 'Bodyweight (reps)',
   reps_only: 'Reps only',
   time: 'Time only',
   distance_time: 'Distance & time',

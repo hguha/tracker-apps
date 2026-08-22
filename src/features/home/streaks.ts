@@ -1,9 +1,7 @@
 // Week-streak computation shared by Home and Badges (§5.2.1). Iterates the sorted
 // set of trained weeks rather than a fixed 7-day span, so it stays correct across DST.
 
-import { weekStart, type WeekStart } from '@/lib/dates'
-
-const WEEK_MS = 7 * 24 * 3600 * 1000
+import { WEEK_MS, weekStart, type WeekStart } from '@/lib/dates'
 
 export interface Streaks {
   /** Consecutive trained weeks ending at the current week. An untrained current

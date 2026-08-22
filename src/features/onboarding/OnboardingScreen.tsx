@@ -5,6 +5,8 @@ import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
+import { AccentPicker } from '@/components/AccentPicker'
+import { PillSelect } from '@/components/PillSelect'
 import { cn } from '@/lib/cn'
 import { THEME_PRESETS, type ColorSchemePreference } from '@/lib/theme'
 import { lengthToCm, parseNumber, weightToKg } from '@/lib/units'
@@ -13,11 +15,25 @@ import type { DistanceUnit, WeightUnit } from '@/domain/types'
 // Bump to re-show the walkthrough to everyone (App gates on profile.onboardingVersion).
 export const ONBOARDING_VERSION = 1
 
-type Step = 'welcome' | 'name' | 'units' | 'body' | 'goal' | 'look' | 'sync'
+type Step = 'welcome' | 'name' | 'units' | 'body' | 'about' | 'goal' | 'look' | 'sync'
 
-// welcome and sync frame the flow; the middle five carry the dots + skip.
-const FLOW: Step[] = ['name', 'units', 'body', 'goal', 'look']
+// welcome and sync frame the flow; the middle steps carry the dots + skip.
+const FLOW: Step[] = ['name', 'units', 'body', 'about', 'goal', 'look']
 const ALL_STEPS: Step[] = ['welcome', ...FLOW, 'sync']
+
+const SEX_OPTIONS: { value: 'male' | 'female'; label: string }[] = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+]
+
+const EXPERIENCE_OPTIONS: {
+  value: 'beginner' | 'intermediate' | 'advanced'
+  label: string
+}[] = [
+  { value: 'beginner', label: 'New' },
+  { value: 'intermediate', label: 'Some' },
+  { value: 'advanced', label: 'Lots' },
+]
 
 const GOAL_SUGGESTIONS = [
   'Get stronger on the big lifts',
@@ -44,9 +60,15 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [height, setHeight] = useState('')
   const [bodyweight, setBodyweight] = useState('')
   const [weeklyGoal, setWeeklyGoal] = useState(4)
+  const [sex, setSex] = useState<'male' | 'female' | null>(null)
+  const [age, setAge] = useState('')
+  const [experience, setExperience] = useState<
+    'beginner' | 'intermediate' | 'advanced' | null
+  >(null)
   const [goal, setGoal] = useState('')
   const [theme, setTheme] = useState('default')
   const [scheme, setScheme] = useState<ColorSchemePreference>('system')
+  const [accentOverride, setAccentOverride] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
   const lengthUnit = weightUnit === 'kg' ? 'cm' : 'in'
@@ -57,7 +79,11 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
       setDistanceUnit(p.unitDistance)
       setTheme(p.theme)
       setScheme(p.colorScheme)
+      setAccentOverride(p.accentOverride)
       if (p.trainingGoal) setGoal(p.trainingGoal)
+      setSex(p.sex)
+      setExperience(p.experienceLevel)
+      if (p.birthYear) setAge(String(new Date().getFullYear() - p.birthYear))
     })
   }, [])
 
@@ -92,6 +118,8 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         await repo.updateProfile({
           heightCm: h !== null && h > 0 ? lengthToCm(h, lengthUnit) : null,
           weeklyWorkoutGoal: weeklyGoal,
+          // The aim doubles as the coach's default availability; refine in settings.
+          trainingDaysPerWeek: weeklyGoal,
         })
         if (bw !== null && bw > 0) {
           await repo.addMetricEntry({
@@ -99,6 +127,17 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
             value: weightToKg(bw, weightUnit),
           })
         }
+      }
+      if (step === 'about') {
+        const years = parseNumber(age)
+        await repo.updateProfile({
+          sex,
+          experienceLevel: experience,
+          birthYear:
+            years !== null && years > 0 && years < 120
+              ? new Date().getFullYear() - Math.round(years)
+              : null,
+        })
       }
       if (step === 'goal') {
         await repo.updateProfile({ trainingGoal: goal.trim() })
@@ -234,6 +273,41 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
             </StepShell>
           )}
 
+          {step === 'about' && (
+            <StepShell
+              title="About you"
+              body="Helps the coach match strength standards and pace progression. All optional."
+            >
+              <Field label="Sex">
+                <PillSelect<'male' | 'female'>
+                  options={SEX_OPTIONS}
+                  value={sex}
+                  onChange={setSex}
+                />
+              </Field>
+              <Field label="Age">
+                <input
+                  inputMode="numeric"
+                  value={age}
+                  onChange={(event) => setAge(event.target.value)}
+                  placeholder="—"
+                  className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                />
+              </Field>
+              <Field label="Lifting experience">
+                <PillSelect<'beginner' | 'intermediate' | 'advanced'>
+                  options={EXPERIENCE_OPTIONS}
+                  value={experience}
+                  onChange={setExperience}
+                />
+              </Field>
+              <ContinueButton
+                onClick={() => void saveAndContinue()}
+                disabled={isSaving}
+              />
+            </StepShell>
+          )}
+
           {step === 'goal' && (
             <StepShell
               title="What are you training for?"
@@ -279,7 +353,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   }}
                 />
               </Field>
-              <Field label="Accent">
+              <Field label="Theme">
                 <div className="grid grid-cols-2 gap-2">
                   {THEME_PRESETS.map((preset) => (
                     <button
@@ -310,6 +384,16 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                     </button>
                   ))}
                 </div>
+              </Field>
+              <Field label="Accent color">
+                <AccentPicker
+                  accentOverride={accentOverride}
+                  onChange={(next) => {
+                    setAccentOverride(next)
+                    // Written immediately so App's appearance live-query repaints.
+                    void repo.updateProfile({ accentOverride: next })
+                  }}
+                />
               </Field>
               <ContinueButton
                 onClick={() => void saveAndContinue()}
