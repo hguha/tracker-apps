@@ -111,7 +111,7 @@ describe('parseBackup validation', () => {
     expect(() => parseBackup('{not json')).toThrow(BackupParseError)
   })
 
-  it('rejects a file that is not a FitNote backup', () => {
+  it('rejects a file that is not a REPutation backup', () => {
     expect(() => parseBackup(JSON.stringify({ hello: 'world' }))).toThrow(
       BackupParseError,
     )

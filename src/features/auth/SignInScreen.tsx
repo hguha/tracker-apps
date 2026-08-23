@@ -98,7 +98,7 @@ export function SignInScreen({
                 <Dumbbell size={28} />
               </span>
               <h1 className="mt-4 text-[26px] font-bold tracking-tight">
-                {isConnectMode ? 'Sync your account' : 'FitNote'}
+                {isConnectMode ? 'Sync your account' : 'REPutation'}
               </h1>
               <p className="mt-1.5 text-[14.5px] text-ink-secondary">
                 {isConnectMode

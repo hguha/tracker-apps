@@ -28,6 +28,16 @@ function lastUserText(contents: GeminiContent[]): string {
   return ''
 }
 
+// Everything the user has said, joined — so a plan follow-up ("make it a strength
+// block") refines the constraints from earlier turns instead of forgetting them.
+function allUserText(contents: GeminiContent[]): string {
+  return contents
+    .filter((c) => c.role === 'user')
+    .map((c) => c.parts.find((p) => typeof p.text === 'string')?.text ?? '')
+    .join(' ')
+    .trim()
+}
+
 /** Regions a balanced program should touch each week — cardio excluded. */
 const CORE_REGIONS: Region[] = [
   'chest',
@@ -489,27 +499,60 @@ const STARTER_SESSIONS: PlanSession[] = [
 
 function answer(summary: CoachSummary, question: string): string {
   const q = question.toLowerCase()
+  const unit = summary.unitWeight
 
   if (summary.totalWorkouts === 0) {
     return "There's no training history yet, so I can't answer from your data. Log a few sessions and ask again."
   }
 
+  const setsByRegion = new Map<Region, number>(
+    summary.regionSets.map((r) => [r.region, r.sets]),
+  )
+  const topLift = summary.exercises.find((e) => e.bestE1rmKg !== null)
+
   if (q.includes('volume') || q.includes('how much')) {
-    const total = summary.weeks.reduce((s, w) => s + w.sets, 0)
-    return `Over the last ${summary.weeksCovered} weeks you've logged ${total} working sets across ${summary.totalWorkouts} sessions.`
+    const totalSets = summary.weeks.reduce((s, w) => s + w.sets, 0)
+    const perWeek = (summary.totalWorkouts / summary.weeksCovered).toFixed(1)
+    const top = summary.regionSets[0]
+    const parts = [
+      `Over the last ${summary.weeksCovered} weeks you've logged ${totalSets} working sets across ${summary.totalWorkouts} sessions — about ${perWeek} a week.`,
+    ]
+    if (top) parts.push(`${REGION_LABELS[top.region]} has taken the most work, at ${top.sets} sets.`)
+    if (topLift && topLift.bestE1rmKg !== null) {
+      parts.push(
+        `Your strongest lift is ${topLift.name}, around ${displayWeight(topLift.bestE1rmKg, unit)} ${unit} estimated 1RM.`,
+      )
+    }
+    return parts.join(' ')
   }
+
   if (q.includes('weak') || q.includes('behind') || q.includes('lagging')) {
-    const trained = new Set(summary.regionSets.map((r) => r.region))
-    const missing = CORE_REGIONS.filter((r) => !trained.has(r))
-    return missing.length > 0
-      ? `You've logged no direct work for ${missing.map((r) => REGION_LABELS[r]).join(', ')} — those are the clearest gaps.`
-      : 'Every major region has some work; your least-trained is ' +
-          `${REGION_LABELS[summary.regionSets[summary.regionSets.length - 1]!.region]}.`
+    const missing = CORE_REGIONS.filter((r) => (setsByRegion.get(r) ?? 0) === 0)
+    if (missing.length > 0) {
+      return `You've logged no direct work for ${missing.map((r) => REGION_LABELS[r]).join(', ')} — the clearest gaps. Adding one exercise for ${REGION_LABELS[missing[0]!]} would round out your week.`
+    }
+    const ranked = CORE_REGIONS.map((r) => ({ r, sets: setsByRegion.get(r) ?? 0 })).sort(
+      (a, b) => a.sets - b.sets,
+    )
+    const least = ranked[0]!
+    const most = ranked[ranked.length - 1]!
+    const push = (setsByRegion.get('chest') ?? 0) + (setsByRegion.get('triceps') ?? 0)
+    const pull = (setsByRegion.get('back') ?? 0) + (setsByRegion.get('biceps') ?? 0)
+    const balance =
+      push > pull * 1.4
+        ? ' Your pushing is running ahead of your pulling — a little more back work would help.'
+        : pull > push * 1.4
+          ? ' Your pulling is ahead of your pushing — a little more pressing would help.'
+          : ''
+    return `Every major muscle is getting some work, but ${REGION_LABELS[least.r]} is your lightest at ${least.sets} sets, against ${most.sets} for ${REGION_LABELS[most.r]}.${balance} A couple of focused sets a week would even it out.`
   }
 
   return (
-    `I can see ${summary.totalWorkouts} sessions and ${summary.exercises.length} exercises in your recent history. ` +
-    'Ask about your balance, volume, or what to train next, and I can answer from that.'
+    `I'm reading ${summary.totalWorkouts} sessions and ${summary.exercises.length} exercises from your last ${summary.weeksCovered} weeks` +
+    (topLift && topLift.bestE1rmKg !== null
+      ? `, with ${topLift.name} your strongest at about ${displayWeight(topLift.bestE1rmKg, unit)} ${unit}. `
+      : '. ') +
+    'Ask about your volume, your balance, a specific lift, or what to train next.'
   )
 }
 
@@ -541,7 +584,7 @@ function encouragement(summary: CoachSummary): string {
 }
 
 export const mockCoachProvider: CoachProvider = {
-  name: 'FitNote Coach (offline)',
+  name: 'REPutation Coach (offline)',
   async respond(summary: CoachSummary, request: CoachRequest): Promise<CoachResponse> {
     // A per-request goal wins; else fall back to the standing profile goal.
     switch (request.kind) {
@@ -574,8 +617,13 @@ export const mockCoachProvider: CoachProvider = {
     })
 
     if (looksLikePlanRequest(text)) {
-      const drafted = plan(summary, text || summary.trainingGoal)
-      const note = "Here's a draft from your history — you're on the offline coach, so I can't chat back and forth, but you can save or tweak this."
+      const goal = allUserText(contents) || text || summary.trainingGoal
+      const drafted = plan(summary, goal)
+      // A model reply already in the thread means this is a refinement, not a first draft.
+      const isRefinement = contents.some((c) => c.role === 'model')
+      const note = isRefinement
+        ? 'Updated — same starting weights, dialed to your new ask. Save it as templates, or keep refining.'
+        : "Here's a draft from your recent training — save any session as a template, or tell me what to change."
       return {
         contents: [...contents, { role: 'model', parts: [{ text: note }] }],
         text: note,

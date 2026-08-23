@@ -1,4 +1,4 @@
-// Offline shell for FitNote. index.html is network-first so a deploy takes
+// Offline shell for REPutation. index.html is network-first so a deploy takes
 // effect at once; Vite's content-hashed assets are cache-first since a given
 // URL never changes contents. Scoped to the registration path — the origin is
 // shared with the marketing site (DEPLOYING.md).

@@ -130,15 +130,15 @@ export function parseBackup(json: string): BackupFile {
   }
 
   if (typeof parsed !== 'object' || parsed === null) {
-    throw new BackupParseError('That file is not a FitNote backup.')
+    throw new BackupParseError('That file is not a REPutation backup.')
   }
   const obj = parsed as Record<string, unknown>
   if (obj.format !== 'fitnote-backup') {
-    throw new BackupParseError('That file is not a FitNote backup.')
+    throw new BackupParseError('That file is not a REPutation backup.')
   }
   if (typeof obj.version !== 'number' || obj.version > BACKUP_VERSION) {
     throw new BackupParseError(
-      'This backup was made by a newer version of FitNote. Update the app, then import.',
+      'This backup was made by a newer version of REPutation. Update the app, then import.',
     )
   }
   if (typeof obj.data !== 'object' || obj.data === null) {

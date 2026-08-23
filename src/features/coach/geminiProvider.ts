@@ -42,7 +42,7 @@ async function describeInvokeError(error: unknown): Promise<Error> {
 }
 
 export const geminiCoachProvider: CoachProvider = {
-  name: 'FitNote Coach (Gemini)',
+  name: 'REPutation Coach (Gemini)',
 
   async respond(summary: CoachSummary, request: CoachRequest): Promise<CoachResponse> {
     const supabase = getSupabase()

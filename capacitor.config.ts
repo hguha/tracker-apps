@@ -5,7 +5,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // /workout-tracker/ subpath the web deploy uses.
 const config: CapacitorConfig = {
   appId: 'com.hirshguha.fitnote',
-  appName: 'FitNote',
+  appName: 'REPutation',
   webDir: 'dist',
   backgroundColor: '#fcfcfb',
   ios: {

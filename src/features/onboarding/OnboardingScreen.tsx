@@ -425,7 +425,7 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
       <div className="flex size-20 items-center justify-center rounded-3xl bg-accent text-accent-contrast shadow-lg shadow-accent/25">
         <Dumbbell size={38} />
       </div>
-      <h1 className="mt-6 text-[30px] font-bold tracking-tight">Welcome to FitNote</h1>
+      <h1 className="mt-6 text-[30px] font-bold tracking-tight">Welcome to REPutation</h1>
       <p className="mt-2 max-w-xs text-[15px] leading-relaxed text-ink-secondary">
         A fast, private log for your training — every set, PR, and trend, saved on your
         device and synced if you want it.

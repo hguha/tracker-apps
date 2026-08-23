@@ -29,7 +29,7 @@ export async function exportBackup(json: string, filename: string): Promise<bool
   })
   const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
   try {
-    await Share.share({ title: 'FitNote backup', url: uri })
+    await Share.share({ title: 'REPutation backup', url: uri })
     return true
   } catch {
     // The share sheet throws on cancel; that's a normal dismissal, not an error.
