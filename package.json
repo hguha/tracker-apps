@@ -9,6 +9,7 @@
     "native:sync": "npm run build:native && cap sync",
     "native:ios": "npm run native:sync && cap open ios",
     "native:android": "npm run native:sync && cap open android",
+    "release:ios": "npm run build:native && npx cap sync ios && cd ios/App && fastlane beta",
     "native:icons": "capacitor-assets generate --assetPath resources",
     "preview": "vite preview",
     "test": "vitest run",

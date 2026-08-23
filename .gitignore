@@ -37,3 +37,9 @@ android/.gradle/
 android/app/src/main/assets/public/
 android/local.properties
 .gradle/
+
+# fastlane run artifacts (config Fastfile/Appfile ARE committed)
+ios/App/fastlane/report.xml
+ios/App/fastlane/Preview.html
+ios/App/fastlane/test_output/
+**/*.p8
