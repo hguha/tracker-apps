@@ -11,7 +11,10 @@ const config: CapacitorConfig = {
   ios: {
     // Match the light-mode surface so there's no white flash before first paint.
     backgroundColor: '#fcfcfb',
-    contentInset: 'always',
+    // The web app draws edge-to-edge (viewport-fit=cover) and handles safe areas
+    // itself via env(safe-area-inset-*). 'never' lets the WebView fill the screen;
+    // 'always' would inset the content too and leave a white gap at the bottom.
+    contentInset: 'never',
   },
   android: {
     backgroundColor: '#fcfcfb',
