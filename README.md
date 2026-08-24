@@ -156,6 +156,25 @@ Changesets). The full rationale, consumption mechanics, and migration sequence a
 - **Don't "finish" rebrands of load-bearing identifiers.** Some internal IDs (OAuth schemes,
   storage keys, bundle IDs, backup format fields) are deliberately kept on old names.
 
+## Testing (how a change to one app/package can't silently break another)
+
+Three layers, all runnable from the root:
+
+- **Package unit tests** — each `@tracker-engine/*` package with logic owns its suite
+  (`core` money, `auth` helpers, `local-first` columnCase/classify + a pure in-memory engine
+  test that proves the engine is app-agnostic). Run in isolation, no app needed.
+- **App tests** — `apps/reputation` keeps its 418 unit tests plus `test/sync/engine.test.ts`, a
+  real **integration** test wiring the engine to the workout DB/repo. `apps/ledger` has unit
+  tests for its metrics + an engine-reuse test.
+- **E2E / regression** (`e2e/`, Playwright) — the "verifies everything" layer: boots each app in
+  a real browser and checks a core flow (reputation renders under `/app/`; ledger syncs seeded
+  bank data through the shared engine and the recurring-detector finds it).
+
+`npm run verify` runs typecheck + lint + all unit tests + every build (reputation web/native,
+ledger, site). `npm run test:e2e` runs Playwright. **Editing a shared package → `npm run verify`
+rebuilds and retests both apps, so a change that would break the other app fails locally.** That's
+the guarantee that keeps reputation and ledger from stepping on each other.
+
 ## Where the deep design lives
 
 - [`docs/architecture.md`](docs/architecture.md) — the org: engine, monorepo→polyrepo, consumption, migration.
