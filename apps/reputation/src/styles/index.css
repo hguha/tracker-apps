@@ -2,6 +2,10 @@
 @import './tokens.css';
 @import './themes.css';
 
+/* Shared UI kit lives outside this app's tree (node_modules is not auto-scanned),
+   so point Tailwind at it or its class names won't be generated. */
+@source '../../../../packages/ui/src';
+
 /* Expose the tokens to Tailwind so `bg-surface`, `text-muted` etc. work. */
 @theme inline {
   --color-surface: var(--surface-1);
