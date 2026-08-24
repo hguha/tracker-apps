@@ -1,20 +1,10 @@
 // Binds the shared SyncEngine to Ledger's Dexie tables — the same injection seam
-// REPutation uses (sync/deps.ts). Proof that @tracker-engine/local-first needs nothing
-// from the app but a SyncDeps.
+// REPutation uses. The engine imports nothing from the app but this SyncDeps. The
+// canonical enqueue lives in the data layer (data/outbox); sync wires it in.
 
-import { db } from '../db'
-import type { OutboxEntry, SyncDeps } from '@tracker-engine/local-first'
-
-// One outbox entry per (table, rowId), refreshed in place — the same collapse rule
-// the engine expects.
-export async function enqueue(table: string, rowId: string): Promise<void> {
-  const existing = await db.outbox.where('[table+rowId]').equals([table, rowId]).first()
-  if (existing?.seq !== undefined) {
-    await db.outbox.update(existing.seq, { queuedAt: Date.now(), attempts: 0 })
-    return
-  }
-  await db.outbox.add({ table, rowId, queuedAt: Date.now(), attempts: 0 } as OutboxEntry)
-}
+import { db } from '@/db'
+import { enqueue } from '@/data/outbox'
+import type { SyncDeps } from '@tracker-engine/local-first'
 
 export function ledgerSyncDeps(): SyncDeps {
   return {

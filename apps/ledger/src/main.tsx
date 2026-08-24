@@ -1,9 +1,21 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
+import { App } from './app/App'
+import { ErrorBoundary } from './app/ErrorBoundary'
+import { applyDefaultAppearance } from './lib/theme'
+import './styles/index.css'
 
-createRoot(document.getElementById('root')!).render(
+// Theme tokens must exist before first paint — the sign-in screen renders before
+// any profile loads, and unset CSS variables paint as transparent.
+applyDefaultAppearance()
+
+const container = document.getElementById('root')
+if (!container) throw new Error('Root element missing from index.html')
+
+createRoot(container).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

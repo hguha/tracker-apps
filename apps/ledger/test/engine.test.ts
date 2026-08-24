@@ -1,15 +1,15 @@
 // Proves Ledger runs on the SHARED engine: the same @tracker-engine/local-first
 // SyncEngine, driven by Ledger's schema + Dexie deps, pulls server-authored bank rows
-// and pushes only client-authored categories.
+// and pushes only client-authored rows (entries/categories/…), never the bank tables.
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { syncStamp } from '@tracker-engine/local-first'
 import { db } from '@/db'
-import type { Category } from '@/domain'
+import type { Category } from '@/domain/types'
 import { LedgerSyncEngine } from '@/sync/engine'
-import { enqueue } from '@/sync/deps'
+import { enqueue } from '@/data/outbox'
 import { MockBankBackend } from '@/sync/mockBackend'
-import { SEED_ACCOUNTS, SEED_TRANSACTIONS, seedBankBackend } from '@/seed'
+import { SEED_ACCOUNTS, SEED_TRANSACTIONS, seedMockBackend } from '@/sync/mockData'
 
 beforeEach(async () => {
   await db.delete()
@@ -19,7 +19,7 @@ beforeEach(async () => {
 describe('ledger on the shared engine', () => {
   it('pulls server-authored bank rows into the local store', async () => {
     const backend = new MockBankBackend()
-    seedBankBackend(backend)
+    seedMockBackend(backend)
     const engine = new LedgerSyncEngine(backend)
 
     await engine.pull()
@@ -28,16 +28,24 @@ describe('ledger on the shared engine', () => {
     expect(await db.transactions.count()).toBe(SEED_TRANSACTIONS.length)
     // The bank balance came through the same pull path REPutation uses.
     const checking = await db.accounts.get('acc_checking')
-    expect(checking?.currentBalanceMinor).toBe(342_512)
+    expect(checking?.currentBalanceMinor).toBe(842_512)
   })
 
-  it('pushes client-authored categories but never server-authored bank rows', async () => {
+  it('pushes client-authored rows but never server-authored bank rows', async () => {
     const backend = new MockBankBackend()
-    seedBankBackend(backend)
+    seedMockBackend(backend)
     const engine = new LedgerSyncEngine(backend)
 
     // A client-authored category the user creates.
-    const cat: Category = { id: 'cat_new', name: 'Coffee', icon: '☕', ...syncStamp() }
+    const cat: Category = {
+      id: 'cat_new',
+      name: 'Coffee',
+      icon: '☕',
+      color: 'var(--cat-dining)',
+      isIncome: false,
+      archived: false,
+      ...syncStamp(),
+    }
     await db.categories.put(cat)
     await enqueue('categories', cat.id)
 

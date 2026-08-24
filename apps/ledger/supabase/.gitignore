@@ -1,0 +1,3 @@
+# Ephemeral Supabase CLI state (linked project ref, cached versions).
+.temp/
+.branches/

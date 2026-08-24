@@ -1,0 +1,66 @@
+/**
+ * Non-themeable design tokens (the finance analogue of REPutation's tokens.css).
+ *
+ * The spending-category palette is a fixed categorical set: a category keeps its
+ * color across themes so "Dining is pink" stays true in every chart and badge.
+ * The sequential ramp encodes magnitude, the diverging pair encodes polarity
+ * (income vs. spend), and status colors are reserved — none of these shift with
+ * the accent, because they're properties of the data, not of taste.
+ *
+ * Surfaces, ink, gridlines, and the accent live in `themes.css`.
+ */
+
+:root {
+  /* spending-category palette — fixed slot assignment, never reordered */
+  --cat-income: #1baf7a;
+  --cat-groceries: #eb6834;
+  --cat-dining: #e87ba4;
+  --cat-transport: #2a78d6;
+  --cat-shopping: #9c5bd6;
+  --cat-subscriptions: #eda100;
+  --cat-housing: #4a3aa7;
+  --cat-utilities: #0f7a86;
+  --cat-health: #d03b3b;
+  --cat-entertainment: #008300;
+  --cat-transfer: #6c6a64;
+  --cat-uncategorized: #a8a69e;
+
+  /* sequential ramp — magnitude, one hue, light → dark */
+  --seq-100: #cde9dd;
+  --seq-200: #9ed6bd;
+  --seq-300: #6cc39c;
+  --seq-400: #35a97a;
+  --seq-500: #1f8a5f;
+  --seq-600: #146b49;
+  --seq-700: #0b4a32;
+
+  /* diverging — income (positive) vs. spend (negative), neutral midpoint */
+  --div-neutral: #f0efec;
+  --div-pos: #1f8a5f;
+  --div-neg: #d03b3b;
+
+  /* status — reserved, always paired with an icon or label */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  --accent-contrast: #ffffff;
+}
+
+[data-scheme='dark'] {
+  --cat-income: #22c07d;
+  --cat-groceries: #f0793f;
+  --cat-dining: #ef8db3;
+  --cat-transport: #4a97ec;
+  --cat-shopping: #ad76e6;
+  --cat-subscriptions: #f0b52a;
+  --cat-housing: #7d74ef;
+  --cat-utilities: #2eaab8;
+  --cat-health: #e35670;
+  --cat-entertainment: #35a865;
+  --cat-transfer: #8f8d86;
+  --cat-uncategorized: #6f6d67;
+
+  --div-neutral: #383835;
+}

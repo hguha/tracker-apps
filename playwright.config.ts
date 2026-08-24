@@ -37,7 +37,9 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'npm run dev --workspace ledger',
+      // Force mock mode (empty Supabase env overrides apps/ledger/.env) so the E2E is
+      // deterministic against the seeded feed + device-only account, not a live project.
+      command: 'VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev --workspace ledger',
       url: 'http://localhost:5174/',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

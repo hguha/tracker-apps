@@ -1,0 +1,111 @@
+/**
+ * Theme presets. Two independent axes, exactly like REPutation:
+ *   - `data-theme` on <html> picks the preset (surfaces, ink, accent)
+ *   - `data-scheme` picks light or dark within it
+ *
+ * The category palette in `tokens.css` is deliberately NOT themeable. Every preset
+ * defines the same variable set; no hex literal belongs anywhere but here and
+ * tokens.css.
+ */
+
+/* ─────────────────────────────────────── default: warm gray, money green */
+
+[data-theme='default'][data-scheme='light'] {
+  --surface-1: #fcfcfb;
+  --surface-page: #f9f9f7;
+  --surface-sunken: #f2f2ef;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --border-strong: rgba(11, 11, 11, 0.18);
+  --accent: #0f8a5f;
+  --accent-wash: rgba(15, 138, 95, 0.1);
+  --accent-contrast: #ffffff;
+}
+
+[data-theme='default'][data-scheme='dark'] {
+  --surface-1: #1a1a19;
+  --surface-page: #0d0d0d;
+  --surface-sunken: #242422;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #2bb583;
+  --accent-wash: rgba(43, 181, 131, 0.16);
+  --accent-contrast: #06120d;
+}
+
+/* ───────────────────────────────────────── slate: cool gray, indigo */
+
+[data-theme='slate'][data-scheme='light'] {
+  --surface-1: #fdfdfe;
+  --surface-page: #f7f8fa;
+  --surface-sunken: #eef0f4;
+  --text-primary: #0b0d12;
+  --text-secondary: #4b5163;
+  --text-muted: #838a9c;
+  --gridline: #dfe2ea;
+  --axis: #bfc4d1;
+  --border: rgba(11, 13, 18, 0.1);
+  --border-strong: rgba(11, 13, 18, 0.18);
+  --accent: #4f46c9;
+  --accent-wash: rgba(79, 70, 201, 0.1);
+  --accent-contrast: #ffffff;
+}
+
+[data-theme='slate'][data-scheme='dark'] {
+  --surface-1: #16181f;
+  --surface-page: #0b0d12;
+  --surface-sunken: #202430;
+  --text-primary: #ffffff;
+  --text-secondary: #c0c5d4;
+  --text-muted: #838a9c;
+  --gridline: #272b36;
+  --axis: #343945;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #7d74ef;
+  --accent-wash: rgba(125, 116, 239, 0.18);
+  --accent-contrast: #ffffff;
+}
+
+/* ─────────────────────────────────────────────── mono: pure grayscale */
+
+[data-theme='mono'][data-scheme='light'] {
+  --surface-1: #ffffff;
+  --surface-page: #f6f6f6;
+  --surface-sunken: #ededed;
+  --text-primary: #000000;
+  --text-secondary: #4d4d4d;
+  --text-muted: #858585;
+  --gridline: #e0e0e0;
+  --axis: #c2c2c2;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --accent: #1a1a1a;
+  --accent-wash: rgba(26, 26, 26, 0.08);
+  --accent-contrast: #ffffff;
+}
+
+[data-theme='mono'][data-scheme='dark'] {
+  --surface-1: #191919;
+  --surface-page: #0a0a0a;
+  --surface-sunken: #242424;
+  --text-primary: #ffffff;
+  --text-secondary: #c4c4c4;
+  --text-muted: #858585;
+  --gridline: #2b2b2b;
+  --axis: #383838;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --accent: #f0f0f0;
+  --accent-wash: rgba(240, 240, 240, 0.12);
+  --accent-contrast: #0a0a0a;
+}

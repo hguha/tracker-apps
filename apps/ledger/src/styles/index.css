@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+@import '@tracker-engine/ui/styles/base.css';
+@import './tokens.css';
+@import './themes.css';
+
+/* The shared UI kit lives outside this app's tree (node_modules isn't auto-scanned),
+   so point Tailwind at its source or its class names won't be generated. */
+@source '../../../../packages/ui/src';
+
+/* Expose the tokens to Tailwind so `bg-surface`, `text-ink-muted`, `text-cat-dining`
+   etc. resolve. */
+@theme inline {
+  --color-surface: var(--surface-1);
+  --color-page: var(--surface-page);
+  --color-sunken: var(--surface-sunken);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-gridline: var(--gridline);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-wash: var(--accent-wash);
+
+  --color-cat-income: var(--cat-income);
+  --color-cat-groceries: var(--cat-groceries);
+  --color-cat-dining: var(--cat-dining);
+  --color-cat-transport: var(--cat-transport);
+  --color-cat-shopping: var(--cat-shopping);
+  --color-cat-subscriptions: var(--cat-subscriptions);
+  --color-cat-housing: var(--cat-housing);
+  --color-cat-utilities: var(--cat-utilities);
+  --color-cat-health: var(--cat-health);
+  --color-cat-entertainment: var(--cat-entertainment);
+  --color-cat-transfer: var(--cat-transfer);
+  --color-cat-uncategorized: var(--cat-uncategorized);
+
+  --color-pos: var(--div-pos);
+  --color-neg: var(--div-neg);
+  --color-good: var(--status-good);
+  --color-warning: var(--status-warning);
+  --color-serious: var(--status-serious);
+  --color-critical: var(--status-critical);
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Amounts and axis ticks align on the decimal; spinners waste room. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}

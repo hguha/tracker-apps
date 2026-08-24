@@ -3,7 +3,8 @@
 // `new SyncEngine(backend)` — or `new SyncEngine(backend, schema)` — unchanged.
 
 import { SyncEngine as CoreSyncEngine } from '@tracker-engine/local-first'
-import type { SyncBackend, SyncSchema } from '@tracker-engine/local-first'
+import type { SyncBackend } from './backend'
+import type { SyncSchema } from './schema'
 import { repSyncSchema } from './repSchema'
 import { appSyncDeps } from './deps'
 

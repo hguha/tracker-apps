@@ -1,0 +1,25 @@
+# Supabase project config for the Ledger backend. `project_id` is the project ref
+# (the subdomain of the project's supabase.co URL); `supabase link` fills it in. It is
+# not a secret.
+project_id = "viqnylegpdfuqkcbhizb"
+
+[functions.coach]
+# The coach function verifies the caller's JWT itself; the gateway check gates it to
+# signed-in users, which is also the per-user rate-limit key.
+verify_jwt = true
+
+[functions.delete-account]
+# Must stay true: the function trusts the JWT's `sub` as the id to delete, so the
+# gateway signature check is what stops a user deleting anyone but themselves.
+verify_jwt = true
+
+[functions.plaid-link-token]
+verify_jwt = true
+
+[functions.plaid-exchange]
+verify_jwt = true
+
+[functions.plaid-sync]
+# User-triggered sync runs under the caller's JWT; the function then uses the service
+# role internally to write the (server-authored) accounts/transactions rows.
+verify_jwt = true

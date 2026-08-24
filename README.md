@@ -24,7 +24,7 @@ tracker-apps/
 │   └── local-first/     @tracker-engine/local-first  sync engine + Supabase backend
 ├── apps/                      npm workspaces — the products (consume the engine)
 │   ├── reputation/      REPutation — workout tracker (the shipping app)
-│   └── ledger/          Expense tracker demo (runs on the engine)
+│   └── ledger/          Ledger — expense tracker (full app on the engine)
 ├── sites/                     marketing sites — self-contained (own node_modules)
 │   └── reputation-site/ Astro static site → reputation.fitness
 ├── docs/                cross-cutting design (architecture, decisions)
@@ -49,7 +49,7 @@ polyrepo endgame (see `docs/architecture.md`), not today.
 |---|---|---|---|
 | engine (`@tracker-engine/*`) | The shared packages (all 6 extracted: core, local-first, auth, platform, ui, ai-coach) | `packages/*` | `tracker-engine` |
 | **reputation** | Workout tracker (REPutation) — the shipping app | `apps/reputation/` | `reputation` |
-| **ledger** | Expense tracker (demo, runs on the engine) | `apps/ledger/` | `ledger` |
+| **ledger** | Expense tracker — full app (overview/log/history/insights/settings + finance coach), on the engine | `apps/ledger/` | `ledger` |
 | reputation-site | REPutation's marketing site (Astro → reputation.fitness) | `sites/reputation-site/` | `reputation-site` |
 | ledger-site, calorie, … | future | — | — |
 
@@ -165,10 +165,13 @@ Three layers, all runnable from the root:
   test that proves the engine is app-agnostic). Run in isolation, no app needed.
 - **App tests** — `apps/reputation` keeps its 418 unit tests plus `test/sync/engine.test.ts`, a
   real **integration** test wiring the engine to the workout DB/repo. `apps/ledger` has unit
-  tests for its metrics + an engine-reuse test.
+  tests for its metrics + the `toLedgerEntries` merge + the offline coach, an engine-reuse test,
+  and `test/repository.test.ts` — an integration test wiring the engine to the ledger DB/repo
+  (pull the seeded feed, then the client-write paths incl. bank-txn overrides + budgets).
 - **E2E / regression** (`e2e/`, Playwright) — the "verifies everything" layer: boots each app in
-  a real browser and checks a core flow (reputation renders under `/app/`; ledger syncs seeded
-  bank data through the shared engine and the recurring-detector finds it).
+  a real browser and checks core flows (reputation renders under `/app/`; ledger signs in
+  on-device, syncs the seeded bank feed through the shared engine, logs a manual transaction,
+  shows the recurring-subscription insight, and gets an answer from the offline coach).
 
 `npm run verify` runs typecheck + lint + all unit tests + every build (reputation web/native,
 ledger, site). `npm run test:e2e` runs Playwright. **Editing a shared package → `npm run verify`
