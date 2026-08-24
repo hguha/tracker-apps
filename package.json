@@ -22,5 +22,8 @@
     "build:site": "npm --prefix sites/reputation-site run build",
     "test:e2e": "playwright test",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:ledger && npm run build:site"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
   }
 }

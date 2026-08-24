@@ -22,3 +22,8 @@ npm-debug.log*
 .env.*
 !.env.example
 **/*.p8
+
+# Playwright E2E artifacts
+test-results
+playwright-report
+.playwright
