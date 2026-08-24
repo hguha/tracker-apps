@@ -17,8 +17,10 @@ export const site = {
   seoDescription:
     'REPutation is a fast, local-first workout tracker for iOS, Android and the web. Log a set in one tap, watch PRs light up, and get 22 analytics charts plus a conversational AI coach. Free, offline, no account, no ads.',
 
-  webAppUrl: 'https://hirshguha.com/workout-tracker',
-  privacyUrl: 'https://hirshguha.com/workout-tracker/privacy.html',
+  // Same-origin as the marketing site (reputation.fitness/app) — relative so it also
+  // works on preview deploys and never hardcodes the domain.
+  webAppUrl: '/app',
+  privacyUrl: '/app/privacy.html',
   author: { name: 'Hirsh Guha', url: 'https://hirshguha.com' },
 
   /**
