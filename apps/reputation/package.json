@@ -23,6 +23,7 @@
     "@capacitor/app": "^8.1.1",
     "@tracker-engine/core": "*",
     "@tracker-engine/local-first": "*",
+    "@tracker-engine/platform": "*",
     "@capacitor/core": "^8.5.0",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/haptics": "^8.0.2",
