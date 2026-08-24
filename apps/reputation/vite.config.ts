@@ -6,15 +6,17 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /**
- * The app is served at `hirshguha.com/workout-tracker`, which a rewrite proxies
- * to this project's own Vercel deployment. Asset URLs must therefore be relative
- * to that subpath, not to `/` — otherwise the browser requests
- * `hirshguha.com/assets/…`, which belongs to the website and 404s.
+ * The web app is served at `reputation.fitness/app` — the marketing site
+ * (reputation-site) proxies `/app/*` to this project's Vercel deployment. Asset
+ * URLs must therefore be relative to that subpath, not to `/` — otherwise the
+ * browser requests `reputation.fitness/assets/…`, which belongs to the site and 404s.
+ * This base also drives the auth redirect URL and the service-worker scope
+ * (both read import.meta.env.BASE_URL), so they follow automatically.
  *
- * Overridable so the same build can target a bare domain later:
- *   BASE_PATH=/ npm run build
+ * Overridable so the native build targets the bundle root:
+ *   BASE_PATH=/ npm run build:native
  */
-const basePath = process.env.BASE_PATH ?? '/workout-tracker/'
+const basePath = process.env.BASE_PATH ?? '/app/'
 
 // `<version>+<git-sha>`, so a client_errors row points at a commit.
 function appVersion(): string {

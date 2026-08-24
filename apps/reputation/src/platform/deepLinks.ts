@@ -4,7 +4,7 @@
 // (implicit flow). Two ways that URL reaches a native app:
 //   - custom scheme `fitnote://auth-callback#...` — survives Supabase's 302 from
 //     /auth/v1/verify, so this is what the email redirect targets (below).
-//   - a Universal Link tap on https://hirshguha.com/workout-tracker/#... — opens
+//   - a Universal Link tap on https://reputation.fitness/app/#... — opens
 //     the app directly (not via redirect), handled the same way.
 // Either arrives through Capacitor's appUrlOpen (warm) or getLaunchUrl (cold).
 //

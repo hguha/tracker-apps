@@ -160,7 +160,7 @@ export function AccountScreen({
 
         <p className="px-1 pt-2 text-center text-[12px] text-ink-muted">
           <a
-            href="https://hirshguha.com/workout-tracker/privacy.html"
+            href="https://reputation.fitness/app/privacy.html"
             target="_blank"
             rel="noopener noreferrer"
             className="underline decoration-line-strong underline-offset-2 active:opacity-60"

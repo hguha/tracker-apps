@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "//": "Serve the workout app at reputation.fitness/app by proxying to the reputation-app project (its immutable Vercel URL survives project renames). If that URL ever changes, update it here.",
+      "source": "/app",
+      "destination": "https://workout-tracker-khaki-five.vercel.app/app"
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "https://workout-tracker-khaki-five.vercel.app/app/:path*"
+    }
+  ]
+}
