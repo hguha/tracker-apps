@@ -8,8 +8,10 @@ import { LedgerSyncEngine } from './sync/engine'
 import { enqueue } from './sync/deps'
 import { MockBankBackend } from './sync/mockBackend'
 import { SEED_CATEGORIES, seedBankBackend } from './seed'
+import * as metrics from './metrics'
 
 const usd = (minor: number) => formatMoney(money(minor, 'USD'))
+const pct = (r: number) => `${Math.round(r * 100)}%`
 
 export default function App() {
   const backend = useRef<MockBankBackend | null>(null)
@@ -67,18 +69,13 @@ export default function App() {
     [categories],
   )
 
-  const netWorth = accounts.reduce((s, a) => s + a.currentBalanceMinor, 0)
+  // All derived numbers come from the canonical metrics layer, not inline math.
+  const netWorth = metrics.netWorthMinor(accounts)
   const income = transactions.filter((t) => t.amountMinor > 0).reduce((s, t) => s + t.amountMinor, 0)
   const spend = transactions.filter((t) => t.amountMinor < 0).reduce((s, t) => s + t.amountMinor, 0)
-
-  const byCategory = useMemo(() => {
-    const totals = new Map<string, number>()
-    for (const t of transactions) {
-      if (t.amountMinor >= 0) continue
-      totals.set(t.categoryId ?? 'uncategorized', (totals.get(t.categoryId ?? 'uncategorized') ?? 0) + t.amountMinor)
-    }
-    return [...totals.entries()].sort((a, b) => a[1] - b[1])
-  }, [transactions])
+  const savings = metrics.savingsRate(transactions)
+  const byCategory = useMemo(() => metrics.spendingByCategory(transactions), [transactions])
+  const subscriptions = useMemo(() => metrics.detectRecurring(transactions), [transactions])
 
   const synced = transactions.length > 0
 
@@ -96,6 +93,7 @@ export default function App() {
         <Stat label="Net worth" value={usd(netWorth)} hint={`${accounts.length} accounts`} />
         <Stat label="Income (this period)" value={usd(income)} />
         <Stat label="Spending (this period)" value={usd(spend)} />
+        <Stat label="Savings rate" value={pct(savings)} hint="income kept" />
       </section>
 
       <div style={S.actions}>
@@ -113,10 +111,10 @@ export default function App() {
         <section style={S.grid}>
           <div style={S.panel}>
             <h2 style={S.h2}>Spending by category</h2>
-            {byCategory.map(([id, minor]) => (
-              <div key={id} style={S.row}>
-                <span>{catName.get(id) ?? id}</span>
-                <b>{usd(minor)}</b>
+            {byCategory.map(({ categoryId, totalMinor }) => (
+              <div key={categoryId} style={S.row}>
+                <span>{catName.get(categoryId) ?? categoryId}</span>
+                <b>{usd(totalMinor)}</b>
               </div>
             ))}
           </div>
@@ -132,6 +130,18 @@ export default function App() {
                 </div>
               ))}
           </div>
+        </section>
+      )}
+
+      {synced && subscriptions.length > 0 && (
+        <section style={S.panel}>
+          <h2 style={S.h2}>Detected subscriptions <span style={S.badge}>pattern analysis</span></h2>
+          {subscriptions.map((r) => (
+            <div key={r.merchant} style={S.row}>
+              <span>{r.merchant} · {r.cadence} · {r.count}× charges</span>
+              <b>{usd(r.avgAmountMinor)}</b>
+            </div>
+          ))}
         </section>
       )}
 
@@ -164,7 +174,7 @@ const S: Record<string, CSSProperties> = {
   h1: { fontSize: 30, margin: 0 },
   tag: { fontSize: 13, verticalAlign: 'middle', background: '#eee', borderRadius: 6, padding: '2px 8px', marginLeft: 8, color: '#666' },
   sub: { color: '#666', marginTop: 6 },
-  cards: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 },
+  cards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 },
   stat: { border: '1px solid #eee', borderRadius: 12, padding: 16 },
   statLabel: { fontSize: 12, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4 },
   statValue: { fontSize: 24, fontWeight: 700, marginTop: 4, fontVariantNumeric: 'tabular-nums' },

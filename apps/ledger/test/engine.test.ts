@@ -9,7 +9,7 @@ import type { Category } from '@/domain'
 import { LedgerSyncEngine } from '@/sync/engine'
 import { enqueue } from '@/sync/deps'
 import { MockBankBackend } from '@/sync/mockBackend'
-import { seedBankBackend } from '@/seed'
+import { SEED_ACCOUNTS, SEED_TRANSACTIONS, seedBankBackend } from '@/seed'
 
 beforeEach(async () => {
   await db.delete()
@@ -24,8 +24,8 @@ describe('ledger on the shared engine', () => {
 
     await engine.pull()
 
-    expect(await db.accounts.count()).toBe(2)
-    expect(await db.transactions.count()).toBe(8)
+    expect(await db.accounts.count()).toBe(SEED_ACCOUNTS.length)
+    expect(await db.transactions.count()).toBe(SEED_TRANSACTIONS.length)
     // The bank balance came through the same pull path REPutation uses.
     const checking = await db.accounts.get('acc_checking')
     expect(checking?.currentBalanceMinor).toBe(342_512)
@@ -49,6 +49,6 @@ describe('ledger on the shared engine', () => {
     expect(pushedTables.has('transactions')).toBe(false)
     expect(pushedTables.has('accounts')).toBe(false)
     // And the pull still landed the bank data.
-    expect(await db.transactions.count()).toBe(8)
+    expect(await db.transactions.count()).toBe(SEED_TRANSACTIONS.length)
   })
 })
