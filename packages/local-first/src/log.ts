@@ -1,11 +1,11 @@
 /**
- * Sync logging (§5.5).
+ * Sync logging.
  *
  * Sync runs in the background and fails quietly by design — which is exactly why
  * "it just said failed to sync a bunch" is so hard to diagnose. This gives the
  * engine a single, structured, prefixed channel so a developer can watch the
- * drain/pull in the console and see *what* pushed, *what* failed, and *why*
- * (the classified reason and server message), not just a count.
+ * drain/pull in the console and see *what* pushed, *what* failed, and *why*, not
+ * just a count.
  *
  * Off by default in production to avoid noise; on automatically in dev, and
  * flippable at runtime via `localStorage.fitnoteSyncDebug = '1'` or
@@ -24,8 +24,9 @@ function enabled(): boolean {
   } catch {
     // localStorage can throw in private mode / sandboxed frames — ignore.
   }
-  // import.meta.env.DEV is true under `vite dev`, false in a production build.
-  return Boolean(import.meta.env?.DEV)
+  // import.meta.env.DEV is true under `vite dev`, false in a production build. Typed
+  // loosely so this package doesn't need Vite's client types to compile standalone.
+  return Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV)
 }
 
 export const syncLog = {

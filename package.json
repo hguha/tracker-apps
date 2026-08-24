@@ -15,14 +15,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "typecheck:packages": "npm run typecheck --workspaces --if-present",
     "lint": "node scripts/check-architecture.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "dependencies": {
     "@capacitor/app": "^8.1.1",
+    "@tracker-engine/core": "*",
+    "@tracker-engine/local-first": "*",
     "@capacitor/core": "^8.5.0",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/haptics": "^8.0.2",

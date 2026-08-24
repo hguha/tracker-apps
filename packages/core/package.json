@@ -1,0 +1,22 @@
+{
+  "name": "@tracker-engine/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain-agnostic primitives shared across apps (REPutation, Ledger).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./money": "./src/money.ts",
+    "./cn": "./src/cn.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

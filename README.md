@@ -1,4 +1,9 @@
-# Workout Tracker
+# REPutation — Workout Tracker
+
+> Part of **tracker-apps** — a family of local-first apps on a shared engine (`tracker-engine`).
+> The shared philosophy, the engine (`@tracker-engine/*`), and how the repos relate live in the
+> handbook (`~/tracker-apps/README.md` and `~/tracker-apps/docs/architecture.md`). This README
+> covers what's specific to REPutation.
 
 A local-first workout tracker. Runs entirely offline in the browser and syncs to
 Supabase when signed in. See `workout-app-spec.md` — §14 lists what remains.

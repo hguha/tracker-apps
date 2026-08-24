@@ -14,52 +14,19 @@ import type {
   WorkoutExercise,
   WorkoutSet,
 } from '@/domain/types'
+import {
+  isReadyToPush,
+  syncStamp,
+  touch,
+  type DeadLetterEntry,
+  type OutboxEntry,
+  type SyncState,
+} from '@tracker-engine/local-first'
 
-/**
- * Durable mutation queue (§5.5): one entry per dirty row, not a log of edits.
- *
- * The entry records *that* a row changed, never a copy of it — the drain reads
- * the row at push time. A frozen payload was the source of a whole class of bug
- * (a workout captured mid-session pushed `endedAt: null` after it had finished),
- * and re-reading makes a replay idempotent by construction. It also means a
- * second edit to the same row refreshes its entry instead of appending, so the
- * queue is bounded by the number of dirty rows and the count the user sees is
- * the number of rows behind, not round trips.
- */
-export interface OutboxEntry {
-  seq?: number
-  table: string
-  rowId: string
-  queuedAt: number
-  attempts: number
-  lastError?: string
-  nextAttemptAt?: number
-  // Set while its workout is in progress (§5.5); the drain skips these until Finish, cleared then.
-  deferredForWorkoutId?: string
-}
-
-export const isReadyToPush = (entry: OutboxEntry): boolean =>
-  entry.deferredForWorkoutId === undefined
-
-/** Per-table high-water marks for delta pulls. */
-export interface SyncState {
-  table: string
-  lastPulledAt: number
-}
-
-// A write the server refused, or that ran out of attempts (§5.5) — moved off the
-// drain path so a poison write can't block the queue. Carries the row as it stood
-// when it failed, plus how hard we tried, because that's what makes it diagnosable.
-export interface DeadLetterEntry {
-  seq?: number
-  table: string
-  rowId: string
-  row: object
-  queuedAt: number
-  failedAt: number
-  attempts: number
-  error: string
-}
+// Generic sync scaffolding now lives in @tracker-engine/local-first; re-exported so app code
+// keeps importing these from '@/db/database' unchanged.
+export { isReadyToPush, syncStamp, touch }
+export type { DeadLetterEntry, OutboxEntry, SyncState }
 
 // Per-set placeholder hints for a repeated session (§7.2); local-only and never synced.
 export interface PlaceholderOverrides {
@@ -252,11 +219,3 @@ export class WorkoutDatabase extends Dexie {
 }
 
 export const db = new WorkoutDatabase()
-
-export function syncStamp(now = Date.now()) {
-  return { createdAt: now, updatedAt: now, deletedAt: null, clientRev: 1 }
-}
-
-export function touch(clientRev: number, now = Date.now()) {
-  return { updatedAt: now, clientRev: clientRev + 1 }
-}

@@ -1,0 +1,35 @@
+name: CI
+
+# One workflow for the whole monorepo. It's small enough that running everything on
+# every change is faster than the machinery to compute "what's affected" — add that
+# (Turborepo/Nx caching, or path filters) only when build times start to hurt.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # recent LTS; dev runs 26, both build the same
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (app)
+        run: npm run typecheck
+      - name: Typecheck (packages)
+        run: npm run typecheck:packages
+      - name: Architecture + calc-consistency lint
+        run: npm run lint
+      - name: Tests (app)
+        run: npm test
+      - name: Tests (workspaces — e.g. ledger)
+        run: npm test --workspaces --if-present
+      - name: Build (web)
+        run: npm run build
+      - name: Build (native bundle)
+        run: npm run build:native
