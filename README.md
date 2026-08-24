@@ -67,7 +67,7 @@ packages. Each depends only *downward*, and an app grabs a specific one — e.g.
 |---|---|---|
 | `@tracker-engine/core` | Pure primitives: `cn`, `money`, dates, units, palette, theme | started (`cn`, `money`) |
 | `@tracker-engine/local-first` | Sync engine (outbox drain, delta pull, dead-letter, retry), `SyncBackend` + Supabase impl, Dexie scaffolding — driven by an injected `SyncSchema` + `SyncDeps`, zero app imports | **done** |
-| `@tracker-engine/auth` | Provider interface + local + Supabase providers, composite "works-signed-out" flow | planned |
+| `@tracker-engine/auth` | Auth contract (AuthProvider/Session) + Supabase client factory & provider. Composite/local/claim stay app-side (data-coupled) | **done** (core) |
 | `@tracker-engine/platform` | Capacitor wrappers: haptics, files, notify, status bar, native shell | **done** |
 | `@tracker-engine/ui` | Component kit: Button, Card, BottomSheet, ProgressRing, Toast, DragList … | planned |
 | `@tracker-engine/ai-coach` | Chat shell + `CoachProvider` interface + offline mock; app supplies summary + tools | planned |

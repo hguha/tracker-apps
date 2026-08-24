@@ -1,0 +1,20 @@
+{
+  "name": "@tracker-engine/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Auth contract (AuthProvider/Session) + a Supabase client factory and Supabase-backed provider (magic link / OTP / delete). App supplies env, storage key, and native redirect scheme.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.1",
+    "@tracker-engine/platform": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
