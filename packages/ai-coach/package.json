@@ -1,0 +1,21 @@
+{
+  "name": "@tracker-engine/ai-coach",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generic AI-coach transport: the Gemini tool-calling loop over a Supabase Edge Function. The app supplies the edge-function name, tool declarations, and how to run/classify them; domain request/response types + prompts + the offline mock stay in the app.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.1"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

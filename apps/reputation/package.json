@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
+    "@tracker-engine/ai-coach": "*",
     "@tracker-engine/auth": "*",
     "@tracker-engine/core": "*",
     "@tracker-engine/local-first": "*",

@@ -47,7 +47,7 @@ polyrepo endgame (see `docs/architecture.md`), not today.
 
 | Piece | What it is | Lives today | Eventual repo |
 |---|---|---|---|
-| engine (`@tracker-engine/*`) | The shared packages | `packages/core`, `packages/local-first` | `tracker-engine` |
+| engine (`@tracker-engine/*`) | The shared packages (all 6 extracted: core, local-first, auth, platform, ui, ai-coach) | `packages/*` | `tracker-engine` |
 | **reputation** | Workout tracker (REPutation) — the shipping app | `apps/reputation/` | `reputation` |
 | **ledger** | Expense tracker (demo, runs on the engine) | `apps/ledger/` | `ledger` |
 | reputation-site | REPutation's marketing site (Astro → reputation.fitness) | `sites/reputation-site/` | `reputation-site` |
@@ -70,7 +70,7 @@ packages. Each depends only *downward*, and an app grabs a specific one — e.g.
 | `@tracker-engine/auth` | Auth contract (AuthProvider/Session) + Supabase client factory & provider. Composite/local/claim stay app-side (data-coupled) | **done** (core) |
 | `@tracker-engine/platform` | Capacitor wrappers: haptics, files, notify, status bar, native shell | **done** |
 | `@tracker-engine/ui` | Token-driven kit: Button, Card, ProgressRing, BottomSheet, PillSelect, Toast, SwipeableRow, DragList (+ base.css) | **done** |
-| `@tracker-engine/ai-coach` | Chat shell + `CoachProvider` interface + offline mock; app supplies summary + tools | planned |
+| `@tracker-engine/ai-coach` | Gemini tool-calling loop over a Supabase edge fn (`runToolLoop`) + wire types; app supplies tools/prompts/mock/domain types | **done** |
 
 > Note on the scope: `@tracker-engine` is the *namespace*, not a package — you always import a
 > specific one (`@tracker-engine/core`, `@tracker-engine/local-first`, …). Keeping them separate
