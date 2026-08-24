@@ -1,0 +1,51 @@
+---
+/**
+ * A small fan of phones that rotates its stacking every few seconds — the front
+ * phone eases to the back and the next one comes forward.
+ *
+ * Geometry is driven by one CSS variable, `--pw` (phone width), so the whole
+ * group scales with the viewport: the slot offsets are percentages of `--pw`,
+ * which means it never needs a separate mobile layout. The rotation itself is in
+ * Base.astro, keyed off `data-phone-stack`; with no JS (or reduced motion) the
+ * phones simply sit in their starting fan.
+ */
+import Phone from './Phone.astro'
+
+interface Props {
+  screens: string[]
+  /** Max phone width on desktop; clamps down with the viewport. */
+  max?: number
+  class?: string
+  loading?: 'eager' | 'lazy'
+}
+
+const { screens, max = 260, class: className, loading = 'lazy' } = Astro.props
+---
+
+<div
+  class:list={['phone-stack relative mx-auto', className]}
+  style={`--pw: clamp(148px, 42vw, ${max}px); width: min(92vw, calc(var(--pw) * 1.95)); height: calc(var(--pw) * 2.28)`}
+  data-phone-stack
+  data-n={screens.length}
+>
+  {
+    screens.map((name, i) => (
+      <div
+        class="phone-slot absolute left-1/2 top-1/2"
+        data-slot={i}
+        style="width: var(--pw); margin-left: calc(var(--pw) / -2); margin-top: calc(var(--pw) * -1.12)"
+      >
+        <Phone name={name} fill loading={loading} />
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .phone-slot {
+    transform-origin: center;
+    transition:
+      transform 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.9s ease;
+  }
+</style>

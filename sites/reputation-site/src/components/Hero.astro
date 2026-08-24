@@ -1,0 +1,65 @@
+---
+import StoreBadges from './StoreBadges.astro'
+import Icon from './Icon.astro'
+import { site } from '@/data/site'
+---
+
+<section class="relative isolate overflow-hidden pb-10 pt-20 sm:pb-14 sm:pt-28">
+  <!-- Atmosphere: a brand-blue bloom and a faint grid that fades before the copy. -->
+  <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+    <div
+      class="absolute left-1/2 top-[-16rem] h-[36rem] w-[64rem] -translate-x-1/2 rounded-full opacity-40 blur-[120px]"
+      style="background: radial-gradient(closest-side, #2a78d6, transparent 72%)"
+    >
+    </div>
+    <div
+      class="absolute inset-x-0 top-0 h-[38rem] opacity-[0.14] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]"
+      style="background-image: linear-gradient(to right, #2c3040 1px, transparent 1px), linear-gradient(to bottom, #2c3040 1px, transparent 1px); background-size: 68px 68px"
+    >
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-3xl px-5 text-center" data-reveal>
+    <p
+      class="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3.5 py-1.5 text-[12.5px] font-semibold text-ink-soft"
+    >
+      <span class="relative flex size-1.5">
+        <span
+          class="absolute inline-flex size-full animate-ping rounded-full bg-region-legs opacity-75"
+        ></span>
+        <span class="relative inline-flex size-1.5 rounded-full bg-region-legs"></span>
+      </span>
+      Free · No account · Works offline
+    </p>
+
+    <h1
+      class="mt-6 font-semibold tracking-[-0.045em] text-balance"
+      style="font-size: var(--text-hero); line-height: 0.98"
+    >
+      Log it in a tap.<br />
+      Build your <span class="whitespace-nowrap"
+        ><span
+          class="font-bold text-accent-bright"
+          style="text-shadow: 0 0 30px rgba(58,135,229,0.55)">REP</span
+        ><span
+          class="shimmer bg-gradient-to-r from-accent-bright via-[#9b7bef] to-[#e87ba4] bg-clip-text text-transparent"
+          style="filter: drop-shadow(0 0 26px rgba(155,123,239,0.4))">utation</span
+        ></span
+      >.
+    </h1>
+
+    <p class="lede mx-auto mt-6 max-w-xl">{site.description}</p>
+
+    <div class="mt-9 flex flex-col items-center gap-4">
+      <StoreBadges class="justify-center" />
+      <a
+        href={site.webAppUrl}
+        class="group inline-flex items-center gap-2 text-[15px] font-semibold text-ink-soft transition hover:text-ink"
+      >
+        Or use it in your browser
+        <Icon name="arrow" size={17} class="transition-transform group-hover:translate-x-1" />
+      </a>
+    </div>
+  </div>
+</section>
+</content>

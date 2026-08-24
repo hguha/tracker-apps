@@ -1,0 +1,70 @@
+---
+import PhoneStack from './PhoneStack.astro'
+import Icon from './Icon.astro'
+import type { Spotlight } from '@/data/features'
+
+interface Props {
+  spotlight: Spotlight
+  /** Odd sections put the phones on the left, so the page alternates. */
+  flip?: boolean
+}
+
+const { spotlight, flip = false } = Astro.props
+
+// Featured screen up front: a three-fan seats the front phone in the centre slot
+// (index 1), a two-fan puts it first. Empty entries drop out.
+const stack = (
+  spotlight.thirdScreen
+    ? [spotlight.secondScreen, spotlight.screen, spotlight.thirdScreen]
+    : [spotlight.screen, spotlight.secondScreen]
+).filter((name): name is string => Boolean(name))
+---
+
+<section id={spotlight.id} class="relative py-14 sm:py-20">
+  <div class="mx-auto max-w-6xl px-5 sm:px-8">
+    <div class="grid items-center gap-14 lg:grid-cols-2 lg:gap-16">
+      <div class:list={[flip && 'lg:order-2']} data-reveal>
+        <p class="eyebrow" style={`color:${spotlight.accent}`}>{spotlight.eyebrow}</p>
+        <h2 class="headline mt-3 max-w-lg">{spotlight.title}</h2>
+        <p class="lede mt-5 max-w-lg">{spotlight.body}</p>
+
+        <ul class="mt-9 space-y-6">
+          {
+            spotlight.points.map((point) => (
+              <li class="flex gap-4">
+                <span
+                  class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full"
+                  style={`background: color-mix(in oklab, ${spotlight.accent} 20%, transparent); color: ${spotlight.accent}`}
+                >
+                  <Icon name="check" size={14} />
+                </span>
+                <div>
+                  <h3 class="text-[15.5px] font-semibold">{point.title}</h3>
+                  <p class="mt-1 text-[14.5px] leading-relaxed text-ink-muted text-pretty">
+                    {point.body}
+                  </p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div
+        class:list={['relative flex justify-center', flip && 'lg:order-1']}
+        data-reveal
+      >
+        <!-- A wash of the section's accent, so each spotlight reads as its own
+             chapter without the copy needing to say so. -->
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 -z-10 opacity-30 blur-[90px]"
+          style={`background: radial-gradient(closest-side, ${spotlight.accent}, transparent 70%)`}
+        >
+        </div>
+
+        <PhoneStack screens={stack} max={284} />
+      </div>
+    </div>
+  </div>
+</section>

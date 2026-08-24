@@ -19,34 +19,43 @@ see [`docs/architecture.md`](docs/architecture.md) for the monorepo→polyrepo p
 
 ```
 tracker-apps/
-├── packages/
+├── packages/                  npm workspaces — the shared engine
 │   ├── core/            @tracker-engine/core         cn, money
 │   └── local-first/     @tracker-engine/local-first  sync engine + Supabase backend
-├── apps/
+├── apps/                      npm workspaces — the products (consume the engine)
 │   ├── reputation/      REPutation — workout tracker (the shipping app)
 │   └── ledger/          Expense tracker demo (runs on the engine)
+├── sites/                     marketing sites — self-contained (own node_modules)
+│   └── reputation-site/ Astro static site → reputation.fitness
 ├── docs/                cross-cutting design (architecture, decisions)
 └── README.md            this handbook
 ```
 
+`packages/*` and `apps/*` are npm workspaces (they share the root `node_modules` and consume
+the engine by symlink). Marketing sites under `sites/*` are kept **self-contained** — each has
+its own `node_modules`/lockfile — because their toolchain (Astro, a different TypeScript major)
+is independent and shares nothing with the apps.
+
 Common tasks from the repo root: `npm run dev` (REPutation) · `npm run dev:ledger` ·
-`npm test` / `npm run typecheck` (all workspaces) · `npm run build` / `build:native` /
-`release:ios` (REPutation). Or work inside an app dir directly.
+`npm run dev:site` / `build:site` (marketing site) · `npm test` / `npm run typecheck` (all
+workspaces) · `npm run build` / `build:native` / `release:ios` (REPutation).
 
-## The family
+## The family (and where each piece lives today)
 
-| Repo | What it is | Status |
-|---|---|---|
-| **tracker-engine** | The shared `@tracker-engine/*` packages (see below) | forming (2 of ~6 extracted) |
-| **reputation** | Workout tracker (REPutation) — the first app; the engine was carved out of it | shipping (App Store review) |
-| **reputation-site** | REPutation's marketing site (Astro → reputation.fitness) | live |
-| **ledger** | Expense tracker — connects accounts, AI spending insights | demo runs on the engine (in `apps/ledger`) |
-| **ledger-site** | Ledger's marketing site | future |
-| **calorie** *(+ site)* | Calorie / nutrition tracker | idea |
+Everything is in **this one monorepo** right now. The "own repo" column is the *future*
+polyrepo endgame (see `docs/architecture.md`), not today.
 
-Every app repo owns only what's genuinely its own — its domain model, database schema,
-screens, native shell (Capacitor + iOS/Android + Fastlane), and Vercel/PWA deploy. Everything
-mechanical comes from the engine.
+| Piece | What it is | Lives today | Eventual repo |
+|---|---|---|---|
+| engine (`@tracker-engine/*`) | The shared packages | `packages/core`, `packages/local-first` | `tracker-engine` |
+| **reputation** | Workout tracker (REPutation) — the shipping app | `apps/reputation/` | `reputation` |
+| **ledger** | Expense tracker (demo, runs on the engine) | `apps/ledger/` | `ledger` |
+| reputation-site | REPutation's marketing site (Astro → reputation.fitness) | `sites/reputation-site/` | `reputation-site` |
+| ledger-site, calorie, … | future | — | — |
+
+Each app owns only what's genuinely its own — domain model, database schema, screens, native
+shell (Capacitor + iOS/Android + Fastlane), and Vercel/PWA deploy. Everything mechanical comes
+from the engine.
 
 ## The engine (`@tracker-engine/*`)
 

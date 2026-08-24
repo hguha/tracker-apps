@@ -1,0 +1,29 @@
+---
+import StoreBadges from './StoreBadges.astro'
+import Logo from './Logo.astro'
+import { site } from '@/data/site'
+---
+
+<section class="relative isolate overflow-hidden py-16 sm:py-24">
+  <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+    <div
+      class="absolute bottom-[-16rem] left-1/2 h-[34rem] w-[62rem] -translate-x-1/2 rounded-full opacity-40 blur-[110px]"
+      style="background: radial-gradient(closest-side, #2a78d6, transparent 72%)"
+    >
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-3xl px-5 text-center sm:px-8" data-reveal>
+    <Logo size={56} class="mx-auto rounded-2xl shadow-2xl" />
+    <h2 class="headline mt-8">Start logging in about four seconds.</h2>
+    <p class="lede mx-auto mt-5 max-w-xl">
+      No sign-up, no trial, no card. Open it, add a lift, type a number — that
+      set is saved before the page would have finished loading anywhere else.
+    </p>
+
+    <div class="mt-10 flex flex-col items-center gap-5">
+      <StoreBadges class="justify-center" />
+      <a href={site.webAppUrl} class="btn-ghost">Open the web app</a>
+    </div>
+  </div>
+</section>

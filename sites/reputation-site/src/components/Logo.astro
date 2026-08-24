@@ -1,0 +1,26 @@
+---
+/** The app mark — the same dumbbell as `public/icon.svg` in the app repo. */
+interface Props {
+  size?: number
+  class?: string
+}
+const { size = 32, class: className } = Astro.props
+---
+
+<svg
+  width={size}
+  height={size}
+  viewBox="0 0 512 512"
+  class={className}
+  role="img"
+  aria-label="REPutation"
+>
+  <rect width="512" height="512" rx="112" fill="#2a78d6"></rect>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="188" y1="256" x2="324" y2="256" stroke-width="28"></line>
+    <line x1="168" y1="196" x2="168" y2="316" stroke-width="34"></line>
+    <line x1="124" y1="216" x2="124" y2="296" stroke-width="34"></line>
+    <line x1="344" y1="196" x2="344" y2="316" stroke-width="34"></line>
+    <line x1="388" y1="216" x2="388" y2="296" stroke-width="34"></line>
+  </g>
+</svg>

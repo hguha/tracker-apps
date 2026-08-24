@@ -1,0 +1,56 @@
+---
+import Logo from './Logo.astro'
+import Wordmark from './Wordmark.astro'
+import { site } from '@/data/site'
+
+const year = new Date().getFullYear()
+---
+
+<footer class="border-t border-line bg-page">
+  <div class="mx-auto max-w-6xl px-5 py-14 sm:px-8">
+    <div class="flex flex-col gap-10 sm:flex-row sm:items-start sm:justify-between">
+      <div class="max-w-xs">
+        <div class="flex items-center gap-2.5 font-semibold tracking-tight">
+          <Logo size={26} class="rounded-[7px]" />
+          <Wordmark />
+        </div>
+        <p class="mt-3 text-[14px] leading-relaxed text-ink-muted">
+          A local-first training log. Your record lives on your device first, and
+          goes exactly where you send it.
+        </p>
+      </div>
+
+      <div class="flex gap-14">
+        <div>
+          <h3 class="text-[13px] font-semibold text-ink">Product</h3>
+          <ul class="mt-3 space-y-2 text-[14px] text-ink-muted">
+            <li><a href="#features" class="transition hover:text-ink">Features</a></li>
+            <li><a href="#screens" class="transition hover:text-ink">Screenshots</a></li>
+            <li><a href="#faq" class="transition hover:text-ink">FAQ</a></li>
+            <li>
+              <a href={site.webAppUrl} class="transition hover:text-ink">Web app</a>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-[13px] font-semibold text-ink">Legal</h3>
+          <ul class="mt-3 space-y-2 text-[14px] text-ink-muted">
+            <li>
+              <a href={site.privacyUrl} class="transition hover:text-ink">Privacy policy</a>
+            </li>
+            <li>
+              <a href={site.author.url} class="transition hover:text-ink">
+                {site.author.name}
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-12 border-t border-line pt-6 text-[13px] text-ink-muted">
+      © {year} {site.author.name}. Screenshots are of the shipping app, taken from a
+      demo training log.
+    </p>
+  </div>
+</footer>

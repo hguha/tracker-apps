@@ -1,0 +1,208 @@
+---
+import '@/styles/global.css'
+import Nav from '@/components/Nav.astro'
+import Footer from '@/components/Footer.astro'
+import { site } from '@/data/site'
+
+interface Props {
+  title?: string
+  description?: string
+}
+
+const {
+  title = `${site.name} — ${site.tagline}`,
+  description = site.seoDescription,
+} = Astro.props
+
+const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://reputation.fitness')
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: site.name,
+  applicationCategory: 'HealthApplication',
+  operatingSystem: 'iOS, Android, Web',
+  description: site.seoDescription,
+  author: { '@type': 'Person', name: site.author.name, url: site.author.url },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta name="theme-color" content="#08090c" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/og.png', canonical)} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+  </head>
+
+  <body id="top">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-ink focus:px-4 focus:py-2 focus:text-page"
+    >
+      Skip to content
+    </a>
+
+    <Nav />
+    <main id="main"><slot /></main>
+    <Footer />
+
+    <script>
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      // Reveal-on-scroll. Everything is already in the DOM; this only adds the
+      // class the stylesheet animates, so the page is complete without it.
+      const targets = document.querySelectorAll('[data-reveal]')
+      if (reduce) {
+        targets.forEach((el) => el.classList.add('is-visible'))
+      } else {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue
+              entry.target.classList.add('is-visible')
+              observer.unobserve(entry.target)
+            }
+          },
+          { rootMargin: '0px 0px -12% 0px', threshold: 0.06 },
+        )
+        targets.forEach((el) => observer.observe(el))
+      }
+
+      // Count-up for [data-count]. Runs once when the number scrolls into view;
+      // with reduced motion it just prints the final value.
+      const format = (n: number) => Math.round(n).toLocaleString('en-US')
+      const counters = document.querySelectorAll<HTMLElement>('[data-count]')
+      const run = (el: HTMLElement) => {
+        const to = Number(el.dataset.count)
+        const suffix = el.dataset.suffix ?? ''
+        if (reduce) {
+          el.textContent = format(to) + suffix
+          return
+        }
+        const start = performance.now()
+        const duration = 1300
+        const tick = (now: number) => {
+          const t = Math.min(1, (now - start) / duration)
+          // easeOutExpo, so it sprints then eases into the final digit.
+          const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t)
+          el.textContent = format(to * eased) + suffix
+          if (t < 1) requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+      }
+      const countObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+            run(entry.target as HTMLElement)
+            countObserver.unobserve(entry.target)
+          }
+        },
+        { threshold: 0.5 },
+      )
+      counters.forEach((el) => countObserver.observe(el))
+
+      // Phone stacks: the slots hold still, but which phone sits in which slot
+      // cycles, so the fan reshuffles front-to-back. Offsets are percentages of
+      // the phone's own width, so this is resolution-independent.
+      type Pose = { x: number; s: number; r: number; z: number; o: number }
+      const LAYOUTS: Record<number, Pose[]> = {
+        2: [
+          { x: 0, s: 1, r: 0, z: 20, o: 1 },
+          { x: 34, s: 0.82, r: 6, z: 6, o: 0.82 },
+        ],
+        3: [
+          { x: -54, s: 0.8, r: -7, z: 6, o: 0.85 },
+          { x: 0, s: 1, r: 0, z: 20, o: 1 },
+          { x: 54, s: 0.8, r: 7, z: 6, o: 0.85 },
+        ],
+      }
+      document.querySelectorAll<HTMLElement>('[data-phone-stack]').forEach((stack, index) => {
+        const n = Number(stack.dataset.n)
+        const layout = LAYOUTS[n]
+        if (!layout) return
+        const slots = [...stack.querySelectorAll<HTMLElement>('.phone-slot')]
+        // The front slot is the one with the highest z; tapping any phone rotates
+        // it into that pose.
+        const front = layout.reduce((b, p, i) => (p.z > layout[b]!.z ? i : b), 0)
+        let offset = 0
+        const apply = () => {
+          slots.forEach((el, i) => {
+            const pose = layout[(i + offset) % n]!
+            el.style.transform = `translateX(${pose.x}%) scale(${pose.s}) rotate(${pose.r}deg)`
+            el.style.zIndex = String(pose.z)
+            el.style.opacity = String(pose.o)
+          })
+        }
+        apply()
+
+        // Auto-advance, resettable so a manual gesture doesn't immediately flip away.
+        let timer: ReturnType<typeof setInterval> | undefined
+        const stop = () => timer && clearInterval(timer)
+        const play = () => {
+          if (reduce || n <= 1) return
+          stop()
+          timer = setInterval(() => {
+            offset = (offset + 1) % n
+            apply()
+          }, 5000)
+        }
+
+        // Swipe/drag horizontally to cycle; a tap brings that phone to the front.
+        stack.querySelectorAll('img').forEach((img) => (img.draggable = false))
+        stack.style.touchAction = 'pan-y'
+        let downX: number | null = null
+        let swiped = false
+        stack.addEventListener('pointerdown', (e) => {
+          downX = e.clientX
+          swiped = false
+          stack.setPointerCapture(e.pointerId)
+        })
+        stack.addEventListener('pointermove', (e) => {
+          if (downX !== null && Math.abs(e.clientX - downX) > 8) swiped = true
+        })
+        stack.addEventListener('pointerup', (e) => {
+          if (downX === null) return
+          const dx = e.clientX - downX
+          downX = null
+          if (Math.abs(dx) > 40) {
+            offset = (offset + (dx < 0 ? 1 : -1) + n) % n
+            apply()
+            play()
+          }
+        })
+
+        slots.forEach((el, i) => {
+          el.style.cursor = 'pointer'
+          el.addEventListener('click', () => {
+            if (swiped) return // a drag already moved the stack
+            offset = (front - i + n) % n
+            apply()
+            play()
+          })
+        })
+
+        // Staggered so several stacks on screen don't all flip on the same beat.
+        setTimeout(play, index * 1300)
+      })
+    </script>
+  </body>
+</html>

@@ -16,6 +16,8 @@
     "build:native": "npm run build:native --workspace reputation",
     "release:ios": "npm run release:ios --workspace reputation",
     "dev": "npm run dev --workspace reputation",
-    "dev:ledger": "npm run dev --workspace ledger"
+    "dev:ledger": "npm run dev --workspace ledger",
+    "dev:site": "npm --prefix sites/reputation-site run dev",
+    "build:site": "npm --prefix sites/reputation-site run build"
   }
 }

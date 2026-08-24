@@ -1,0 +1,27 @@
+---
+import Base from '@/layouts/Base.astro'
+import Hero from '@/components/Hero.astro'
+import Spotlight from '@/components/Spotlight.astro'
+import AiCoach from '@/components/AiCoach.astro'
+import FeatureGrid from '@/components/FeatureGrid.astro'
+import Leagues from '@/components/Leagues.astro'
+import Gallery from '@/components/Gallery.astro'
+import Faq from '@/components/Faq.astro'
+import Cta from '@/components/Cta.astro'
+import { spotlights } from '@/data/features'
+---
+
+<Base>
+  <Hero />
+  <!-- The screenshot marquee sits directly under the hero as the one full-width
+       showcase, then the spotlights explain the pillars; Leagues (coming) closes. -->
+  <Gallery />
+  <Spotlight spotlight={spotlights[0]} />
+  <Spotlight spotlight={spotlights[1]} flip />
+  <AiCoach />
+  <Spotlight spotlight={spotlights[2]} />
+  <FeatureGrid />
+  <Leagues />
+  <Faq />
+  <Cta />
+</Base>

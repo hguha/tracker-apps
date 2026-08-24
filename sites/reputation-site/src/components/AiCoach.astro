@@ -1,0 +1,127 @@
+---
+import PhoneStack from './PhoneStack.astro'
+import Icon from './Icon.astro'
+import { coach } from '@/data/features'
+---
+
+<section id="coach" class="relative isolate overflow-hidden py-16 sm:py-24">
+  <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+    <div
+      class="absolute left-1/2 top-1/2 h-[42rem] w-[72rem] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-30 blur-[130px]"
+      style={`background: radial-gradient(closest-side, ${coach.accent}, transparent 72%)`}
+    >
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-6xl px-5 sm:px-8">
+    <div class="mx-auto max-w-2xl text-center" data-reveal>
+      <p class="eyebrow" style={`color:${coach.accent}`}>
+        <Icon name="sparkles" size={14} class="mb-0.5 inline" />
+        {coach.eyebrow}
+      </p>
+      <h2 class="headline mt-3" style="font-size: var(--text-section)">{coach.title}</h2>
+      <p class="lede mx-auto mt-5">{coach.body}</p>
+    </div>
+
+    <!-- Left: the live back-and-forth (the coach asking its own question), cycling
+         through capabilities. Right: what that turns into — real screens you can
+         swipe through. -->
+    <div class="mt-12 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <div
+        class="card mx-auto w-full max-w-md !p-5 sm:!p-6"
+        style={`--card-accent:${coach.accent}`}
+        data-reveal
+      >
+        <div class="flex items-center gap-2.5 border-b border-line pb-4">
+          <span
+            class="flex size-8 items-center justify-center rounded-xl"
+            style={`background: color-mix(in oklab, ${coach.accent} 18%, transparent); color:${coach.accent}`}
+          >
+            <Icon name="sparkles" size={16} />
+          </span>
+          <span class="text-[14px] font-semibold">Coach</span>
+          <span class="ml-auto flex items-center gap-1.5 text-[12px] text-ink-muted">
+            <span class="size-1.5 rounded-full bg-region-legs"></span>
+            reads your log
+          </span>
+        </div>
+
+        <!-- Threads share one box and crossfade; each is bottom-anchored like a
+             real chat, so they fit without clipping regardless of length. -->
+        <div class="relative mt-4 min-h-[268px]" data-coach-threads>
+          {
+            coach.threads.map((thread, t) => (
+              <div
+                class="absolute inset-x-0 bottom-0 flex flex-col gap-3 transition-opacity duration-500"
+                data-coach-thread={t}
+                style={t === 0 ? '' : 'opacity:0'}
+                aria-hidden={t === 0 ? undefined : 'true'}
+              >
+                {thread.map((turn) => (
+                  <div class:list={['flex', turn.from === 'you' ? 'justify-end' : 'justify-start']}>
+                    <p
+                      class:list={[
+                        'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed text-pretty',
+                        turn.from === 'you'
+                          ? 'rounded-br-md bg-ink text-page'
+                          : 'rounded-bl-md bg-surface-2 text-ink',
+                      ]}
+                    >
+                      {turn.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="flex justify-center lg:justify-end" data-reveal>
+        <PhoneStack screens={['coach-plan', 'coach-ask']} max={266} />
+      </div>
+    </div>
+
+    <div class="mx-auto mt-14 grid max-w-5xl gap-6 md:grid-cols-3">
+      {
+        coach.points.map((point, i) => (
+          <div
+            class="card card-lift"
+            style={`--card-accent:${coach.accent}; --reveal-delay:${i * 90}ms`}
+            data-reveal
+          >
+            <span
+              class="flex size-11 items-center justify-center rounded-2xl"
+              style={`background: color-mix(in oklab, ${coach.accent} 16%, transparent); color:${coach.accent}`}
+            >
+              <Icon name={i === 0 ? 'sparkles' : i === 1 ? 'layers' : 'lock'} size={21} />
+            </span>
+            <h3 class="mt-5 text-[16.5px] font-semibold tracking-[-0.01em]">{point.title}</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-ink-muted text-pretty">
+              {point.body}
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<script>
+  // Crossfade the coach threads; reduced motion keeps the first one on screen.
+  const group = document.querySelector<HTMLElement>('[data-coach-threads]')
+  if (group && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const threads = [...group.querySelectorAll<HTMLElement>('[data-coach-thread]')]
+    let active = 0
+    if (threads.length > 1) {
+      setInterval(() => {
+        threads[active]!.style.opacity = '0'
+        threads[active]!.setAttribute('aria-hidden', 'true')
+        active = (active + 1) % threads.length
+        threads[active]!.style.opacity = '1'
+        threads[active]!.removeAttribute('aria-hidden')
+      }, 4200)
+    }
+  }
+</script>
+</content>

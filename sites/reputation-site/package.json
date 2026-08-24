@@ -1,0 +1,24 @@
+{
+  "name": "reputation-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Product website for REPutation, the local-first workout tracker.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "screens": "node tools/capture.mjs"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "astro": "^7.2.2",
+    "tailwindcss": "^4.2.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "playwright": "^1.57.0",
+    "typescript": "^6.0.3"
+  }
+}

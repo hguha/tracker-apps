@@ -1,0 +1,75 @@
+---
+/**
+ * A screenshot in a phone bezel.
+ *
+ * Both colour schemes are rendered and swapped with CSS off `html[data-shots]`,
+ * so the one toggle in the nav flips every phone on the page at once without any
+ * per-component state.
+ */
+import { Image } from 'astro:assets'
+import { screen } from '@/lib/screens'
+import { site } from '@/data/site'
+
+interface Props {
+  name: string
+  /** Rendered width of the device in px; the image is sized to match. */
+  width?: number
+  label?: string
+  class?: string
+  loading?: 'eager' | 'lazy'
+  /** Fill the parent's width instead of a fixed px — lets a stack size it via CSS. */
+  fill?: boolean
+}
+
+const {
+  name,
+  width = 300,
+  label,
+  class: className,
+  loading = 'lazy',
+  fill = false,
+} = Astro.props
+
+// A fixed intrinsic width for the srcset even when the display size is fluid;
+// 300 @2× covers every place a filled phone is shown.
+const intrinsic = fill ? 300 : Math.round(width * 0.93)
+---
+
+<div class:list={['phone', fill && 'w-full', className]} style={fill ? undefined : `width:${width}px`}>
+  <div class="relative overflow-hidden rounded-[13%/6.2%] border border-white/12 bg-[#0b0c10] p-[2.6%] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.04)_inset]">
+    <div class="relative overflow-hidden rounded-[11%/5.4%] bg-black">
+      {(['light', 'dark'] as const).map((scheme) => (
+        <Image
+          src={screen(name, scheme)}
+          alt={label ? `${label} — ${site.name}` : `${site.name} ${name} screen`}
+          width={intrinsic}
+          densities={[1, 2]}
+          loading={loading}
+          decoding="async"
+          class:list={['block h-auto w-full', `shot-${scheme}`]}
+        />
+      ))}
+
+    </div>
+
+    {/* A soft diagonal sheen across the glass. */}
+    <div
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 rounded-[13%/6.2%] bg-gradient-to-tr from-white/0 via-white/[0.055] to-white/0"
+    >
+    </div>
+  </div>
+
+  {label && (
+    <p class="mt-4 text-center text-[13px] font-medium text-ink-muted">{label}</p>
+  )}
+</div>
+
+<style>
+  /* Dark is the default so the phones sit in the page rather than glare out of
+     it; the nav toggle sets data-shots="light" to show the other capture. */
+  :global(html:not([data-shots='light'])) .shot-light,
+  :global(html[data-shots='light']) .shot-dark {
+    display: none;
+  }
+</style>

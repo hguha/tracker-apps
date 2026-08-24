@@ -1,0 +1,46 @@
+---
+import { stats } from '@/data/site'
+---
+
+<section class="relative py-10 sm:py-14">
+  <div class="mx-auto max-w-6xl px-5 sm:px-8">
+    <div
+      class="relative overflow-hidden rounded-3xl border border-line bg-surface/60 px-6 py-10 sm:px-10"
+      data-reveal
+    >
+      <!-- A wide, dim bloom so the band reads as its own lit panel. -->
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 -top-24 h-48 opacity-30 blur-[80px]"
+        style="background: radial-gradient(closest-side, #2a78d6, transparent 70%)"
+      >
+      </div>
+
+      <p class="relative text-center text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+        Everything included — nothing behind a paywall
+      </p>
+
+      <dl class="relative mt-8 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4">
+        {
+          stats.map((stat, i) => (
+            <div class="text-center" data-reveal style={`--reveal-delay:${i * 90}ms`}>
+              <dt
+                class="bg-gradient-to-b from-white to-ink-soft bg-clip-text text-[clamp(2.6rem,6vw,3.6rem)] font-semibold leading-none tracking-[-0.04em] tabular-nums text-transparent"
+                data-count={stat.value}
+                data-suffix={stat.suffix}
+              >
+                {stat.value}{stat.suffix}
+              </dt>
+              <dd class="mx-auto mt-2.5 max-w-[16ch] text-[13.5px] font-medium leading-snug text-ink">
+                {stat.label}
+                <span class="mt-1 block text-[12px] font-normal text-ink-muted">
+                  {stat.hint}
+                </span>
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,15 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  /**
+   * `tools/` is excluded on purpose. `demo-seed.ts` is type-checked where it
+   * actually runs — inside the app repo's Vitest, whose tsconfig has the `@/`
+   * alias and `vitest` types this project has no reason to carry. The other
+   * tools are plain `.mjs`.
+   */
+  "include": [".astro/types.d.ts", "src/**/*"],
+  "exclude": ["dist", "tools"],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  }
+}

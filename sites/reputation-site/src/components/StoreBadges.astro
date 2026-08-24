@@ -1,0 +1,68 @@
+---
+/**
+ * App Store / Play Store badges.
+ *
+ * A store link that does not exist yet renders as a disabled "coming soon"
+ * badge rather than a live link to a 404 — filling in `site.stores` is the only
+ * change needed at launch.
+ */
+import { site } from '@/data/site'
+
+interface Props {
+  class?: string
+}
+const { class: className } = Astro.props
+
+const badges = [
+  { key: 'appStore', href: site.stores.appStore, store: 'App Store', prefix: 'Download on the' },
+  { key: 'playStore', href: site.stores.playStore, store: 'Google Play', prefix: 'Get it on' },
+] as const
+---
+
+<div class:list={['flex flex-wrap items-center gap-3', className]}>
+  {
+    badges.map(({ key, href, store, prefix }) => {
+      const inner = (
+        <>
+          <span class="shrink-0">
+            {key === 'appStore' ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M17.05 12.54c.02-2.3 1.88-3.4 1.96-3.45-1.07-1.57-2.74-1.78-3.33-1.8-1.4-.15-2.74.82-3.45.82-.72 0-1.82-.8-3-.78-1.54.02-2.96.9-3.75 2.28-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.02-1.12 2.78-2.23.87-1.27 1.23-2.5 1.25-2.57-.03-.01-2.4-.92-2.42-3.71M14.9 5.6c.62-.76 1.04-1.8.93-2.85-.9.04-2 .6-2.65 1.35-.58.67-1.08 1.74-.94 2.76 1 .08 2.03-.51 2.66-1.26"
+                />
+              </svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M3.6 2.2a1.6 1.6 0 0 0-.5 1.2v17.2c0 .5.2.9.5 1.2l9.1-9.8zM14 13.1l2.7 2.9-9.9 5.6zM17.9 9.3l-3.9 3.8 3.9 3.8 2.9-1.6c1-.6 1-2.1 0-2.7zM6.8 2.3l9.9 5.6-2.7 2.9z"
+                />
+              </svg>
+            )}
+          </span>
+          <span class="flex flex-col items-start leading-tight">
+            <span class="text-[10px] font-medium uppercase tracking-wider opacity-70">
+              {href ? prefix : 'Coming soon to'}
+            </span>
+            <span class="text-[15px] font-semibold">{store}</span>
+          </span>
+        </>
+      )
+
+      return href ? (
+        <a
+          href={href}
+          class="flex items-center gap-3 rounded-2xl border border-white/15 bg-ink px-5 py-2.5 text-page transition hover:bg-white"
+        >
+          {inner}
+        </a>
+      ) : (
+        <span
+          aria-disabled="true"
+          class="flex cursor-default items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-2.5 text-ink-soft"
+        >
+          {inner}
+        </span>
+      )
+    })
+  }
+</div>

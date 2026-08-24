@@ -1,0 +1,211 @@
+@import 'tailwindcss';
+
+/**
+ * The site's tokens.
+ *
+ * The region palette is copied verbatim from the app's `tokens.css` rather than
+ * re-picked: a feature card tinted "back orange" should be the same orange the
+ * chart uses, and these values are the ones that passed the colourblind
+ * separation gates.
+ */
+@theme {
+  --color-ink: #f4f5f7;
+  --color-ink-soft: #a8adb9;
+  --color-ink-muted: #6f7583;
+
+  --color-page: #08090c;
+  --color-surface: #101217;
+  --color-surface-2: #171a21;
+  --color-line: #23262f;
+
+  --color-accent: #3987e5;
+  --color-accent-bright: #5aa0f2;
+
+  --color-region-chest: #3987e5;
+  --color-region-back: #eb6834;
+  --color-region-legs: #1baf7a;
+  --color-region-shoulders: #eda100;
+  --color-region-biceps: #e87ba4;
+  --color-region-triceps: #9c5bd6;
+  --color-region-core: #1baf7a;
+  --color-region-cardio: #7d74ef;
+
+  --font-sans:
+    'Inter var', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --text-hero: clamp(2.6rem, 7.5vw, 5.25rem);
+  --text-section: clamp(1.9rem, 4vw, 3rem);
+}
+
+/* The app's palette, as raw variables, so content files can name a colour
+   without the build needing to know about it. */
+:root {
+  --region-chest: #3987e5;
+  --region-back: #eb6834;
+  --region-legs: #1baf7a;
+  --region-shoulders: #eda100;
+  --region-biceps: #e87ba4;
+  --region-triceps: #9c5bd6;
+  --region-core: #1baf7a;
+  --region-cardio: #7d74ef;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* The sticky nav would otherwise sit on top of whatever you jumped to. */
+    scroll-padding-top: 6rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  }
+}
+
+@layer components {
+  /* Section headings and body copy at a readable measure. */
+  .eyebrow {
+    @apply text-[13px] font-semibold uppercase tracking-[0.14em];
+  }
+
+  .headline {
+    @apply font-semibold tracking-[-0.03em] text-balance;
+    font-size: var(--text-section);
+    line-height: 1.05;
+  }
+
+  .lede {
+    @apply text-[17px] leading-relaxed text-ink-soft text-pretty md:text-lg;
+  }
+
+  .card {
+    @apply relative overflow-hidden rounded-3xl border border-line bg-surface p-7;
+  }
+
+  /* A hairline highlight along the top edge — reads as a lit surface rather than
+     a border, which is what keeps the dark cards from looking flat. */
+  .card::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      color-mix(in oklab, var(--card-accent, var(--color-accent)) 55%, transparent),
+      transparent
+    );
+  }
+
+}
+
+/* `@utility`, not `@layer components`: only a utility can be the target of a
+   later `@apply`, and the two button variants share this base. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5
+    text-[15px] font-semibold transition;
+}
+
+@utility btn-primary {
+  @apply btn bg-ink text-page hover:bg-white;
+}
+
+@utility btn-ghost {
+  @apply btn border border-line bg-surface text-ink hover:border-ink-muted hover:bg-surface-2;
+}
+
+/* Reveal on scroll. Anything with `data-reveal` starts lowered and fades in when
+   the observer in Base.astro tags it; without JS it is simply visible.
+   `--reveal-delay` (set inline per item) staggers a group so a grid cascades in
+   rather than snapping as one block. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+
+  [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* The accent word in the hero, a slow sheen left to right. */
+  .shimmer {
+    background-size: 200% auto;
+    animation: shimmer 6s linear infinite;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: 200% center;
+    }
+  }
+}
+
+/* The screenshot gallery scrolls itself, forever. The track holds two copies of
+   the list, so a -50% translate loops seamlessly; hover pauses it. The strip
+   bleeds off both edges via a mask. Reduced motion stops the animation and hands
+   scrolling back to the user. */
+.marquee-viewport {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 6%,
+    black 94%,
+    transparent
+  );
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 60s linear infinite;
+}
+.marquee-viewport:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-viewport {
+    overflow-x: auto;
+  }
+  .marquee-track {
+    animation: none;
+    width: auto;
+  }
+  .marquee-track > [data-marquee-clone] {
+    display: none;
+  }
+}
+.gallery-scroll:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+/* A card's accent glow, brought up on hover. */
+.card-lift {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease;
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in oklab, var(--card-accent, var(--color-accent)) 45%, var(--color-line));
+}

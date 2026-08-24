@@ -1,0 +1,33 @@
+---
+import Phone from './Phone.astro'
+import { gallery } from '@/data/features'
+
+// Two copies of the list so a -50% translate loops seamlessly and forever.
+const copies = [
+  { items: gallery, clone: false },
+  { items: gallery, clone: true },
+]
+---
+
+<section id="screens" class="relative overflow-hidden py-12 sm:py-16">
+  <!-- A self-scrolling, endlessly looping strip. Hover pauses it; reduced motion
+       turns it into a normal scroll container. The edge fade is a mask. -->
+  <div class="marquee-viewport">
+    <div class="marquee-track">
+      {
+        copies.map(({ items, clone }) =>
+          items.map(({ screen, label }) => (
+            <div
+              class="mr-6 shrink-0"
+              data-marquee-clone={clone ? '' : undefined}
+              aria-hidden={clone ? 'true' : undefined}
+            >
+              <Phone name={screen} width={216} label={label} />
+            </div>
+          )),
+        )
+      }
+    </div>
+  </div>
+</section>
+</content>
