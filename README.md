@@ -69,7 +69,7 @@ packages. Each depends only *downward*, and an app grabs a specific one — e.g.
 | `@tracker-engine/local-first` | Sync engine (outbox drain, delta pull, dead-letter, retry), `SyncBackend` + Supabase impl, Dexie scaffolding — driven by an injected `SyncSchema` + `SyncDeps`, zero app imports | **done** |
 | `@tracker-engine/auth` | Auth contract (AuthProvider/Session) + Supabase client factory & provider. Composite/local/claim stay app-side (data-coupled) | **done** (core) |
 | `@tracker-engine/platform` | Capacitor wrappers: haptics, files, notify, status bar, native shell | **done** |
-| `@tracker-engine/ui` | Token-driven kit: Button, Card, ProgressRing, BottomSheet, PillSelect (+ base.css). Toast/DragList/SwipeableRow pending | **done** (core) |
+| `@tracker-engine/ui` | Token-driven kit: Button, Card, ProgressRing, BottomSheet, PillSelect, Toast, SwipeableRow, DragList (+ base.css) | **done** |
 | `@tracker-engine/ai-coach` | Chat shell + `CoachProvider` interface + offline mock; app supplies summary + tools | planned |
 
 > Note on the scope: `@tracker-engine` is the *namespace*, not a package — you always import a

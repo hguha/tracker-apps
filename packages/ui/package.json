@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Token-driven UI kit (Button, Card, ProgressRing, BottomSheet, PillSelect). Styling comes from the consuming app's design tokens; ./styles/base.css supplies the animations + safe-area helpers.",
+  "description": "Token-driven UI kit (Button, Card, ProgressRing, BottomSheet, PillSelect, Toast, SwipeableRow, DragList). Styling comes from the consuming app's design tokens; ./styles/base.css supplies the animations + safe-area helpers.",
   "exports": {
     ".": "./src/index.ts",
     "./styles/base.css": "./styles/base.css"
@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tracker-engine/core": "*"
+    "@tracker-engine/core": "*",
+    "@tracker-engine/platform": "*",
+    "lucide-react": "^1.27.0"
   },
   "peerDependencies": {
     "react": "^19.0.0",
