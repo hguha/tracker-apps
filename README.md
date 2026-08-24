@@ -1,226 +1,155 @@
-# REPutation — Workout Tracker
+# tracker-apps
 
-> Part of **tracker-apps** — a family of local-first apps on a shared engine (`tracker-engine`).
-> The shared philosophy, the engine (`@tracker-engine/*`), and how the repos relate live in the
-> handbook (`~/tracker-apps/README.md` and `~/tracker-apps/docs/architecture.md`). This README
-> covers what's specific to REPutation.
+*A family of local-first apps built on one shared engine.*
 
-A local-first workout tracker. Runs entirely offline in the browser and syncs to
-Supabase when signed in. See `workout-app-spec.md` — §14 lists what remains.
+This is the home for everything: the shared foundation, each app, each marketing site, and
+the design notes that tie them together. The apps are deliberately small and focused — a
+workout tracker, an expense tracker, maybe a calorie tracker. What they share is the
+**engine**: the local-first sync engine, auth, platform wrappers, UI kit, and AI-coach pattern
+that every one of these apps needs and none of them should reinvent.
 
-## Running it
+This README is the handbook — the shared philosophy and the hard-won notes. Each app has its
+own README for what's specific to it.
 
-```bash
-npm install
-npm run dev
-```
+## Repository layout (today: one monorepo)
 
-Then open the printed `Network:` URL on your phone — same wifi, no build step,
-no account. Data lives in that browser's IndexedDB.
-
-```bash
-npm test          # 377 unit tests
-npm run typecheck # strict TS, no errors
-npm run build     # production bundle
-```
-
-## Features
-
-### Logging
-- **Typing a number logs the set** — no confirm step, placeholders from last time
-- **PR glow** — the row lights up as soon as its values beat a record
-- Last-time header always visible, never behind a tap
-- Drag to reorder; drop one exercise on another to superset them
-- Swipe left to delete, right to duplicate or confirm last time's numbers
-- Cardio as one entry block with live pace; kept out of lifting volume
-- Auto session titles (`Aug 3 Evening · Push`, split inferred from the work)
-- Session menu — rename, change date/time, save as template, discard
-- Empty workouts are discarded, never saved
-- Explicit rest button, 10s warning tick, expiry chime, vibration
-- Sound cues — set logged, PR, rest warning, rest over, workout done
-- Exercise detail sheet — notes, records, last sessions, per-exercise actions
-
-### Templates and repeat
-- Templates — list with folders, editor, clear plan-vs-workout separation
-- Preview a past workout or template before starting — confirm, then start
-- Repeat any past workout from history or the start screen
-- Save as template from the finish sheet, session menu, history row, or preview
-
-### History and editing
-- History list + calendar + filters + pagination
-- Edit any past workout; add a forgotten set; backdate a session
-
-### Insights
-- 5 sub-tabs (Overview, Strength, Volume, Habit, Body), 22 charts
-- Searchable filters, table view on every chart
-- Body metrics — 28 biomarker definitions (bodyweight, body fat, waist, resting HR, …)
-
-### Exercise library
-- Browse, search, filter, view full taxonomy any time
-- Add a custom exercise with muscle + equipment + pattern tagging
-- Movement + equipment split: one library row per movement, equipment chosen at add time
-
-### Themes and accessibility
-- 7 themes × light/dark, plus a custom accent with enforced contrast
-- Colorblind-separated body-part palette (ΔE ≥ 15) — themes never touch chart colors
-
-### Coach (AI)
-- Critique, plan, ask, encouragement — mock (offline) + Gemini (signed-in)
-- De-identified summary: no names, notes, or absolute dates leave the device
-- Plans materialize as templates you can edit before starting
-
-### Auth, sync, portability
-- Magic link with OTP fallback; anonymous device-only mode
-- Composite provider — the app works signed out; upgrading claims the device data
-- Sync: event-driven push, delta pull on open/foreground/manual, deferred
-  in-progress workouts, dead-letter + retry, discard-local, hard erase
-- In-app account deletion (edge function; cascades from `auth.users`)
-- JSON export + import
-- Units — lb/kg, mi/km, in/cm, exact round-trip; storage always metric
-
-### Production plumbing
-- **PWA** — service worker scoped to `/workout-tracker/`, `navigator.storage.persist()`
-  called on every load so iOS doesn't evict IndexedDB under pressure
-- **First-party error log** — signed-in crashes write a scrubbed record to
-  Supabase (`client_errors`, INSERT-only RLS); no third-party SDK
-- **Keep-alive** — daily `pg_cron` heartbeat against Supabase's free-tier idle timer
-- **Privacy policy** — [`docs/privacy-policy.md`](docs/privacy-policy.md), linked
-  from Sign-in and Account
-
-## Not built yet
-
-Deliberately deferred, in spec order:
-
-- **iOS install-education card.** The service worker and
-  `navigator.storage.persist()` are already wired; what remains is the in-app
-  prompt teaching Safari users to "Add to Home Screen" so the persistence prompt
-  actually fires.
-- **Server-scheduled push** for the rest timer (spec §12.3). The in-app timer
-  works; a notification with the app closed needs the Cloudflare Durable Object.
-- **Remaining charts** (spec §9). 23 built, covering every color job so the
-  system is proven; the rest are mostly the Body sub-tab and follow the same
-  pattern.
-- **Per-exercise charts on the library detail screen** — data and chart
-  components both exist; wiring only.
-- **Plate calculator**, **URL filter state**, **pinned charts**.
-- **API-level keep-alive.** The `pg_cron` heartbeat is applied; a GH Actions
-  HTTP cron would also cover the "API activity" interpretation of Supabase's
-  idle policy (workflow snippet in DEPLOYING.md).
-- **Weekly R2 backup** — manual JSON export covers it for now.
-- **Progress photos** (spec §4.9).
-- **E2E tests** (Playwright). Unit + repository + sync coverage is solid; the
-  offline→force-quit→reconnect path is verified manually.
-
-## Layout
+Right now everything lives in this one repo (`tracker-apps`) so the engine can churn cheaply
+against its consumers. Each app *will* graduate to its own repo consuming a published engine —
+see [`docs/architecture.md`](docs/architecture.md) for the monorepo→polyrepo plan and its trigger.
 
 ```
-src/
-  domain/types.ts        Every entity. Mirrors the Postgres schema 1:1.
-  lib/
-    units.ts             All unit conversion. The only place it happens.
-    dates.ts             All timezone-aware bucketing and formatting.
-    metrics.ts           Volume, e1RM, working sets, region attribution. Pure.
-    palette.ts           Region → color. Fixed assignment, never reordered.
-    theme.ts             Theme presets, accent contrast enforcement.
-    sessionTitle.ts      Auto titles: date + time of day + inferred split.
-  db/
-    database.ts          Dexie schema + the outbox queue.
-    seed/                Base movements + biomarker definitions.
-  auth/                  AuthProvider interface + local + Supabase impls.
-  data/                  The single data-access boundary. Nothing else touches Dexie.
-  sync/                  Outbox drain, delta pull, dead-letter, retry.
-  features/
-    workout/             The active workout screen — the product.
-    insights/            Charts. Lazy-loaded so logging never pays for ECharts.
-    coach/               AI coach: mock + Gemini providers, summary builder.
-    auth/                Sign-in and account screens.
-    library/             The exercise library.
-    timer/               Rest timer state and all sound cues.
-    history/  home/  profile/  templates/  onboarding/
-  components/            Card, Button, SwipeableRow, DragList, FilterSheet, Toast.
-  styles/
-    tokens.css           Chart palette + status colors. NOT themeable.
-    themes.css           The 7 presets. Surfaces, ink, accent.
-
-test/                    Mirrors src/. 375 tests.
-supabase/
-  migrations/            16 SQL migrations; RLS policies + test suite.
-  functions/             coach, delete-account.
+tracker-apps/
+├── packages/
+│   ├── core/            @tracker-engine/core         cn, money
+│   └── local-first/     @tracker-engine/local-first  sync engine + Supabase backend
+├── apps/
+│   ├── reputation/      REPutation — workout tracker (the shipping app)
+│   └── ledger/          Expense tracker demo (runs on the engine)
+├── docs/                cross-cutting design (architecture, decisions)
+└── README.md            this handbook
 ```
 
-Five conventions worth knowing before editing:
+Common tasks from the repo root: `npm run dev` (REPutation) · `npm run dev:ledger` ·
+`npm test` / `npm run typecheck` (all workspaces) · `npm run build` / `build:native` /
+`release:ios` (REPutation). Or work inside an app dir directly.
 
-**Storage is always metric.** `weightKg`, `distanceM`, centimeters. Conversion
-happens only in `lib/units.ts`, at the display boundary. Storing display units
-would push conversion into every chart and PR comparison, where one miss
-silently corrupts a year of analytics.
+## The family
 
-**Nothing imports Dexie except `data/`.** Screens call the repository (a barrel
-over `data/outbox.ts`, `data/workouts.ts`, …). That's what keeps the sync layer
-swappable.
+| Repo | What it is | Status |
+|---|---|---|
+| **tracker-engine** | The shared `@tracker-engine/*` packages (see below) | forming (2 of ~6 extracted) |
+| **reputation** | Workout tracker (REPutation) — the first app; the engine was carved out of it | shipping (App Store review) |
+| **reputation-site** | REPutation's marketing site (Astro → reputation.fitness) | live |
+| **ledger** | Expense tracker — connects accounts, AI spending insights | demo runs on the engine (in `apps/ledger`) |
+| **ledger-site** | Ledger's marketing site | future |
+| **calorie** *(+ site)* | Calorie / nutrition tracker | idea |
 
-**A set with values is a logged set.** There is no confirm step and no separate
-"completed" toggle for the user to manage — `isCompleted` is derived on write.
-An untouched row is a placeholder and is ignored by every metric, then discarded
-on finish. A session with nothing logged is discarded outright.
+Every app repo owns only what's genuinely its own — its domain model, database schema,
+screens, native shell (Capacitor + iOS/Android + Fastlane), and Vercel/PWA deploy. Everything
+mechanical comes from the engine.
 
-**Nothing above `src/auth/types.ts` knows how auth works.** Screens call
-`useAuth()`. Swapping the local provider for Supabase is one file.
+## The engine (`@tracker-engine/*`)
 
-**Themes may not touch chart series colors.** `styles/themes.css` controls
-surfaces, ink, and the accent. The 7 body-part colors in `tokens.css` are fixed
-because their specific ordering is what passes the colorblind-separation checks,
-and because a color has to keep meaning the same body part. Charts draw marks in
-categorical slot 1, never the accent — every theme accent but Mono measures
-inside the ΔE≥15 series floor of some body-part color.
+The reusable foundation lives in the `tracker-engine` repo and is published as a scope of
+packages. Each depends only *downward*, and an app grabs a specific one — e.g.
+`import { SyncEngine } from '@tracker-engine/local-first'`.
 
-## Comments: keep them to an absolute minimum
+| Package | Responsibility | Status |
+|---|---|---|
+| `@tracker-engine/core` | Pure primitives: `cn`, `money`, dates, units, palette, theme | started (`cn`, `money`) |
+| `@tracker-engine/local-first` | Sync engine (outbox drain, delta pull, dead-letter, retry), `SyncBackend` + Supabase impl, Dexie scaffolding — driven by an injected `SyncSchema` + `SyncDeps`, zero app imports | **done** |
+| `@tracker-engine/auth` | Provider interface + local + Supabase providers, composite "works-signed-out" flow | planned |
+| `@tracker-engine/platform` | Capacitor wrappers: haptics, files, notify, status bar, deep links | planned |
+| `@tracker-engine/ui` | Component kit: Button, Card, BottomSheet, ProgressRing, Toast, DragList … | planned |
+| `@tracker-engine/ai-coach` | Chat shell + `CoachProvider` interface + offline mock; app supplies summary + tools | planned |
 
-The code should read on its own; reorganize or rename rather than annotate. Add
-a comment ONLY when it earns its place — a non-obvious *why* (a workaround, an
-invariant, a subtle ordering constraint), never a *what* the code already
-states. Prefer one terse line over a block. No banners, no restating signatures,
-no `// loop over exercises`. When editing, delete comments that have gone stale
-or that narrate the obvious. The existing comments in this repo are the intended
-density ceiling, not a target — most functions have none.
+> Note on the scope: `@tracker-engine` is the *namespace*, not a package — you always import a
+> specific one (`@tracker-engine/core`, `@tracker-engine/local-first`, …). Keeping them separate
+> is what lets each be versioned and depended on independently.
 
-## Deploying
+An app builds itself by writing a domain, a DB schema, and features on top of these — for
+sync, it hands the engine a `SyncSchema` (what to sync) and `SyncDeps` (where it lives). See
+`docs/architecture.md` for how the engine is consumed and how repos relate over time.
 
-Lives at `hirshguha.com/workout-tracker`, from its own Vercel project that the
-website proxies to. See **DEPLOYING.md** — including the service-worker scope
-trap to avoid before the PWA ships.
+## Shared design philosophy
 
-## Native apps (iOS / Android)
+These principles hold across every app. They're why the shared engine is possible.
 
-The iOS and Android apps are the **same web build** wrapped in Capacitor — no
-separate codebase (design: `docs/design-native-app.md`). The `ios/` project is
-committed and pre-configured; `android/` is generated on demand.
+1. **Local-first, offline-authoritative.** IndexedDB (Dexie) is the source of truth; the UI
+   never awaits the network. Sync reconciles in the background against Supabase. The app is
+   fully usable signed out, on a plane, forever.
 
-**After any web-side change** (a bug fix, a new feature — most work), reship with:
+2. **One canonical representation, one conversion boundary.** Store one canonical unit
+   (kilograms for lifting, integer minor units for money) and convert *only* at the display
+   edge. Storing display units pushes conversion into every chart and comparison, where one
+   miss silently corrupts a year of data.
 
-```bash
-npm run native:ios       # rebuild web (BASE_PATH=/) → cap sync → open Xcode
-```
+3. **One data-access boundary.** Nothing but the `data/` layer touches the database. Screens
+   call a repository. That single seam is what keeps the sync layer swappable.
 
-Then in Xcode press **Run** (⌘R) for the simulator, or **Product → Archive** for
-a store build. If Xcode is already open, `npm run native:sync` alone re-copies the
-build and you just hit Run again. That's the whole loop — no `cap add`, no
-re-signing.
+4. **Layered, and enforced.** `domain → lib → db → data → sync/auth → components → features →
+   app`, dependencies point only downward. A tiny checker (`scripts/check-architecture.mjs`,
+   not ESLint — TS 7 isn't supported yet) fails the build on an upward import.
 
-You need more than a resync only when:
+5. **Auth is one seam.** Nothing above `auth/types` knows how auth works; screens call
+   `useAuth()`. A composite provider means the app works signed out, and signing in *claims*
+   the device's local data rather than discarding it.
 
-- **Adding/removing a Capacitor plugin or editing `capacitor.config.ts`** — still
-  just `native:sync` (it runs `cap sync`, which re-resolves plugins).
-- **Changing app icons or the splash** (`resources/`) — run `npm run native:icons`.
-- **Editing native config** (`Info.plist`, entitlements) — those live in `ios/`;
-  just rebuild.
-- **Submitting a new App Store build** — bump Version/Build in Xcode, then Archive.
+6. **Sync is a contract, not a feature.** Backend-agnostic (`SyncBackend`), domain-agnostic
+   (`SyncSchema`), app-agnostic (`SyncDeps`). Outbox drains parents-before-children, delta
+   pull on open/foreground (never a timer), poison writes dead-letter with retry, and there's
+   always a discard-local and a hard-erase escape hatch. Server-authored (pull-only) tables
+   handle data the client doesn't own (e.g. bank transactions).
 
-Full runbook (Xcode signing, App Store Connect, Play Store, Universal Links,
-privacy) is in **DEPLOYING.md → Native builds**.
+7. **Calc-consistency.** Every quantity is computed one way, in one place. "Weekly volume" or
+   "monthly spend" must be identical in the coach, the charts, and the budgets — divergent
+   implementations of the same number are a bug class we've been burned by and now lint for.
 
-## Where the design decisions live
+8. **Privacy by default.** AI summaries are de-identified — no names, notes, or absolute dates
+   leave the device. Errors go to a first-party log (no third-party SDK). Financial data
+   raises the bar further: third-party tokens live server-side only, RLS on every table,
+   column encryption, biometric lock.
 
-`workout-app-spec.md` is the reference. Section numbers appear in comments
-throughout the source where a non-obvious choice traces back to it — e.g.
-`SetRow.tsx` cites §6.2 for why typing a value is what logs a set.
+9. **AI is an optional, swappable provider.** One `CoachProvider` interface, two
+   implementations: an edge-function model (Gemini) when signed in, and a data-driven offline
+   **mock** so the feature works — and demos — with no network and no key.
+
+10. **One build, native shell.** The iOS/Android apps are the *same web build* wrapped in
+    Capacitor — no second codebase. PWA and native ship from one bundle. Releases are one
+    command (Fastlane → TestFlight).
+
+11. **Comments minimal.** The code reads on its own; rename or reorganize rather than
+    annotate. Comment only a non-obvious *why* — a workaround, an invariant, an ordering
+    constraint — never a *what*. Most functions have none.
+
+12. **Ship-quality plumbing is table stakes.** Service worker + `storage.persist()`, a
+    keep-alive cron against the free-tier idle timer, a scrubbed error log, and a real privacy
+    policy — every app gets these, so they belong in the shared patterns, not reinvented.
+
+## How the repos relate
+
+Short version: **monorepo now, polyrepo later.** Today the engine + REPutation live together so
+the engine can churn cheaply against its first consumer. When the second app (Ledger) arrives it
+joins as a second workspace — still one repo, still no publish step — which is what battle-tests
+the engine's API. Only once the engine stabilizes and the repo-count actually hurts do we split
+each app into its own repo consuming a **published, versioned** engine (GitHub Packages +
+Changesets). The full rationale, consumption mechanics, and migration sequence are in
+[`docs/architecture.md`](docs/architecture.md).
+
+## Conventions when working in any repo
+
+- **Verify before declaring done:** `typecheck`, `test`, `lint` (architecture), `build`, and
+  `build:native` all green. The test suite is the safety net for every refactor.
+- **Behavior-preserving refactors stay behavior-preserving** — prove it with the existing
+  tests before adding anything new.
+- **Secrets never commit.** API keys (`**/*.p8`), `.env` with IDs, third-party tokens — all
+  git-ignored; tokens for account aggregation live server-side only.
+- **Don't "finish" rebrands of load-bearing identifiers.** Some internal IDs (OAuth schemes,
+  storage keys, bundle IDs, backup format fields) are deliberately kept on old names.
+
+## Where the deep design lives
+
+- [`docs/architecture.md`](docs/architecture.md) — the org: engine, monorepo→polyrepo, consumption, migration.
+- `reputation/workout-app-spec.md` — the exhaustive product spec the `§`-numbered code comments cite.
+- `reputation/docs/design-expense-tracker.md` — the Ledger design + the engine split (will migrate here once `tracker-engine` is its own repo).
+- Each app/site README — what's specific to that one.

@@ -1,7 +1,10 @@
+# Global patterns for the monorepo. App-specific artifact paths live in each app's
+# own .gitignore (e.g. apps/reputation/.gitignore for Capacitor/Fastlane artifacts).
+
 # dependencies
 node_modules
 
-# build output
+# build output (any package/app)
 dist
 .vercel
 
@@ -14,33 +17,8 @@ npm-debug.log*
 .idea
 .vscode
 
-# local env — never commit secrets
+# secrets — never commit
 .env
 .env.*
 !.env.example
-
-# screenshots produced by the smoke scripts
-screenshots
-
-# Supabase CLI local state
-supabase/.temp/
-
-# Capacitor native builds — the ios/ and android/ projects ARE committed, but
-# their generated/build artifacts are not.
-ios/App/Pods/
-ios/App/build/
-ios/App/App/public/
-ios/.gitignore
-android/build/
-android/app/build/
-android/.gradle/
-android/app/src/main/assets/public/
-android/local.properties
-.gradle/
-
-# fastlane run artifacts (config Fastfile/Appfile ARE committed)
-ios/App/fastlane/report.xml
-ios/App/fastlane/Preview.html
-ios/App/fastlane/test_output/
 **/*.p8
-ios/App/fastlane/README.md

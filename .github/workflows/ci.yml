@@ -19,17 +19,13 @@ jobs:
           node-version: 24 # recent LTS; dev runs 26, both build the same
           cache: npm
       - run: npm ci
-      - name: Typecheck (app)
+      - name: Typecheck (all workspaces)
         run: npm run typecheck
-      - name: Typecheck (packages)
-        run: npm run typecheck:packages
-      - name: Architecture + calc-consistency lint
+      - name: Architecture + calc-consistency lint (reputation)
         run: npm run lint
-      - name: Tests (app)
+      - name: Tests (all workspaces)
         run: npm test
-      - name: Tests (workspaces — e.g. ledger)
-        run: npm test --workspaces --if-present
-      - name: Build (web)
+      - name: Build REPutation (web)
         run: npm run build
-      - name: Build (native bundle)
+      - name: Build REPutation (native bundle)
         run: npm run build:native
