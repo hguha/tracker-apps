@@ -45,6 +45,7 @@ const WRITE_STORES: Record<string, WritableStore> = {
   entries: db.entries as unknown as WritableStore,
   categories: db.categories as unknown as WritableStore,
   budgets: db.budgets as unknown as WritableStore,
+  rules: db.rules as unknown as WritableStore,
   categoryOverrides: db.categoryOverrides as unknown as WritableStore,
 }
 

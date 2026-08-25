@@ -96,6 +96,16 @@ export interface Budget extends Stamped {
   limitMinor: number // positive
 }
 
+// Client-authored: "categorize matching transactions as X". Applied to uncategorized
+// bank transactions (as an override) and manual entries. First enabled match wins.
+export interface Rule extends Stamped {
+  id: string
+  merchantMatch: string
+  matchType: 'contains' | 'equals'
+  categoryId: string
+  enabled: boolean
+}
+
 export type ColorSchemePreference = 'system' | 'light' | 'dark'
 export type ThemePreset = 'default' | 'slate' | 'mono'
 

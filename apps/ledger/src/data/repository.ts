@@ -5,6 +5,7 @@
 import { db } from '@/db'
 import { syncStamp, touch } from '@tracker-engine/local-first'
 import { toLedgerEntries } from '@/lib/entries'
+import { categoryForMerchant } from '@/lib/rules'
 import type {
   Account,
   Budget,
@@ -12,6 +13,7 @@ import type {
   Entry,
   LedgerEntry,
   Profile,
+  Rule,
 } from '@/domain/types'
 import { enqueue, newId, patch } from './outbox'
 
@@ -37,6 +39,10 @@ export async function getProfile(): Promise<Profile | undefined> {
 
 export async function listBudgets(): Promise<Budget[]> {
   return live(await db.budgets.toArray())
+}
+
+export async function listRules(): Promise<Rule[]> {
+  return live(await db.rules.toArray())
 }
 
 export async function getEntry(id: string): Promise<Entry | undefined> {
@@ -165,6 +171,77 @@ export async function setBudget(categoryId: string, limitMinor: number): Promise
   const id = newId()
   await db.budgets.put({ id, categoryId, limitMinor, ...syncStamp() })
   await enqueue('budgets', id)
+}
+
+// ── Rules & auto-categorization (client-authored) ────────────────────────────────
+
+export async function addRule(input: {
+  merchantMatch: string
+  matchType?: 'contains' | 'equals'
+  categoryId: string
+}): Promise<string> {
+  const id = newId()
+  await db.rules.put({
+    id,
+    merchantMatch: input.merchantMatch.trim(),
+    matchType: input.matchType ?? 'contains',
+    categoryId: input.categoryId,
+    enabled: true,
+    ...syncStamp(),
+  })
+  await enqueue('rules', id)
+  await applyRules()
+  return id
+}
+
+export async function updateRule(
+  id: string,
+  changes: Partial<Pick<Rule, 'merchantMatch' | 'matchType' | 'categoryId' | 'enabled'>>,
+): Promise<void> {
+  await patch('rules', id, changes)
+  await applyRules()
+}
+
+export async function deleteRule(id: string): Promise<void> {
+  await patch('rules', id, { deletedAt: Date.now() })
+}
+
+/**
+ * Applies the rules to uncategorized activity. A bank transaction with no override
+ * gets one (rules beat the aggregator's guess); a manual entry with no category gets
+ * filled. Idempotent — a row that already has an override/category is left alone —
+ * so it's safe to run after every sync. Returns how many rows it categorized.
+ */
+export async function applyRules(): Promise<number> {
+  const [rules, transactions, entries, overrides] = await Promise.all([
+    listRules(),
+    db.transactions.toArray(),
+    db.entries.toArray(),
+    db.categoryOverrides.toArray(),
+  ])
+  if (rules.length === 0) return 0
+
+  const hasOverride = new Set(live(overrides).map((o) => o.id))
+  let applied = 0
+
+  for (const txn of live(transactions)) {
+    if (hasOverride.has(txn.id)) continue
+    const categoryId = categoryForMerchant(txn.merchant, rules)
+    if (!categoryId) continue
+    await db.categoryOverrides.put({ id: txn.id, categoryId, ...syncStamp() })
+    await enqueue('categoryOverrides', txn.id)
+    applied += 1
+  }
+
+  for (const entry of live(entries)) {
+    if (entry.categoryId !== null) continue
+    const categoryId = categoryForMerchant(entry.merchant, rules)
+    if (!categoryId) continue
+    await patch('entries', entry.id, { categoryId })
+    applied += 1
+  }
+
+  return applied
 }
 
 // ── Profile (client-authored) ────────────────────────────────────────────────────

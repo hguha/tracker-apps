@@ -10,6 +10,7 @@ import type { SyncRowStore, SyncSchema } from '@tracker-engine/local-first'
 const STORES: Record<string, SyncRowStore> = {
   categories: db.categories as unknown as SyncRowStore,
   budgets: db.budgets as unknown as SyncRowStore,
+  rules: db.rules as unknown as SyncRowStore,
   entries: db.entries as unknown as SyncRowStore,
   categoryOverrides: db.categoryOverrides as unknown as SyncRowStore,
   accounts: db.accounts as unknown as SyncRowStore,
@@ -21,7 +22,7 @@ const STORES: Record<string, SyncRowStore> = {
 // appearance is therefore per-device for now.
 export const ledgerSyncSchema: SyncSchema = {
   // Client-authored first (these drain), then the pull-only bank tables.
-  tables: ['categories', 'budgets', 'entries', 'categoryOverrides', 'accounts', 'transactions'],
+  tables: ['categories', 'budgets', 'rules', 'entries', 'categoryOverrides', 'accounts', 'transactions'],
 
   // A transaction depends on its account; a budget on its category; an entry on its
   // (optional) account. Push parents before children.
@@ -44,6 +45,7 @@ export const ledgerSyncSchema: SyncSchema = {
     'categoryOverrides',
     'entries',
     'budgets',
+    'rules',
     'accounts',
     'categories',
   ],

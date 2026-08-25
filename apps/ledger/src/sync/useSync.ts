@@ -8,6 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { liveQuery } from 'dexie'
 import { db } from '@/db'
 import { isReadyToPush } from '@tracker-engine/local-first'
+import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { bankSource } from './aggregation'
 import { LedgerSyncEngine } from './engine'
@@ -58,7 +59,11 @@ export function useSync(): SyncStatus {
 
     const reconcile = () => {
       if (cancelled || isOffline()) return
-      engine.sync().catch((error) => console.warn('[sync] reconcile threw', error))
+      engine
+        .sync()
+        // Auto-categorize freshly pulled bank transactions per the user's rules.
+        .then(() => repo.applyRules())
+        .catch((error) => console.warn('[sync] reconcile threw', error))
     }
 
     reconcile()

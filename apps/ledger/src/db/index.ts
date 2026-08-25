@@ -11,6 +11,7 @@ import type {
   CategoryOverride,
   Entry,
   Profile,
+  Rule,
   Transaction,
 } from '@/domain/types'
 
@@ -25,6 +26,7 @@ export class LedgerDatabase extends Dexie {
   categoryOverrides!: EntityTable<CategoryOverride, 'id'>
   categories!: EntityTable<Category, 'id'>
   budgets!: EntityTable<Budget, 'id'>
+  rules!: EntityTable<Rule, 'id'>
   profile!: EntityTable<Profile, 'id'>
   outbox!: EntityTable<OutboxEntry, 'seq'>
   deadLetter!: EntityTable<DeadLetterEntry, 'seq'>
@@ -44,6 +46,8 @@ export class LedgerDatabase extends Dexie {
       deadLetter: '++seq, table, rowId',
       syncState: 'table',
     })
+    // Rules (Phase 1: auto-categorization) added in v2.
+    this.version(2).stores({ rules: 'id, updatedAt' })
   }
 }
 
@@ -57,6 +61,7 @@ const DOMAIN_TABLES = [
   db.categoryOverrides,
   db.categories,
   db.budgets,
+  db.rules,
   db.profile,
   db.outbox,
   db.deadLetter,
