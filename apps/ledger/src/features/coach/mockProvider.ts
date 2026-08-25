@@ -89,7 +89,7 @@ async function answer(text: string): Promise<{ text: string; action?: CoachActio
 }
 
 export const mockCoachProvider: CoachProvider = {
-  name: 'Ledger Coach (offline)',
+  name: 'COINcidence Coach (offline)',
 
   async chat(
     contents: GeminiContent[],

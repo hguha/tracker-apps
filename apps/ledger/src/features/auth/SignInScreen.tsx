@@ -35,8 +35,8 @@ export function SignInScreen() {
   return (
     <div className="mx-auto flex h-full max-w-sm flex-col justify-center gap-6 px-6">
       <div className="text-center">
-        <div className="text-4xl">📒</div>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">Ledger</h1>
+        <div className="text-4xl">🪙</div>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">COINcidence</h1>
         <p className="mt-1 text-sm text-ink-muted">
           Your money, tracked privately on your device.
         </p>

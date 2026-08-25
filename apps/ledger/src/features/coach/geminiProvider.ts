@@ -23,7 +23,7 @@ import {
 const MAX_TOOL_ROUNDS = 4
 
 export const geminiCoachProvider: CoachProvider = {
-  name: 'Ledger Coach (Gemini)',
+  name: 'COINcidence Coach (Gemini)',
 
   chat(
     contents: GeminiContent[],

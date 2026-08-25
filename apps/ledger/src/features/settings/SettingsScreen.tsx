@@ -60,7 +60,7 @@ export function SettingsScreen({ sync }: { sync: SyncStatus }) {
       </div>
 
       <p className="mt-6 text-center text-xs text-ink-muted">
-        Ledger · runs on the shared @tracker-engine
+        COINcidence · runs on the shared @tracker-engine
       </p>
     </div>
   )

@@ -53,7 +53,13 @@ origin (e.g. `http://localhost:5174`, and the deployed URL) and the native schem
 
 ```bash
 supabase secrets set GEMINI_API_KEY=...          # finance coach
-# Plaid (see below):
+
+# Teller (recommended aggregator — free for up to 100 connections). PEM from the
+# Teller dashboard (Application → Certificates):
+supabase secrets set TELLER_CERT="$(cat certificate.pem)"
+supabase secrets set TELLER_KEY="$(cat private_key.pem)"
+
+# Plaid (alternative; no free production tier — pay per call/account):
 supabase secrets set PLAID_CLIENT_ID=...
 supabase secrets set PLAID_SECRET=...
 supabase secrets set PLAID_ENV=sandbox           # sandbox | development | production
@@ -61,22 +67,31 @@ supabase secrets set PLAID_ENV=sandbox           # sandbox | development | produ
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected into functions automatically.
 
-## What I need from you for Plaid
+## Bank connections — Teller (recommended) or Plaid
 
-Bank connectivity is server-mediated (the Plaid token never touches the app). To turn
-the scaffold on:
+Aggregation is server-mediated: the bank token never touches the app. The client opens
+the provider's Connect widget, the token is stored server-side, and a sync function
+fills the pull-only `accounts`/`transactions` tables — which the client pulls normally.
 
-1. **A Plaid account** — sign up at dashboard.plaid.com (free). Sandbox is instant;
-   Development/Production require Plaid's review.
-2. **API keys** — from the Plaid dashboard (Team Settings → Keys): `client_id` and the
-   **Sandbox** `secret`. Set them as the Supabase secrets above with `PLAID_ENV=sandbox`.
-3. **Products / scopes** — this scaffold requests `transactions` for `US`/`en`. Tell me
-   if you want `auth`, `investments`, or more country codes and I'll widen the Link token.
-4. **Redirect URI** (only needed for OAuth banks / production): register an
-   `https://…/plaid-oauth` redirect in the Plaid dashboard and I'll pass it to Link.
+### Teller (recommended — genuinely free for personal use)
 
-With sandbox keys set, "Connect a bank" in Settings opens Plaid Link, `plaid-exchange`
-stores the token, and `plaid-sync` fills the bank-feed tables — which the client pulls
-through the normal sync path (those tables are server-authored / pull-only).
+Free for **up to 100 live connections** ($0 until you exceed that). US banks; auth is a
+client certificate + Teller Connect.
 
-Until then, the app runs on the seeded demo feed (`src/sync/mockData.ts`).
+What I need from you:
+1. **A Teller account** — sign up at teller.io (free). Create an Application.
+2. **A client certificate** — Teller dashboard → your Application → Certificates:
+   download `certificate.pem` + `private_key.pem`. Set them as `TELLER_CERT` / `TELLER_KEY`
+   secrets (see above). Sandbox test tokens work without a cert.
+3. **The Teller Application ID** — I'll use it to open Teller Connect in the app.
+
+Then `teller-store-enrollment` saves the enrollment token and `teller-sync` pulls the data.
+
+### Plaid (alternative — no free production tier)
+
+Plaid sandbox is free (fake data), but **production is pay-as-you-go from the first
+account** (Balance ~$0.10/call, Transactions ~$0.30/account/mo) — no perpetual free
+tier. Use it only if you need coverage Teller lacks. Set `PLAID_CLIENT_ID`/`PLAID_SECRET`/
+`PLAID_ENV`; scaffold requests `transactions` for `US`/`en`.
+
+Until an aggregator is wired, the app runs on the seeded demo feed (`src/sync/mockData.ts`).

@@ -61,9 +61,10 @@ export function AccountsScreen({ onBack }: { onBack: () => void }) {
           <div className="mt-3 rounded-2xl border border-line bg-surface p-4 text-sm text-ink-secondary">
             <p className="font-medium text-ink">Plaid Link — ready to wire</p>
             <p className="mt-1">
-              Bank connections run through Plaid, server-side: the app opens Link, and an
-              Edge Function exchanges the token and syncs transactions into your account.
-              Add your Plaid sandbox keys to the Ledger Supabase project to turn this on.
+              Bank connections run server-side through Teller (free for up to 100
+              connections): the app opens Teller Connect, and an Edge Function syncs
+              balances + transactions into your account. Add your Teller certificate to
+              the COINcidence backend to turn this on.
             </p>
             <p className="mt-2 text-ink-muted">
               Until then, the demo runs on a realistic seeded feed.

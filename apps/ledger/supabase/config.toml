@@ -23,3 +23,10 @@ verify_jwt = true
 # User-triggered sync runs under the caller's JWT; the function then uses the service
 # role internally to write the (server-authored) accounts/transactions rows.
 verify_jwt = true
+
+# Teller — the recommended aggregator (free up to 100 connections).
+[functions.teller-store-enrollment]
+verify_jwt = true
+
+[functions.teller-sync]
+verify_jwt = true
