@@ -54,3 +54,20 @@ test('the offline coach answers from the ledger', async ({ page }) => {
   // The offline mock computes a real answer naming a subscription.
   await expect(page.getByText(/Netflix/)).toBeVisible({ timeout: 15_000 })
 })
+
+test('imports a CSV statement into the ledger (the free path)', async ({ page }) => {
+  await continueOnDevice(page)
+
+  await page.getByRole('button', { name: 'Settings' }).click()
+  await page.getByRole('button', { name: 'Import transactions' }).click()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'statement.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Date,Description,Amount\n2026-08-15,Chipotle Import,-11.25\n'),
+  })
+  await page.getByRole('button', { name: /Import 1 transaction/ }).click()
+  await expect(page.getByText(/Imported 1/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'History' }).click()
+  await expect(page.getByText('Chipotle Import')).toBeVisible()
+})

@@ -4,13 +4,14 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Trash2 } from 'lucide-react'
-import { Button } from '@tracker-engine/ui'
+import { Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Button, useToast } from '@tracker-engine/ui'
 import { SubScreen } from '@/components/SubScreen'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { CategoryPickerSheet } from '@/components/CategoryPickerSheet'
 import { EmptyState } from '@/components/EmptyState'
 import * as repo from '@/data/repository'
+import { autoCategorize } from './aiCategorize'
 import { cn } from '@/lib/cn'
 
 export function RulesScreen({ onBack }: { onBack: () => void }) {
@@ -18,6 +19,24 @@ export function RulesScreen({ onBack }: { onBack: () => void }) {
   const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const catMap = new Map(categories.map((c) => [c.id, c]))
   const [adding, setAdding] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const toast = useToast()
+
+  async function runAi() {
+    setAiBusy(true)
+    try {
+      const { created, considered } = await autoCategorize()
+      toast.show(
+        considered === 0
+          ? 'Nothing left to categorize'
+          : `AI created ${created} rule${created === 1 ? '' : 's'} from ${considered} merchants`,
+      )
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'AI categorization failed')
+    } finally {
+      setAiBusy(false)
+    }
+  }
 
   return (
     <SubScreen title="Rules" onBack={onBack}>
@@ -25,6 +44,12 @@ export function RulesScreen({ onBack }: { onBack: () => void }) {
         Automatically categorize transactions by merchant. Rules apply to new activity
         and clean up existing transactions.
       </p>
+
+      <div className="px-4 pb-3">
+        <Button variant="secondary" className="w-full" onClick={runAi} disabled={aiBusy}>
+          <Sparkles size={16} className="mr-1" /> {aiBusy ? 'Categorizing…' : 'Auto-categorize with AI'}
+        </Button>
+      </div>
 
       {rules.length === 0 ? (
         <div className="px-4">

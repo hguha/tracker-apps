@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { syncStamp, touch } from '@tracker-engine/local-first'
 import { toLedgerEntries } from '@/lib/entries'
 import { categoryForMerchant } from '@/lib/rules'
+import { dedupeKey, type ParsedTxn } from '@/lib/import'
 import type {
   Account,
   Budget,
@@ -98,6 +99,49 @@ export async function updateEntry(
 
 export async function deleteEntry(id: string): Promise<void> {
   await patch('entries', id, { deletedAt: Date.now() })
+}
+
+/**
+ * Imports parsed statement rows as manual entries (the free, aggregator-independent
+ * path), skipping any that already exist as an entry OR a bank transaction (dedup by
+ * date+merchant+amount). Applies rules afterward so imports land categorized.
+ */
+export async function importEntries(
+  rows: ParsedTxn[],
+): Promise<{ added: number; skipped: number }> {
+  const [entries, transactions] = await Promise.all([
+    db.entries.toArray(),
+    db.transactions.toArray(),
+  ])
+  const seen = new Set<string>()
+  for (const e of live(entries)) seen.add(dedupeKey(e))
+  for (const t of live(transactions)) seen.add(dedupeKey(t))
+
+  let added = 0
+  let skipped = 0
+  for (const row of rows) {
+    if (seen.has(dedupeKey(row))) {
+      skipped += 1
+      continue
+    }
+    seen.add(dedupeKey(row))
+    const id = newId()
+    await db.entries.put({
+      id,
+      accountId: null,
+      categoryId: null,
+      amountMinor: row.amountMinor,
+      currency: 'USD',
+      date: row.date,
+      merchant: row.merchant,
+      note: 'Imported',
+      ...syncStamp(),
+    })
+    await enqueue('entries', id)
+    added += 1
+  }
+  if (added > 0) await applyRules()
+  return { added, skipped }
 }
 
 // ── Categorization ─────────────────────────────────────────────────────────────
@@ -204,6 +248,26 @@ export async function updateRule(
 
 export async function deleteRule(id: string): Promise<void> {
   await patch('rules', id, { deletedAt: Date.now() })
+}
+
+/** Adds many rules at once (e.g. from AI categorization), applying them once at the end. */
+export async function addRulesBulk(
+  items: { merchantMatch: string; matchType?: 'contains' | 'equals'; categoryId: string }[],
+): Promise<number> {
+  for (const item of items) {
+    const id = newId()
+    await db.rules.put({
+      id,
+      merchantMatch: item.merchantMatch.trim(),
+      matchType: item.matchType ?? 'contains',
+      categoryId: item.categoryId,
+      enabled: true,
+      ...syncStamp(),
+    })
+    await enqueue('rules', id)
+  }
+  if (items.length > 0) await applyRules()
+  return items.length
 }
 
 /**

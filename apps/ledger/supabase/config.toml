@@ -13,6 +13,10 @@ verify_jwt = true
 # gateway signature check is what stops a user deleting anyone but themselves.
 verify_jwt = true
 
+[functions.categorize]
+# Shares GEMINI_API_KEY with coach; gated to signed-in users.
+verify_jwt = true
+
 [functions.plaid-link-token]
 verify_jwt = true
 

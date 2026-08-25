@@ -10,14 +10,16 @@ Internal name stays `ledger` (workspace, dir, Dexie store `ledger`, storage key
 — the same way REPutation keeps `fitnote` internally. The brand everywhere user-facing
 is **COINcidence**.
 
-## Aggregator decision
+## Aggregator decision (updated: no free live API exists)
 
-**Teller** is the primary aggregator: free for up to 100 live connections (US banks,
-client-cert + Teller Connect). **Plaid** stays as an alternative but has *no free
-production tier* (pay-as-you-go from the first account). Both are wired server-side
-(token never touches the client); the client only pulls the resulting server-authored
-rows. **CSV/OFX import** is the always-free fallback (Phase 5). The choice lives behind
-one seam: `src/sync/aggregation.ts` + the `teller-*` / `plaid-*` edge functions.
+Checked Teller, Plaid, Stripe Financial Connections — **none offer a free tier for US
+personal use** anymore (Teller advertises 100 free connections but access is gated;
+Plaid + Stripe are pay-as-you-go from the first account: ~$0.10 balance / $0.30 txns
+per account/mo). So the **free primary path is CSV/OFX statement import** (done) —
+works with any bank, $0, no aggregator account. Live auto-sync via Plaid/Stripe stays
+scaffolded server-side as an optional pay-as-you-go add-on (pennies/month for one
+person). Everything sits behind one seam: `src/sync/aggregation.ts` + the `teller-*` /
+`plaid-*` edge functions; imported rows become client-authored manual entries.
 
 ## Done (foundation)
 
@@ -28,13 +30,16 @@ one seam: `src/sync/aggregation.ts` + the `teller-*` / `plaid-*` edge functions.
 
 ## Phases (each independently shippable, all free)
 
-### Phase 1 — Rules + auto-categorization *(foundation for everything)*
-- `Rule` model (client-authored): match on merchant (contains/equals/regex) → category.
-- Pure `lib/rules.ts` (`categoryOf(entry, rules)`), applied when new bank txns arrive
-  (writes a synced override) and previewable in History.
-- Settings → Rules screen (list/add/edit); "always categorize X as Y" from a txn.
-- **AI categorization**: a `categorize` edge-function mode that maps a batch of
-  uncategorized merchants → category ids (Gemini), plus "turn this into a rule".
+### Phase 1 — Rules + auto-categorization ✅ DONE
+- `Rule` model (client-authored, synced); pure `lib/rules.ts`; `repo.applyRules()` runs
+  after every sync + on edits (bank txns via synced overrides, manual entries in place).
+- Settings → Rules screen.
+- **AI categorization** ✅: `categorize` Edge Function (Gemini) maps uncategorized
+  merchants → categories; the client turns them into rules ("Auto-categorize with AI").
+
+### Phase 1.5 — Free data in ✅ DONE
+- **CSV/OFX import** (`lib/import.ts` + Settings → Import): parse any bank export,
+  dedupe, create client-authored entries, auto-categorize. The free path in.
 
 ### Phase 2 — Full financial picture
 - **Manual accounts** (cash, property, vehicles, loans, crypto) so net worth is complete.
@@ -54,10 +59,10 @@ one seam: `src/sync/aggregation.ts` + the `teller-*` / `plaid-*` edge functions.
 - **Natural-language search** ("coffee since June") backed by the metrics layer.
 
 ### Phase 5 — Breadth
-- **Investments/holdings** (Teller/Plaid investments) — positions + value in net worth.
-- **CSV/OFX import** — always-free ingestion; maps to the same server/manual model.
+- **Investments/holdings** (Plaid investments) — positions + value in net worth.
 - **Reports** — monthly statement, category trends, year-in-review.
 - **Multi-currency** display.
+- **Live sync** (optional): wire Plaid/Stripe pay-as-you-go for hands-off import.
 
 ## Not doing (can't be free / not replicable)
 - Bill *negotiation* (Rocket Money uses humans). Closest: AI drafts a cancellation email.

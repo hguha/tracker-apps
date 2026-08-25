@@ -3,7 +3,7 @@
 // data to focused sub-screens.
 
 import { useState } from 'react'
-import { ChevronRight, CreditCard, Database, Palette, Tag, Wand2 } from 'lucide-react'
+import { ChevronRight, CreditCard, Database, Palette, Tag, Upload, Wand2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button } from '@tracker-engine/ui'
 import { initialsOf } from '@tracker-engine/auth'
@@ -14,10 +14,11 @@ import type { SyncStatus } from '@/sync/useSync'
 import { AppearanceScreen } from './AppearanceScreen'
 import { CategoriesScreen } from './CategoriesScreen'
 import { RulesScreen } from './RulesScreen'
+import { ImportScreen } from './ImportScreen'
 import { AccountsScreen } from './AccountsScreen'
 import { DataScreen } from './DataScreen'
 
-type Sub = 'root' | 'appearance' | 'categories' | 'rules' | 'accounts' | 'data'
+type Sub = 'root' | 'appearance' | 'categories' | 'rules' | 'import' | 'accounts' | 'data'
 
 export function SettingsScreen({ sync }: { sync: SyncStatus }) {
   const [sub, setSub] = useState<Sub>('root')
@@ -27,6 +28,7 @@ export function SettingsScreen({ sync }: { sync: SyncStatus }) {
   if (sub === 'appearance') return <AppearanceScreen onBack={() => setSub('root')} />
   if (sub === 'categories') return <CategoriesScreen onBack={() => setSub('root')} />
   if (sub === 'rules') return <RulesScreen onBack={() => setSub('root')} />
+  if (sub === 'import') return <ImportScreen onBack={() => setSub('root')} />
   if (sub === 'accounts') return <AccountsScreen onBack={() => setSub('root')} />
   if (sub === 'data') return <DataScreen sync={sync} onBack={() => setSub('root')} />
 
@@ -50,6 +52,7 @@ export function SettingsScreen({ sync }: { sync: SyncStatus }) {
 
       <div className="mx-4 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
         <Row icon={<CreditCard size={18} />} label="Bank accounts" onClick={() => setSub('accounts')} />
+        <Row icon={<Upload size={18} />} label="Import transactions" onClick={() => setSub('import')} />
         <Row icon={<Tag size={18} />} label="Categories & budgets" onClick={() => setSub('categories')} />
         <Row icon={<Wand2 size={18} />} label="Rules (auto-categorize)" onClick={() => setSub('rules')} />
         <Row icon={<Palette size={18} />} label="Appearance" onClick={() => setSub('appearance')} />

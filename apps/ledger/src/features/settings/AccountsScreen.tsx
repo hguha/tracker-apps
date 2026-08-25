@@ -59,15 +59,15 @@ export function AccountsScreen({ onBack }: { onBack: () => void }) {
 
         {showConnect && (
           <div className="mt-3 rounded-2xl border border-line bg-surface p-4 text-sm text-ink-secondary">
-            <p className="font-medium text-ink">Plaid Link — ready to wire</p>
+            <p className="font-medium text-ink">Import is the free way in</p>
             <p className="mt-1">
-              Bank connections run server-side through Teller (free for up to 100
-              connections): the app opens Teller Connect, and an Edge Function syncs
-              balances + transactions into your account. Add your Teller certificate to
-              the COINcidence backend to turn this on.
+              There's no free live-sync bank API anymore, so the free path is{' '}
+              <b>Settings → Import transactions</b>: drop in a CSV/OFX export from any
+              bank and it lands in your ledger, deduped and auto-categorized.
             </p>
             <p className="mt-2 text-ink-muted">
-              Until then, the demo runs on a realistic seeded feed.
+              Automatic live sync (Plaid/Stripe) is scaffolded server-side and can be
+              switched on later — it's pay-as-you-go (pennies/month for personal use).
             </p>
           </div>
         )}
