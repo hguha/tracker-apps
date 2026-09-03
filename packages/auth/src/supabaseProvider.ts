@@ -78,8 +78,11 @@ export class SupabaseAuthProvider implements AuthProvider {
    * link. A project with autoconfirm on returns a session instead, which is passed
    * straight through.
    *
-   * Note: Supabase deliberately reports success for an address that already exists,
-   * so this can't be used to enumerate accounts.
+   * Note: Supabase reports success for an address that already has an account and
+   * sends nothing, so that sign-up can't be used to enumerate accounts. Left
+   * unhandled that's a dead end — the app says "check your email" for a message
+   * that will never arrive — so it's detected (an existing user comes back with an
+   * empty `identities` array) and reported as "already registered" instead.
    */
   async signUpWithPassword(
     email: string,
@@ -96,6 +99,12 @@ export class SupabaseAuthProvider implements AuthProvider {
     })
     if (error) return { kind: 'error', message: error.message }
     if (data.session) return { kind: 'session', session: toSession(data.session) }
+    if (data.user && (data.user.identities?.length ?? 0) === 0) {
+      return {
+        kind: 'error',
+        message: 'That email already has an account. Sign in, or reset your password.',
+      }
+    }
     return { kind: 'confirm-sent', email: email.trim() }
   }
 

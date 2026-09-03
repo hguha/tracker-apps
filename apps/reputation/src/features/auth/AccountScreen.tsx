@@ -10,6 +10,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { db, isReadyToPush } from '@/db/database'
+import { clearDbOwner } from '@/db/owner'
+import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { isBackendConfigured } from '@/backend/supabaseClient'
 import { initialsOf, passwordProblem } from '@/auth/types'
@@ -32,6 +34,35 @@ export function AccountScreen({
   const [nameDraft, setNameDraft] = useState<string | null>(null)
   const [dialog, setDialog] = useState<'none' | 'sign-out' | 'delete'>('none')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  /**
+   * Deletion has to be awaited and its failure surfaced: this used to fire and
+   * forget, so a rejected call (or an undeployed function) still showed "Account
+   * deleted" while the account lived on. On success the local database is cleared
+   * too — the server rows are gone, and leaving a deleted account's history on the
+   * device would resurface it on the next sign-in.
+   */
+  async function confirmDelete() {
+    setIsDeleting(true)
+    try {
+      await deleteAccount()
+      await repo.clearLocalData()
+      clearDbOwner()
+      setDialog('none')
+      setDeleteConfirmation('')
+      toast.show('Account deleted')
+    } catch (cause) {
+      setDialog('none')
+      toast.show(
+        cause instanceof Error
+          ? `Could not delete the account: ${cause.message}`
+          : 'Could not delete the account. Try again.',
+      )
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   // Account owns identity + account actions; counts and sync live on Data & sync.
   // Kept here only for the sign-out/delete safety checks, not shown as stats.
@@ -216,11 +247,10 @@ export function AccountScreen({
           }}
           confirmLabel="Delete everything"
           confirmVariant="danger"
-          isConfirmDisabled={deleteConfirmation.trim().toLowerCase() !== 'delete'}
-          onConfirm={() => {
-            void deleteAccount()
-            toast.show('Account deleted')
-          }}
+          isConfirmDisabled={
+            deleteConfirmation.trim().toLowerCase() !== 'delete' || isDeleting
+          }
+          onConfirm={() => void confirmDelete()}
         >
           <p className="text-[14px] text-ink-secondary">
             This removes{' '}
