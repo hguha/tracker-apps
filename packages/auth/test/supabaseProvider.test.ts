@@ -12,10 +12,14 @@ const { SupabaseAuthProvider } = await import('../src/supabaseProvider')
 
 type SignUpResponse = { data: unknown; error: unknown }
 
-function providerWith(signUp: () => Promise<SignUpResponse>) {
+function providerWith(
+  signUp: () => Promise<SignUpResponse>,
+  verifyOtp?: (args: unknown) => Promise<SignUpResponse>,
+) {
   const client = {
     auth: {
       signUp,
+      verifyOtp,
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
   } as unknown as SupabaseClient
@@ -72,5 +76,38 @@ describe('signUpWithPassword', () => {
     }))
     const result = await provider.signUpWithPassword('new@example.com', 'x')
     expect(result).toEqual({ kind: 'error', message: 'Password is too weak' })
+  })
+})
+
+describe('verifySignupCode', () => {
+  const noSignUp = async () => ({ data: { user: null, session: null }, error: null })
+
+  it('confirms the account with the code from the email — no redirect involved', async () => {
+    const calls: unknown[] = []
+    const provider = providerWith(noSignUp, async (args) => {
+      calls.push(args)
+      return { data: { session: { user: USER, access_token: 't' } }, error: null }
+    })
+
+    const result = await provider.verifySignupCode('new@example.com', ' 123456 ')
+    expect(result.kind).toBe('session')
+    // Verified as a signup token, and the code is trimmed before sending.
+    expect(calls[0]).toEqual({
+      email: 'new@example.com',
+      token: '123456',
+      type: 'signup',
+    })
+  })
+
+  it('reports a bad code rather than throwing', async () => {
+    const provider = providerWith(noSignUp, async () => ({
+      data: { session: null },
+      error: { message: 'Token has expired or is invalid' },
+    }))
+    const result = await provider.verifySignupCode('new@example.com', '000000')
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'Token has expired or is invalid',
+    })
   })
 })

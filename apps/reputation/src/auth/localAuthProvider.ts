@@ -130,6 +130,12 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'error', message: 'There is nothing to confirm for a device-only account.' }
   }
 
+  // Without a server there's no address to confirm, so the local dev code stands in
+  // (same code the sign-in panel accepts).
+  verifySignupCode(email: string, code: string): Promise<SignInResult> {
+    return this.verifyCode(email, code)
+  }
+
   async updatePassword(): Promise<void> {
     throw new Error('A device-only account has no password.')
   }

@@ -108,6 +108,18 @@ export class SupabaseAuthProvider implements AuthProvider {
     return { kind: 'confirm-sent', email: email.trim() }
   }
 
+  async verifySignupCode(email: string, code: string): Promise<SignInResult> {
+    const { data, error } = await this.client.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: 'signup',
+    })
+    if (error || !data.session) {
+      return { kind: 'error', message: error?.message ?? 'That code did not work.' }
+    }
+    return { kind: 'session', session: toSession(data.session) }
+  }
+
   async resendConfirmation(email: string): Promise<SignInResult> {
     const { error } = await this.client.auth.resend({
       type: 'signup',

@@ -32,6 +32,7 @@ interface AuthState {
   signInWithPassword: (email: string, password: string) => Promise<SignInResult>
   sendPasswordReset: (email: string) => Promise<SignInResult>
   resendConfirmation: (email: string) => Promise<SignInResult>
+  verifySignupCode: (email: string, code: string) => Promise<SignInResult>
   updatePassword: (password: string) => Promise<void>
   /** True after landing from a recovery link, until a new password is set. */
   isRecoveringPassword: boolean
@@ -124,6 +125,10 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     (email: string) => provider.resendConfirmation(email),
     [],
   )
+  const verifySignupCode = useCallback(
+    (email: string, code: string) => provider.verifySignupCode(email, code),
+    [],
+  )
   const updatePassword = useCallback(
     (password: string) => provider.updatePassword(password),
     [],
@@ -147,6 +152,7 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       signInWithPassword,
       sendPasswordReset,
       resendConfirmation,
+      verifySignupCode,
       updatePassword,
       isRecoveringPassword,
       clearPasswordRecovery,
@@ -163,6 +169,7 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       signInWithPassword,
       sendPasswordReset,
       resendConfirmation,
+      verifySignupCode,
       updatePassword,
       isRecoveringPassword,
       clearPasswordRecovery,

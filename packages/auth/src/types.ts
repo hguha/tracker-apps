@@ -44,6 +44,13 @@ export interface AuthProvider {
   sendPasswordReset(email: string): Promise<SignInResult>
   /** Re-sends the sign-up confirmation email, for when the first one is lost. */
   resendConfirmation(email: string): Promise<SignInResult>
+  /**
+   * Confirms a new account with the code from the sign-up email, instead of the
+   * link. A code has no redirect URL to get wrong, so it behaves the same on the
+   * web, an installed PWA, and inside the native shell — and it still works when
+   * the email is opened on a different device.
+   */
+  verifySignupCode(email: string, code: string): Promise<SignInResult>
   /** Sets (or replaces) the password for the signed-in user. */
   updatePassword(password: string): Promise<void>
 
