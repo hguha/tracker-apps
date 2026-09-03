@@ -102,6 +102,34 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'session', session }
   }
 
+  // Passwords are a server credential — there's nothing to check them against on a
+  // device-only account, and pretending otherwise would imply protection that
+  // isn't there. Without a backend, signing up locally just establishes the
+  // device session so the app is still usable.
+  async signUpWithPassword(email: string, _password: string): Promise<SignInResult> {
+    if (!isValidEmail(email)) {
+      return { kind: 'error', message: 'That doesn’t look like an email address.' }
+    }
+    const normalized = email.trim().toLowerCase()
+    const session = await this.establish(normalized, deriveName(normalized), true)
+    return { kind: 'session', session }
+  }
+
+  async signInWithPassword(): Promise<SignInResult> {
+    return {
+      kind: 'error',
+      message: 'Password sign-in needs a connection. Use a code, or continue on this device.',
+    }
+  }
+
+  async sendPasswordReset(): Promise<SignInResult> {
+    return { kind: 'error', message: 'Password resets need a connection.' }
+  }
+
+  async updatePassword(): Promise<void> {
+    throw new Error('A device-only account has no password.')
+  }
+
   private async establish(
     email: string,
     displayName: string,

@@ -7,6 +7,7 @@ import {
   effectiveWeightKg,
   estimatedOneRepMaxKg,
   isWorkingSet,
+  needsBodyweight,
   topSetWeightKg,
   volumeLoadKg,
   weightForRepsKg,
@@ -102,6 +103,14 @@ describe('effectiveWeightKg', () => {
     expect(effectiveWeightKg(set({ weightKg: null }), pushup, null, 'bodyweight')).toBeNull()
   })
 
+  it('is null for EVERY bodyweight mode when bodyweight is unknown', () => {
+    // Including `weighted`: its load is bodyweight + plates, so the plates alone
+    // are not a usable number. The UI asks for a bodyweight instead (needsBodyweight).
+    const pullup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 1 })
+    expect(effectiveWeightKg(set({ weightKg: 20 }), pullup, null, 'weighted')).toBeNull()
+    expect(effectiveWeightKg(set({ weightKg: 20 }), pullup, null, 'assisted')).toBeNull()
+  })
+
   it('takes the entered weight at face value for a dumbbell lift — no doubling (§6)', () => {
     // Equipment no longer affects the effective weight: the user logs the weight
     // they intend, so a 40 kg dumbbell entry is 40 kg of effective load, not 80.
@@ -109,9 +118,30 @@ describe('effectiveWeightKg', () => {
   })
 })
 
+describe('needsBodyweight', () => {
+  it('flags a bodyweight movement with no session bodyweight, whatever the mode', () => {
+    const pullup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 1 })
+    expect(needsBodyweight(pullup, null)).toBe(true)
+    expect(needsBodyweight(pullup, 80)).toBe(false)
+  })
+
+  it('never flags an externally-loaded lift', () => {
+    expect(needsBodyweight(exercise(), null)).toBe(false)
+  })
+})
+
 describe('volumeLoadKg', () => {
   it('sums weight times reps', () => {
     expect(volumeLoadKg([set(), set()], exercise(), 80, null)).toBe(1000)
+  })
+
+  it('scores zero for bodyweight work with no bodyweight — the case needsBodyweight guards', () => {
+    const pullup = exercise({ trackingType: 'bodyweight_reps', bodyweightFactor: 1 })
+    expect(volumeLoadKg([set({ weightKg: null, reps: 10 })], pullup, null, 'bodyweight')).toBe(0)
+    // With a bodyweight it counts the full effective load (80 kg × 10).
+    expect(volumeLoadKg([set({ weightKg: null, reps: 10 })], pullup, 80, 'bodyweight')).toBe(800)
+    // Weighted adds the plates on top: (80 + 20) × 5.
+    expect(volumeLoadKg([set({ weightKg: 20, reps: 5 })], pullup, 80, 'weighted')).toBe(500)
   })
 
   it('leaves planned-but-unperformed sets out of the total', () => {

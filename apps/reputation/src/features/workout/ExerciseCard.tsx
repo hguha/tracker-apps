@@ -4,16 +4,19 @@ import { Card } from '@/components/Card'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { formatDayHeading, formatRelativeDay } from '@/lib/dates'
-import type {
-  DistanceUnit,
-  Equipment,
-  Exercise,
-  LoadMode,
-  PerformedSession,
-  PerformedSet,
-  WeightUnit,
-  WorkoutSet,
+import {
+  LOAD_MODE_LABELS,
+  type DistanceUnit,
+  type Equipment,
+  type Exercise,
+  type LoadMode,
+  type PerformedSession,
+  type PerformedSet,
+  type WeightUnit,
+  type WorkoutSet,
 } from '@/domain/types'
+import { needsBodyweight } from '@/lib/metrics'
+import { parseNumber, weightToKg } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
 import { composeExerciseName } from '@/lib/labels'
 import { CardioEntry } from './CardioEntry'
@@ -150,6 +153,15 @@ export function ExerciseCard(props: ExerciseCardProps) {
             <h3 className="truncate text-[16px] font-semibold tracking-tight">
               {composeExerciseName(exercise.name, equipment)}
             </h3>
+            {/* The same movement can appear twice in a session under different
+                load modes (bodyweight vs weighted), and the composed name is
+                identical for both — so the mode is labelled, always, not just
+                when it's the non-default. */}
+            {loadMode !== null && (
+              <span className="shrink-0 rounded-full bg-sunken px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-secondary">
+                {LOAD_MODE_LABELS[loadMode]}
+              </span>
+            )}
             {supersetGroup !== null && (
               <span className="shrink-0 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
                 Superset
@@ -163,6 +175,12 @@ export function ExerciseCard(props: ExerciseCardProps) {
             <p className="mt-0.5 text-[11.5px] text-ink-muted">
               {loggingHint(equipment, weightUnit)}
             </p>
+          )}
+          {/* Without a bodyweight there is no load to multiply, so these sets would
+              score zero volume and set no records. Ask for it here rather than
+              logging a silent zero. */}
+          {needsBodyweight(exercise, bodyweightKg) && !isPastSession && (
+            <BodyweightPrompt weightUnit={weightUnit} />
           )}
           {(sessionNote.trim() !== '' || exercise.notes.trim() !== '') && (
             <button
@@ -270,6 +288,58 @@ export function ExerciseCard(props: ExerciseCardProps) {
         </>
       )}
     </Card>
+  )
+}
+
+/**
+ * Inline capture for a missing bodyweight. Writing it through the normal metric
+ * path caches it on the profile and stamps it onto the in-progress session, so the
+ * volume on screen fixes itself immediately (see data/bodyMetrics).
+ */
+function BodyweightPrompt({ weightUnit }: { weightUnit: WeightUnit }) {
+  const [value, setValue] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const parsed = parseNumber(value)
+
+  async function save() {
+    if (parsed === null || parsed <= 0) return
+    setIsSaving(true)
+    try {
+      await repo.addMetricEntry({
+        definitionId: 'bodyweight',
+        value: weightToKg(parsed, weightUnit),
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-1.5 rounded-lg bg-sunken px-2.5 py-2">
+      <p className="text-[11.5px] leading-snug text-ink-secondary">
+        Add your bodyweight so these reps count toward volume and records.
+      </p>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <input
+          inputMode="decimal"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void save()
+          }}
+          placeholder={weightUnit}
+          aria-label={`Bodyweight (${weightUnit})`}
+          className="tabular h-8 w-20 rounded-md border border-line bg-surface px-2 text-[14px] outline-none focus:border-accent"
+        />
+        <button
+          onClick={() => void save()}
+          disabled={parsed === null || parsed <= 0 || isSaving}
+          className="h-8 rounded-md bg-accent px-2.5 text-[12.5px] font-semibold text-accent-contrast disabled:opacity-40"
+        >
+          Save
+        </button>
+      </div>
+    </div>
   )
 }
 

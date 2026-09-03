@@ -47,6 +47,27 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'error', message: 'Email sign-in needs a backend.' }
   }
 
+  // Passwords are a server credential; a device-only book has nothing to check one
+  // against, so these are unavailable rather than pretending to protect anything.
+  async signUpWithPassword(): Promise<SignInResult> {
+    return { kind: 'error', message: 'Creating an account needs a backend.' }
+  }
+
+  async signInWithPassword(): Promise<SignInResult> {
+    return {
+      kind: 'error',
+      message: 'Password sign-in needs a backend. Continue on this device instead.',
+    }
+  }
+
+  async sendPasswordReset(): Promise<SignInResult> {
+    return { kind: 'error', message: 'Password resets need a backend.' }
+  }
+
+  async updatePassword(): Promise<void> {
+    throw new Error('A device-only book has no password.')
+  }
+
   async continueOffline(displayName = 'You'): Promise<SignInResult> {
     const session: Session = {
       userId: LOCAL_USER_ID,

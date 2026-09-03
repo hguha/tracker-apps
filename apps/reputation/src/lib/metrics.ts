@@ -52,6 +52,20 @@ export function effectiveWeightKg(
   }
 }
 
+/**
+ * True when this row's load can't be computed because the session has no
+ * bodyweight on it. Every bodyweight mode (including `weighted`, whose load is
+ * bodyweight + the entered plates) needs it, so without a bodyweight the set
+ * would silently score zero volume. Screens use this to ask for the number
+ * instead of showing a wrong zero.
+ */
+export function needsBodyweight(
+  exercise: VolumeExercise,
+  bodyweightKg: number | null,
+): boolean {
+  return exercise.trackingType === 'bodyweight_reps' && bodyweightKg === null
+}
+
 export function volumeLoadKg(
   sets: VolumeInput[],
   exercise: VolumeExercise,

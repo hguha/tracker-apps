@@ -71,6 +71,66 @@ export class SupabaseAuthProvider implements AuthProvider {
     return { kind: 'error', message: 'Offline accounts are only available locally.' }
   }
 
+  /**
+   * Creates the account and signs in in one step. With email confirmation off in
+   * the project, Supabase returns a session here; if a project still requires
+   * confirmation there's no session, which we surface as a sent-email result
+   * rather than pretending sign-in succeeded.
+   */
+  async signUpWithPassword(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<SignInResult> {
+    const { data, error } = await this.client.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: this.authRedirectUrl(),
+        ...(displayName ? { data: { display_name: displayName.trim() } } : {}),
+      },
+    })
+    if (error) return { kind: 'error', message: error.message }
+    if (data.session) return { kind: 'session', session: toSession(data.session) }
+    return { kind: 'code-sent', email: email.trim() }
+  }
+
+  async signInWithPassword(email: string, password: string): Promise<SignInResult> {
+    const { data, error } = await this.client.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+    if (error || !data.session) {
+      return { kind: 'error', message: error?.message ?? 'That email and password did not match.' }
+    }
+    return { kind: 'session', session: toSession(data.session) }
+  }
+
+  async sendPasswordReset(email: string): Promise<SignInResult> {
+    const { error } = await this.client.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: this.authRedirectUrl(),
+    })
+    if (error) return { kind: 'error', message: error.message }
+    return { kind: 'reset-sent', email: email.trim() }
+  }
+
+  async updatePassword(password: string): Promise<void> {
+    const { error } = await this.client.auth.updateUser({ password })
+    if (error) throw new Error(error.message)
+  }
+
+  /**
+   * Fires when the user lands from a recovery link, so the app can ask for a new
+   * password. Supabase signs them in for that window — the session is real, which
+   * is why the app must handle this rather than silently continue.
+   */
+  onPasswordRecovery(callback: () => void): () => void {
+    const { data } = this.client.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') callback()
+    })
+    return () => data.subscription.unsubscribe()
+  }
+
   async signOut(): Promise<void> {
     await this.client.auth.signOut()
   }

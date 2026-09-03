@@ -84,6 +84,24 @@ export class CompositeAuthProvider implements AuthProvider {
     return this.remote.verifyCode(email, code)
   }
 
+  signUpWithPassword(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<SignInResult> {
+    return this.remote.signUpWithPassword(email, password, displayName)
+  }
+  signInWithPassword(email: string, password: string): Promise<SignInResult> {
+    return this.remote.signInWithPassword(email, password)
+  }
+  sendPasswordReset(email: string): Promise<SignInResult> {
+    return this.remote.sendPasswordReset(email)
+  }
+  /** Recovery only exists for the remote account. */
+  onPasswordRecovery(callback: () => void): () => void {
+    return this.remote.onPasswordRecovery(callback)
+  }
+
   // Offline path → local, always available even with a backend configured.
   continueOffline(displayName?: string): Promise<SignInResult> {
     return this.local.continueOffline(displayName)
@@ -98,6 +116,11 @@ export class CompositeAuthProvider implements AuthProvider {
     return this.localSession
       ? this.local.updateDisplayName(name)
       : this.remote.updateDisplayName(name)
+  }
+  updatePassword(password: string): Promise<void> {
+    return this.localSession
+      ? this.local.updatePassword()
+      : this.remote.updatePassword(password)
   }
   deleteAccount(): Promise<void> {
     return this.localSession ? this.local.deleteAccount() : this.remote.deleteAccount()

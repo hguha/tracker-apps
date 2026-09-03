@@ -10,7 +10,15 @@
     <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="REPutation" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!--
+      `default`, NOT `black-translucent`. Translucent makes an installed PWA draw
+      under the status bar, and iOS reports safe-area-inset-top as 0 there, so
+      pt-safe adds nothing and every screen sits too high. `default` lets iOS inset
+      the web view below the status bar itself. This meta only applies to the
+      home-screen PWA — the Capacitor shell uses the native status bar (see
+      capacitor.config.ts + platform/statusBar), so native is unaffected.
+    -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!-- Relative hrefs so they resolve under the /app/ base path. -->
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />

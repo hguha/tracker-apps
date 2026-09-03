@@ -24,6 +24,17 @@ interface AuthState {
   signInWithEmail: (email: string) => Promise<SignInResult>
   verifyCode: (email: string, code: string) => Promise<SignInResult>
   continueOffline: (displayName?: string) => Promise<SignInResult>
+  signUpWithPassword: (
+    email: string,
+    password: string,
+    displayName?: string,
+  ) => Promise<SignInResult>
+  signInWithPassword: (email: string, password: string) => Promise<SignInResult>
+  sendPasswordReset: (email: string) => Promise<SignInResult>
+  updatePassword: (password: string) => Promise<void>
+  /** True after landing from a recovery link, until a new password is set. */
+  isRecoveringPassword: boolean
+  clearPasswordRecovery: () => void
   signOut: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
   deleteAccount: () => Promise<void>
@@ -50,6 +61,14 @@ if (provider instanceof CompositeAuthProvider) {
 
 export function AuthProviderScope({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false)
+
+  // A recovery link signs the user in, so without this the app would just open as
+  // normal and the "reset my password" intent would be silently lost.
+  useEffect(() => {
+    if (!(provider instanceof CompositeAuthProvider)) return
+    return provider.onPasswordRecovery(() => setIsRecoveringPassword(true))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -87,6 +106,24 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     (displayName?: string) => provider.continueOffline(displayName),
     [],
   )
+  const signUpWithPassword = useCallback(
+    (email: string, password: string, displayName?: string) =>
+      provider.signUpWithPassword(email, password, displayName),
+    [],
+  )
+  const signInWithPassword = useCallback(
+    (email: string, password: string) => provider.signInWithPassword(email, password),
+    [],
+  )
+  const sendPasswordReset = useCallback(
+    (email: string) => provider.sendPasswordReset(email),
+    [],
+  )
+  const updatePassword = useCallback(
+    (password: string) => provider.updatePassword(password),
+    [],
+  )
+  const clearPasswordRecovery = useCallback(() => setIsRecoveringPassword(false), [])
   const signOut = useCallback(() => provider.signOut(), [])
   const updateDisplayName = useCallback(
     (name: string) => provider.updateDisplayName(name),
@@ -101,6 +138,12 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       signInWithEmail,
       verifyCode,
       continueOffline,
+      signUpWithPassword,
+      signInWithPassword,
+      sendPasswordReset,
+      updatePassword,
+      isRecoveringPassword,
+      clearPasswordRecovery,
       signOut,
       updateDisplayName,
       deleteAccount,
@@ -110,6 +153,12 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       signInWithEmail,
       verifyCode,
       continueOffline,
+      signUpWithPassword,
+      signInWithPassword,
+      sendPasswordReset,
+      updatePassword,
+      isRecoveringPassword,
+      clearPasswordRecovery,
       signOut,
       updateDisplayName,
       deleteAccount,

@@ -1,10 +1,18 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, Check, ChevronLeft, LogIn, LogOut, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Check,
+  ChevronLeft,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Trash2,
+} from 'lucide-react'
 import { db, isReadyToPush } from '@/db/database'
 import { useAuth } from '@/auth/AuthContext'
 import { isBackendConfigured } from '@/backend/supabaseClient'
-import { initialsOf } from '@/auth/types'
+import { initialsOf, passwordProblem } from '@/auth/types'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -109,6 +117,9 @@ export function AccountScreen({
             Used for the greeting on Home.
           </p>
         </Card>
+
+        {/* Only a real (server) account has a password to change. */}
+        {!session.isLocal && <PasswordCard />}
 
         {session.isLocal && (
           <Card className="p-4">
@@ -270,5 +281,102 @@ function Dialog({
         </Button>
       </div>
     </BottomSheet>
+  )
+}
+
+/**
+ * Set or change the account password. Collapsed by default so it doesn't compete
+ * with identity; a user who signed up with an emailed code has no password yet and
+ * uses this to add one.
+ */
+function PasswordCard() {
+  const { updatePassword } = useAuth()
+  const toast = useToast()
+  const [isOpen, setIsOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [isBusy, setIsBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const problem = passwordProblem(password)
+
+  async function save() {
+    if (problem !== null) return
+    setIsBusy(true)
+    setError(null)
+    try {
+      await updatePassword(password)
+      setPassword('')
+      setIsOpen(false)
+      toast.show('Password updated')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update the password.')
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  if (!isOpen) {
+    return (
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-sunken"
+        >
+          <KeyRound size={18} className="shrink-0 text-ink-muted" />
+          <span className="text-[15px] font-semibold">Set or change password</span>
+        </button>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="p-4">
+      <label
+        htmlFor="account-password"
+        className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-ink-muted"
+      >
+        New password
+      </label>
+      <input
+        id="account-password"
+        type="password"
+        autoComplete="new-password"
+        value={password}
+        onChange={(event) => {
+          setPassword(event.target.value)
+          setError(null)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') void save()
+        }}
+        placeholder="••••••••"
+        className="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+      />
+      <p className="mt-1.5 text-[12px] text-ink-muted">{problem ?? 'Looks good.'}</p>
+      {error && (
+        <p role="alert" className="mt-2 text-[13px] text-critical">
+          {error}
+        </p>
+      )}
+      <div className="mt-3 flex gap-2">
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={() => {
+            setIsOpen(false)
+            setPassword('')
+            setError(null)
+          }}
+        >
+          Cancel
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={problem !== null || isBusy}
+          onClick={() => void save()}
+        >
+          Save
+        </Button>
+      </div>
+    </Card>
   )
 }

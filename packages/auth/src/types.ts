@@ -10,6 +10,8 @@ export interface Session {
 export type SignInResult =
   | { kind: 'session'; session: Session }
   | { kind: 'code-sent'; email: string }
+  /** A reset email is on its way; there's no session yet. */
+  | { kind: 'reset-sent'; email: string }
   | { kind: 'error'; message: string }
 
 export interface AuthProvider {
@@ -21,6 +23,21 @@ export interface AuthProvider {
   verifyCode(email: string, code: string): Promise<SignInResult>
   /** Offline-only path: claims the on-device account with no verification. */
   continueOffline(displayName?: string): Promise<SignInResult>
+
+  // ── Password credentials ───────────────────────────────────────────────────
+  // A password is the second way into the same account, so a user who can't
+  // receive email (or a store reviewer) isn't locked out. Sign-up returns a
+  // session immediately — no "confirm your email, now sign in again" round trip.
+  signUpWithPassword(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<SignInResult>
+  signInWithPassword(email: string, password: string): Promise<SignInResult>
+  /** Emails a recovery link; completing it lands the app in recovery mode. */
+  sendPasswordReset(email: string): Promise<SignInResult>
+  /** Sets (or replaces) the password for the signed-in user. */
+  updatePassword(password: string): Promise<void>
 
   signOut(): Promise<void>
   updateDisplayName(name: string): Promise<void>
@@ -41,6 +58,22 @@ export const CODE_MAX_LENGTH = 10
 export function isSubmittableCode(value: string): boolean {
   const trimmed = value.trim()
   return trimmed.length >= CODE_MIN_LENGTH && trimmed.length <= CODE_MAX_LENGTH
+}
+
+// Supabase's default minimum. Kept here so the client can say what's wrong before
+// a round trip, and so every app enforces the same floor.
+export const PASSWORD_MIN_LENGTH = 6
+
+/** null when acceptable, else the reason to show the user. */
+export function passwordProblem(value: string): string | null {
+  if (value.length < PASSWORD_MIN_LENGTH) {
+    return `Use at least ${PASSWORD_MIN_LENGTH} characters.`
+  }
+  return null
+}
+
+export function isValidPassword(value: string): boolean {
+  return passwordProblem(value) === null
 }
 
 export function initialsOf(displayName: string): string {

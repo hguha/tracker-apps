@@ -9,6 +9,7 @@ import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import { ToastProvider } from '@/components/Toast'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
+import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
 import { AccountScreen } from '@/features/auth/AccountScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
 import { BadgesScreen } from '@/features/home/BadgesScreen'
@@ -70,7 +71,11 @@ export function App() {
 
 // A signed-out user gets the auth screen and nothing else (§11.1.3).
 function AuthGate() {
-  const { session, isLoading } = useAuth()
+  const { session, isLoading, isRecoveringPassword } = useAuth()
+
+  // A recovery link signs the user in, so this has to win over the normal app —
+  // otherwise arriving from "reset my password" just opens Home.
+  if (isRecoveringPassword) return <SetPasswordScreen />
 
   if (isLoading) {
     return (
