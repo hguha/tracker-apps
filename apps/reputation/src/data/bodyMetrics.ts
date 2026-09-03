@@ -1,6 +1,7 @@
-import { db, syncStamp, touch } from '@/db/database'
+import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import { type MetricDefinition, type MetricEntry } from '@/domain/types'
+import { backfillWorkoutBodyweights } from './bodyweightBackfill'
 import { enqueue, newId } from './outbox'
 import { updateProfile } from './profile'
 
@@ -45,20 +46,12 @@ export async function addMetricEntry(input: {
   await db.metricEntries.add(entry)
   await enqueue('metricEntries', entry.id)
 
-  // Bodyweight feeds bodyweight-exercise volume, so cache the latest and stamp it
-  // onto any in-progress session that lacks one (finished sessions are the migration's job).
+  // Bodyweight feeds bodyweight-exercise volume, so cache the latest and repair
+  // every workout that has none — finished ones included, since those sets score
+  // zero volume until the row carries a bodyweight.
   if (input.definitionId === 'bodyweight') {
     await updateProfile({ bodyweightCacheKg: input.value })
-    const active = await db.workouts
-      .filter((w) => w.endedAt === null && w.deletedAt === null && w.bodyweightKg === null)
-      .toArray()
-    for (const workout of active) {
-      await db.workouts.update(workout.id, {
-        bodyweightKg: input.value,
-        ...touch(workout.clientRev),
-      })
-      await enqueue('workouts', workout.id)
-    }
+    await backfillWorkoutBodyweights()
   }
 
   return entry.id

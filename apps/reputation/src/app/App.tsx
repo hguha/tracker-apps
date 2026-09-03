@@ -109,6 +109,10 @@ function SignedInApp() {
       // Fold duplicate movements together and move bodyweight lifts onto the
       // load-mode model. Idempotent, so it's a no-op once a device is migrated.
       .then(() => repo.migrateExerciseModel())
+      // Repairs sessions logged before a bodyweight was on file — their bodyweight
+      // lifts score zero volume until the workout row carries one, and the boot
+      // migration above only covers devices that had measurements at upgrade time.
+      .then(() => repo.backfillWorkoutBodyweights())
       // Order matters: end any edit session this launch inherited, then free the
       // writes it was holding.
       .then(() => repo.endStaleEditSessions())

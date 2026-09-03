@@ -72,10 +72,14 @@ export class SupabaseAuthProvider implements AuthProvider {
   }
 
   /**
-   * Creates the account and signs in in one step. With email confirmation off in
-   * the project, Supabase returns a session here; if a project still requires
-   * confirmation there's no session, which we surface as a sent-email result
-   * rather than pretending sign-in succeeded.
+   * Creates the account. When the project requires email confirmation (it does —
+   * it's what stops scripted signups burning the free tier), there's no session
+   * yet, so this returns `confirm-sent` and the caller tells the user to open the
+   * link. A project with autoconfirm on returns a session instead, which is passed
+   * straight through.
+   *
+   * Note: Supabase deliberately reports success for an address that already exists,
+   * so this can't be used to enumerate accounts.
    */
   async signUpWithPassword(
     email: string,
@@ -92,7 +96,17 @@ export class SupabaseAuthProvider implements AuthProvider {
     })
     if (error) return { kind: 'error', message: error.message }
     if (data.session) return { kind: 'session', session: toSession(data.session) }
-    return { kind: 'code-sent', email: email.trim() }
+    return { kind: 'confirm-sent', email: email.trim() }
+  }
+
+  async resendConfirmation(email: string): Promise<SignInResult> {
+    const { error } = await this.client.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: this.authRedirectUrl() },
+    })
+    if (error) return { kind: 'error', message: error.message }
+    return { kind: 'confirm-sent', email: email.trim() }
   }
 
   async signInWithPassword(email: string, password: string): Promise<SignInResult> {

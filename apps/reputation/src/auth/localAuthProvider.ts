@@ -126,6 +126,10 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'error', message: 'Password resets need a connection.' }
   }
 
+  async resendConfirmation(): Promise<SignInResult> {
+    return { kind: 'error', message: 'There is nothing to confirm for a device-only account.' }
+  }
+
   async updatePassword(): Promise<void> {
     throw new Error('A device-only account has no password.')
   }

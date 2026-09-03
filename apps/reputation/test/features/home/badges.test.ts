@@ -21,9 +21,27 @@ function stats(partial: Partial<LifetimeStats> = {}): LifetimeStats {
     bestBenchE1rmKg: 0,
     bestDeadliftE1rmKg: 0,
     bestAnyE1rmKg: 0,
+    bestOverheadPressE1rmKg: 0,
+    bestRowE1rmKg: 0,
+    bestPullUpE1rmKg: 0,
+    bestDipE1rmKg: 0,
     totalCardioMeters: 0,
     totalCardioSeconds: 0,
     distinctExercises: 0,
+    distinctRegions: 0,
+    totalReps: 0,
+    totalBodyweightReps: 0,
+    maxRepsInSet: 0,
+    maxSetWeightKg: 0,
+    totalDaysTrained: 0,
+    bestDayStreak: 0,
+    earlyWorkouts: 0,
+    lateWorkouts: 0,
+    weekendWorkouts: 0,
+    prCount: 0,
+    totalTrainingSeconds: 0,
+    longestWorkoutSeconds: 0,
+    bodyweightKg: 0,
     ...partial,
   }
 }
@@ -121,7 +139,8 @@ describe('cardio badges', () => {
       (x) => x.key === 'cardio-marathon',
     )!
     expect(b.earned).toBe(false)
-    expect(b.detailText).toBe('13 / 26 mi')
+    // The target reads as the real marathon distance, not a rounded 26.
+    expect(b.detailText).toBe('13 / 26.2 mi')
   })
 
   it('earns the cardio-hours badge on total time', () => {
@@ -172,9 +191,87 @@ describe('groupedBadges', () => {
       'Milestones',
       'Consistency',
       'Strength',
+      'Bodyweight',
       'Volume',
       'Cardio',
+      'Habits',
     ])
     expect(groups.every((g) => g.badges.length > 0)).toBe(true)
+  })
+
+  it('every badge key is unique, so React keys and progress can not collide', () => {
+    const keys = evaluateBadges(stats()).map((b) => b.key)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('a fresh user has no earned badges and every badge renders a detail string', () => {
+    const all = evaluateBadges(stats())
+    expect(all.filter((b) => b.earned)).toHaveLength(0)
+    for (const badge of all) {
+      expect(badge.detailText, badge.key).not.toContain('NaN')
+      expect(badge.detailText.length, badge.key).toBeGreaterThan(0)
+      expect(badge.fraction, badge.key).toBe(0)
+    }
+  })
+
+  it('awards the new stat-driven badges once their targets are met', () => {
+    const earned = new Set(
+      evaluateBadges(
+        stats({
+          totalReps: 100_000,
+          totalBodyweightReps: 10_000,
+          maxRepsInSet: 50,
+          bestDayStreak: 30,
+          earlyWorkouts: 50,
+          lateWorkouts: 10,
+          weekendWorkouts: 50,
+          prCount: 100,
+          totalDaysTrained: 365,
+          distinctRegions: 7,
+          totalTrainingSeconds: 500 * 3600,
+          longestWorkoutSeconds: 2 * 3600,
+          // Comfortably past each target, not exactly on it: an exact hit rides a
+          // float boundary and would make the test flaky, not more precise.
+          maxSetWeightKg: lb(410),
+          bestOverheadPressE1rmKg: lb(190),
+          bestRowE1rmKg: lb(230),
+          // Relative-strength targets scale off bodyweight.
+          bodyweightKg: lb(180),
+          bestDeadliftE1rmKg: lb(460),
+        }),
+      )
+        .filter((b) => b.earned)
+        .map((b) => b.key),
+    )
+    for (const key of [
+      'reps-100000',
+      'bw-reps-10000',
+      'reps-in-set-50',
+      'day-streak-30',
+      'early-50',
+      'late-10',
+      'weekend-50',
+      'hundred-prs',
+      'days-365',
+      'all-regions',
+      'time-500h',
+      'long-session-2h',
+      'heaviest-405',
+      'ohp-185',
+      'row-225',
+      'deadlift-2bw',
+    ]) {
+      expect(earned.has(key), key).toBe(true)
+    }
+    // 460 lb clears 2.5× a 180 lb bodyweight (450 lb).
+    expect(earned.has('deadlift-2_5bw')).toBe(true)
+  })
+
+  it('relative-strength badges stay at zero until a bodyweight is known', () => {
+    const badge = evaluateBadges(stats({ bestBenchE1rmKg: lb(300) })).find(
+      (b) => b.key === 'bench-bw',
+    )!
+    expect(badge.earned).toBe(false)
+    expect(badge.detailText).toBe('Add your bodyweight')
   })
 })

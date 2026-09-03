@@ -12,6 +12,12 @@ export type SignInResult =
   | { kind: 'code-sent'; email: string }
   /** A reset email is on its way; there's no session yet. */
   | { kind: 'reset-sent'; email: string }
+  /**
+   * Sign-up succeeded but the address must be confirmed before the account works.
+   * Distinct from `code-sent` because the user's next action is different: open the
+   * link in the email, not type a code.
+   */
+  | { kind: 'confirm-sent'; email: string }
   | { kind: 'error'; message: string }
 
 export interface AuthProvider {
@@ -36,6 +42,8 @@ export interface AuthProvider {
   signInWithPassword(email: string, password: string): Promise<SignInResult>
   /** Emails a recovery link; completing it lands the app in recovery mode. */
   sendPasswordReset(email: string): Promise<SignInResult>
+  /** Re-sends the sign-up confirmation email, for when the first one is lost. */
+  resendConfirmation(email: string): Promise<SignInResult>
   /** Sets (or replaces) the password for the signed-in user. */
   updatePassword(password: string): Promise<void>
 

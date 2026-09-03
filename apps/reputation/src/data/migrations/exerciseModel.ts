@@ -9,6 +9,7 @@ import type {
   TrackingType,
   WorkoutExercise,
 } from '@/domain/types'
+import { backfillWorkoutBodyweights } from '../bodyweightBackfill'
 import { enqueue } from '../outbox'
 import { rebuildLastPerformance, refreshPersonalRecords } from '../records'
 
@@ -313,15 +314,10 @@ async function backfillWorkoutBodyweight(
   trackingOf: Map<string, TrackingType>,
   touched: Set<string>,
 ): Promise<void> {
+  // Which workouts were missing one, before the shared backfill fills them.
   const missing = await db.workouts.filter((w) => w.bodyweightKg === null).toArray()
   if (missing.length === 0) return
-
-  const measurements = (
-    await db.metricEntries.where('definitionId').equals('bodyweight').toArray()
-  )
-    .filter((e) => e.deletedAt === null)
-    .sort((a, b) => a.measuredAt - b.measuredAt)
-  if (measurements.length === 0) return
+  if ((await backfillWorkoutBodyweights()) === 0) return
 
   const wesByWorkout = new Map<string, WorkoutExercise[]>()
   for (const we of allWorkoutExercises) {
@@ -329,26 +325,10 @@ async function backfillWorkoutBodyweight(
   }
 
   for (const workout of missing) {
-    const bodyweightKg = nearestMeasurement(measurements, workout.startedAt)
-    await db.workouts.update(workout.id, { bodyweightKg, ...touch(workout.clientRev) })
-    await enqueue('workouts', workout.id)
     for (const we of wesByWorkout.get(workout.id) ?? []) {
       if (isBodyweightTracking(trackingOf.get(we.exerciseId))) {
         touched.add(`${we.exerciseId}:${we.equipment}`)
       }
     }
   }
-}
-
-// The measurement value closest in time to `at`, preferring the most recent one
-// at or before it. `entries` is sorted ascending and non-empty.
-function nearestMeasurement(
-  entries: { measuredAt: number; value: number }[],
-  at: number,
-): number {
-  let best = entries[0]!
-  for (const entry of entries) {
-    if (Math.abs(entry.measuredAt - at) <= Math.abs(best.measuredAt - at)) best = entry
-  }
-  return best.value
 }

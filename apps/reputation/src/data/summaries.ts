@@ -19,7 +19,7 @@ import {
   type SummarySession,
   buildCoachSummary,
 } from './coachSummary'
-import { WEEK_MS, weekOffset } from '@/lib/dates'
+import { DAY_MS, WEEK_MS, weekOffset } from '@/lib/dates'
 import { composeExerciseName } from '@/lib/labels'
 import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
 import { type SetSignal, sessionTitle } from '@/lib/sessionTitle'
@@ -159,14 +159,49 @@ export const BIG_THREE = {
   deadlift: 'deadlift',
 } as const
 
+// The lifts beyond the big three that carry their own milestones.
+export const BADGE_LIFTS = {
+  overheadPress: 'overhead_press',
+  row: 'barbell_row',
+  pullUp: 'pull_up',
+  dip: 'dip',
+} as const
+
 export interface BadgeStats {
   bestSquatE1rmKg: number
   bestBenchE1rmKg: number
   bestDeadliftE1rmKg: number
   bestAnyE1rmKg: number
+  bestOverheadPressE1rmKg: number
+  bestRowE1rmKg: number
+  bestPullUpE1rmKg: number
+  bestDipE1rmKg: number
   totalCardioMeters: number
   totalCardioSeconds: number
   distinctExercises: number
+  /** Distinct body regions trained — the balance measure. */
+  distinctRegions: number
+  totalReps: number
+  /** Reps on bodyweight movements (pull-ups, dips, push-ups). */
+  totalBodyweightReps: number
+  /** Most reps in a single set, for the high-rep grinder badges. */
+  maxRepsInSet: number
+  /** Heaviest single completed set, whatever the lift. */
+  maxSetWeightKg: number
+  /** Distinct calendar days with a logged workout. */
+  totalDaysTrained: number
+  /** Longest run of consecutive calendar days trained. */
+  bestDayStreak: number
+  /** Sessions started before 07:00 / at or after 21:00 — habit badges. */
+  earlyWorkouts: number
+  lateWorkouts: number
+  weekendWorkouts: number
+  /** Personal records set, across every record type. */
+  prCount: number
+  totalTrainingSeconds: number
+  longestWorkoutSeconds: number
+  /** Latest bodyweight, for relative-strength badges. 0 when unknown. */
+  bodyweightKg: number
 }
 
 export async function getBadgeStats(): Promise<BadgeStats> {
@@ -191,7 +226,14 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     ...new Set(allWe.map((we) => we.exerciseId)),
   ])
   const patternByExercise = new Map<string, string>()
-  exercises.forEach((ex) => ex && patternByExercise.set(ex.id, ex.movementPattern))
+  const regionByExercise = new Map<string, string>()
+  const trackingByExercise = new Map<string, string>()
+  exercises.forEach((ex) => {
+    if (!ex) return
+    patternByExercise.set(ex.id, ex.movementPattern)
+    regionByExercise.set(ex.id, ex.region)
+    trackingByExercise.set(ex.id, ex.trackingType)
+  })
   const weToExercise = new Map(allWe.map((we) => [we.id, we.exerciseId]))
 
   const allSets = (
@@ -203,26 +245,114 @@ export async function getBadgeStats(): Promise<BadgeStats> {
 
   let totalCardioMeters = 0
   let totalCardioSeconds = 0
+  let totalReps = 0
+  let totalBodyweightReps = 0
+  let maxRepsInSet = 0
+  let maxSetWeightKg = 0
   const distinctExercises = new Set<string>()
+  const distinctRegions = new Set<string>()
   for (const set of allSets) {
     const exerciseId = weToExercise.get(set.workoutExerciseId)
     if (!exerciseId) continue
     distinctExercises.add(exerciseId)
+    const region = regionByExercise.get(exerciseId)
+    if (region) distinctRegions.add(region)
+
+    const reps = set.reps ?? 0
+    totalReps += reps
+    if (reps > maxRepsInSet) maxRepsInSet = reps
+    if ((set.weightKg ?? 0) > maxSetWeightKg) maxSetWeightKg = set.weightKg ?? 0
+    if (trackingByExercise.get(exerciseId) === 'bodyweight_reps') {
+      totalBodyweightReps += reps
+    }
+
     if (patternByExercise.get(exerciseId) === 'cardio') {
       totalCardioMeters += set.distanceM ?? 0
       totalCardioSeconds += set.durationSeconds ?? 0
     }
   }
 
+  // Session-shaped stats: when you train, and for how long.
+  const finished = workouts.filter((w) => w.endedAt !== null)
+  let earlyWorkouts = 0
+  let lateWorkouts = 0
+  let weekendWorkouts = 0
+  let totalTrainingSeconds = 0
+  let longestWorkoutSeconds = 0
+  const days = new Set<string>()
+  for (const w of finished) {
+    const at = new Date(w.startedAt)
+    const hour = at.getHours()
+    if (hour < 7) earlyWorkouts += 1
+    if (hour >= 21) lateWorkouts += 1
+    const weekday = at.getDay()
+    if (weekday === 0 || weekday === 6) weekendWorkouts += 1
+    days.add(`${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`)
+
+    const seconds = Math.max(0, ((w.endedAt as number) - w.startedAt) / 1000)
+    // Ignore absurd durations from a session left open overnight, so "longest
+    // workout" stays a real number rather than a forgotten timer.
+    if (seconds <= 6 * 3600) {
+      totalTrainingSeconds += seconds
+      if (seconds > longestWorkoutSeconds) longestWorkoutSeconds = seconds
+    }
+  }
+
+  const prCount = (await db.personalRecords.toArray()).filter(
+    (pr) => pr.deletedAt === null,
+  ).length
+
+  const profile = await getProfile()
+
   return {
     bestSquatE1rmKg: bestE1rmByExercise.get(BIG_THREE.squat) ?? 0,
     bestBenchE1rmKg: bestE1rmByExercise.get(BIG_THREE.bench) ?? 0,
     bestDeadliftE1rmKg: bestE1rmByExercise.get(BIG_THREE.deadlift) ?? 0,
     bestAnyE1rmKg,
+    bestOverheadPressE1rmKg: bestE1rmByExercise.get(BADGE_LIFTS.overheadPress) ?? 0,
+    bestRowE1rmKg: bestE1rmByExercise.get(BADGE_LIFTS.row) ?? 0,
+    bestPullUpE1rmKg: bestE1rmByExercise.get(BADGE_LIFTS.pullUp) ?? 0,
+    bestDipE1rmKg: bestE1rmByExercise.get(BADGE_LIFTS.dip) ?? 0,
     totalCardioMeters,
     totalCardioSeconds,
     distinctExercises: distinctExercises.size,
+    distinctRegions: distinctRegions.size,
+    totalReps,
+    totalBodyweightReps,
+    maxRepsInSet,
+    maxSetWeightKg,
+    totalDaysTrained: days.size,
+    bestDayStreak: longestDayStreak(finished.map((w) => w.startedAt)),
+    earlyWorkouts,
+    lateWorkouts,
+    weekendWorkouts,
+    prCount,
+    totalTrainingSeconds,
+    longestWorkoutSeconds,
+    bodyweightKg: profile.bodyweightCacheKg ?? 0,
   }
+}
+
+/** Longest run of consecutive calendar days that have a workout. */
+function longestDayStreak(startedAts: number[]): number {
+  if (startedAts.length === 0) return 0
+  const dayNumbers = [
+    ...new Set(
+      startedAts.map((at) => {
+        const d = new Date(at)
+        // Local midnight, so a streak follows the user's days, not UTC's.
+        return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / DAY_MS)
+      }),
+    ),
+  ].sort((a, b) => a - b)
+
+  let best = 1
+  let run = 1
+  for (let i = 1; i < dayNumbers.length; i += 1) {
+    run = dayNumbers[i]! - dayNumbers[i - 1]! === 1 ? run + 1 : 1
+    if (run > best) best = run
+  }
+  return best
 }
 
 // Feeds the AI coach (§13); the privacy contract lives in buildCoachSummary, which

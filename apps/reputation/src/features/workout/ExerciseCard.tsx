@@ -179,8 +179,14 @@ export function ExerciseCard(props: ExerciseCardProps) {
           {/* Without a bodyweight there is no load to multiply, so these sets would
               score zero volume and set no records. Ask for it here rather than
               logging a silent zero. */}
-          {needsBodyweight(exercise, bodyweightKg) && !isPastSession && (
-            <BodyweightPrompt weightUnit={weightUnit} />
+          {/* Shown on past sessions too: saving a bodyweight backfills the workouts
+              that lack one, which is exactly how an old session's zero gets fixed. */}
+          {needsBodyweight(exercise, bodyweightKg) && (
+            <BodyweightPrompt
+              weightUnit={weightUnit}
+              isPastSession={isPastSession}
+              measuredAt={asOf}
+            />
           )}
           {(sessionNote.trim() !== '' || exercise.notes.trim() !== '') && (
             <button
@@ -296,7 +302,16 @@ export function ExerciseCard(props: ExerciseCardProps) {
  * path caches it on the profile and stamps it onto the in-progress session, so the
  * volume on screen fixes itself immediately (see data/bodyMetrics).
  */
-function BodyweightPrompt({ weightUnit }: { weightUnit: WeightUnit }) {
+function BodyweightPrompt({
+  weightUnit,
+  isPastSession,
+  measuredAt,
+}: {
+  weightUnit: WeightUnit
+  isPastSession: boolean
+  /** The session's date, so a past session's measurement isn't dated today. */
+  measuredAt: number
+}) {
   const [value, setValue] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const parsed = parseNumber(value)
@@ -305,9 +320,13 @@ function BodyweightPrompt({ weightUnit }: { weightUnit: WeightUnit }) {
     if (parsed === null || parsed <= 0) return
     setIsSaving(true)
     try {
+      // Dated to the session being viewed: the backfill picks the measurement
+      // nearest each workout, so this scores that session with what the user
+      // weighed then rather than with today's weight.
       await repo.addMetricEntry({
         definitionId: 'bodyweight',
         value: weightToKg(parsed, weightUnit),
+        measuredAt,
       })
     } finally {
       setIsSaving(false)
@@ -317,7 +336,9 @@ function BodyweightPrompt({ weightUnit }: { weightUnit: WeightUnit }) {
   return (
     <div className="mt-1.5 rounded-lg bg-sunken px-2.5 py-2">
       <p className="text-[11.5px] leading-snug text-ink-secondary">
-        Add your bodyweight so these reps count toward volume and records.
+        {isPastSession
+          ? 'This session has no bodyweight on file, so these reps scored no volume. Add it to fix them.'
+          : 'Add your bodyweight so these reps count toward volume and records.'}
       </p>
       <div className="mt-1.5 flex items-center gap-1.5">
         <input

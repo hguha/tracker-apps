@@ -31,7 +31,10 @@ export default defineConfig({
   // Each app's dev server. Playwright waits for the URL before running that project.
   webServer: [
     {
-      command: 'npm run dev --workspace reputation',
+      // No Supabase env, so the suite exercises the local provider and can never
+      // send mail or write to the live project. Server-side auth behaviour
+      // (confirmation, password sign-in) is verified against the project directly.
+      command: 'VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev --workspace reputation',
       url: 'http://localhost:5173/app/',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

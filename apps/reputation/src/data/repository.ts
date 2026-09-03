@@ -11,6 +11,7 @@ export * from './sets'
 export * from './records'
 export * from './templates'
 export * from './bodyMetrics'
+export * from './bodyweightBackfill'
 export * from './maintenance'
 export * from './migrations/exerciseModel'
 // Surfaced from the db layer so features can key per-user state without importing @/db.

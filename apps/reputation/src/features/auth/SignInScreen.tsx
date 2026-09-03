@@ -12,17 +12,21 @@ import { LOCAL_DEV_CODE } from '@/auth/localAuthProvider'
 import { isBackendConfigured } from '@/backend/supabaseClient'
 import { cn } from '@/lib/cn'
 
-const RESEND_SECONDS = 30
+// Matches the server's per-address email cooldown (~60s); a shorter timer would just
+// enable an avoidable 429.
+const RESEND_SECONDS = 60
 
 // With a real backend, the dev-code note and offline path are hidden.
 const HAS_BACKEND = isBackendConfigured()
 
 /**
- * Panels, not steps: password is the default way in and creating an account signs
- * you straight in (no "confirm your email, now sign in again" detour). The emailed
- * code remains as an alternative for anyone who'd rather not keep a password.
+ * Panels, not steps: password is the default way in, and each panel states exactly
+ * what happens next. Creating an account emails a confirmation link — that check is
+ * what keeps scripted signups from piling up accounts — and the `confirm` panel says
+ * so plainly instead of silently failing the next sign-in. The emailed code remains
+ * as an alternative for anyone who'd rather not keep a password.
  */
-type Panel = 'password' | 'signup' | 'code' | 'forgot'
+type Panel = 'password' | 'signup' | 'code' | 'forgot' | 'confirm'
 
 export function SignInScreen({
   // Present in "connect account" mode: a device-only user upgrading to a real account.
@@ -37,6 +41,7 @@ export function SignInScreen({
     signInWithPassword,
     signUpWithPassword,
     sendPasswordReset,
+    resendConfirmation,
   } = useAuth()
   const isConnectMode = onCancel !== undefined
 
@@ -73,6 +78,9 @@ export function SignInScreen({
       } else if (result.kind === 'reset-sent') {
         setPanel('password')
         setNotice('Check your email for a link to set a new password.')
+      } else if (result.kind === 'confirm-sent') {
+        setPanel('confirm')
+        setResendIn(RESEND_SECONDS)
       }
       // 'session' needs nothing: the session change unmounts this screen.
     } catch (cause) {
@@ -145,7 +153,7 @@ export function SignInScreen({
           </button>
         )}
 
-        {panel !== 'code' && (
+        {panel !== 'code' && panel !== 'confirm' && (
           <div className="mb-8 text-center">
             <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-contrast">
               <Dumbbell size={28} />
@@ -259,6 +267,49 @@ export function SignInScreen({
               className="mt-4 w-full py-2 text-[14px] font-semibold text-accent active:opacity-60"
             >
               I already have an account
+            </button>
+          </>
+        )}
+
+        {panel === 'confirm' && (
+          <>
+            <div className="rounded-xl bg-accent-wash px-4 py-3.5">
+              <p className="text-[14.5px] font-semibold text-accent">
+                Confirm your email to finish
+              </p>
+              <p className="mt-1 text-[13.5px] text-ink-secondary">
+                We sent a confirmation link to <span className="font-semibold">{email}</span>.
+                Open it on this device and you'll be signed in automatically.
+              </p>
+            </div>
+
+            <p className="mt-4 text-[12.5px] leading-relaxed text-ink-muted">
+              Confirming keeps accounts tied to real addresses. Once it's done you can
+              sign in here with your password any time.
+            </p>
+
+            {error && <ErrorNote>{error}</ErrorNote>}
+
+            <button
+              onClick={() => void run(() => resendConfirmation(email))}
+              disabled={resendIn > 0 || isBusy}
+              className={cn(
+                'mt-4 w-full py-2 text-[14px] font-semibold',
+                resendIn > 0 ? 'text-ink-muted' : 'text-accent active:opacity-60',
+              )}
+            >
+              {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend the confirmation email'}
+            </button>
+
+            <button
+              onClick={() => {
+                setPanel('password')
+                setError(null)
+                setNotice(null)
+              }}
+              className="mt-1 w-full py-2 text-[14px] font-semibold text-ink-secondary active:opacity-60"
+            >
+              I've confirmed — sign in
             </button>
           </>
         )}

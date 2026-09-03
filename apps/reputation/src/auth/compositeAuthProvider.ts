@@ -97,6 +97,9 @@ export class CompositeAuthProvider implements AuthProvider {
   sendPasswordReset(email: string): Promise<SignInResult> {
     return this.remote.sendPasswordReset(email)
   }
+  resendConfirmation(email: string): Promise<SignInResult> {
+    return this.remote.resendConfirmation(email)
+  }
   /** Recovery only exists for the remote account. */
   onPasswordRecovery(callback: () => void): () => void {
     return this.remote.onPasswordRecovery(callback)
