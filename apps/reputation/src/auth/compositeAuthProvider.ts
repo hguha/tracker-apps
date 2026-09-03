@@ -103,6 +103,9 @@ export class CompositeAuthProvider implements AuthProvider {
   verifySignupCode(email: string, code: string): Promise<SignInResult> {
     return this.remote.verifySignupCode(email, code)
   }
+  verifyRecoveryCode(email: string, code: string): Promise<SignInResult> {
+    return this.remote.verifyRecoveryCode(email, code)
+  }
   /** Recovery only exists for the remote account. */
   onPasswordRecovery(callback: () => void): () => void {
     return this.remote.onPasswordRecovery(callback)

@@ -72,6 +72,10 @@ export class LocalAuthProvider implements AuthProvider {
     return { kind: 'error', message: 'There is nothing to confirm for a device-only book.' }
   }
 
+  async verifyRecoveryCode(): Promise<SignInResult> {
+    return { kind: 'error', message: 'A device-only book has no password to reset.' }
+  }
+
   async updatePassword(): Promise<void> {
     throw new Error('A device-only book has no password.')
   }

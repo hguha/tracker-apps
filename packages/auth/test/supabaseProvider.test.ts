@@ -110,4 +110,20 @@ describe('verifySignupCode', () => {
       message: 'Token has expired or is invalid',
     })
   })
+
+  it('redeems a reset code as a recovery token, giving a session to set a password with', async () => {
+    const calls: unknown[] = []
+    const provider = providerWith(noSignUp, async (args) => {
+      calls.push(args)
+      return { data: { session: { user: USER, access_token: 't' } }, error: null }
+    })
+
+    const result = await provider.verifyRecoveryCode('user@example.com', '654321')
+    expect(result.kind).toBe('session')
+    expect(calls[0]).toEqual({
+      email: 'user@example.com',
+      token: '654321',
+      type: 'recovery',
+    })
+  })
 })

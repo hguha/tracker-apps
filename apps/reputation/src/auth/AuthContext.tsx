@@ -33,9 +33,12 @@ interface AuthState {
   sendPasswordReset: (email: string) => Promise<SignInResult>
   resendConfirmation: (email: string) => Promise<SignInResult>
   verifySignupCode: (email: string, code: string) => Promise<SignInResult>
+  verifyRecoveryCode: (email: string, code: string) => Promise<SignInResult>
   updatePassword: (password: string) => Promise<void>
-  /** True after landing from a recovery link, until a new password is set. */
+  /** True while resetting a password, until the new one is set. */
   isRecoveringPassword: boolean
+  /** Called before redeeming a reset code, so the app shows the set-password step. */
+  beginPasswordRecovery: () => void
   clearPasswordRecovery: () => void
   signOut: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
@@ -129,10 +132,15 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     (email: string, code: string) => provider.verifySignupCode(email, code),
     [],
   )
+  const verifyRecoveryCode = useCallback(
+    (email: string, code: string) => provider.verifyRecoveryCode(email, code),
+    [],
+  )
   const updatePassword = useCallback(
     (password: string) => provider.updatePassword(password),
     [],
   )
+  const beginPasswordRecovery = useCallback(() => setIsRecoveringPassword(true), [])
   const clearPasswordRecovery = useCallback(() => setIsRecoveringPassword(false), [])
   const signOut = useCallback(() => provider.signOut(), [])
   const updateDisplayName = useCallback(
@@ -153,8 +161,10 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       sendPasswordReset,
       resendConfirmation,
       verifySignupCode,
+      verifyRecoveryCode,
       updatePassword,
       isRecoveringPassword,
+      beginPasswordRecovery,
       clearPasswordRecovery,
       signOut,
       updateDisplayName,
@@ -170,8 +180,10 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       sendPasswordReset,
       resendConfirmation,
       verifySignupCode,
+      verifyRecoveryCode,
       updatePassword,
       isRecoveringPassword,
+      beginPasswordRecovery,
       clearPasswordRecovery,
       signOut,
       updateDisplayName,

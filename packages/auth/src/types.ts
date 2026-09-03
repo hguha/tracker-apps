@@ -51,6 +51,13 @@ export interface AuthProvider {
    * the email is opened on a different device.
    */
   verifySignupCode(email: string, code: string): Promise<SignInResult>
+  /**
+   * Exchanges the code from a password-reset email for a session, so the app can
+   * then set a new password. Code rather than link for the same reason as sign-up —
+   * and specifically for iOS, where a link opens Safari and an installed PWA has a
+   * separate storage container, so the reset would land in the wrong place.
+   */
+  verifyRecoveryCode(email: string, code: string): Promise<SignInResult>
   /** Sets (or replaces) the password for the signed-in user. */
   updatePassword(password: string): Promise<void>
 

@@ -39,9 +39,10 @@ test('auth asks for an intent first, then does exactly that one thing', async ({
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Email me a one-time code/ })).toBeVisible()
 
-  // Reset panel is reachable and back-navigable.
+  // Reset asks for a code, not a link — a link can't reach an installed iOS PWA.
   await page.getByRole('button', { name: /Forgot your password\?/ }).click()
   await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Email me a reset code/ })).toBeVisible()
   await page.getByRole('button', { name: /Back to sign in/ }).click()
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
 

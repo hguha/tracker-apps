@@ -27,11 +27,13 @@ const HAS_BACKEND = isBackendConfigured()
  * whether typing both signs them in or creates an account. So the first thing asked
  * is which one they're doing, and every later panel does exactly that one thing.
  *
- * Confirmation and sign-in codes are entered as codes rather than followed as links.
- * A link carries a redirect URL that depends on where sign-up happened — a dev
- * origin, a preview deploy, or a custom scheme the native shell owns — and it breaks
- * outright when the email is read on a different device. A code has no redirect, so
- * it behaves identically on the web, an installed PWA, and inside the native app.
+ * Every email path — confirmation, sign-in, password reset — is a code, and the
+ * emails contain no links at all. A link carries a redirect URL that depends on
+ * where the request started (a dev origin, a preview deploy, or the custom scheme
+ * the native shell owns), and it breaks outright when the mail is read on another
+ * device. On iOS it can't work for an installed PWA at all: the link opens Safari,
+ * which has a separate storage container, so the session would land somewhere the
+ * app can't see. A code has no redirect and behaves identically everywhere.
  */
 type Panel =
   | 'welcome'
@@ -40,6 +42,8 @@ type Panel =
   | 'confirm'
   | 'code'
   | 'forgot'
+  /** Redeeming the code from a reset email; success routes to set-a-new-password. */
+  | 'reset-code'
 
 export function SignInScreen({
   // Present in "connect account" mode: a device-only user upgrading to a real account.
@@ -56,6 +60,9 @@ export function SignInScreen({
     sendPasswordReset,
     resendConfirmation,
     verifySignupCode,
+    verifyRecoveryCode,
+    beginPasswordRecovery,
+    clearPasswordRecovery,
   } = useAuth()
   const isConnectMode = onCancel !== undefined
 
@@ -64,7 +71,6 @@ export function SignInScreen({
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [resendIn, setResendIn] = useState(0)
 
@@ -80,8 +86,15 @@ export function SignInScreen({
   function go(next: Panel) {
     setPanel(next)
     setError(null)
-    setNotice(null)
     setCode('')
+  }
+
+  // Each "we emailed you something" result leads to the same code panel, differing
+  // only in which one.
+  const PANEL_FOR_RESULT: Record<string, Panel> = {
+    'code-sent': 'code',
+    'confirm-sent': 'confirm',
+    'reset-sent': 'reset-code',
   }
 
   // Every submit funnels through here so busy state and result handling can't drift.
@@ -89,24 +102,20 @@ export function SignInScreen({
     action: () => Promise<{ kind: string; message?: string; email?: string }>,
   ) {
     setError(null)
-    setNotice(null)
     setIsBusy(true)
     try {
       const result = await action()
-      if (result.kind === 'error') setError(result.message ?? 'Something went wrong.')
-      else if (result.kind === 'code-sent') {
-        setPanel('code')
-        setCode('')
-        setResendIn(RESEND_SECONDS)
-      } else if (result.kind === 'confirm-sent') {
-        setPanel('confirm')
-        setCode('')
-        setResendIn(RESEND_SECONDS)
-      } else if (result.kind === 'reset-sent') {
-        setPanel('sign-in')
-        setNotice('Check your email for a link to choose a new password.')
+      if (result.kind === 'error') {
+        setError(result.message ?? 'Something went wrong.')
+      } else {
+        const next = PANEL_FOR_RESULT[result.kind]
+        if (next) {
+          setPanel(next)
+          setCode('')
+          setResendIn(RESEND_SECONDS)
+        }
+        // 'session' needs nothing: the session change unmounts this screen.
       }
-      // 'session' needs nothing: the session change unmounts this screen.
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Something went wrong.')
     } finally {
@@ -318,7 +327,6 @@ export function SignInScreen({
               {isBusy ? 'Signing in…' : 'Sign in'}
             </Button>
 
-            {notice && <Notice>{notice}</Notice>}
             {error && <ErrorNote>{error}</ErrorNote>}
 
             <button
@@ -402,11 +410,33 @@ export function SignInScreen({
             onResend: () => signInWithEmail(email),
           })}
 
+        {panel === 'reset-code' &&
+          codePanel({
+            title: 'Enter your reset code',
+            blurb: (
+              <>
+                We sent a 6-digit code to{' '}
+                <span className="font-semibold text-ink">{email}</span>. Enter it and
+                you'll choose a new password next.
+              </>
+            ),
+            // Redeeming the code signs the user in, so recovery mode is flagged first —
+            // otherwise the session would drop them straight into the app with the old
+            // password still in place.
+            onSubmit: async () => {
+              beginPasswordRecovery()
+              const result = await verifyRecoveryCode(email, code.trim())
+              if (result.kind !== 'session') clearPasswordRecovery()
+              return result
+            },
+            onResend: () => sendPasswordReset(email),
+          })}
+
         {panel === 'forgot' && (
           <>
             <h1 className="text-[24px] font-bold tracking-tight">Reset your password</h1>
             <p className="mt-1.5 text-[14.5px] text-ink-secondary">
-              We'll email you a link to choose a new one.
+              We'll email you a 6-digit code to confirm it's you.
             </p>
 
             <div className="mt-6">{emailField}</div>
@@ -417,7 +447,7 @@ export function SignInScreen({
               onClick={() => void run(() => sendPasswordReset(email))}
             >
               <Mail size={18} />
-              Email me a reset link
+              Email me a reset code
             </Button>
 
             {error && <ErrorNote>{error}</ErrorNote>}
@@ -458,14 +488,6 @@ function ErrorNote({ children }: { children: React.ReactNode }) {
         color: 'var(--status-critical)',
       }}
     >
-      {children}
-    </p>
-  )
-}
-
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-3 rounded-xl bg-accent-wash px-3.5 py-2.5 text-[13.5px] text-accent">
       {children}
     </p>
   )

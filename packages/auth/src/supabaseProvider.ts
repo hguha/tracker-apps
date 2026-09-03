@@ -141,12 +141,24 @@ export class SupabaseAuthProvider implements AuthProvider {
     return { kind: 'session', session: toSession(data.session) }
   }
 
+  // No redirectTo: the reset email carries a code, not a link, so there is no
+  // landing page to send anyone to.
   async sendPasswordReset(email: string): Promise<SignInResult> {
-    const { error } = await this.client.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: this.authRedirectUrl(),
-    })
+    const { error } = await this.client.auth.resetPasswordForEmail(email.trim())
     if (error) return { kind: 'error', message: error.message }
     return { kind: 'reset-sent', email: email.trim() }
+  }
+
+  async verifyRecoveryCode(email: string, code: string): Promise<SignInResult> {
+    const { data, error } = await this.client.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: 'recovery',
+    })
+    if (error || !data.session) {
+      return { kind: 'error', message: error?.message ?? 'That code did not work.' }
+    }
+    return { kind: 'session', session: toSession(data.session) }
   }
 
   async updatePassword(password: string): Promise<void> {

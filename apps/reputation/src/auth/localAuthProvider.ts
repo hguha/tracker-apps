@@ -136,6 +136,10 @@ export class LocalAuthProvider implements AuthProvider {
     return this.verifyCode(email, code)
   }
 
+  async verifyRecoveryCode(): Promise<SignInResult> {
+    return { kind: 'error', message: 'A device-only account has no password to reset.' }
+  }
+
   async updatePassword(): Promise<void> {
     throw new Error('A device-only account has no password.')
   }
