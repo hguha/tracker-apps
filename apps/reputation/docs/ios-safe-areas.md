@@ -11,6 +11,30 @@ Three targets render this app and each treats safe areas differently:
 `viewport-fit=cover` does **not** make iOS inset anything. It only decides whether
 `env(safe-area-inset-*)` reports real numbers or zero.
 
+## An installed web app pins its window geometry at install time
+
+**This is what caused the long chase.** iOS fixes a home-screen web app's window
+configuration (viewport-fit, status-bar treatment) when it is added. Page content —
+HTML, CSS, JS — updates on every launch, so the app looks up to date while the *window*
+is still laid out per whatever `index.html` said the day it was installed. Editing
+`viewport-fit` and reloading therefore proves nothing.
+
+The signature, measured via Settings → Data & sync:
+
+```
+screen 956 · 894px · inset 62/34 · scroll 0 over 0 off 0
+```
+
+`956 − 894 = 62`, exactly the top inset — the window excludes the status bar, which is
+non-`cover` geometry, even though the served HTML has `viewport-fit=cover`. Consequences:
+the window starts at screen y=0 (content under the Dynamic Island, so top padding *is*
+needed) and ends 62px above the bottom, leaving a strip outside the web view that no CSS
+can paint — the "black bar".
+
+**So: after any change to the viewport or status-bar metas, delete the home-screen app
+and re-add it.** A refresh, or even a service-worker update, cannot fix window geometry.
+Confirm with the Display row: the viewport height should equal `screen`.
+
 ## `@media (display-mode: standalone)` DOES NOT MATCH on iOS
 
 This wasted several rounds. An installed iOS web app sets `navigator.standalone === true`
