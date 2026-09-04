@@ -193,30 +193,12 @@ input[type='number'] {
 }
 
 /*
- * The installed iOS web app pads NOTHING, on purpose.
- *
- * Measured on device: a Safari tab reports insets 0/0 and looks correct, while the
- * installed app reports 62/34 and looks wrong by about that much. iOS has already
- * inset the installed web view below the Dynamic Island and above the home indicator
- * — it just still reports the insets — so honouring them adds a second helping of the
- * same padding.
- *
- * Native is the opposite case and keeps them: Capacitor sets `contentInset: 'never'`
- * precisely so the app draws edge-to-edge and pads itself. A browser tab reports 0/0
- * anyway, so it doesn't care either way.
- *
- * Gated on `[data-shell='installed']`, which main.tsx sets from
- * `navigator.standalone`, and NOT on `@media (display-mode: standalone)` — that query
- * does not match in an installed iOS web app (measured: the padding stayed at 62/34
- * with the media-query version of this rule), so anything gated on it silently does
- * nothing.
+ * The installed web app keeps the reported insets. Zeroing them was tried (on the
+ * theory that iOS had already inset the view) and made the top markedly WORSE, which
+ * proves the opposite: the app really does draw under the Dynamic Island and needs
+ * that padding. Whatever is pushing content up is larger than 62px and is not a
+ * padding problem — see docs/ios-safe-areas.md.
  */
-html[data-shell='installed'] .pt-safe {
-  padding-top: 0;
-}
-html[data-shell='installed'] .pb-safe {
-  padding-bottom: 0;
-}
 
 /*
  * No floor, either. A `max(env(...), Npx)` floor under

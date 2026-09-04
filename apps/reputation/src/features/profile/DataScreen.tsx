@@ -535,5 +535,23 @@ function displayReport(): string {
   const padBottom = Math.round(parseFloat(padStyle.paddingBottom) || 0)
   pad.remove()
 
-  return `inset ${top}/${bottom} · pad ${padTop}/${padBottom} · ${visual}px${mismatch} · ${mode} ${dm}`
+  // Is the document itself scrolled or overflowing? That, not padding, is what can push
+  // the whole app up past its own header — and it's the one thing the earlier readings
+  // couldn't distinguish.
+  const doc = document.documentElement
+  const scrolled = Math.round(window.scrollY || doc.scrollTop || 0)
+  const overflow = Math.round(doc.scrollHeight - doc.clientHeight)
+  // Where the visual viewport sits relative to the layout viewport, and how the layout
+  // viewport compares to the physical screen.
+  const offsetTop = Math.round(window.visualViewport?.offsetTop ?? 0)
+  const screenH = Math.round(window.screen?.height ?? 0)
+
+  return [
+    `inset ${top}/${bottom}`,
+    `pad ${padTop}/${padBottom}`,
+    `${visual}px${mismatch}`,
+    `screen ${screenH}`,
+    `scroll ${scrolled} over ${overflow} off ${offsetTop}`,
+    `${mode} ${dm}`,
+  ].join(' · ')
 }
