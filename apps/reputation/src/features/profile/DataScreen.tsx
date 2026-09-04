@@ -17,7 +17,7 @@ import {
 import { isNativePlatform } from '@/lib/platform'
 import { APP_VERSION } from '@/lib/version'
 import { exportBackup, pickBackupText } from '@/platform/files'
-import { viewportShortfall } from '@/platform/viewport'
+import { detectShell, viewportShortfall } from '@/platform/viewport'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -493,16 +493,17 @@ function QueueGroup({
 }
 
 /**
- * What the OS actually tells us about the screen: the safe-area insets it reports,
- * the window height, and whether we're running installed. Shown because the iOS
- * safe-area behaviour differs between a browser tab, an installed web app and the
- * native shell, and guessing at which one is misreporting has cost several rounds
- * (docs/ios-safe-areas.md). Read as: top/bottom insets, window height, mode.
+ * What the OS tells us about the window: the safe-area insets it reports, how much of
+ * the screen it covers, and which shell we're in. Reads as
+ * `inset 0/34 · 894px of 956 · installed dm✗`, with a `⚠︎` appended for anything
+ * abnormal. Kept because iOS's window geometry is not inspectable any other way, and
+ * guessing at it cost several rounds — see docs/ios-safe-areas.md.
  */
 function displayReport(): string {
   if (typeof window === 'undefined') return '—'
+
+  // Resolve env() the same way the layout does, via a real element.
   const probe = document.createElement('div')
-  // Resolve the env() values the same way the layout does, via a real element.
   probe.style.cssText =
     'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'
   document.body.appendChild(probe)
@@ -511,55 +512,31 @@ function displayReport(): string {
   const bottom = Math.round(parseFloat(style.paddingBottom) || 0)
   probe.remove()
 
-  // What the safe-area rules actually key off (main.tsx sets it), plus whether the
-  // display-mode query agrees. They disagree on iOS: an installed web app sets
-  // navigator.standalone but does not match the media query, which is why rules gated
-  // on the query did nothing. Worth showing so that trap stays visible.
-  const mode = document.documentElement.dataset.shell ?? 'unset'
-  const dm = window.matchMedia('(display-mode: standalone)').matches ? 'dm✓' : 'dm✗'
-
-  // The shell's own height next to the window's. These must match: a shell taller
-  // than the visible area is what lets the document scroll its header off-screen.
-  const shell = Math.round(document.documentElement.clientHeight)
-  const visual = Math.round(window.visualViewport?.height ?? window.innerHeight)
-  const mismatch = Math.abs(shell - visual) > 1 ? ` ⚠︎ shell ${shell}` : ''
-
-  // What .pt-safe/.pb-safe actually resolve to, which is not the same as the reported
-  // inset — the installed web app zeroes them because iOS has already inset it. This is
-  // the number to check after a safe-area change.
-  const pad = document.createElement('div')
-  pad.className = 'pt-safe pb-safe'
-  pad.style.cssText = 'position:fixed;visibility:hidden'
-  document.body.appendChild(pad)
-  const padStyle = getComputedStyle(pad)
-  const padTop = Math.round(parseFloat(padStyle.paddingTop) || 0)
-  const padBottom = Math.round(parseFloat(padStyle.paddingBottom) || 0)
-  pad.remove()
-
-  // Is the document itself scrolled or overflowing? That, not padding, is what can push
-  // the whole app up past its own header — and it's the one thing the earlier readings
-  // couldn't distinguish.
   const doc = document.documentElement
-  const scrolled = Math.round(window.scrollY || doc.scrollTop || 0)
-  const overflow = Math.round(doc.scrollHeight - doc.clientHeight)
-  // Where the visual viewport sits relative to the layout viewport, and how the layout
-  // viewport compares to the physical screen.
-  const offsetTop = Math.round(window.visualViewport?.offsetTop ?? 0)
-  const screenH = Math.round(window.screen?.height ?? 0)
+  const viewport = Math.round(window.visualViewport?.height ?? window.innerHeight)
+  const screenHeight = Math.round(window.screen?.height ?? 0)
 
-  // How much of the physical screen the window fails to cover. THIS is the number that
-  // matters: anything above zero is screen area outside the web view, which no
-  // stylesheet can reach. `window.screenY` was reported here before and looked like the
-  // decisive reading — it is not, because iOS pins it to 0 for a home-screen web app
-  // whatever the window's real position. See docs/ios-safe-areas.md.
-  const short = viewportShortfall()
-  const geometry = short > 0 ? ` (short ${short})` : ''
+  // Anything here means trouble: a window short of the screen leaves area outside the web
+  // view that no CSS can paint, a shell taller than the window can scroll its own header
+  // out of view, and a scrollable document means it already has.
+  const shortfall = viewportShortfall()
+  const shellHeight = Math.round(doc.clientHeight)
+  const overflow = Math.round(doc.scrollHeight - doc.clientHeight)
+  const warnings = [
+    shortfall > 0 ? `short ${shortfall}` : '',
+    Math.abs(shellHeight - viewport) > 1 ? `shell ${shellHeight}` : '',
+    overflow > 0 ? `over ${overflow}` : '',
+  ].filter(Boolean)
+
+  // `dm✗` is the trap worth keeping visible: an installed iOS web app sets
+  // navigator.standalone but does NOT match `(display-mode: standalone)`, so CSS gated on
+  // that query silently does nothing.
+  const dm = window.matchMedia('(display-mode: standalone)').matches ? 'dm✓' : 'dm✗'
 
   return [
     `inset ${top}/${bottom}`,
-    `pad ${padTop}/${padBottom}`,
-    `${visual}px of ${screenH}${geometry}${mismatch}`,
-    `scroll ${scrolled} over ${overflow} off ${offsetTop}`,
-    `${mode} ${dm}`,
+    `${viewport}px of ${screenHeight}`,
+    `${detectShell()} ${dm}`,
+    ...(warnings.length ? [`⚠︎ ${warnings.join(' ')}`] : []),
   ].join(' · ')
 }

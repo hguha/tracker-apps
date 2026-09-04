@@ -44,19 +44,9 @@ body,
   height: 100%;
 }
 
-/*
- * `100svh`, the *small* viewport height, is what an installed iOS web app needs.
- *
- * Measured on an installed iPhone app (Settings -> Data & sync shows this): the insets
- * report correctly (62 top / 34 bottom) but `100%` resolves to 894px, taller than the
- * visible area. The document can then scroll by the difference, and once it does the
- * top — including that 62px of inset padding — is pushed out of view: content looks
- * shifted up, the top controls can't be reached, and a gap opens at the bottom.
- *
- * `svh` is the smallest viewport, so the shell is never taller than the screen and
- * there is nothing to scroll. NOT `dvh`, which tracks the *dynamic* size and can be
- * the larger value — that was tried and behaved like `100%`.
- */
+/* `svh` is the *small* viewport height, so the shell can never be taller than the
+   visible area — which is what lets a document scroll its own header off-screen on iOS.
+   Not `dvh`, which tracks the dynamic size and can be the larger value. */
 @supports (height: 100svh) {
   html,
   body,
@@ -65,19 +55,12 @@ body,
   }
 }
 
-/*
- * Belt and braces for the same failure: the app is a fixed shell whose screens each
- * own an `overflow-y-auto` region, so the document itself should never scroll. If it
- * can't scroll, it can't strand its own header above the fold.
- */
+/* Every screen owns its own scroller, so the document itself never should. */
 body {
   overflow: hidden;
 }
 
-/*
- * The canvas background comes from `html` and paints anything the app's own layout
- * doesn't cover, so a gap can never show through as black.
- */
+/* Canvas background, so anything the layout doesn't cover paints as the app's colour. */
 html {
   background: var(--surface-page);
 }
@@ -184,38 +167,13 @@ input[type='number'] {
   }
 }
 
-/* Safe-area helpers for the notch/Dynamic Island and the home indicator. */
+/* Safe areas for the Dynamic Island and home indicator. Plain `env()`, no floors and no
+   per-shell overrides: iOS reports these relative to the window, so one rule is correct
+   in a browser tab, an installed app and the native shell alike. When they looked wrong
+   it was the window that was wrong — see docs/ios-safe-areas.md. */
 .pt-safe {
   padding-top: env(safe-area-inset-top);
 }
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
-
-/*
- * The installed web app keeps the reported TOP inset. Zeroing it was tried (on the
- * theory that iOS had already inset the view) and made the top markedly WORSE, which
- * proves the opposite: the app really does draw under the Dynamic Island and needs
- * that padding.
- *
- * The bottom is the opposite case when the window is short of the screen (measured:
- * 894px window on a 956px screen, drawn from y=0 — `data-viewport="short"`, published
- * by platform/viewport.ts). The home indicator then sits in the dead strip BELOW the
- * web view, so reserving 34px for it inside the window doesn't clear anything: it just
- * widens a gap that is already 62px of unpaintable black into 96px. Give that space
- * back to the app and let the bottom bar sit flush with the edge of the web view.
- *
- * This is damage control, not the fix — the fix is window geometry, which iOS pins at
- * install time. See docs/ios-safe-areas.md before touching any of this.
- */
-html[data-shell='installed'][data-viewport='short'] .pb-safe {
-  padding-bottom: 0;
-}
-
-/*
- * No floor, either. A `max(env(...), Npx)` floor under
- * `@media (display-mode: standalone)` was tried and made things markedly worse on a
- * real device, so the inset iOS reports is used as-is. See docs/ios-safe-areas.md
- * before changing any of this — several plausible-sounding variants have been ruled
- * out on hardware.
- */

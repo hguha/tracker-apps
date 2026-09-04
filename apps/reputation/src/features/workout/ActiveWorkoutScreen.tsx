@@ -303,9 +303,8 @@ export function ActiveWorkoutScreen({
 
   return (
     <div className="flex h-full flex-col">
-      {/* pt-safe, like every other full-screen header: this screen is rendered outside
-          the tab shell's padded <main>, so without it the back button and title sit
-          under the status bar / Dynamic Island. */}
+      {/* pt-safe like every other full-screen header — this screen renders outside the
+          tab shell's padded <main>. */}
       <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
         <button
           onClick={isEditMode ? () => void handleLeaveEditing() : onExit}

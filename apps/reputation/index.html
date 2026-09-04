@@ -2,14 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!--
-      `viewport-fit=cover` is required, not optional: an installed iOS web app spans the
-      whole screen either way, and `cover` is what makes env(safe-area-inset-*) report
-      real numbers instead of zero. Without it the app has no way to know where the
-      Dynamic Island and home indicator are, and overlaps both.
-      The padding itself comes from .pt-safe/.pb-safe, which floor those insets while
-      installed — see styles/index.css.
-    -->
+    <!-- `viewport-fit=cover` makes env(safe-area-inset-*) report real numbers instead
+         of zero, which is what .pt-safe/.pb-safe pad with. -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
@@ -19,15 +13,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="REPutation" />
     <!--
-      `black-translucent` pairs with `viewport-fit=cover`: the app draws under a
-      transparent status bar and pads for it via env(safe-area-inset-top), which is the
-      combination in which iOS actually reports that inset. `default` was tried and made
-      it report zero, which left content under the status bar with no way to pad for it.
-
-      This meta applies only to the home-screen PWA; the Capacitor shell uses the native
-      status bar (capacitor.config.ts + platform/statusBar), so native is unaffected.
+      Deliberately NO `apple-mobile-web-app-status-bar-style`. `black-translucent` moves
+      an installed app's window up to draw under the status bar, but iOS still sizes it
+      as if it started below — a window 62px shorter than the screen at y=0, so content
+      hides under the Dynamic Island and a strip along the bottom sits outside the web
+      view where no CSS can reach it. Without it, `display: standalone` from the manifest
+      gives the ordinary geometry and the safe-area insets come out right on their own.
+      iOS captures this at install, so it only changes on delete-and-re-add.
     -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- Relative hrefs so they resolve under the /app/ base path. -->
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
