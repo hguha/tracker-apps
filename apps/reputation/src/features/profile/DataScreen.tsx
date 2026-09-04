@@ -170,8 +170,6 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
             </div>
           </dl>
 
-          {/* iOS pins a home-screen app's window when it's added and never revisits it, so
-              this can only be fixed from the Home Screen — no reload or update reaches it. */}
           {hasStaleWindow() ? (
             <p className="mt-2 text-[13px] leading-snug text-ink-muted">
               This app was added to your Home Screen with an older layout, which leaves a
@@ -507,13 +505,8 @@ function QueueGroup({
   )
 }
 
-/**
- * What the OS tells us about the window: the safe-area insets it reports, how much of
- * the screen it covers, and which shell we're in. Reads as
- * `inset 0/34 · 894px of 956 · installed dm✗`, with a `⚠︎` appended for anything
- * abnormal. Kept because iOS's window geometry is not inspectable any other way, and
- * guessing at it cost several rounds — see docs/ios-safe-areas.md.
- */
+// `inset 0/34 · 894px of 956 · installed dm✗`, plus `⚠︎` for anything abnormal. iOS's
+// window geometry isn't inspectable any other way.
 function displayReport(): string {
   if (typeof window === 'undefined') return '—'
 
@@ -522,9 +515,6 @@ function displayReport(): string {
   const viewport = Math.round(window.visualViewport?.height ?? window.innerHeight)
   const screenHeight = Math.round(window.screen?.height ?? 0)
 
-  // Anything here means trouble: a stale window leaves screen area outside the web view
-  // that no CSS can paint, a shell taller than the window can scroll its own header out of
-  // view, and a scrollable document means it already has.
   const shellHeight = Math.round(doc.clientHeight)
   const overflow = Math.round(doc.scrollHeight - doc.clientHeight)
   const warnings = [
@@ -533,9 +523,6 @@ function displayReport(): string {
     overflow > 0 ? `over ${overflow}` : '',
   ].filter(Boolean)
 
-  // `dm✗` is the trap worth keeping visible: an installed iOS web app sets
-  // navigator.standalone but does NOT match `(display-mode: standalone)`, so CSS gated on
-  // that query silently does nothing.
   const dm = window.matchMedia('(display-mode: standalone)').matches ? 'dm✓' : 'dm✗'
 
   return [
