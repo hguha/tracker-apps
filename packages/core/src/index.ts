@@ -1,3 +1,4 @@
-// @tracker-engine/core — domain-agnostic primitives shared across apps.
 export * from './cn'
+export * from './color'
+export * from './dates'
 export * from './money'

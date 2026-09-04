@@ -1,8 +1,5 @@
-// Money in integer minor units (cents), never floats — the finance analogue of the
-// workout app storing weight canonically in kg. Formatting and parsing live here so
-// every screen, chart, and the coach agree on the same numbers (the calc-consistency
-// rule the workout app learned the hard way, applied from day one). This is the first
-// piece of Ledger-specific shared code; REPutation doesn't use it yet.
+// Money in integer minor units (cents), never floats, so every screen, chart and AI
+// caller agrees on the same numbers.
 
 export interface Money {
   /** Integer minor units, e.g. cents. Outflows are negative by convention. */

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App'
-import { ErrorBoundary } from './app/ErrorBoundary'
+import { ErrorBoundary } from '@tracker-engine/ui'
 import { applyDefaultAppearance } from './lib/theme'
 import './styles/index.css'
 

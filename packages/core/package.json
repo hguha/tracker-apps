@@ -3,11 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Domain-agnostic primitives shared across apps (REPutation, Ledger).",
+  "description": "Domain-agnostic primitives shared across apps.",
   "exports": {
     ".": "./src/index.ts",
     "./money": "./src/money.ts",
-    "./cn": "./src/cn.ts"
+    "./cn": "./src/cn.ts",
+    "./dates": "./src/dates.ts",
+    "./color": "./src/color.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,7 +17,8 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "date-fns": "^4.1.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
