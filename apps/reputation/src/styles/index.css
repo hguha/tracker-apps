@@ -45,13 +45,38 @@ body,
 }
 
 /*
+ * `100svh`, the *small* viewport height, is what an installed iOS web app needs.
+ *
+ * Measured on an installed iPhone app (Settings -> Data & sync shows this): the insets
+ * report correctly (62 top / 34 bottom) but `100%` resolves to 894px, taller than the
+ * visible area. The document can then scroll by the difference, and once it does the
+ * top — including that 62px of inset padding — is pushed out of view: content looks
+ * shifted up, the top controls can't be reached, and a gap opens at the bottom.
+ *
+ * `svh` is the smallest viewport, so the shell is never taller than the screen and
+ * there is nothing to scroll. NOT `dvh`, which tracks the *dynamic* size and can be
+ * the larger value — that was tried and behaved like `100%`.
+ */
+@supports (height: 100svh) {
+  html,
+  body,
+  #root {
+    height: 100svh;
+  }
+}
+
+/*
+ * Belt and braces for the same failure: the app is a fixed shell whose screens each
+ * own an `overflow-y-auto` region, so the document itself should never scroll. If it
+ * can't scroll, it can't strand its own header above the fold.
+ */
+body {
+  overflow: hidden;
+}
+
+/*
  * The canvas background comes from `html` and paints anything the app's own layout
  * doesn't cover, so a gap can never show through as black.
- *
- * Deliberately NOT sized with `100dvh`: in an installed iOS web app that can exceed
- * the visible area, which makes the root taller than the screen — and a centred
- * layout then pushes its own top out of reach, with nothing to scroll back to.
- * `100%` tracks what's actually visible.
  */
 html {
   background: var(--surface-page);

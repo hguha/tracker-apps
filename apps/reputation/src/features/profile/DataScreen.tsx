@@ -515,5 +515,12 @@ function displayReport(): string {
     // iOS's own flag for a home-screen web app, which predates display-mode.
     (navigator as { standalone?: boolean }).standalone === true
   const mode = isNativePlatform() ? 'native' : standalone ? 'installed' : 'browser'
-  return `inset ${top}/${bottom} · ${window.innerHeight}px · ${mode}`
+
+  // The shell's own height next to the window's. These must match: a shell taller
+  // than the visible area is what lets the document scroll its header off-screen.
+  const shell = Math.round(document.documentElement.clientHeight)
+  const visual = Math.round(window.visualViewport?.height ?? window.innerHeight)
+  const mismatch = Math.abs(shell - visual) > 1 ? ` ⚠︎ shell ${shell}` : ''
+
+  return `inset ${top}/${bottom} · ${visual}px${mismatch} · ${mode}`
 }
