@@ -201,20 +201,21 @@ input[type='number'] {
  * — it just still reports the insets — so honouring them adds a second helping of the
  * same padding.
  *
- * Native is the opposite case and must keep them: Capacitor sets
- * `contentInset: 'never'` precisely so the app draws edge-to-edge and pads itself. The
- * `:not([data-shell='native'])` guard is what makes that safe — a Capacitor WebView may
- * well match `display-mode: standalone` too, and native is the one target that has been
- * correct throughout, so it must not be reachable from here. main.tsx sets the
- * attribute before the first paint.
+ * Native is the opposite case and keeps them: Capacitor sets `contentInset: 'never'`
+ * precisely so the app draws edge-to-edge and pads itself. A browser tab reports 0/0
+ * anyway, so it doesn't care either way.
+ *
+ * Gated on `[data-shell='installed']`, which main.tsx sets from
+ * `navigator.standalone`, and NOT on `@media (display-mode: standalone)` — that query
+ * does not match in an installed iOS web app (measured: the padding stayed at 62/34
+ * with the media-query version of this rule), so anything gated on it silently does
+ * nothing.
  */
-@media (display-mode: standalone) {
-  html:not([data-shell='native']) .pt-safe {
-    padding-top: 0;
-  }
-  html:not([data-shell='native']) .pb-safe {
-    padding-bottom: 0;
-  }
+html[data-shell='installed'] .pt-safe {
+  padding-top: 0;
+}
+html[data-shell='installed'] .pb-safe {
+  padding-bottom: 0;
 }
 
 /*

@@ -510,11 +510,12 @@ function displayReport(): string {
   const bottom = Math.round(parseFloat(style.paddingBottom) || 0)
   probe.remove()
 
-  const standalone =
-    window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS's own flag for a home-screen web app, which predates display-mode.
-    (navigator as { standalone?: boolean }).standalone === true
-  const mode = isNativePlatform() ? 'native' : standalone ? 'installed' : 'browser'
+  // What the safe-area rules actually key off (main.tsx sets it), plus whether the
+  // display-mode query agrees. They disagree on iOS: an installed web app sets
+  // navigator.standalone but does not match the media query, which is why rules gated
+  // on the query did nothing. Worth showing so that trap stays visible.
+  const mode = document.documentElement.dataset.shell ?? 'unset'
+  const dm = window.matchMedia('(display-mode: standalone)').matches ? 'dm✓' : 'dm✗'
 
   // The shell's own height next to the window's. These must match: a shell taller
   // than the visible area is what lets the document scroll its header off-screen.
@@ -534,5 +535,5 @@ function displayReport(): string {
   const padBottom = Math.round(parseFloat(padStyle.paddingBottom) || 0)
   pad.remove()
 
-  return `inset ${top}/${bottom} · pad ${padTop}/${padBottom} · ${visual}px${mismatch} · ${mode}`
+  return `inset ${top}/${bottom} · pad ${padTop}/${padBottom} · ${visual}px${mismatch} · ${mode} ${dm}`
 }
