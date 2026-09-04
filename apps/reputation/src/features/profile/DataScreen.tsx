@@ -522,5 +522,17 @@ function displayReport(): string {
   const visual = Math.round(window.visualViewport?.height ?? window.innerHeight)
   const mismatch = Math.abs(shell - visual) > 1 ? ` ⚠︎ shell ${shell}` : ''
 
-  return `inset ${top}/${bottom} · ${visual}px${mismatch} · ${mode}`
+  // What .pt-safe/.pb-safe actually resolve to, which is not the same as the reported
+  // inset — the installed web app zeroes them because iOS has already inset it. This is
+  // the number to check after a safe-area change.
+  const pad = document.createElement('div')
+  pad.className = 'pt-safe pb-safe'
+  pad.style.cssText = 'position:fixed;visibility:hidden'
+  document.body.appendChild(pad)
+  const padStyle = getComputedStyle(pad)
+  const padTop = Math.round(parseFloat(padStyle.paddingTop) || 0)
+  const padBottom = Math.round(parseFloat(padStyle.paddingBottom) || 0)
+  pad.remove()
+
+  return `inset ${top}/${bottom} · pad ${padTop}/${padBottom} · ${visual}px${mismatch} · ${mode}`
 }

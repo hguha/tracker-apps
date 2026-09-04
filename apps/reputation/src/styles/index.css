@@ -193,7 +193,32 @@ input[type='number'] {
 }
 
 /*
- * Deliberately just env(), with no floor. A `max(env(...), Npx)` floor under
+ * The installed iOS web app pads NOTHING, on purpose.
+ *
+ * Measured on device: a Safari tab reports insets 0/0 and looks correct, while the
+ * installed app reports 62/34 and looks wrong by about that much. iOS has already
+ * inset the installed web view below the Dynamic Island and above the home indicator
+ * — it just still reports the insets — so honouring them adds a second helping of the
+ * same padding.
+ *
+ * Native is the opposite case and must keep them: Capacitor sets
+ * `contentInset: 'never'` precisely so the app draws edge-to-edge and pads itself. The
+ * `:not([data-shell='native'])` guard is what makes that safe — a Capacitor WebView may
+ * well match `display-mode: standalone` too, and native is the one target that has been
+ * correct throughout, so it must not be reachable from here. main.tsx sets the
+ * attribute before the first paint.
+ */
+@media (display-mode: standalone) {
+  html:not([data-shell='native']) .pt-safe {
+    padding-top: 0;
+  }
+  html:not([data-shell='native']) .pb-safe {
+    padding-bottom: 0;
+  }
+}
+
+/*
+ * No floor, either. A `max(env(...), Npx)` floor under
  * `@media (display-mode: standalone)` was tried and made things markedly worse on a
  * real device, so the inset iOS reports is used as-is. See docs/ios-safe-areas.md
  * before changing any of this — several plausible-sounding variants have been ruled
