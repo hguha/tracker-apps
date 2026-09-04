@@ -42,22 +42,6 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/*
- * An installed iOS web app covers the whole screen, and in some standalone
- * configurations reports env(safe-area-inset-*) as zero — so these would pad nothing
- * and content would sit under the Dynamic Island or the home indicator. Floor them
- * while installed; `max()` keeps the real inset wherever iOS reports one (native
- * always does), and a browser tab is untouched.
- */
-@media (display-mode: standalone) {
-  .pt-safe {
-    padding-top: max(env(safe-area-inset-top), 48px);
-  }
-  .pb-safe {
-    padding-bottom: max(env(safe-area-inset-bottom), 20px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-rise,

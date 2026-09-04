@@ -156,6 +156,12 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               <dt className="text-ink-secondary">App version</dt>
               <dd className="tabular font-semibold text-ink-muted">{APP_VERSION}</dd>
             </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-ink-secondary">Display</dt>
+              <dd className="tabular text-right text-[12px] font-semibold text-ink-muted">
+                {displayReport()}
+              </dd>
+            </div>
           </dl>
 
           {sync.enabled ? (
@@ -483,4 +489,31 @@ function QueueGroup({
       </div>
     </div>
   )
+}
+
+/**
+ * What the OS actually tells us about the screen: the safe-area insets it reports,
+ * the window height, and whether we're running installed. Shown because the iOS
+ * safe-area behaviour differs between a browser tab, an installed web app and the
+ * native shell, and guessing at which one is misreporting has cost several rounds
+ * (docs/ios-safe-areas.md). Read as: top/bottom insets, window height, mode.
+ */
+function displayReport(): string {
+  if (typeof window === 'undefined') return '—'
+  const probe = document.createElement('div')
+  // Resolve the env() values the same way the layout does, via a real element.
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'
+  document.body.appendChild(probe)
+  const style = getComputedStyle(probe)
+  const top = Math.round(parseFloat(style.paddingTop) || 0)
+  const bottom = Math.round(parseFloat(style.paddingBottom) || 0)
+  probe.remove()
+
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    // iOS's own flag for a home-screen web app, which predates display-mode.
+    (navigator as { standalone?: boolean }).standalone === true
+  const mode = isNativePlatform() ? 'native' : standalone ? 'installed' : 'browser'
+  return `inset ${top}/${bottom} · ${window.innerHeight}px · ${mode}`
 }

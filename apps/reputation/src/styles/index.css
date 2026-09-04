@@ -168,21 +168,9 @@ input[type='number'] {
 }
 
 /*
- * An installed iOS web app spans the whole screen whether or not `viewport-fit=cover`
- * is set — `cover` only decides whether env(safe-area-inset-*) reports real numbers.
- * When it reports zero (which it does in some standalone configurations), these
- * helpers pad nothing and the app overlaps the Dynamic Island and the home indicator.
- *
- * So floor them while installed. `max()` means the floor only applies when the
- * reported inset is smaller — where iOS reports correctly (every native build, and
- * standalone when it behaves) the real value still wins, and a browser tab is
- * untouched because it isn't in standalone display mode.
+ * Deliberately just env(), with no floor. A `max(env(...), Npx)` floor under
+ * `@media (display-mode: standalone)` was tried and made things markedly worse on a
+ * real device, so the inset iOS reports is used as-is. See docs/ios-safe-areas.md
+ * before changing any of this — several plausible-sounding variants have been ruled
+ * out on hardware.
  */
-@media (display-mode: standalone) {
-  .pt-safe {
-    padding-top: max(env(safe-area-inset-top), 48px);
-  }
-  .pb-safe {
-    padding-bottom: max(env(safe-area-inset-bottom), 20px);
-  }
-}
