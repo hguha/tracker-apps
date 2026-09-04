@@ -22,14 +22,34 @@ is still laid out per whatever `index.html` said the day it was installed. Editi
 The signature, measured via Settings → Data & sync:
 
 ```
-screen 956 · 894px · inset 62/34 · scroll 0 over 0 off 0
+inset 62/34 · pad 62/0 · 894px of 956 (short 62) · scroll 0 over 0 off 0 · installed dm✗
 ```
 
-`956 − 894 = 62`, exactly the top inset — the window excludes the status bar, which is
-non-`cover` geometry, even though the served HTML has `viewport-fit=cover`. Consequences:
-the window starts at screen y=0 (content under the Dynamic Island, so top padding *is*
-needed) and ends 62px above the bottom, leaving a strip outside the web view that no CSS
-can paint — the "black bar".
+`956 − 894 = 62`, exactly the top inset — the window is sized as if it excluded the
+status bar, which is non-`cover` geometry, even though the served HTML has
+`viewport-fit=cover`.
+
+**Do not read `window.screenY` to find where the window sits.** An earlier version of
+this doc called it "the decisive number"; iOS pins it to `0` for a home-screen web app
+regardless of the window's real position, so it can never distinguish the two cases. The
+two readings that *do* settle it:
+
+- iOS reports `safe-area-inset-top: 62` to the installed app while reporting `0` to a
+  Safari tab. It only makes the app responsible for that region if the app covers it —
+  so the window starts at screen y=0 and top padding really is needed.
+- A screen whose header lacked `pt-safe` rendered *behind* the translucent status bar,
+  visibly ghosted under the clock. Same conclusion, from the other direction.
+
+So: window at y=0, 894 tall, on a 956 screen → the bottom 62px is outside the web view.
+That is the "black bar", and no stylesheet can paint it.
+
+**What follows from that (and what doesn't).** The 34px bottom inset is worse than
+useless in this state: the home indicator lives in the dead strip *below* the window, so
+padding for it inside the window turns a 62px gap into a 96px one. Hence
+`html[data-shell='installed'][data-viewport='short'] .pb-safe { padding-bottom: 0 }` —
+`data-viewport` is published by `platform/viewport.ts` from the measured shortfall, so
+the rule disappears by itself once the geometry is healthy. It shrinks the damage; it
+does not fix it. Only a reinstall can.
 
 **So: after any change to the viewport or status-bar metas, delete the home-screen app
 and re-add it.** A refresh, or even a service-worker update, cannot fix window geometry.
@@ -98,13 +118,15 @@ Native and browser are correct.
 
 ## Before changing anything here
 
-1. **Read the numbers, don't guess.** Settings → Data & sync shows a `Display` row:
-   `inset <top>/<bottom> · <window height>px · <browser|installed|native>`. Get that
-   from the affected target first — the failures above all came from assuming an
-   inset value rather than reading it.
-2. **Re-install to test.** The service worker is network-first for HTML, but an
-   installed app that launches offline can still show the previous shell. Deleting and
-   re-adding the home-screen app removes all doubt.
+1. **Read the numbers, don't guess.** Settings → Data & sync shows a `Display` row.
+   The one to check is `<window>px of <screen>`: if it says `short N`, N pixels of the
+   screen are outside the web view and the problem is geometry, not padding. Every
+   failure above came from assuming a value rather than reading it — and one came from
+   reading a value (`screenY`) that iOS doesn't populate.
+2. **Re-install to test.** iOS pins window geometry at install; a reload cannot change
+   it, so a meta-tag change tested by refreshing proves nothing about the window (only
+   about `env()`, which *is* live). Delete the home-screen app and re-add it, then check
+   that the Display row no longer says `short`.
 3. **Check all three targets**, since a fix for one has repeatedly broken another.
 
 ## Layout rules that prevent the worst failure

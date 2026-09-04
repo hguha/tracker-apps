@@ -193,12 +193,24 @@ input[type='number'] {
 }
 
 /*
- * The installed web app keeps the reported insets. Zeroing them was tried (on the
+ * The installed web app keeps the reported TOP inset. Zeroing it was tried (on the
  * theory that iOS had already inset the view) and made the top markedly WORSE, which
  * proves the opposite: the app really does draw under the Dynamic Island and needs
- * that padding. Whatever is pushing content up is larger than 62px and is not a
- * padding problem — see docs/ios-safe-areas.md.
+ * that padding.
+ *
+ * The bottom is the opposite case when the window is short of the screen (measured:
+ * 894px window on a 956px screen, drawn from y=0 — `data-viewport="short"`, published
+ * by platform/viewport.ts). The home indicator then sits in the dead strip BELOW the
+ * web view, so reserving 34px for it inside the window doesn't clear anything: it just
+ * widens a gap that is already 62px of unpaintable black into 96px. Give that space
+ * back to the app and let the bottom bar sit flush with the edge of the web view.
+ *
+ * This is damage control, not the fix — the fix is window geometry, which iOS pins at
+ * install time. See docs/ios-safe-areas.md before touching any of this.
  */
+html[data-shell='installed'][data-viewport='short'] .pb-safe {
+  padding-bottom: 0;
+}
 
 /*
  * No floor, either. A `max(env(...), Npx)` floor under

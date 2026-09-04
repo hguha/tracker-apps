@@ -17,6 +17,7 @@ import {
 import { isNativePlatform } from '@/lib/platform'
 import { APP_VERSION } from '@/lib/version'
 import { exportBackup, pickBackupText } from '@/platform/files'
+import { viewportShortfall } from '@/platform/viewport'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -546,19 +547,18 @@ function displayReport(): string {
   const offsetTop = Math.round(window.visualViewport?.offsetTop ?? 0)
   const screenH = Math.round(window.screen?.height ?? 0)
 
-  // Where the window sits ON the screen. This is the decisive number: the window is
-  // 62px shorter than the screen, and `at 0` means it starts at the very top (so the
-  // app draws under the Dynamic Island and must pad for it, leaving a strip below it
-  // that no CSS can reach), while `at 62` means iOS already inset it (so padding the
-  // top again is double-counting). Everything else measured so far is identical in
-  // both cases, which is why this took so long to pin down.
-  const at = Math.round(window.screenY ?? 0)
+  // How much of the physical screen the window fails to cover. THIS is the number that
+  // matters: anything above zero is screen area outside the web view, which no
+  // stylesheet can reach. `window.screenY` was reported here before and looked like the
+  // decisive reading — it is not, because iOS pins it to 0 for a home-screen web app
+  // whatever the window's real position. See docs/ios-safe-areas.md.
+  const short = viewportShortfall()
+  const geometry = short > 0 ? ` (short ${short})` : ''
 
   return [
     `inset ${top}/${bottom}`,
     `pad ${padTop}/${padBottom}`,
-    `${visual}px at ${at}${mismatch}`,
-    `screen ${screenH}`,
+    `${visual}px of ${screenH}${geometry}${mismatch}`,
     `scroll ${scrolled} over ${overflow} off ${offsetTop}`,
     `${mode} ${dm}`,
   ].join(' · ')
