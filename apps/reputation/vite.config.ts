@@ -18,6 +18,35 @@ import { fileURLToPath } from 'node:url'
  */
 const basePath = process.env.BASE_PATH ?? '/app/'
 
+/**
+ * The native shell draws edge-to-edge (capacitor.config.ts `contentInset: 'never'`)
+ * and needs `viewport-fit=cover` so env(safe-area-inset-*) reports real values, which
+ * is how the app pads the notch and home indicator inside the WebView.
+ *
+ * The web build must NOT have it: an installed home-screen PWA reports those insets as
+ * zero, so nothing pads the status bar and the top of the app becomes unreachable
+ * (see index.html). So the flag is added here, at build time, for the native bundle
+ * only — deterministic, and with no runtime meta mutation that could land after the
+ * first paint.
+ */
+const isNativeBuild = process.env.NATIVE === '1'
+
+function nativeViewport() {
+  return {
+    name: 'native-viewport-fit',
+    transformIndexHtml(html: string) {
+      if (!isNativeBuild) return html
+      return html.replace(
+        /(<meta\s+name="viewport"\s+content=")([^"]*)(")/,
+        (_match, open: string, content: string, close: string) =>
+          content.includes('viewport-fit')
+            ? `${open}${content}${close}`
+            : `${open}${content}, viewport-fit=cover${close}`,
+      )
+    },
+  }
+}
+
 // `<version>+<git-sha>`, so a client_errors row points at a commit.
 function appVersion(): string {
   const pkg = JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string }
@@ -37,7 +66,7 @@ function appVersion(): string {
 
 export default defineConfig({
   base: basePath,
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), nativeViewport()],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion()),
   },

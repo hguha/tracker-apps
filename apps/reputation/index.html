@@ -15,7 +15,9 @@
 
       Without `cover`, iOS insets the web view itself and those areas are never ours to
       get wrong. The native shell does draw edge-to-edge (capacitor.config.ts
-      contentInset: 'never'), so it re-adds `cover` at boot — see platform/viewport.ts.
+      contentInset: 'never') and reports insets reliably, so the native build adds
+      `cover` back into this tag at build time — see the nativeViewport plugin in
+      vite.config.ts, driven by NATIVE=1 in the build:native script.
     -->
     <meta
       name="viewport"

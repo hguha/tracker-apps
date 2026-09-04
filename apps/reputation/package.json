@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:native": "tsc --noEmit && BASE_PATH=/ vite build",
+    "build:native": "tsc --noEmit && BASE_PATH=/ NATIVE=1 vite build",
     "native:sync": "npm run build:native && cap sync",
     "native:ios": "npm run native:sync && cap open ios",
     "native:android": "npm run native:sync && cap open android",
