@@ -17,7 +17,12 @@ import {
 import { isNativePlatform } from '@/lib/platform'
 import { APP_VERSION } from '@/lib/version'
 import { exportBackup, pickBackupText } from '@/platform/files'
-import { detectShell, viewportShortfall } from '@/platform/viewport'
+import {
+  detectShell,
+  hasStaleWindow,
+  safeAreaInsets,
+  viewportShortfall,
+} from '@/platform/viewport'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -164,6 +169,16 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               </dd>
             </div>
           </dl>
+
+          {/* iOS pins a home-screen app's window when it's added and never revisits it, so
+              this can only be fixed from the Home Screen — no reload or update reaches it. */}
+          {hasStaleWindow() ? (
+            <p className="mt-2 text-[13px] leading-snug text-ink-muted">
+              This app was added to your Home Screen with an older layout, which leaves a
+              strip along the bottom of the screen that the app can&rsquo;t draw on. Delete
+              the icon and add it again from Safari to fix it.
+            </p>
+          ) : null}
 
           {sync.enabled ? (
             <>
@@ -502,28 +517,18 @@ function QueueGroup({
 function displayReport(): string {
   if (typeof window === 'undefined') return '—'
 
-  // Resolve env() the same way the layout does, via a real element.
-  const probe = document.createElement('div')
-  probe.style.cssText =
-    'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'
-  document.body.appendChild(probe)
-  const style = getComputedStyle(probe)
-  const top = Math.round(parseFloat(style.paddingTop) || 0)
-  const bottom = Math.round(parseFloat(style.paddingBottom) || 0)
-  probe.remove()
-
+  const { top, bottom } = safeAreaInsets()
   const doc = document.documentElement
   const viewport = Math.round(window.visualViewport?.height ?? window.innerHeight)
   const screenHeight = Math.round(window.screen?.height ?? 0)
 
-  // Anything here means trouble: a window short of the screen leaves area outside the web
-  // view that no CSS can paint, a shell taller than the window can scroll its own header
-  // out of view, and a scrollable document means it already has.
-  const shortfall = viewportShortfall()
+  // Anything here means trouble: a stale window leaves screen area outside the web view
+  // that no CSS can paint, a shell taller than the window can scroll its own header out of
+  // view, and a scrollable document means it already has.
   const shellHeight = Math.round(doc.clientHeight)
   const overflow = Math.round(doc.scrollHeight - doc.clientHeight)
   const warnings = [
-    shortfall > 0 ? `short ${shortfall}` : '',
+    hasStaleWindow() ? `stale ${viewportShortfall()}` : '',
     Math.abs(shellHeight - viewport) > 1 ? `shell ${shellHeight}` : '',
     overflow > 0 ? `over ${overflow}` : '',
   ].filter(Boolean)

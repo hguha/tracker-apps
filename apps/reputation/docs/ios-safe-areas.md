@@ -20,7 +20,7 @@ an installed app's window up to draw under the status bar, but iOS still *sizes*
 window as if it began below one. The result on an iPhone 16 Pro Max:
 
 ```
-inset 62/34 · 894px of 956 · installed dm✗ · ⚠︎ short 62
+inset 62/34 · 894px of 956 · installed dm✗ · ⚠︎ stale 62
 ```
 
 A 894pt window at y=0 on a 956pt screen. Content hid under the Dynamic Island, and the
@@ -28,12 +28,28 @@ A 894pt window at y=0 on a 956pt screen. Content hid under the Dynamic Island, a
 stylesheet, which is the "black bar". Every attempt to fix it in CSS therefore failed,
 and each fix made another target worse.
 
-Deleting the meta lets the manifest's `display: standalone` give the ordinary geometry,
-which reports `0/34` and needs no help. **iOS captures this at install time**, which is
-why the regression appeared when the app's URL moved (`hirshguha.com/workout-tracker` →
-`reputation.fitness/app`) and the home-screen app was re-added, long after the meta was
-written — and why a reload can never change it. After any change to the viewport or
-status-bar metas, delete and re-add the home-screen app.
+Removing the meta leaves `display: standalone` from the manifest, which gives the ordinary
+geometry: a window below the status bar reporting `inset 0/34`, needing no help.
+
+**A window short of the screen is not by itself a bug.** A window that starts below the
+status bar is legitimately `screen − 62` tall, and it reports a top inset of `0` because
+nothing overlaps it there. The broken state is *short **and** reporting a top inset*: the
+app is being told to clear a status bar it cannot be sitting below. That contradiction is
+what `hasStaleWindow()` tests and what the Display row flags as `stale`.
+
+### Why the timeline is confusing
+
+The meta was **not** a recent regression — it was added early (`9cdd473`) and was present
+throughout the period the app looked fine. The original `index.html` (`4420eae`) had
+neither it nor a manifest link. What changed was **the install, not the code**: iOS pins
+window geometry when an app is added to the Home Screen and never revisits it, so the
+long-lived home-screen icon kept its original geometry while the served HTML drifted. The
+break surfaced when the app's URL moved (`hirshguha.com/workout-tracker` →
+`reputation.fitness/app`, `e2adc78`) and the icon had to be re-added — picking up
+`black-translucent` for the first time, ~13 commits before the symptom was reported.
+
+So a meta-tag change tested by reloading proves nothing about the window. Delete and
+re-add the home-screen app.
 
 ## Two traps
 
@@ -48,8 +64,8 @@ status-bar metas, delete and re-add the home-screen app.
 ## Before changing anything here
 
 1. **Read the Display row** (Settings → Data & sync) on the affected target first. It
-   should be clean; `⚠︎ short N` means N pixels of the screen are outside the web view
-   and the problem is window geometry, not padding.
+   should be clean; `⚠︎ stale N` means the window is from an older install and the problem
+   is geometry, not padding — the screen says so in plain words too.
 2. **Re-install to test** anything involving the viewport or status-bar metas.
 3. **Check all three targets** — a fix for one has repeatedly broken another.
 

@@ -21,16 +21,47 @@ export function detectShell(): Shell {
     : 'browser'
 }
 
-/**
- * How many pixels of the physical screen the window doesn't cover — the number that
- * exposed the `black-translucent` bug, where an installed app got a window 62px shorter
- * than the screen and still drew from y=0, leaving a strip outside the web view.
- *
- * Only meaningful for the installed shell: a browser tab is legitimately shorter than
- * the screen (that's the chrome), and the native shell sizes its own window.
- */
+/** Resolves env(safe-area-inset-*) the way the layout does, via a real element. */
+export function safeAreaInsets(): { top: number; bottom: number } {
+  const probe = document.createElement('div')
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'
+  document.body.appendChild(probe)
+  const style = getComputedStyle(probe)
+  const insets = {
+    top: Math.round(parseFloat(style.paddingTop) || 0),
+    bottom: Math.round(parseFloat(style.paddingBottom) || 0),
+  }
+  probe.remove()
+  return insets
+}
+
+/** How many pixels of the physical screen the window doesn't cover. */
 export function viewportShortfall(): number {
   const screenHeight = window.screen?.height ?? 0
   const viewport = window.visualViewport?.height ?? window.innerHeight
   return Math.max(0, Math.round(screenHeight - viewport))
+}
+
+/** Bigger than rounding noise, smaller than any real safe-area inset. */
+const SHORTFALL_TOLERANCE = 24
+
+/**
+ * Whether this home-screen app is running in a window left over from an older install.
+ *
+ * iOS fixes an installed app's window geometry when it is added and never revisits it, so
+ * a home-screen app can keep a layout its current HTML would no longer ask for. The
+ * signature is a window short of the screen that *also* reports a top inset: short means
+ * the window doesn't reach the bottom of the screen, and a top inset means the app is
+ * being asked to clear a status bar it therefore can't be sitting below. The two together
+ * are contradictory, and produce a strip along the bottom that is outside the web view —
+ * unpaintable by any stylesheet. Being merely short is normal and fine: that is just a
+ * window that starts below the status bar, and it reports a top inset of 0.
+ *
+ * The only remedy is deleting the home-screen app and adding it again. See
+ * docs/ios-safe-areas.md.
+ */
+export function hasStaleWindow(): boolean {
+  if (detectShell() !== 'installed') return false
+  return viewportShortfall() >= SHORTFALL_TOLERANCE && safeAreaInsets().top > 0
 }
