@@ -11,7 +11,27 @@ Three targets render this app and each treats safe areas differently:
 `viewport-fit=cover` does **not** make iOS inset anything. It only decides whether
 `env(safe-area-inset-*)` reports real numbers or zero.
 
-## The actual root cause (found by measuring, commit 1bdb953)
+## `@media (display-mode: standalone)` DOES NOT MATCH on iOS
+
+This wasted several rounds. An installed iOS web app sets `navigator.standalone === true`
+but does **not** match `@media (display-mode: standalone)` — so any CSS gated on that
+query silently does nothing, and an experiment gated on it produces a meaningless
+result rather than a failure.
+
+Detect the shell in JS and publish it as `data-shell` on `<html>` (see `main.tsx`):
+`native` (Capacitor) / `installed` (`navigator.standalone`) / `browser`. Gate CSS on
+that attribute. The Display row shows the resolved shell plus whether the query agrees,
+e.g. `installed dm✗`.
+
+## Insets are already applied for an installed web app (commit b2f869e)
+
+Measured: a Safari tab reports `0/0` and looks right; the installed app reports `62/34`
+and looks wrong by about that much. iOS has already inset the installed web view — it
+just still *reports* the insets — so honouring them pads twice. `.pt-safe`/`.pb-safe`
+therefore resolve to **0** under `html[data-shell='installed']`. Native keeps them
+(`contentInset: 'never'` means it must pad itself); a browser tab reports 0 anyway.
+
+## A theory that measurement killed (commit 1bdb953)
 
 On an installed iPhone app the insets report **correctly** — 62 top / 34 bottom. The
 fault was the **height**: `height: 100%` resolved to **894px**, taller than the visible
@@ -49,7 +69,7 @@ Native and browser are correct.
 | `status-bar-style: default` (keeping `cover`) | insets report 0; content under the status bar, top controls unreachable, black strip at the bottom |
 | Dropping `viewport-fit=cover` | still full-screen, insets now 0; overlaps the Dynamic Island and home indicator |
 | `height: 100dvh` on `html/body/#root` | tracks the *dynamic* size, so it can be the larger value and behaves like `100%`. Use `100svh` |
-| `max(env(...), 48px)` floor under `@media (display-mode: standalone)` | markedly worse — content shifted far too high with black bars returning |
+| `max(env(...), 48px)` floor under `@media (display-mode: standalone)` | the query never matched, so this did nothing — the observed change came from other edits in the same commit |
 | Mutating the viewport meta at runtime in `main.tsx` | depends on the Capacitor bridge being ready; shifts layout after first paint |
 
 ## Before changing anything here
