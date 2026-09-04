@@ -546,10 +546,18 @@ function displayReport(): string {
   const offsetTop = Math.round(window.visualViewport?.offsetTop ?? 0)
   const screenH = Math.round(window.screen?.height ?? 0)
 
+  // Where the window sits ON the screen. This is the decisive number: the window is
+  // 62px shorter than the screen, and `at 0` means it starts at the very top (so the
+  // app draws under the Dynamic Island and must pad for it, leaving a strip below it
+  // that no CSS can reach), while `at 62` means iOS already inset it (so padding the
+  // top again is double-counting). Everything else measured so far is identical in
+  // both cases, which is why this took so long to pin down.
+  const at = Math.round(window.screenY ?? 0)
+
   return [
     `inset ${top}/${bottom}`,
     `pad ${padTop}/${padBottom}`,
-    `${visual}px${mismatch}`,
+    `${visual}px at ${at}${mismatch}`,
     `screen ${screenH}`,
     `scroll ${scrolled} over ${overflow} off ${offsetTop}`,
     `${mode} ${dm}`,
