@@ -1,4 +1,3 @@
-// Re-exported from @tracker-engine/auth; shim so existing '@/auth/types' importers don't change.
 export type { AuthProvider, Session, SignInResult } from '@tracker-engine/auth'
 export {
   CODE_MAX_LENGTH,

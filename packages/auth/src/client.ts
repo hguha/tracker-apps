@@ -1,6 +1,4 @@
-// Supabase client factory. The app owns env reading, the storage key, and any
-// singleton caching — this just applies the auth options and the SIGNED_IN hash
-// strip. The anon key is public by design (RLS protects data).
+// The anon key is public by design; RLS protects the data.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
@@ -35,4 +33,26 @@ export function createSupabaseClient(config: SupabaseClientConfig): SupabaseClie
   })
 
   return client
+}
+
+/**
+ * Memoized client from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`, or null when either
+ * is unset so the app runs entirely against IndexedDB. `storageKey` is app-specific and
+ * load-bearing — changing it signs every existing user out.
+ */
+export function supabaseSingleton(storageKey: string): () => SupabaseClient | null {
+  let client: SupabaseClient | null | undefined
+  return () => {
+    if (client !== undefined) return client
+    const env = import.meta.env as Record<string, string | undefined>
+    const url = env.VITE_SUPABASE_URL
+    const anonKey = env.VITE_SUPABASE_ANON_KEY
+    client = url && anonKey ? createSupabaseClient({ url, anonKey, storageKey }) : null
+    return client
+  }
+}
+
+export function isBackendConfigured(): boolean {
+  const env = import.meta.env as Record<string, string | undefined>
+  return Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY)
 }
