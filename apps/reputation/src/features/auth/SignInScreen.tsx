@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, Dumbbell, Mail, WifiOff } from 'lucide-react'
 import { Button } from '@/components/Button'
+import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import {
   CODE_MAX_LENGTH,
@@ -82,6 +84,12 @@ export function SignInScreen({
 
   const emailOk = isValidEmail(email)
   const pwProblem = passwordProblem(password)
+
+  // Only needed when upgrading a device-only account, to say what's about to move.
+  const localCount = useLiveQuery(
+    async () => (isConnectMode ? { workouts: await repo.countFinishedWorkouts() } : undefined),
+    [isConnectMode],
+  )
 
   function go(next: Panel) {
     setPanel(next)
@@ -271,7 +279,11 @@ export function SignInScreen({
               </h1>
               <p className="mt-1.5 text-[14.5px] text-ink-secondary">
                 {isConnectMode
-                  ? 'Everything you logged on this device comes with you and syncs across your devices.'
+                  ? localCount === undefined
+                    ? 'Everything on this device comes with you and syncs across your devices.'
+                    : // The concrete number matters: "your data comes with you" is a
+                      // promise, and this is the receipt for it before they commit.
+                      `Your ${localCount.workouts} workout${localCount.workouts === 1 ? '' : 's'} on this device will be added to the account you sign in to — nothing is replaced or lost.`
                   : 'Log your lifts, watch the numbers move.'}
               </p>
             </div>
@@ -300,8 +312,8 @@ export function SignInScreen({
                   Use this device only
                 </button>
                 <p className="mt-2 text-center text-[12.5px] leading-relaxed text-ink-muted">
-                  No account needed — everything stays in this browser. You can add an
-                  account later and keep what you logged.
+                  No account needed — everything stays on this device. Add an account
+                  whenever you like and this history moves onto it.
                 </p>
               </>
             )}

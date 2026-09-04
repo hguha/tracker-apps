@@ -43,6 +43,9 @@ interface AuthState {
   signOut: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
   deleteAccount: () => Promise<void>
+  /** What signing in did to this device's data, for the app to report once. */
+  dataTransition: DataTransition | null
+  clearDataTransition: () => void
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -53,6 +56,18 @@ const provider: AuthProvider = supabase
   ? new CompositeAuthProvider(supabase)
   : new LocalAuthProvider()
 
+/**
+ * What the data layer did to this device's contents when the session changed. Both
+ * outcomes move a meaningful amount of the user's history around, so neither should
+ * be a console line only — the app surfaces them (see SignedInApp).
+ */
+export type DataTransition =
+  | { kind: 'claimed'; rows: number }
+  | { kind: 'wiped-foreign' }
+
+// Set during the session change, then handed to React once the new session lands.
+let pendingTransition: DataTransition | null = null
+
 // On upgrade, point the data layer at the new uid and claim on-device data before remount (§11.1.3).
 if (provider instanceof CompositeAuthProvider) {
   provider.onUpgrade = async (newUserId: string) => {
@@ -60,6 +75,7 @@ if (provider instanceof CompositeAuthProvider) {
     const claimed = await repo.claimLocalData(newUserId)
     // Record ownership before `apply`'s guard runs, so these just-claimed rows aren't wiped as another account's.
     setDbOwner(newUserId)
+    if (claimed > 0) pendingTransition = { kind: 'claimed', rows: claimed }
     console.info(`[auth] claimed ${claimed} local rows into ${newUserId}`)
   }
 }
@@ -67,6 +83,7 @@ if (provider instanceof CompositeAuthProvider) {
 export function AuthProviderScope({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false)
+  const [dataTransition, setDataTransition] = useState<DataTransition | null>(null)
 
   // A recovery link signs the user in, so without this the app would just open as
   // normal and the "reset my password" intent would be silently lost.
@@ -86,9 +103,16 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       setActiveUserId(ownerId)
       if (next) {
         const wiped = await repo.assertDbOwner(ownerId)
-        if (wiped) console.info(`[auth] wiped another account's local data`)
+        if (wiped) {
+          pendingTransition = { kind: 'wiped-foreign' }
+          console.info(`[auth] wiped another account's local data`)
+        }
       }
-      if (!cancelled) setSession(next)
+      if (!cancelled) {
+        setSession(next)
+        setDataTransition(pendingTransition)
+        pendingTransition = null
+      }
     }
 
     void provider.getSession().then(apply)
@@ -148,6 +172,7 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
     [],
   )
   const deleteAccount = useCallback(() => provider.deleteAccount(), [])
+  const clearDataTransition = useCallback(() => setDataTransition(null), [])
 
   const value = useMemo<AuthState>(
     () => ({
@@ -169,6 +194,8 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       signOut,
       updateDisplayName,
       deleteAccount,
+      dataTransition,
+      clearDataTransition,
     }),
     [
       session,
@@ -188,6 +215,8 @@ export function AuthProviderScope({ children }: { children: ReactNode }) {
       signOut,
       updateDisplayName,
       deleteAccount,
+      dataTransition,
+      clearDataTransition,
     ],
   )
 

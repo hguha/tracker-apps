@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
+import { setDbOwner } from '@/db/owner'
 import * as repo from '@/data/repository'
 
 beforeEach(async () => {
@@ -1890,6 +1891,35 @@ describe('active user id + local data reset', () => {
     // A system library row is never re-owned.
     const benchExists = queued.some((e) => e.rowId === 'bench_press')
     expect(benchExists).toBe(false)
+  })
+
+  it('connecting an account keeps device history — the guard runs after the claim, not before', async () => {
+    // The whole sequence AuthContext performs on upgrade, in order. Getting it
+    // backwards would wipe the rows the claim just re-owned, which reads to the user
+    // as "signing in deleted my workouts".
+    const UID = '77777777-7777-7777-7777-777777777777'
+
+    const workoutId = await repo.startWorkout()
+    const weId = await repo.addExerciseToWorkout(workoutId, 'bench_press', 'barbell')
+    const setId = await repo.addSet({ workoutExerciseId: weId, weightKg: 100, reps: 5 })
+    await repo.logSetValues(setId, {})
+    await repo.finishWorkout(workoutId)
+
+    // 1. Point the data layer at the new uid and claim. 2. Record ownership.
+    setActiveUserId(UID)
+    const claimed = await repo.claimLocalData(UID)
+    setDbOwner(UID)
+    // 3. The session lands and the ownership guard runs.
+    const wiped = await repo.assertDbOwner(UID)
+
+    expect(claimed).toBeGreaterThan(0)
+    expect(wiped).toBe(false)
+    // The history survived and belongs to the account now.
+    expect((await db.workouts.get(workoutId))?.userId).toBe(UID)
+    expect(await repo.countFinishedWorkouts()).toBe(1)
+    // And it's queued to reach the server.
+    const queued = await db.outbox.toArray()
+    expect(queued.some((e) => e.table === 'workouts' && e.rowId === workoutId)).toBe(true)
   })
 
   it('assertDbOwner wipes when a different account owned the local database', async () => {

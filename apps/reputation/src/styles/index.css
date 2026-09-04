@@ -44,6 +44,29 @@ body,
   height: 100%;
 }
 
+/*
+ * The canvas background is taken from `html`, and it paints everything the app's own
+ * layout doesn't cover. Without it, an installed iOS web app showed a black strip
+ * across the home-indicator inset once the tab bar was on screen: `height: 100%`
+ * resolves against the layout viewport, which there is shorter than the window, so
+ * the leftover strip fell through to the window's own (black) background.
+ */
+html {
+  background: var(--surface-page);
+}
+
+/*
+ * And fill the *window* where the unit exists, so the tab bar actually reaches the
+ * bottom rather than floating above that strip. `100%` stays as the fallback.
+ */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
 body {
   margin: 0;
   background: var(--surface-page);

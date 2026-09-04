@@ -6,7 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { seedIfNeeded } from '@/db/seed'
 import * as repo from '@/data/repository'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
-import { ToastProvider } from '@/components/Toast'
+import { ToastProvider, useToast } from '@/components/Toast'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
@@ -101,6 +101,7 @@ function SignedInApp() {
   const [showTour, setShowTour] = useState(false)
 
   useSync()
+  useDataTransitionToast()
 
   useEffect(() => {
     void seedIfNeeded()
@@ -334,4 +335,26 @@ function SignedInApp() {
       {showTour && <AppTour onClose={() => setShowTour(false)} />}
     </div>
   )
+}
+
+/**
+ * Reports what signing in did to this device's data. Claiming or wiping moves the
+ * user's whole history, so it's stated plainly once rather than left to a console
+ * line — "where did my workouts go?" is the worst possible surprise in a tracker.
+ */
+function useDataTransitionToast(): void {
+  const { dataTransition, clearDataTransition } = useAuth()
+  const toast = useToast()
+
+  useEffect(() => {
+    if (!dataTransition) return
+    if (dataTransition.kind === 'claimed') {
+      toast.show(
+        `Added this device's history to your account — ${dataTransition.rows.toLocaleString()} items now syncing.`,
+      )
+    } else {
+      toast.show('Signed in as a different account, so this device was cleared to match it.')
+    }
+    clearDataTransition()
+  }, [dataTransition, clearDataTransition, toast])
 }
