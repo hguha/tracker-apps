@@ -11,6 +11,25 @@ Three targets render this app and each treats safe areas differently:
 `viewport-fit=cover` does **not** make iOS inset anything. It only decides whether
 `env(safe-area-inset-*)` reports real numbers or zero.
 
+## The actual root cause (found by measuring, commit 1bdb953)
+
+On an installed iPhone app the insets report **correctly** — 62 top / 34 bottom. The
+fault was the **height**: `height: 100%` resolved to **894px**, taller than the visible
+area. The document could then scroll by the difference, and once it did the top,
+including that 62px of inset padding, was pushed out of view. Hence "shifted up", "top
+controls unreachable" and "gap at the bottom" — all one bug, none of it about padding.
+
+Fix: size the shell with **`100svh`** (small viewport height) so it can never exceed
+the screen, plus `body { overflow: hidden }` since every screen owns its own scroller.
+`svh` not `dvh`: `dvh` tracks the dynamic size and can be the larger value.
+
+Reference measurements (iPhone 16):
+
+| Target | insets | height |
+|---|---|---|
+| installed PWA | 62 / 34 | 894px ← taller than the screen with `100%` |
+| Safari tab | 0 / 0 | 742px |
+
 ## Current state (the baseline that worked)
 
 Unchanged since the first commit, and restored after four failed experiments:
@@ -29,7 +48,7 @@ Native and browser are correct.
 |---|---|
 | `status-bar-style: default` (keeping `cover`) | insets report 0; content under the status bar, top controls unreachable, black strip at the bottom |
 | Dropping `viewport-fit=cover` | still full-screen, insets now 0; overlaps the Dynamic Island and home indicator |
-| `height: 100dvh` on `html/body/#root` | can exceed the visible area, making the root taller than the screen and pushing content out of reach |
+| `height: 100dvh` on `html/body/#root` | tracks the *dynamic* size, so it can be the larger value and behaves like `100%`. Use `100svh` |
 | `max(env(...), 48px)` floor under `@media (display-mode: standalone)` | markedly worse — content shifted far too high with black bars returning |
 | Mutating the viewport meta at runtime in `main.tsx` | depends on the Capacitor bridge being ready; shifts layout after first paint |
 
