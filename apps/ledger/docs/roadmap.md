@@ -1,14 +1,18 @@
-# COINcidence — roadmap to Monarch / Era / Rocket Money parity
+# COINcidence — roadmap
 
-Goal: match the *tracking + budgeting + AI-copilot* value of Monarch, Era, and Rocket
-Money, on our free stack (Supabase free tier: DB + auth + edge functions + `pg_cron`;
-Gemini free tier; Teller free tier; heavy compute is client-side). Money-movement and
-human-concierge features are deliberately out of scope (see "Not doing").
+**Status: deferred (2026-09-04).** Parked after Phase 1.5, not abandoned. The reason is
+external and unlikely to change: **no aggregator offers a free tier for US personal
+accounts.** Plaid, Teller and Stripe Financial Connections were all checked — Teller's
+advertised free tier is gated and inaccessible; Plaid and Stripe bill from the first
+account (~$0.10/balance, ~$0.30/txns per account/month). Without free bank linking the app
+can only be as good as its CSV/OFX import, which works but is manual, so the remaining
+phases aren't worth building yet.
 
-Internal name stays `ledger` (workspace, dir, Dexie store `ledger`, storage key
-`ledger.auth`, scheme `ledger://`, Supabase project `ledger` / ref `viqnylegpdfuqkcbhizb`)
-— the same way REPutation keeps `fitnote` internally. The brand everywhere user-facing
-is **COINcidence**.
+What is already done still works and is worth keeping alive: local-first app on the shared
+engine, rules + AI categorization, CSV/OFX import, budgets, subscription detection, net
+worth. Resume if an aggregator opens a free tier, or if paying a few dollars a month
+becomes acceptable — the seam is `src/sync/aggregation.ts` plus the `plaid-*` / `teller-*`
+edge functions, and nothing else needs to change.
 
 ## Aggregator decision (updated: no free live API exists)
 
