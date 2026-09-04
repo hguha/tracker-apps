@@ -172,8 +172,18 @@ input[type='number'] {
    in a browser tab, an installed app and the native shell alike. When they looked wrong
    it was the window that was wrong — see docs/ios-safe-areas.md. */
 .pt-safe {
-  padding-top: env(safe-area-inset-top);
+  /*
+   * Additive, and that matters: this rule wins the cascade over Tailwind's `py-2` on the
+   * same element (same layer, same specificity, declared later), so a plain `env()` here
+   * *replaces* a top bar's own padding instead of adding to it. That left every header's
+   * content flush against the Dynamic Island with no breathing room — blurred under it and
+   * awkward to tap — and, in a browser where the inset is 0, gave those headers 8px of
+   * bottom padding and none at the top. `0.5rem` is the `py-2` they all ask for.
+   */
+  padding-top: calc(env(safe-area-inset-top) + 0.5rem);
 }
 .pb-safe {
+  /* NOT additive: the tab bar declares no padding of its own, so anything extra here
+     would lift it off the bottom edge, where it currently sits correctly. */
   padding-bottom: env(safe-area-inset-bottom);
 }
