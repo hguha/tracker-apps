@@ -31,8 +31,10 @@ export function SetPasswordScreen() {
   }
 
   return (
-    <div className="flex h-full flex-col justify-center bg-page px-6 pb-safe pt-safe">
-      <div className="mx-auto w-full max-w-sm">
+    // Centred with `m-auto` inside a scroller, so a short viewport can never leave
+    // the fields above the fold with no way to reach them (see SignInScreen).
+    <div className="flex h-full flex-col overflow-y-auto bg-page px-6 pb-safe pt-safe">
+      <div className="m-auto w-full max-w-sm py-6">
         <div className="mb-8 text-center">
           <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-contrast">
             <KeyRound size={26} />

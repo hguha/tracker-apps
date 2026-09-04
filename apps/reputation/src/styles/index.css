@@ -45,26 +45,16 @@ body,
 }
 
 /*
- * The canvas background is taken from `html`, and it paints everything the app's own
- * layout doesn't cover. Without it, an installed iOS web app showed a black strip
- * across the home-indicator inset once the tab bar was on screen: `height: 100%`
- * resolves against the layout viewport, which there is shorter than the window, so
- * the leftover strip fell through to the window's own (black) background.
+ * The canvas background comes from `html` and paints anything the app's own layout
+ * doesn't cover, so a gap can never show through as black.
+ *
+ * Deliberately NOT sized with `100dvh`: in an installed iOS web app that can exceed
+ * the visible area, which makes the root taller than the screen — and a centred
+ * layout then pushes its own top out of reach, with nothing to scroll back to.
+ * `100%` tracks what's actually visible.
  */
 html {
   background: var(--surface-page);
-}
-
-/*
- * And fill the *window* where the unit exists, so the tab bar actually reaches the
- * bottom rather than floating above that strip. `100%` stays as the fallback.
- */
-@supports (height: 100dvh) {
-  html,
-  body,
-  #root {
-    height: 100dvh;
-  }
 }
 
 body {

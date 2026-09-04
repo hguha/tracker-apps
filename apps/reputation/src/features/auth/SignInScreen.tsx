@@ -256,8 +256,12 @@ export function SignInScreen({
   const showBack = panel !== 'welcome' || isConnectMode
 
   return (
-    <div className="flex h-full flex-col justify-center bg-page px-6 pb-safe pt-safe">
-      <div className="mx-auto w-full max-w-sm">
+    // Scrollable, and centred with `m-auto` rather than `justify-center`: centring a
+    // flex container clips the overflow's top with no way to scroll back to it, so on
+    // a short viewport (or with the keyboard up) the controls up there became
+    // unreachable. `m-auto` centres when there's room and scrolls when there isn't.
+    <div className="flex h-full flex-col overflow-y-auto bg-page px-6 pb-safe pt-safe">
+      <div className="m-auto w-full max-w-sm py-6">
         {showBack && (
           <button
             onClick={() => (panel === 'welcome' ? onCancel?.() : go('welcome'))}

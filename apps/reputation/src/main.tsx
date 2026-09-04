@@ -7,11 +7,14 @@ import { registerServiceWorker } from './lib/serviceWorker'
 import { applyDefaultAppearance } from './lib/theme'
 import { initDeepLinks } from './platform/deepLinks'
 import { initNativeShell } from './platform/native'
+import { applyNativeViewport } from './platform/viewport'
 import './styles/index.css'
 
 // Theme tokens must exist before the first paint — the sign-in screen is drawn
 // before any profile has loaded, and unset variables render as transparent.
 applyDefaultAppearance()
+// Before render, so the native shell lays out edge-to-edge from the first paint.
+applyNativeViewport()
 installGlobalErrorHandlers()
 initNativeShell()
 initDeepLinks()

@@ -2,21 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      No `viewport-fit=cover` here, on purpose.
+
+      `cover` hands the web view the whole screen and makes the app responsible for the
+      notch and home-indicator insets via env(safe-area-inset-*). That works in the
+      browser and in the Capacitor WebView, but an installed home-screen web app
+      reports those insets unreliably — paired with a non-translucent status bar it
+      reported them as zero, so content sat under the status bar with its top controls
+      unreachable and a black strip along the bottom. The symptom appeared ONLY in the
+      installed PWA, which is exactly the scope of these apple-mobile-web-app metas.
+
+      Without `cover`, iOS insets the web view itself and those areas are never ours to
+      get wrong. The native shell does draw edge-to-edge (capacitor.config.ts
+      contentInset: 'never'), so it re-adds `cover` at boot — see platform/viewport.ts.
+    -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="REPutation" />
     <!--
-      `default`, NOT `black-translucent`. Translucent makes an installed PWA draw
-      under the status bar, and iOS reports safe-area-inset-top as 0 there, so
-      pt-safe adds nothing and every screen sits too high. `default` lets iOS inset
-      the web view below the status bar itself. This meta only applies to the
-      home-screen PWA — the Capacitor shell uses the native status bar (see
-      capacitor.config.ts + platform/statusBar), so native is unaffected.
+      `default` (not `black-translucent`) so iOS owns the status bar and insets the web
+      view below it. Combined with dropping `viewport-fit=cover` above, the installed
+      PWA never has to compute a safe area — which is the point, because that's what it
+      gets wrong. Translucent would put the app back under the status bar and make the
+      layout depend on env(safe-area-inset-top) again.
+
+      This meta applies only to the home-screen PWA; the Capacitor shell uses the native
+      status bar (capacitor.config.ts + platform/statusBar), so native is unaffected.
     -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!-- Relative hrefs so they resolve under the /app/ base path. -->
