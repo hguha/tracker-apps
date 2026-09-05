@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import * as repo from '@/data/repository'
 import { applyAppearance, THEME_PRESETS } from '@/lib/theme'
+import { AboutYouCard } from './AboutYouCard'
 import { ProgramCard } from './ProgramCard'
 
 export function SettingsScreen() {
@@ -17,6 +18,8 @@ export function SettingsScreen() {
       <h1 className="px-1 text-[17px] font-semibold tracking-tight">Settings</h1>
 
       <ProgramCard />
+
+      <AboutYouCard />
 
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Appearance</h2>

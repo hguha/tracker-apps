@@ -6,6 +6,7 @@ import * as repo from '@/data/repository'
 import { dayTotals, remaining } from '@/lib/nutrition'
 import { MEAL_SLOTS, type LogEntry, type MealSlot } from '@/domain/types'
 import { grams, MACRO_META } from '@/features/shared/format'
+import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { MacroBar } from './MacroBar'
 import { WeighInCard } from './WeighInCard'
 
@@ -64,6 +65,8 @@ export function TodayScreen({ onLog }: { onLog: (meal: MealSlot) => void }) {
           </p>
         )}
       </Card>
+
+      <CheckInCard />
 
       <WeighInCard />
 

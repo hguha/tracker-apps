@@ -1,4 +1,4 @@
-import { dayKey } from '@tracker-engine/core'
+import { DAY_MS, dayKey } from '@tracker-engine/core'
 import { syncStamp } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import { db, owner } from '@/db'
@@ -7,6 +7,7 @@ import {
   EMPTY_NUTRIENTS,
   type BodyWeightRow,
   type CheckIn,
+  type CoachingMode,
   type Food,
   type LogEntry,
   type MacroTargets,
@@ -16,6 +17,8 @@ import {
   type Program,
 } from '@/domain/types'
 import { nutrientsFor, portionFor } from '@/lib/nutrition'
+import { buildCheckIn, initialTargets, lastCompleteWeekKey } from '@/lib/checkin'
+import type { IntakeDay } from '@/lib/expenditure'
 
 /**
  * The only way features touch storage. Screens never import `@/db` directly, so the write
@@ -296,6 +299,10 @@ export async function startProgram(
   return program.id
 }
 
+export function setCoachingMode(programId: string, coachingMode: CoachingMode): Promise<void> {
+  return patch('programs', programId, { coachingMode })
+}
+
 export function checkIns(): Promise<CheckIn[]> {
   return db.checkIns.filter(alive).toArray()
 }
@@ -322,12 +329,78 @@ export async function saveCheckIn(input: CheckInInput): Promise<string> {
   return row.id
 }
 
-/** The targets in force: the newest applied check-in, else nothing yet. */
+/**
+ * The targets in force: the newest applied check-in, or the cold-start estimate until a week
+ * qualifies. Null only when there's nothing to go on at all.
+ */
 export async function currentTargets(): Promise<MacroTargets | null> {
   const applied = (await checkIns())
     .filter((c) => c.status === 'applied')
     .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
-  return applied?.targets ?? null
+  if (applied) return applied.targets
+
+  const program = await activeProgram()
+  if (!program) return null
+  return initialTargets(program, await getProfile(), await weights())
+}
+
+/** Calories logged per day over a window, days with nothing logged omitted. */
+export async function intakeByDay(fromDay: string, toDay: string): Promise<IntakeDay[]> {
+  const entries = await entriesBetween(fromDay, toDay)
+  const totals = new Map<string, number>()
+  for (const entry of entries) {
+    totals.set(entry.day, (totals.get(entry.day) ?? 0) + entry.nutrients.kcal)
+  }
+  return [...totals.entries()]
+    .map(([day, kcal]) => ({ day, kcal }))
+    .sort((a, b) => a.day.localeCompare(b.day))
+}
+
+/**
+ * Recalculates the week that just ended, and saves the result.
+ *
+ * Idempotent per week: re-running replaces that week's row rather than appending, so opening
+ * the app twice on a Monday can't produce two conflicting conclusions. Returns null when
+ * there is already a check-in for the week, or not enough data to draw one.
+ */
+export async function runCheckIn(now = Date.now()): Promise<CheckIn | null> {
+  const program = await activeProgram()
+  if (!program || program.coachingMode === 'manual') return null
+
+  const week = lastCompleteWeekKey(now)
+  const existing = (await checkIns()).find((c) => c.weekStart === week)
+  if (existing) return null
+
+  const outcome = buildCheckIn({
+    now,
+    program,
+    profile: await getProfile(),
+    weights: await weights(),
+    // Eight weeks: enough for the filter to settle, short enough to stay cheap.
+    intake: await intakeByDay(dayKey(now - 56 * DAY_MS), dayKey(now)),
+    prior: (await checkIns())
+      .filter((c) => c.status === 'applied')
+      .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0] ?? null,
+  })
+  if (outcome.kind !== 'ready') return null
+
+  const id = await saveCheckIn(outcome.draft)
+  return (await db.checkIns.get(id)) ?? null
+}
+
+/** The proposal waiting on the user, in collaborative mode. */
+export async function pendingCheckIn(): Promise<CheckIn | undefined> {
+  return (await checkIns())
+    .filter((c) => c.status === 'proposed')
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
+}
+
+export function applyCheckIn(id: string): Promise<void> {
+  return patch('checkIns', id, { status: 'applied' })
+}
+
+export function declineCheckIn(id: string): Promise<void> {
+  return patch('checkIns', id, { status: 'declined' })
 }
 
 // --- Account lifecycle ------------------------------------------------------------

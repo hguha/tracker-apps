@@ -37,11 +37,14 @@ function Shell() {
   const [tab, setTab] = useState<TabKey>('today')
   const [logMeal, setLogMeal] = useState<MealSlot | null>(null)
 
-  // Reference data and appearance, both needed before anything reads them.
+  // Reference data and appearance, both needed before anything reads them, then the weekly
+  // recalculation. Check-in runs at boot rather than on a timer: the week it's about has
+  // already ended, so there's nothing to be timely about.
   useLiveQuery(async () => {
     await seedFoods()
     const profile = await repo.getProfile()
     applyAppearance({ theme: profile.theme, colorScheme: profile.colorScheme })
+    await repo.runCheckIn()
     return true
   }, [])
 

@@ -75,6 +75,8 @@ export function TrendsScreen() {
         )}
       </Card>
 
+      <CheckInHistory />
+
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Weight</h2>
         {latest ? (
@@ -93,5 +95,41 @@ export function TrendsScreen() {
         )}
       </Card>
     </div>
+  )
+}
+
+/** Every past recalculation. The adaptation is the product, so it should be inspectable. */
+function CheckInHistory() {
+  const history = useLiveQuery(() => repo.checkIns(), [], [])
+  const weeks = (history ?? [])
+    .filter((c) => c.status !== 'declined')
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
+    .slice(0, 8)
+
+  if (weeks.length === 0) return null
+
+  return (
+    <Card className="p-4">
+      <h2 className="text-[15px] font-semibold tracking-tight">Check-ins</h2>
+      <ul className="mt-2 divide-y divide-line">
+        {weeks.map((week) => (
+          <li key={week.id} className="flex items-baseline justify-between py-2">
+            <div>
+              <div className="tabular text-[13.5px]">{week.weekStart}</div>
+              <div className="tabular text-[12px] text-ink-muted">
+                {week.daysLogged}/7 days · {week.trendChangeKgPerWeek >= 0 ? '+' : ''}
+                {week.trendChangeKgPerWeek.toFixed(2)} kg/wk
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="tabular text-[14px] font-semibold">{week.targets.kcal}</div>
+              <div className="tabular text-[11.5px] text-ink-muted">
+                exp {week.expenditureKcal} ± {week.expenditureSe}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
