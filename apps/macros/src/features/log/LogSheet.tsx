@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { ScanLine } from 'lucide-react'
 import { BottomSheet, Button, useToast } from '@tracker-engine/ui'
+import { isBarcodeScanningAvailable } from '@/platform/barcode'
+import { searchRemote } from '@/data/foodLookup'
+import { ScanPanel } from './ScanPanel'
 import * as repo from '@/data/repository'
 import { gramsToMg, nutrientsFor, portionFor } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food, type MealSlot } from '@/domain/types'
@@ -14,8 +18,19 @@ import { grams } from '@/features/shared/format'
 export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () => void }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Food | null>(null)
+  const [isScanning, setIsScanning] = useState(false)
+  const canScan = isBarcodeScanningAvailable()
 
   const results = useLiveQuery(() => repo.searchFoods(query), [query], [])
+
+  // Local first, always. Only reach for the long tail when the seeded set comes up thin, and
+  // never block on it: results already on screen must not disappear while a fetch is in
+  // flight. Remote hits are cached locally, so the live query picks them up on its own.
+  useEffect(() => {
+    if (query.trim().length < 3 || (results?.length ?? 0) >= 5) return
+    const id = window.setTimeout(() => void searchRemote(query), 400)
+    return () => clearTimeout(id)
+  }, [query, results?.length])
   const frequentIds = useLiveQuery(() => repo.frequentFoodIds(12), [], [])
   const frequents = useLiveQuery(
     async () => [...(await repo.foodsByIds(frequentIds ?? [])).values()],
@@ -27,7 +42,9 @@ export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () =>
 
   return (
     <BottomSheet onDismiss={onDismiss} panelClassName="flex max-h-[85%] flex-col">
-      {selected ? (
+      {isScanning ? (
+        <ScanPanel onFound={setSelected} onCancel={() => setIsScanning(false)} />
+      ) : selected ? (
         <PortionStep
           food={selected}
           meal={meal}
@@ -36,14 +53,24 @@ export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () =>
         />
       ) : (
         <>
-          <div className="border-b border-line px-4 py-3">
+          <div className="flex items-center gap-2 border-b border-line px-4 py-3">
             <input
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search foods"
-              className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+              className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
             />
+            {/* Hidden rather than shown-and-broken where BarcodeDetector is absent. */}
+            {canScan && (
+              <button
+                onClick={() => setIsScanning(true)}
+                aria-label="Scan a barcode"
+                className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-secondary active:opacity-60"
+              >
+                <ScanLine size={20} />
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto">
