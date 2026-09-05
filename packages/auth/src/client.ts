@@ -44,15 +44,19 @@ export function supabaseSingleton(storageKey: string): () => SupabaseClient | nu
   let client: SupabaseClient | null | undefined
   return () => {
     if (client !== undefined) return client
-    const env = import.meta.env as Record<string, string | undefined>
-    const url = env.VITE_SUPABASE_URL
-    const anonKey = env.VITE_SUPABASE_ANON_KEY
+    const { url, anonKey } = backendEnv()
     client = url && anonKey ? createSupabaseClient({ url, anonKey, storageKey }) : null
     return client
   }
 }
 
 export function isBackendConfigured(): boolean {
-  const env = import.meta.env as Record<string, string | undefined>
-  return Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY)
+  const { url, anonKey } = backendEnv()
+  return Boolean(url && anonKey)
+}
+
+// Read without depending on vite's ImportMeta types, so this package typechecks standalone.
+function backendEnv(): { url?: string; anonKey?: string } {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+  return { url: env?.VITE_SUPABASE_URL, anonKey: env?.VITE_SUPABASE_ANON_KEY }
 }
