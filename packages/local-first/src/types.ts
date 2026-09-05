@@ -84,3 +84,4 @@ export interface SyncDeps {
   /** Report a dead-letter for server-side diagnostics. */
   reportError(tag: string, error: Error): unknown
 }
+

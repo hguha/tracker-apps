@@ -2,9 +2,9 @@ import { db } from '@/db'
 import { enqueue } from '@/data/outbox'
 import { createSyncDeps, type SyncDeps } from '@tracker-engine/local-first'
 
-export function ledgerSyncDeps(): SyncDeps {
+export function macroSyncDeps(): SyncDeps {
   return createSyncDeps({
-    tag: 'ledger',
+    tag: 'macros',
     enqueue,
     tables: {
       outbox: db.outbox,
