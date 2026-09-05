@@ -6,7 +6,7 @@
 // Env: GEMINI_API_KEY. Requires a JWT (verify_jwt defaults on), so a device-only user falls
 // back to the offline coach rather than reaching this.
 
-const MODEL = 'gemini-2.5-flash'
+const MODEL = 'gemini-3.6-flash'
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
 const SYSTEM = `You are the coach inside MACROcosm, a calorie and macro tracker.

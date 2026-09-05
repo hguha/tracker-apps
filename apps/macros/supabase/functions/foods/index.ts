@@ -10,8 +10,16 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 const USDA = 'https://api.nal.usda.gov/fdc/v1'
 
 // FDC nutrient numbers, which are stable identifiers; names are not.
+//
+// Energy needs three of them. SR Legacy and Branded report 208; many Foundation foods report
+// only the Atwater variants (957 general, 958 specific) and would otherwise come back as 0
+// kcal — which is how the first version returned zero-calorie chicken breast.
+const ENERGY_NUMBERS = ['208', '958', '957']
+
 const NUTRIENT_IDS: Record<string, string> = {
   '208': 'kcal',
+  '957': 'kcal',
+  '958': 'kcal',
   '203': 'proteinMg',
   '205': 'carbsMg',
   '204': 'fatMg',
@@ -55,15 +63,26 @@ interface FdcFood {
 
 function mapFood(food: FdcFood) {
   const per100 = { ...EMPTY }
+  // Energy: prefer 208, then Atwater specific, then general — whichever is present.
+  const byNumber = new Map<string, number>()
   for (const nutrient of food.foodNutrients ?? []) {
     const number = nutrient.nutrientNumber ?? nutrient.nutrient?.number
-    const key = number ? NUTRIENT_IDS[number] : undefined
-    if (!key) continue
     const value = nutrient.value ?? nutrient.amount
-    if (typeof value !== 'number') continue
-    // FDC reports macros in g and micros in mg, per 100 g. kcal stays kcal.
+    if (!number || typeof value !== 'number') continue
+    if (!byNumber.has(number)) byNumber.set(number, value)
+
+    const key = NUTRIENT_IDS[number]
+    if (!key || key === 'kcal') continue
+    // FDC reports macros in g and micros in mg, per 100 g.
     const unit = (nutrient.unitName ?? nutrient.nutrient?.unitName ?? '').toUpperCase()
-    per100[key] = key === 'kcal' ? Math.round(value) : Math.round(unit === 'G' ? value * 1000 : value)
+    per100[key] = Math.round(unit === 'G' ? value * 1000 : value)
+  }
+  for (const number of ENERGY_NUMBERS) {
+    const value = byNumber.get(number)
+    if (typeof value === 'number') {
+      per100.kcal = Math.round(value)
+      break
+    }
   }
 
   const portions = (food.foodPortions ?? [])
@@ -120,6 +139,7 @@ Deno.serve(async (request) => {
     op?: string
     q?: string
     code?: string
+    id?: string
     limit?: number
   }
 
@@ -133,19 +153,31 @@ Deno.serve(async (request) => {
 
   try {
     if (body.op === 'barcode' && body.code) {
-      const found = await search(key, body.code, 1)
-      const match = found.find((f) => f.gtinUpc === body.code) ?? null
+      // Branded only, and more than one hit: FDC's search matches a barcode loosely, so the
+      // exact gtinUpc has to be picked out of several results rather than assumed to be first.
+      const found = await search(key, body.code, 10, ['Branded'])
+      const match = found.find((f) => f.gtinUpc === body.code)
       if (!match) return json({ food: null })
-      const row = mapFood(match)
+      const [row] = await withPortions(key, [match])
+      if (!row) return json({ food: null })
       await admin.from('foods').upsert(row)
       return json({ food: toClient(row) })
     }
 
     if (body.op === 'search' && body.q) {
       const found = await search(key, body.q, Math.min(50, body.limit ?? 25))
-      const rows = found.map(mapFood)
+      const rows = await withPortions(key, found)
       if (rows.length > 0) await admin.from('foods').upsert(rows)
       return json({ foods: rows.map(toClient) })
+    }
+
+    if (body.op === 'get' && body.id) {
+      const fdcId = body.id.replace(/^usda:/, '')
+      const [detail] = await details(key, [fdcId])
+      if (!detail) return json({ food: null })
+      const row = mapFood(detail)
+      await admin.from('foods').upsert(row)
+      return json({ food: toClient(row) })
     }
 
     return json({ error: 'Unknown op' }, 400)
@@ -154,16 +186,44 @@ Deno.serve(async (request) => {
   }
 })
 
-async function search(key: string, query: string, pageSize: number): Promise<FdcFood[]> {
+/**
+ * Search returns no `foodPortions`, so a hit would have no "1 breast" or "1 slice" to log by —
+ * only raw grams. The detail endpoint has them, and one bulk call covers the whole page, so
+ * every search costs two requests instead of N.
+ */
+async function withPortions(key: string, foods: FdcFood[]) {
+  if (foods.length === 0) return []
+  try {
+    const detailed = await details(key, foods.map((f) => String(f.fdcId)))
+    const byId = new Map(detailed.map((f) => [f.fdcId, f]))
+    return foods.map((f) => mapFood(byId.get(f.fdcId) ?? f))
+  } catch {
+    // A detail lookup failing must not lose the search: grams-only is still usable.
+    return foods.map(mapFood)
+  }
+}
+
+async function details(key: string, fdcIds: string[]): Promise<FdcFood[]> {
+  const response = await fetch(`${USDA}/foods?api_key=${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fdcIds, format: 'full' }),
+  })
+  if (!response.ok) throw new Error(`USDA details ${response.status}`)
+  return (await response.json()) as FdcFood[]
+}
+
+async function search(
+  key: string,
+  query: string,
+  pageSize: number,
+  dataType = ['Foundation', 'SR Legacy', 'Survey (FNDDS)', 'Branded'],
+): Promise<FdcFood[]> {
   const response = await fetch(`${USDA}/foods/search?api_key=${encodeURIComponent(key)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      pageSize,
-      // Whole foods first: someone searching "chicken breast" wants the ingredient.
-      dataType: ['Foundation', 'SR Legacy', 'Survey (FNDDS)', 'Branded'],
-    }),
+    // Whole foods first: someone searching "chicken breast" wants the ingredient.
+    body: JSON.stringify({ query, pageSize, dataType }),
   })
   if (!response.ok) throw new Error(`USDA ${response.status}`)
   const body = (await response.json()) as { foods?: FdcFood[] }

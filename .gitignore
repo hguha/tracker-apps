@@ -27,3 +27,7 @@ npm-debug.log*
 test-results
 playwright-report
 .playwright
+
+# Supabase CLI scratch: holds a pooler connection string, so it must not be committed.
+supabase/.temp/
+**/supabase/.temp/
