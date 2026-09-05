@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, formatDayHeading } from '@tracker-engine/core'
 import { Card, ProgressRing } from '@tracker-engine/ui'
-import { Trash2 } from 'lucide-react'
+import { Sparkles, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dayTotals, remaining } from '@/lib/nutrition'
 import { MEAL_SLOTS, type LogEntry, type MealSlot } from '@/domain/types'
@@ -17,7 +17,13 @@ const MEAL_LABELS: Record<MealSlot, string> = {
   snack: 'Snacks',
 }
 
-export function TodayScreen({ onLog }: { onLog: (meal: MealSlot) => void }) {
+export function TodayScreen({
+  onLog,
+  onOpenCoach,
+}: {
+  onLog: (meal: MealSlot) => void
+  onOpenCoach: () => void
+}) {
   const today = dayKey(Date.now())
   const entries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
@@ -67,6 +73,15 @@ export function TodayScreen({ onLog }: { onLog: (meal: MealSlot) => void }) {
       </Card>
 
       <CheckInCard />
+
+      <button
+        onClick={onOpenCoach}
+        className="flex w-full items-center gap-2 rounded-2xl bg-surface px-4 py-3 text-left ring-1 ring-line active:bg-sunken"
+      >
+        <Sparkles size={18} className="shrink-0 text-accent" />
+        <span className="flex-1 text-[14px] font-medium">Ask the coach</span>
+        <span className="text-[12.5px] text-ink-muted">about your numbers</span>
+      </button>
 
       <WeighInCard />
 

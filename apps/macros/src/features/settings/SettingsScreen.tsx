@@ -19,10 +19,12 @@ export function SettingsScreen({
   onConnect,
   onOpenAccount,
   onOpenData,
+  onOpenCoach,
 }: {
   onConnect: () => void
   onOpenAccount: () => void
   onOpenData: () => void
+  onOpenCoach: () => void
 }) {
   const { session } = useAuth()
   const sync = useSync()
@@ -75,6 +77,7 @@ export function SettingsScreen({
       </Card>
 
       <Card className="p-0">
+        <NavRow label="Coach" detail="Ask about your numbers" onClick={onOpenCoach} />
         <NavRow label="Account" detail={session?.email ?? 'This device only'} onClick={onOpenAccount} />
         <NavRow
           label="Data & sync"

@@ -14,13 +14,19 @@ import { AccountScreen } from '@/features/auth/AccountScreen'
 import { OnboardingScreen, ONBOARDING_VERSION } from '@/features/onboarding/OnboardingScreen'
 import { TodayScreen } from '@/features/today/TodayScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
-import { TrendsScreen } from '@/features/trends/TrendsScreen'
+import { InsightsScreen } from '@/features/insights/InsightsScreen'
 import { SettingsScreen } from '@/features/settings/SettingsScreen'
 import { DataScreen } from '@/features/settings/DataScreen'
+import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogSheet } from '@/features/log/LogSheet'
 import type { MealSlot } from '@/domain/types'
 
-type View = { kind: 'tabs' } | { kind: 'account' } | { kind: 'data' } | { kind: 'connect' }
+type View =
+  | { kind: 'tabs' }
+  | { kind: 'account' }
+  | { kind: 'data' }
+  | { kind: 'connect' }
+  | { kind: 'coach' }
 
 export function App() {
   return (
@@ -108,18 +114,24 @@ function SignedInApp() {
   if (view.kind === 'connect') {
     return <SignInScreen onCancel={() => setView({ kind: 'tabs' })} />
   }
+  if (view.kind === 'coach') {
+    return <CoachScreen onBack={() => setView({ kind: 'tabs' })} />
+  }
 
   return (
     <div className="flex h-full flex-col">
       <main className="flex-1 overflow-y-auto pb-6 pt-safe">
-        {tab === 'today' && <TodayScreen onLog={setLogMeal} />}
+        {tab === 'today' && (
+          <TodayScreen onLog={setLogMeal} onOpenCoach={() => setView({ kind: 'coach' })} />
+        )}
         {tab === 'history' && <HistoryScreen />}
-        {tab === 'trends' && <TrendsScreen />}
+        {tab === 'insights' && <InsightsScreen />}
         {tab === 'settings' && (
           <SettingsScreen
             onConnect={() => setView({ kind: 'connect' })}
             onOpenAccount={() => setView({ kind: 'account' })}
             onOpenData={() => setView({ kind: 'data' })}
+            onOpenCoach={() => setView({ kind: 'coach' })}
           />
         )}
       </main>
