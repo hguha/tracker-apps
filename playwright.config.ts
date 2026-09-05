@@ -26,6 +26,11 @@ export default defineConfig({
       testMatch: /ledger\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5174/' },
     },
+    {
+      name: 'macros',
+      testMatch: /macros\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/' },
+    },
   ],
 
   // Each app's dev server. Playwright waits for the URL before running that project.
@@ -44,6 +49,14 @@ export default defineConfig({
       // deterministic against the seeded feed + device-only account, not a live project.
       command: 'VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev --workspace ledger',
       url: 'http://localhost:5174/',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // Empty Supabase env so the suite runs against the device-only provider and the
+      // offline coach — deterministic, and it can never touch a live project.
+      command: 'VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev --workspace macros',
+      url: 'http://localhost:5175/',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

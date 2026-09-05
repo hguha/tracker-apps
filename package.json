@@ -20,8 +20,8 @@
     "dev:ledger": "npm run dev --workspace ledger",
     "dev:site": "npm --prefix sites/reputation-site run dev",
     "build:site": "npm --prefix sites/reputation-site run build",
-    "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:ledger && npm run build:macros && npm run build:site",
+    "test:e2e": "playwright test --project=reputation --project=macros",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:macros && npm run build:site && npm run test:e2e",
     "dev:macros": "npm run dev --workspace macros",
     "build:macros": "npm run build --workspace macros"
   },
