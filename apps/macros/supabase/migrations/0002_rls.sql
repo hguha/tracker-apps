@@ -8,12 +8,17 @@
 --      edge function writes under the service role, which bypasses RLS.
 
 alter table foods          enable row level security;
+alter table profiles       enable row level security;
 alter table log_entries    enable row level security;
 alter table body_weights   enable row level security;
 alter table recipes        enable row level security;
 alter table meal_templates enable row level security;
 alter table programs       enable row level security;
 alter table check_ins      enable row level security;
+
+-- The profile is keyed by the user id, so ownership is the primary key itself.
+create policy "own profile" on profiles for all
+  using (id = auth.uid()) with check (id = auth.uid());
 
 create policy "own log_entries" on log_entries for all
   using (user_id = auth.uid()) with check (user_id = auth.uid());

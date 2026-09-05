@@ -1,9 +1,10 @@
 import { db } from '@/db'
 import { createWriteQueue, type WritableRowStore } from '@tracker-engine/local-first'
 
-// Client-authored synced tables only. `foods` is server-authored (pull-only) and `profile`
-// is device-local, so neither can be written through here.
+// Client-authored synced tables only. `foods` is server-authored (pull-only) and `device` is
+// device-local, so neither can be written through here.
 const WRITE_STORES: Record<string, WritableRowStore> = {
+  profiles: db.profiles as unknown as WritableRowStore,
   logEntries: db.logEntries as unknown as WritableRowStore,
   bodyWeights: db.bodyWeights as unknown as WritableRowStore,
   recipes: db.recipes as unknown as WritableRowStore,

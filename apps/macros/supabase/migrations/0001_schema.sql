@@ -51,6 +51,27 @@ create index foods_search_idx on foods
 
 -- Client-authored -------------------------------------------------------------------
 
+-- One row per user, keyed BY the user id: appearance, units and the cold-start facts follow
+-- the account, and `onboarding_version` is here (not device-local) so setup doesn't re-run on
+-- a second device.
+create table profiles (
+  id                 uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  display_name       text not null default 'You',
+  units              text not null default 'metric',
+  theme              text not null default 'default',
+  color_scheme       text not null default 'system',
+  accent_override    text,
+  height_cm          numeric,
+  birth_year         integer,
+  sex                text,
+  onboarded_at       timestamptz,
+  onboarding_version integer not null default 0,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  deleted_at         timestamptz,
+  client_rev         integer not null default 1
+);
+
 create table log_entries (
   id            text primary key,
   user_id       uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -166,7 +187,7 @@ create table check_ins (
 do $$
 declare t text;
 begin
-  foreach t in array array['foods', 'log_entries', 'body_weights', 'recipes',
+  foreach t in array array['foods', 'profiles', 'log_entries', 'body_weights', 'recipes',
                            'meal_templates', 'programs', 'check_ins']
   loop
     execute format(

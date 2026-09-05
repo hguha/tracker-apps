@@ -4,6 +4,7 @@ import { createOwnerGuard } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import type {
   BodyWeightRow,
+  DeviceSettings,
   CheckIn,
   Food,
   LogEntry,
@@ -25,7 +26,8 @@ export class MacrosDatabase extends Dexie {
   mealTemplates!: EntityTable<MealTemplate, 'id'>
   programs!: EntityTable<Program, 'id'>
   checkIns!: EntityTable<CheckIn, 'id'>
-  profile!: EntityTable<Profile, 'id'>
+  profiles!: EntityTable<Profile, 'id'>
+  device!: EntityTable<DeviceSettings, 'id'>
   outbox!: EntityTable<OutboxEntry, 'seq'>
   deadLetter!: EntityTable<DeadLetterEntry, 'seq'>
   syncState!: EntityTable<SyncState, 'table'>
@@ -40,7 +42,8 @@ export class MacrosDatabase extends Dexie {
       mealTemplates: 'id, name, updatedAt, userId',
       programs: 'id, startedAt, updatedAt, userId',
       checkIns: 'id, weekStart, updatedAt, userId',
-      profile: 'id',
+      profiles: 'id, updatedAt, userId',
+      device: 'id',
       outbox: '++seq, table, rowId, [table+rowId]',
       deadLetter: '++seq, table, rowId',
       syncState: 'table',
@@ -59,7 +62,8 @@ const OWNED_TABLES = [
   db.mealTemplates,
   db.programs,
   db.checkIns,
-  db.profile,
+  db.profiles,
+  db.device,
   db.outbox,
   db.deadLetter,
   db.syncState,

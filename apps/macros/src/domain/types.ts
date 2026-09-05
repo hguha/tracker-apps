@@ -230,17 +230,30 @@ export type UnitSystem = 'metric' | 'imperial'
 export type ThemePreset = 'default' | 'slate' | 'mono'
 export type ColorSchemePreference = 'system' | 'light' | 'dark'
 
-/** Device-local; never synced. */
-export interface Profile {
-  id: 'me'
+/**
+ * Synced, one row per user, exactly like REPutation's. Appearance and units follow the account
+ * so a second device looks right immediately; height/birthYear/sex do because the cold-start
+ * estimate needs them anywhere; and `onboardingVersion` does so setup doesn't re-run per
+ * device — which is the whole reason this isn't device-local.
+ */
+export interface Profile extends SyncColumns {
+  id: string
   displayName: string
   units: UnitSystem
   theme: ThemePreset
   colorScheme: ColorSchemePreference
+  accentOverride: string | null
   heightCm: number | null
   birthYear: number | null
   sex: 'male' | 'female' | null
   onboardedAt: number | null
+  /** The onboarding revision this account last completed; below ONBOARDING_VERSION re-runs it. */
+  onboardingVersion: number
+}
+
+/** Device-local, never synced: the REPutation grant token belongs to this device's keychain. */
+export interface DeviceSettings {
+  id: 'device'
   /** Opaque grant token for the REPutation link; null until connected. */
   reputationGrant: string | null
 }

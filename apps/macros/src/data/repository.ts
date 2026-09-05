@@ -1,5 +1,5 @@
 import { DAY_MS, dayKey } from '@tracker-engine/core'
-import { syncStamp } from '@tracker-engine/local-first'
+import { syncStamp, touch } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import { db, owner } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
@@ -13,6 +13,7 @@ import {
   type MacroTargets,
   type MealSlot,
   type Nutrients,
+  type DeviceSettings,
   type Profile,
   type Program,
 } from '@/domain/types'
@@ -33,28 +34,48 @@ export function setActiveUserId(userId: string): void {
 
 export const currentUserId = (): string => activeUserId
 
-// --- Profile (device-local) -------------------------------------------------------
+// --- Profile (synced, one row per user) -------------------------------------------
 
-const DEFAULT_PROFILE: Profile = {
-  id: 'me',
-  displayName: 'You',
-  units: 'metric',
-  theme: 'default',
-  colorScheme: 'system',
-  heightCm: null,
-  birthYear: null,
-  sex: null,
-  onboardedAt: null,
-  reputationGrant: null,
+function defaultProfile(userId: string): Profile {
+  return {
+    id: userId,
+    displayName: 'You',
+    units: 'metric',
+    theme: 'default',
+    colorScheme: 'system',
+    accentOverride: null,
+    heightCm: null,
+    birthYear: null,
+    sex: null,
+    onboardedAt: null,
+    onboardingVersion: 0,
+    ...syncStamp(),
+  }
 }
 
+/** Creates the row on first read, so every later write is a patch and syncs cleanly. */
 export async function getProfile(): Promise<Profile> {
-  return (await db.profile.get('me')) ?? DEFAULT_PROFILE
+  const existing = await db.profiles.get(activeUserId)
+  if (existing) return existing
+  const created = defaultProfile(activeUserId)
+  await db.profiles.put(created)
+  await enqueue('profiles', created.id)
+  return created
 }
 
 export async function saveProfile(changes: Partial<Profile>): Promise<void> {
-  const current = await getProfile()
-  await db.profile.put({ ...current, ...changes, id: 'me' })
+  await getProfile()
+  await patch('profiles', activeUserId, changes as Record<string, unknown>)
+}
+
+// --- Device settings (never synced) -----------------------------------------------
+
+export async function getDeviceSettings(): Promise<DeviceSettings> {
+  return (await db.device.get('device')) ?? { id: 'device', reputationGrant: null }
+}
+
+export async function saveDeviceSettings(changes: Partial<DeviceSettings>): Promise<void> {
+  await db.device.put({ ...(await getDeviceSettings()), ...changes, id: 'device' })
 }
 
 // --- Foods (server-authored reference data) ---------------------------------------
@@ -420,6 +441,7 @@ export function declineCheckIn(id: string): Promise<void> {
  */
 export async function claimLocalData(userId: string): Promise<number> {
   const tables = [
+    ['profiles', db.profiles],
     ['logEntries', db.logEntries],
     ['bodyWeights', db.bodyWeights],
     ['recipes', db.recipes],
@@ -430,6 +452,21 @@ export async function claimLocalData(userId: string): Promise<number> {
 
   let claimed = 0
   for (const [table, store] of tables) {
+    if (table === 'profiles') {
+      // The profile's primary key *is* the owner, so it can't be re-owned in place — the row
+      // has to be re-keyed, which means delete and re-insert.
+      const stale = (await db.profiles.toArray()).filter((row) => row.id !== userId)
+      for (const row of stale) {
+        const existing = await db.profiles.get(userId)
+        if (!existing) {
+          await db.profiles.put({ ...row, id: userId, ...touch(row.clientRev) })
+          await enqueue('profiles', userId)
+          claimed += 1
+        }
+        await db.profiles.delete(row.id)
+      }
+      continue
+    }
     const rows = await store.where('userId').notEqual(userId).toArray()
     for (const row of rows) {
       await store.update(row.id, { userId, updatedAt: Date.now() })
@@ -447,6 +484,7 @@ export const clearDbOwner = (): void => owner.clearOwner()
 /** Wipes this device's copy, keeping the seeded food reference data. */
 export async function clearLocalData(): Promise<void> {
   await Promise.all([
+    db.profiles.clear(),
     db.logEntries.clear(),
     db.bodyWeights.clear(),
     db.recipes.clear(),

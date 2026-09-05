@@ -1,0 +1,5 @@
+# `foods` is a public read proxy for USDA: it exposes no user data and writes only shared
+# reference rows. verify_jwt must be off, or a device-only user — who has the anon key but no
+# session — could not look up a barcode, and offline-first means exactly that case works.
+[functions.foods]
+verify_jwt = false

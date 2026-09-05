@@ -26,6 +26,10 @@ export interface AuthState<T> {
   verifySignupCode: (email: string, code: string) => Promise<SignInResult>
   verifyRecoveryCode: (email: string, code: string) => Promise<SignInResult>
   updatePassword: (password: string) => Promise<void>
+  /** True from arriving on a reset code until the new password is set. */
+  isRecoveringPassword: boolean
+  beginPasswordRecovery: () => void
+  clearPasswordRecovery: () => void
   signOut: () => Promise<void>
   updateDisplayName: (name: string) => Promise<void>
   deleteAccount: () => Promise<void>
@@ -38,6 +42,12 @@ export interface AuthScopeConfig<T> {
   provider: AuthProvider
   isLocalOnly: boolean
   localUserId?: string
+  /**
+   * Subscribes to the backend's password-recovery event. Redeeming a reset code signs the
+   * user in, so without this the app would just open as normal and the "reset my password"
+   * intent would be silently lost.
+   */
+  onPasswordRecovery?(callback: () => void): () => void
   /**
    * Runs with the resolved owner id *before* the session reaches React. A mounted screen
    * reads whole IndexedDB tables, so anything that has to happen before the first render —
@@ -55,6 +65,9 @@ export function createAuthScope<T>(config: AuthScopeConfig<T>) {
   function AuthProviderScope({ children }: { children: ReactNode }) {
     const [session, setSession] = useState<Session | null | undefined>(undefined)
     const [transition, setTransition] = useState<T | null>(null)
+    const [isRecoveringPassword, setIsRecoveringPassword] = useState(false)
+
+    useEffect(() => config.onPasswordRecovery?.(() => setIsRecoveringPassword(true)), [])
 
     useEffect(() => {
       let cancelled = false
@@ -97,13 +110,16 @@ export function createAuthScope<T>(config: AuthScopeConfig<T>) {
         verifySignupCode: bind(provider.verifySignupCode),
         verifyRecoveryCode: bind(provider.verifyRecoveryCode),
         updatePassword: bind(provider.updatePassword),
+        isRecoveringPassword,
+        beginPasswordRecovery: () => setIsRecoveringPassword(true),
+        clearPasswordRecovery: () => setIsRecoveringPassword(false),
         signOut: bind(provider.signOut),
         updateDisplayName: bind(provider.updateDisplayName),
         deleteAccount: bind(provider.deleteAccount),
         transition,
         clearTransition: () => setTransition(null),
       }),
-      [session, transition, bind],
+      [session, transition, isRecoveringPassword, bind],
     )
 
     return <Context.Provider value={value}>{children}</Context.Provider>

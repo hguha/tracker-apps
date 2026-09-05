@@ -17,6 +17,8 @@ export const { AuthProviderScope, useAuth } = createAuthScope<DataTransition>({
   provider,
   isLocalOnly: supabase === null,
   localUserId: LOCAL_USER_ID,
+  onPasswordRecovery: (callback) =>
+    provider instanceof MacrosAuthProvider ? provider.onPasswordRecovery(callback) : () => {},
   applySession: async (ownerId, session) => {
     repo.setActiveUserId(ownerId)
     if (!session) return null

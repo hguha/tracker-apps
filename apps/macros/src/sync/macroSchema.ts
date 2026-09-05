@@ -2,6 +2,7 @@ import type { SyncSchema } from '@tracker-engine/local-first'
 import { db } from '@/db'
 
 const STORES = {
+  profiles: db.profiles,
   programs: db.programs,
   recipes: db.recipes,
   mealTemplates: db.mealTemplates,
@@ -38,5 +39,13 @@ export const macroSyncSchema: SyncSchema = {
 
   // Children before parents. `foods` is absent on purpose: shared reference data nobody
   // owns, so an account erase must not delete it.
-  eraseOrder: ['logEntries', 'checkIns', 'bodyWeights', 'mealTemplates', 'recipes', 'programs'],
+  eraseOrder: [
+    'logEntries',
+    'checkIns',
+    'bodyWeights',
+    'mealTemplates',
+    'recipes',
+    'programs',
+    'profiles',
+  ],
 }
