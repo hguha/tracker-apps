@@ -7,7 +7,7 @@ functions are live.
 
 - Migrations `0001_schema.sql` + `0002_rls.sql` applied.
 - Secrets: `USDA_API_KEY`, `GEMINI_API_KEY`.
-- Functions: `foods` (verify_jwt **off**), `coach` (verify_jwt **on**).
+- Functions: `foods` (verify_jwt **off**), `coach` and `delete-account` (verify_jwt **on**).
 - `site_url` / redirect allow-list: `http://localhost:5175/**`, `macros://auth-callback`.
 - `mailer_autoconfirm` off, `mailer_otp_length` 6 — same anti-spam posture as REPutation.
 
@@ -34,13 +34,13 @@ The anon key is public by design — RLS is what protects the data.
 supabase link --project-ref kofgokucenxojecqbyhr
 supabase db push
 supabase secrets set USDA_API_KEY=... GEMINI_API_KEY=...
-supabase functions deploy foods coach
+supabase functions deploy foods coach delete-account
 npm run test:e2e:live          # needs `npm run dev:macros` running
 ```
 
 **Deploy every function before debugging client code.** REPutation's `delete-account` went
-undeployed for months and 404'd silently. `delete-account` is not deployed here yet either —
-the Account screen's delete will fail until it is.
+undeployed for months and 404'd silently, so it's verified here: deleting removed the auth user
+and cascaded its rows away.
 
 ## Without any of this
 
