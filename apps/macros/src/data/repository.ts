@@ -53,8 +53,17 @@ function defaultProfile(userId: string): Profile {
   }
 }
 
-/** Creates the row on first read, so every later write is a patch and syncs cleanly. */
+/**
+ * Read-only, and it must stay that way: this is read from live queries, and Dexie throws
+ * "readwrite transaction in liveQuery context" if a querier writes. Returns an unsaved default
+ * when there's no row yet; `ensureProfile` is what creates it, from the boot effect.
+ */
 export async function getProfile(): Promise<Profile> {
+  return (await db.profiles.get(activeUserId)) ?? defaultProfile(activeUserId)
+}
+
+/** Creates the profile row if absent. Boot-effect only — never call this from a query. */
+export async function ensureProfile(): Promise<Profile> {
   const existing = await db.profiles.get(activeUserId)
   if (existing) return existing
   const created = defaultProfile(activeUserId)
@@ -64,7 +73,7 @@ export async function getProfile(): Promise<Profile> {
 }
 
 export async function saveProfile(changes: Partial<Profile>): Promise<void> {
-  await getProfile()
+  await ensureProfile()
   await patch('profiles', activeUserId, changes as Record<string, unknown>)
 }
 

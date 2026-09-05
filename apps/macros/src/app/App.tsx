@@ -65,6 +65,7 @@ function SignedInApp() {
   // a liveQuery context, and a querier that writes would also re-fire on its own writes.
   useEffect(() => {
     void seedFoods()
+      .then(() => repo.ensureProfile())
       .then(() => repo.runCheckIn())
       .then(() => setIsReady(true))
       .catch(() => setIsReady(true))
