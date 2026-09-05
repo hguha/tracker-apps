@@ -1,0 +1,21 @@
+{
+  "name": "@tracker-engine/body",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared bodyweight domain: the join key between the fitness and nutrition apps.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tracker-engine/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

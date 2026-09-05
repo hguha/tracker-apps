@@ -68,7 +68,7 @@ export async function countFinishedWorkouts(): Promise<number> {
 }
 
 export async function updateWorkout(id: string, patch: Partial<Workout>): Promise<void> {
-  await patchRow(db.workouts, 'workouts', id, patch)
+  await patchRow('workouts', id, patch)
 }
 
 // Ends a session, or discards it if nothing was logged (§6.4.1).
@@ -241,7 +241,7 @@ export async function deleteWorkout(id: string): Promise<void> {
   const isUnsent = await isWorkoutUnsent(id)
 
   // Soft delete only — a hard delete can't be represented in pull-based sync.
-  await patchRow(db.workouts, 'workouts', id, { deletedAt: Date.now() })
+  await patchRow('workouts', id, { deletedAt: Date.now() })
 
   // Discarding a session means none of it is sent. When it never reached the
   // server there is nothing to tombstone either, so the whole queued subtree goes
@@ -258,7 +258,7 @@ export async function deleteWorkout(id: string): Promise<void> {
 }
 
 export async function restoreWorkout(id: string): Promise<void> {
-  await patchRow(db.workouts, 'workouts', id, { deletedAt: null })
+  await patchRow('workouts', id, { deletedAt: null })
   // Discarding dropped the queued writes for this workout's exercises and sets, so
   // undo has to put them back or the session would live on this device only.
   await requeueWorkoutSubtree(id)
@@ -324,12 +324,12 @@ export async function updateWorkoutExercise(
   id: string,
   patch: Partial<WorkoutExercise>,
 ): Promise<void> {
-  await patchRow(db.workoutExercises, 'workoutExercises', id, patch)
+  await patchRow('workoutExercises', id, patch)
 }
 
 export async function removeWorkoutExercise(id: string): Promise<void> {
   const row = await db.workoutExercises.get(id)
-  await patchRow(db.workoutExercises, 'workoutExercises', id, { deletedAt: Date.now() })
+  await patchRow('workoutExercises', id, { deletedAt: Date.now() })
   if (row?.supersetGroup !== null && row !== undefined) {
     await collapseLoneSuperset(row.workoutId, row.supersetGroup!)
   }
@@ -345,7 +345,7 @@ async function collapseLoneSuperset(workoutId: string, group: number): Promise<v
 }
 
 export async function restoreWorkoutExercise(id: string): Promise<void> {
-  await patchRow(db.workoutExercises, 'workoutExercises', id, { deletedAt: null })
+  await patchRow('workoutExercises', id, { deletedAt: null })
 }
 
 export async function reorderWorkoutExercises(orderedIds: string[]): Promise<void> {

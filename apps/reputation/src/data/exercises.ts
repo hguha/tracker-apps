@@ -110,7 +110,7 @@ export async function saveExerciseEdits(
 export async function deleteExercise(id: string): Promise<void> {
   const exercise = await db.exercises.get(id)
   if (!exercise || exercise.userId === null) return
-  await patchRow(db.exercises, 'exercises', id, { deletedAt: Date.now() })
+  await patchRow('exercises', id, { deletedAt: Date.now() })
 }
 
 // Repoints this user's workout/template exercises from one exercise id to another
@@ -139,7 +139,7 @@ export async function updateExercise(
   id: string,
   patch: Partial<Exercise>,
 ): Promise<void> {
-  await patchRow(db.exercises, 'exercises', id, patch)
+  await patchRow('exercises', id, patch)
 }
 
 export interface ExerciseDetail {

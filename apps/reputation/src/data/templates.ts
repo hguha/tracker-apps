@@ -71,11 +71,11 @@ export async function updateTemplate(
   id: string,
   patch: Partial<Template>,
 ): Promise<void> {
-  await patchRow(db.templates, 'templates', id, patch)
+  await patchRow('templates', id, patch)
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  await patchRow(db.templates, 'templates', id, { deletedAt: Date.now() })
+  await patchRow('templates', id, { deletedAt: Date.now() })
 }
 
 // A template the + button created and the user backed straight out of is scratch,
@@ -92,7 +92,7 @@ export async function discardUntouchedTemplate(id: string): Promise<boolean> {
 }
 
 export async function restoreTemplate(id: string): Promise<void> {
-  await patchRow(db.templates, 'templates', id, { deletedAt: null })
+  await patchRow('templates', id, { deletedAt: null })
 }
 
 export async function addExerciseToTemplate(
@@ -130,11 +130,11 @@ export async function updateTemplateExercise(
   id: string,
   patch: Partial<TemplateExercise>,
 ): Promise<void> {
-  await patchRow(db.templateExercises, 'templateExercises', id, patch)
+  await patchRow('templateExercises', id, patch)
 }
 
 export async function removeTemplateExercise(id: string): Promise<void> {
-  await patchRow(db.templateExercises, 'templateExercises', id, { deletedAt: Date.now() })
+  await patchRow('templateExercises', id, { deletedAt: Date.now() })
 }
 
 export async function reorderTemplateExercises(orderedIds: string[]): Promise<void> {

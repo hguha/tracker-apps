@@ -1,46 +1,37 @@
-// The durable write queue and the row-write helper every domain module builds on.
-// One entry per dirty row (§5.5); the drain reads the row itself at push time.
+// The durable write queue for REPutation. The generic parts live in
+// @tracker-engine/local-first; what stays here is deferral — an in-progress or
+// being-edited workout holds its writes until Finish, so a live session never publishes
+// half a workout and a cancelled edit publishes nothing.
 
-import { db, touch } from '@/db/database'
+import { db } from '@/db/database'
+import { createWriteQueue, type WritableRowStore } from '@tracker-engine/local-first'
 
-export function newId(): string {
-  // randomUUID is only defined in a secure context; dev over http://<lan-ip>
-  // (phone-on-wifi testing) isn't one, so fall back rather than throw on every write.
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  return 'id-' + crypto.getRandomValues(new Uint32Array(4)).join('-')
+const WRITE_STORES: Record<string, WritableRowStore> = {
+  workouts: db.workouts as unknown as WritableRowStore,
+  workoutExercises: db.workoutExercises as unknown as WritableRowStore,
+  sets: db.sets as unknown as WritableRowStore,
+  templates: db.templates as unknown as WritableRowStore,
+  templateExercises: db.templateExercises as unknown as WritableRowStore,
+  exercises: db.exercises as unknown as WritableRowStore,
+  metricEntries: db.metricEntries as unknown as WritableRowStore,
+  profiles: db.profiles as unknown as WritableRowStore,
 }
 
-/**
- * Marks a row as needing to reach the server.
- *
- * Idempotent per row: a second edit refreshes the existing entry rather than
- * appending, keeping its original `seq` so push order (parents before children)
- * is stable, and resetting the retry state because a fresh edit deserves a fresh
- * attempt. `deletedAt` needs no special case — a tombstone is just the row's
- * current state.
- */
-export async function enqueue(table: string, rowId: string): Promise<void> {
-  const deferredForWorkoutId = await deferralFor(table, rowId)
-  const existing = await db.outbox.where('[table+rowId]').equals([table, rowId]).first()
+const writes = createWriteQueue({
+  queue: {
+    findByRow: (table, rowId) =>
+      db.outbox.where('[table+rowId]').equals([table, rowId]).first(),
+    add: (entry) => db.outbox.add(entry as never),
+    update: (seq, changes) => db.outbox.update(seq, changes),
+    delete: (seq) => db.outbox.delete(seq),
+  },
+  store: (table) => WRITE_STORES[table],
+  deferralFor: (table, rowId) => deferralFor(table, rowId),
+})
 
-  if (existing) {
-    await db.outbox.update(existing.seq!, {
-      deferredForWorkoutId,
-      attempts: 0,
-      lastError: undefined,
-      nextAttemptAt: undefined,
-    })
-    return
-  }
-
-  await db.outbox.add({
-    table,
-    rowId,
-    queuedAt: Date.now(),
-    attempts: 0,
-    deferredForWorkoutId,
-  })
-}
+export const enqueue = writes.enqueue
+export const forgetQueuedWrite = writes.forget
+export { newId } from '@tracker-engine/local-first'
 
 /**
  * The workout whose writes this row belongs to, if that workout is still being
@@ -146,27 +137,13 @@ export async function releaseDeferredWrites(workoutId: string): Promise<number> 
   return held.length
 }
 
-type SyncFields = {
-  updatedAt: number
-  deletedAt: number | null
-  clientRev: number
-}
-
-type SyncedStore<T extends SyncFields> = {
-  get: (id: string) => Promise<T | undefined>
-  update: (id: string, changes: Partial<T>) => Promise<number>
-}
-
-export async function patchRow<T extends SyncFields>(
-  store: SyncedStore<T>,
+/** Applies a patch to a row, stamps it, and queues it — the one client-write path. */
+export async function patchRow(
   table: string,
   id: string,
-  patch: Partial<T>,
+  patch: Record<string, unknown>,
 ): Promise<void> {
-  const current = await store.get(id)
-  if (!current) return
-  await store.update(id, { ...patch, ...touch(current.clientRev) } as Partial<T>)
-  await enqueue(table, id)
+  await writes.patch(table, id, patch)
 }
 
 /**
@@ -200,12 +177,6 @@ export async function releaseStrandedDeferrals(): Promise<number> {
     cleared += await releaseDeferredWrites(workoutId)
   }
   return cleared
-}
-
-/** Drops the queued write for a row, for when the row is removed outright. */
-export async function forgetQueuedWrite(table: string, rowId: string): Promise<void> {
-  const entry = await db.outbox.where('[table+rowId]').equals([table, rowId]).first()
-  if (entry) await db.outbox.delete(entry.seq!)
 }
 
 /**

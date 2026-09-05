@@ -75,15 +75,15 @@ export async function addSet(input: NewSetInput): Promise<string> {
 }
 
 export async function updateSet(id: string, patch: Partial<WorkoutSet>): Promise<void> {
-  await patchRow(db.sets, 'sets', id, patch)
+  await patchRow('sets', id, patch)
 }
 
 export async function deleteSet(id: string): Promise<void> {
-  await patchRow(db.sets, 'sets', id, { deletedAt: Date.now() })
+  await patchRow('sets', id, { deletedAt: Date.now() })
 }
 
 export async function restoreSet(id: string): Promise<void> {
-  await patchRow(db.sets, 'sets', id, { deletedAt: null })
+  await patchRow('sets', id, { deletedAt: null })
 }
 
 // Writes values to a set and derives its completion (§6.2): a set with values is

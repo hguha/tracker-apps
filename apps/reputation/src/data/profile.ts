@@ -10,7 +10,7 @@ export async function getProfile(): Promise<Profile> {
 }
 
 export async function updateProfile(patch: Partial<Profile>): Promise<void> {
-  await patchRow(db.profiles, 'profiles', getActiveUserId(), patch)
+  await patchRow('profiles', getActiveUserId(), patch)
 }
 
 // Re-owns device-only ('local-user') rows to a real uid on sign-in so server RLS
