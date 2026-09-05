@@ -11,6 +11,7 @@ import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { TrendsScreen } from '@/features/trends/TrendsScreen'
 import { SettingsScreen } from '@/features/settings/SettingsScreen'
 import { LogSheet } from '@/features/log/LogSheet'
+import { SignInScreen } from '@/features/auth/SignInScreen'
 import type { MealSlot } from '@/domain/types'
 
 export function App() {
@@ -33,9 +34,10 @@ function currentMeal(): MealSlot {
 }
 
 function Shell() {
-  const { isLoading } = useAuth()
+  const { isLoading, session } = useAuth()
   const [tab, setTab] = useState<TabKey>('today')
   const [logMeal, setLogMeal] = useState<MealSlot | null>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
 
   // Reference data and appearance, both needed before anything reads them, then the weekly
   // recalculation. Check-in runs at boot rather than on a timer: the week it's about has
@@ -49,6 +51,8 @@ function Shell() {
   }, [])
 
   if (isLoading) return <div className="h-full bg-page" />
+  if (!session) return <SignInScreen />
+  if (isConnecting) return <SignInScreen onCancel={() => setIsConnecting(false)} />
 
   return (
     <div className="flex h-full flex-col">
@@ -56,7 +60,7 @@ function Shell() {
         {tab === 'today' && <TodayScreen onLog={setLogMeal} />}
         {tab === 'history' && <HistoryScreen />}
         {tab === 'trends' && <TrendsScreen />}
-        {tab === 'settings' && <SettingsScreen />}
+        {tab === 'settings' && <SettingsScreen onConnect={() => setIsConnecting(true)} />}
       </main>
 
       <TabBar active={tab} onSelect={setTab} onLog={() => setLogMeal(currentMeal())} />

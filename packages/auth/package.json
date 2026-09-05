@@ -14,7 +14,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.1",
-    "@tracker-engine/platform": "*"
+    "@tracker-engine/core": "*",
+    "@tracker-engine/platform": "*",
+    "@tracker-engine/ui": "*",
+    "lucide-react": "^1.27.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

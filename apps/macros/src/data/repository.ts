@@ -113,6 +113,13 @@ export async function entriesBetween(fromDay: string, toDay: string): Promise<Lo
   return db.logEntries.where('day').between(fromDay, toDay, true, true).filter(alive).toArray()
 }
 
+/** Days with at least one entry — what "your data comes with you" actually refers to. */
+export async function countLoggedDays(): Promise<number> {
+  const days = new Set<string>()
+  await db.logEntries.filter(alive).each((entry) => days.add(entry.day))
+  return days.size
+}
+
 /** Distinct foods logged most often, for the Log screen's frequents. */
 export async function frequentFoodIds(limit = 20): Promise<string[]> {
   const counts = new Map<string, number>()

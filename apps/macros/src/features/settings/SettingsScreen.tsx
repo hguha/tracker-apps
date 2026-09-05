@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Card, useToast } from '@tracker-engine/ui'
+import { Button, Card, useToast } from '@tracker-engine/ui'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import * as repo from '@/data/repository'
@@ -7,7 +7,7 @@ import { applyAppearance, THEME_PRESETS } from '@/lib/theme'
 import { AboutYouCard } from './AboutYouCard'
 import { ProgramCard } from './ProgramCard'
 
-export function SettingsScreen() {
+export function SettingsScreen({ onConnect }: { onConnect: () => void }) {
   const toast = useToast()
   const auth = useAuth()
   const sync = useSync()
@@ -57,9 +57,14 @@ export function SettingsScreen() {
           {sync.deadLettered > 0 && <Row label="Failed">{String(sync.deadLettered)}</Row>}
         </dl>
         {!sync.enabled && (
-          <p className="mt-2 text-[12.5px] text-ink-muted">
-            Everything stays in this browser. Nothing is uploaded.
-          </p>
+          <>
+            <p className="mt-2 text-[12.5px] text-ink-muted">
+              Everything stays in this browser. Nothing is uploaded.
+            </p>
+            <Button variant="secondary" className="mt-3 w-full" onClick={onConnect}>
+              Connect an account
+            </Button>
+          </>
         )}
       </Card>
 
