@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Auth contract (AuthProvider/Session) + a Supabase client factory and Supabase-backed provider (magic link / OTP / delete). App supplies env, storage key, and native redirect scheme.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./react": "./src/react/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -17,6 +18,15 @@
   },
   "devDependencies": {
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@types/react": "^19.2.17"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }

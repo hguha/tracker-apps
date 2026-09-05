@@ -1,0 +1,11 @@
+{
+  "name": "MACROcosm",
+  "short_name": "MACROcosm",
+  "description": "A fast, local-first calorie and macro tracker.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0d0d",
+  "theme_color": "#d2601a"
+}

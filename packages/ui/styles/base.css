@@ -35,8 +35,12 @@
   animation: te-drop-in 220ms cubic-bezier(0.16, 1.03, 0.3, 1);
 }
 
+/* Additive: this wins the cascade over Tailwind's `py-*` on the same element, so a bare
+   `env()` replaces a top bar's padding instead of adding to it and leaves content against
+   the Dynamic Island. `.pb-safe` is not additive — a tab bar has no padding of its own and
+   must sit flush. */
 .pt-safe {
-  padding-top: env(safe-area-inset-top);
+  padding-top: calc(env(safe-area-inset-top) + 1rem);
 }
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);

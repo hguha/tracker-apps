@@ -1,15 +1,15 @@
-import { BarChart3, Home, Receipt, Settings } from 'lucide-react'
+import { BarChart3, CalendarDays, Home, Settings } from 'lucide-react'
 import { TabBar as BaseTabBar, type TabDefinition } from '@tracker-engine/ui'
 
-export type TabKey = 'overview' | 'history' | 'insights' | 'settings'
+export type TabKey = 'today' | 'history' | 'trends' | 'settings'
 
 const LEFT: TabDefinition<TabKey>[] = [
-  { key: 'overview', label: 'Overview', icon: Home },
-  { key: 'history', label: 'History', icon: Receipt },
+  { key: 'today', label: 'Today', icon: Home },
+  { key: 'history', label: 'History', icon: CalendarDays },
 ]
 
 const RIGHT: TabDefinition<TabKey>[] = [
-  { key: 'insights', label: 'Insights', icon: BarChart3 },
+  { key: 'trends', label: 'Trends', icon: BarChart3 },
   { key: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -28,7 +28,7 @@ export function TabBar({
       right={RIGHT}
       active={active}
       onSelect={onSelect}
-      centerLabel="Log a transaction"
+      centerLabel="Log food"
       onCenter={onLog}
     />
   )

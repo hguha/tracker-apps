@@ -1,0 +1,46 @@
+/**
+ * Non-themeable tokens. Macro colours are a fixed categorical set — protein stays the same
+ * hue in every ring, bar and chart — and the status ramp encodes how a day sits against its
+ * target. Neither shifts with the accent, because both are properties of the data.
+ *
+ * Surfaces, ink and the accent live in themes.css.
+ */
+
+:root {
+  --macro-protein: #d0453b;
+  --macro-carbs: #2a78d6;
+  --macro-fat: #eda100;
+  --macro-fiber: #1f8a5f;
+  --macro-alcohol: #9c5bd6;
+
+  /* Against target: under, on, over. Paired with a label, never colour alone. */
+  --target-under: #2a78d6;
+  --target-on: #0ca30c;
+  --target-over: #d03b3b;
+
+  /* Confidence in a number the app inferred (expenditure, a photo estimate). */
+  --confidence-high: #0ca30c;
+  --confidence-medium: #fab219;
+  --confidence-low: #a8a69e;
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  --accent-contrast: #ffffff;
+}
+
+[data-scheme='dark'] {
+  --macro-protein: #e35670;
+  --macro-carbs: #4a97ec;
+  --macro-fat: #f0b52a;
+  --macro-fiber: #22c07d;
+  --macro-alcohol: #ad76e6;
+
+  --target-under: #4a97ec;
+  --target-on: #35a865;
+  --target-over: #e35670;
+
+  --confidence-low: #6f6d67;
+}

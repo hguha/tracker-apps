@@ -9,6 +9,7 @@ export { ToastProvider, useToast } from './Toast'
 export { SwipeableRow, useRowTap, type SwipeAction } from './SwipeableRow'
 export { DragList, DragItem, useDragList, type DropIntent } from './DragList'
 export { ErrorBoundary } from './ErrorBoundary'
+export { TabBar, type TabDefinition } from './TabBar'
 export {
   createAppearance,
   resolveScheme,

@@ -11,7 +11,7 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspace reputation && npm run lint --workspace ledger",
+    "lint": "npm run lint --workspace reputation && npm run lint --workspace ledger && npm run lint --workspace macros",
     "build": "npm run build --workspace reputation",
     "build:native": "npm run build:native --workspace reputation",
     "build:ledger": "npm run build --workspace ledger",
@@ -21,7 +21,9 @@
     "dev:site": "npm --prefix sites/reputation-site run dev",
     "build:site": "npm --prefix sites/reputation-site run build",
     "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:ledger && npm run build:site"
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:ledger && npm run build:macros && npm run build:site",
+    "dev:macros": "npm run dev --workspace macros",
+    "build:macros": "npm run build --workspace macros"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0"

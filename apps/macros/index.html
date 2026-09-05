@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover makes env(safe-area-inset-*) report real numbers, which is what
+         .pt-safe/.pb-safe pad with. Deliberately NO apple-mobile-web-app-status-bar-style:
+         black-translucent gives an installed iOS app a window shorter than the screen while
+         still drawing from y=0, leaving a strip outside the web view that no CSS can paint. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MACROcosm" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <title>MACROcosm</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
