@@ -18,6 +18,8 @@ export default defineConfig({
   projects: [
     {
       name: 'reputation',
+      // The live suite lives under e2e/live and is opt-in, so every default project matches
+      // only its own top-level spec.
       testMatch: /reputation\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5173/app/' },
     },
@@ -29,6 +31,13 @@ export default defineConfig({
     {
       name: 'macros',
       testMatch: /macros\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/' },
+    },
+    {
+      // Live project. Needs `npm run dev:macros` (real env) already running, and is opt-in
+      // only: it spends third-party quota and depends on USDA being up.
+      name: 'macros-live',
+      testMatch: /macros-live\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/' },
     },
   ],

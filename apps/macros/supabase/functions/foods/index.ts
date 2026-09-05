@@ -131,7 +131,16 @@ function toClient(row: ReturnType<typeof mapFood>) {
   }
 }
 
+// A browser preflights every cross-origin POST, so without these the function is unreachable
+// from the app entirely — which unit tests and an empty-env E2E run can never surface.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 Deno.serve(async (request) => {
+  if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (request.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   const key = Deno.env.get('USDA_API_KEY')
@@ -233,6 +242,6 @@ async function search(
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 }

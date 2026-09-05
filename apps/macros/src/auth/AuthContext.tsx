@@ -1,5 +1,5 @@
 import { createAuthScope } from '@tracker-engine/auth/react'
-import { LOCAL_USER_ID, type AuthProvider } from '@tracker-engine/auth'
+import { CompositeAuthProvider, LOCAL_USER_ID, type AuthProvider } from '@tracker-engine/auth'
 import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
 import { LocalAuthProvider } from './localAuthProvider'
@@ -9,16 +9,33 @@ import { MacrosAuthProvider } from './supabaseAuthProvider'
 export type DataTransition = { kind: 'claimed'; rows: number } | { kind: 'wiped-foreign' }
 
 const supabase = getSupabase()
-const provider: AuthProvider = supabase
-  ? new MacrosAuthProvider(supabase)
-  : new LocalAuthProvider()
+
+/**
+ * Composed, not either/or. With a project configured the app still has to offer "use this
+ * device only" — the Supabase provider has no such path, so picking one provider broke
+ * device-only mode outright whenever env was present.
+ */
+const composite = supabase
+  ? new CompositeAuthProvider(new MacrosAuthProvider(supabase), new LocalAuthProvider())
+  : null
+const provider: AuthProvider = composite ?? new LocalAuthProvider()
+
+// Claim on upgrade runs before the remote session reaches React, so a device-only user's food
+// log moves onto the account rather than being wiped by the owner guard.
+if (composite) {
+  composite.onUpgrade = async (newUserId) => {
+    repo.setActiveUserId(newUserId)
+    const claimed = await repo.claimLocalData(newUserId)
+    repo.setDbOwner(newUserId)
+    if (claimed > 0) console.info(`[auth] claimed ${claimed} local rows into ${newUserId}`)
+  }
+}
 
 export const { AuthProviderScope, useAuth } = createAuthScope<DataTransition>({
   provider,
   isLocalOnly: supabase === null,
   localUserId: LOCAL_USER_ID,
-  onPasswordRecovery: (callback) =>
-    provider instanceof MacrosAuthProvider ? provider.onPasswordRecovery(callback) : () => {},
+  onPasswordRecovery: (callback) => composite?.onPasswordRecovery(callback) ?? (() => {}),
   applySession: async (ownerId, session) => {
     repo.setActiveUserId(ownerId)
     if (!session) return null

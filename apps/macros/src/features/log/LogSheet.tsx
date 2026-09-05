@@ -43,7 +43,15 @@ export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () =>
   return (
     <BottomSheet onDismiss={onDismiss} panelClassName="flex max-h-[85%] flex-col">
       {isScanning ? (
-        <ScanPanel onFound={setSelected} onCancel={() => setIsScanning(false)} />
+        <ScanPanel
+          // Leaving scan mode matters: the portion step renders in the same slot, so a found
+          // barcode would otherwise stay stuck on the camera view.
+          onFound={(food) => {
+            setIsScanning(false)
+            setSelected(food)
+          }}
+          onCancel={() => setIsScanning(false)}
+        />
       ) : selected ? (
         <PortionStep
           food={selected}

@@ -23,7 +23,8 @@
     "test:e2e": "playwright test --project=reputation --project=macros",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:macros && npm run build:site && npm run test:e2e",
     "dev:macros": "npm run dev --workspace macros",
-    "build:macros": "npm run build --workspace macros"
+    "build:macros": "npm run build --workspace macros",
+    "test:e2e:live": "playwright test --project=macros-live"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0"
