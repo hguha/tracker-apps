@@ -88,6 +88,18 @@ export function dayTotals(entries: readonly Pick<LogEntry, 'nutrients'>[]): Nutr
   return sum(entries.map((e) => e.nutrients))
 }
 
+/**
+ * Average per *logged* day, not per calendar day.
+ *
+ * Dividing by calendar days would quietly understate everything for anyone who misses a day,
+ * turning a gap in logging into an apparent nutrient deficiency.
+ */
+export function dailyAverage(entries: readonly Pick<LogEntry, 'nutrients' | 'day'>[]): Nutrients {
+  const days = new Set(entries.map((entry) => entry.day)).size
+  if (days === 0) return { ...EMPTY_NUTRIENTS }
+  return scale(sum(entries.map((entry) => entry.nutrients)), 1 / days)
+}
+
 /** What's left of a target. Can go negative — that's information, not an error. */
 export function remaining(totals: Nutrients, targets: MacroTargets): MacroTargets {
   return {
@@ -109,6 +121,12 @@ export function kcalFromMacros(n: Nutrients): number {
   return Math.round(
     mgToGrams(n.proteinMg) * 4 + mgToGrams(n.carbsMg) * 4 + mgToGrams(n.fatMg) * 9,
   )
+}
+
+/** Grams of protein per 100 kcal — the comparison that matters when a deficit squeezes protein. */
+export function proteinPer100Kcal(n: Nutrients): number {
+  if (n.kcal <= 0) return 0
+  return (mgToGrams(n.proteinMg) / n.kcal) * 100
 }
 
 export function macroSplitPct(n: Nutrients): { protein: number; carbs: number; fat: number } {

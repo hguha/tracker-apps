@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
+import { dayKey } from '@tracker-engine/core'
 import { dayTotals } from '@/lib/nutrition'
+import { lastCompleteWeekKey } from '@/lib/checkin'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
 
 async function reset() {
@@ -253,5 +255,78 @@ describe('check-in ids', () => {
     const all = await repo.checkIns()
     expect(all).toHaveLength(1)
     expect(all[0]!.daysLogged).toBe(5)
+  })
+})
+
+describe('targets in force', () => {
+  const checkIn = (weekStart: string, kcal: number) => ({
+    weekStart,
+    expenditureKcal: 2500,
+    expenditureSe: 120,
+    trendKg: 80,
+    trendChangeKgPerWeek: -0.4,
+    meanIntakeKcal: 2100,
+    daysLogged: 7,
+    kcalPerKg: 7700,
+    note: '',
+    status: 'applied' as const,
+    targets: { kcal, proteinMg: 1, carbsMg: 1, fatMg: 1 },
+  })
+
+  it('scores a day against the check-in that preceded it, not the newest one', async () => {
+    // Weeks start Monday. The check-in for the week of 2026-08-24 is drawn once that week ends,
+    // so it governs the week of 08-31 — and must not be applied retroactively to 08-26.
+    await repo.saveCheckIn(checkIn('2026-08-17', 1800))
+    await repo.saveCheckIn(checkIn('2026-08-24', 1600))
+
+    const targets = await repo.targetsByDay(['2026-08-26', '2026-09-02'])
+    expect(targets.get('2026-08-26')?.kcal).toBe(1800)
+    expect(targets.get('2026-09-02')?.kcal).toBe(1600)
+  })
+
+  it('has no target for a day before the first check-in and before any weight', async () => {
+    await repo.saveCheckIn(checkIn('2026-08-24', 1600))
+    expect((await repo.targetsByDay(['2026-08-01'])).get('2026-08-01')).toBeNull()
+  })
+
+  it('reads today from the check-in for the week that just ended', async () => {
+    await repo.saveCheckIn(checkIn('2026-01-05', 1800))
+    await repo.saveCheckIn(checkIn(lastCompleteWeekKey(Date.now()), 1500))
+    expect((await repo.currentTargets())?.kcal).toBe(1500)
+  })
+})
+
+describe('saved meals', () => {
+  it('logs a saved meal as ordinary entries at the time given', async () => {
+    const food = await chicken()
+    await repo.logFood({ food, grams: 200, meal: 'dinner' })
+    const entries = await repo.entriesForDay(dayKey(Date.now()))
+    const id = await repo.saveMealTemplate('Usual dinner', entries)
+
+    const template = (await repo.mealTemplates()).find((row) => row.id === id)!
+    expect(template.nutrients.kcal).toBe(dayTotals(entries).kcal)
+
+    const at = Date.parse('2026-09-01T19:30:00')
+    await repo.logMealTemplate(template, 'dinner', at)
+    const logged = await repo.entriesForDay('2026-09-01')
+    expect(logged).toHaveLength(1)
+    expect(logged[0]!.eatenAt).toBe(at)
+    expect(logged[0]!.source).toBe('template')
+  })
+})
+
+describe('relogEntries', () => {
+  it('keeps the time of day rather than stamping everything with now', async () => {
+    const food = await chicken()
+    await repo.logFood({ food, grams: 100, meal: 'lunch', eatenAt: Date.parse('2026-09-01T12:15:00') })
+    await repo.logFood({ food, grams: 100, meal: 'lunch', eatenAt: Date.parse('2026-09-01T12:40:00') })
+
+    const source = await repo.entriesForDay('2026-09-01')
+    await repo.relogEntries(source, { day: '2026-09-03' })
+
+    const copies = (await repo.entriesForDay('2026-09-03')).sort((a, b) => a.eatenAt - b.eatenAt)
+    expect(copies).toHaveLength(2)
+    expect(new Date(copies[0]!.eatenAt).getHours()).toBe(12)
+    expect(copies[1]!.eatenAt - copies[0]!.eatenAt).toBe(25 * 60_000)
   })
 })

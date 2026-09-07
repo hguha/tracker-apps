@@ -1,0 +1,18 @@
+{
+  "name": "@tracker-engine/badges",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Progress-badge engine: a catalog of targets, evaluated against an app's own lifetime stats.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

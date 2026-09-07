@@ -12,13 +12,7 @@ type State =
 
 /** Camera scan, then lookup. Typing the digits stays available throughout, because a scan can
  *  fail for reasons the user can't fix (a scuffed label, low light, no camera permission). */
-export function ScanPanel({
-  onFound,
-  onCancel,
-}: {
-  onFound: (food: Food) => void
-  onCancel: () => void
-}) {
+export function ScanPanel({ onFound }: { onFound: (food: Food) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const handleRef = useRef<ScanHandle | null>(null)
   const [state, setState] = useState<State>({ kind: 'scanning' })
@@ -69,13 +63,6 @@ export function ScanPanel({
 
   return (
     <div className="flex flex-col">
-      <div className="border-b border-line px-4 py-3">
-        <button onClick={onCancel} className="text-[13px] font-semibold text-accent">
-          ← Back
-        </button>
-        <h2 className="mt-1 text-[16px] font-semibold tracking-tight">Scan a barcode</h2>
-      </div>
-
       <div className="px-4 py-3">
         {state.kind === 'failed' ? (
           <p className="rounded-xl bg-sunken px-3.5 py-2.5 text-[13.5px] text-ink-secondary">

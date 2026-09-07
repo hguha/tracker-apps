@@ -5,7 +5,6 @@ import * as repo from '@/data/repository'
 import { grams as fmtGrams } from '@/features/shared/format'
 import type { MealSlot } from '@/domain/types'
 import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
-import { MealPicker } from './MealPicker'
 
 /**
  * "Turkey sandwich" instead of four separate lookups.
@@ -16,18 +15,21 @@ import { MealPicker } from './MealPicker'
  */
 export function DescribePanel({
   meal,
-  onBack,
+  at,
+  initialText = '',
   onDone,
 }: {
   meal: MealSlot
-  onBack: () => void
+  at: number
+  /** Carried over from the search box, so describing a meal never means retyping it. */
+  initialText?: string
   onDone: () => void
 }) {
   const toast = useToast()
-  const [text, setText] = useState('')
-  const [slot, setSlot] = useState<MealSlot>(meal)
+  const [text, setText] = useState(initialText)
   const [estimate, setEstimate] = useState<MealEstimate | null>(null)
   const [isBusy, setIsBusy] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function run() {
@@ -53,13 +55,6 @@ export function DescribePanel({
 
   return (
     <div className="flex max-h-full flex-col">
-      <div className="border-b border-line px-4 py-3">
-        <button onClick={onBack} className="text-[13px] font-semibold text-accent">
-          ← Back
-        </button>
-        <h2 className="mt-1 text-[16px] font-semibold tracking-tight">Describe a meal</h2>
-      </div>
-
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
         <textarea
           rows={2}
@@ -119,18 +114,19 @@ export function DescribePanel({
               <p className="text-[12.5px] text-ink-muted">{estimate.assumptions}</p>
             )}
 
-            <MealPicker value={slot} onChange={setSlot} />
-
             <Button
               className="w-full"
-              disabled={loggable.length === 0}
+              disabled={loggable.length === 0 || isSaving}
               onClick={() => {
+                if (isSaving) return
+                setIsSaving(true)
                 void (async () => {
                   for (const item of loggable) {
                     await repo.logFood({
                       food: item.food!,
                       grams: item.grams,
-                      meal: slot,
+                      meal,
+                      eatenAt: at,
                       source: 'describe',
                       note: item.query,
                       estimate: {
@@ -142,10 +138,10 @@ export function DescribePanel({
                   }
                   toast.show(`Logged ${loggable.length} items`)
                   onDone()
-                })()
+                })().finally(() => setIsSaving(false))
               }}
             >
-              Log {loggable.length} item{loggable.length === 1 ? '' : 's'}
+              {isSaving ? 'Logging…' : `Log ${loggable.length} item${loggable.length === 1 ? '' : 's'}`}
             </Button>
           </>
         )}

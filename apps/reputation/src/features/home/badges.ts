@@ -1,6 +1,16 @@
 // The Home badge catalog (§5.2.1): config-driven — adding a badge is one entry here.
-// `progress` returns 0–1 (≥ 1 is earned); `detail` renders the concrete state.
+// `progress` returns 0–1 (≥ 1 is earned); `detail` renders the concrete state. The evaluation,
+// clamping and ordering live in @tracker-engine/badges, shared with MACROcosm.
 
+import {
+  countBadge as countTarget,
+  evaluateBadges as evaluate,
+  groupBadges,
+  ratio,
+  startedBadges,
+  type Badge as EngineBadge,
+  type BadgeState as EngineBadgeState,
+} from '@tracker-engine/badges'
 import { distanceToM, formatDisplayWeight, weightToKg } from '@/lib/units'
 
 export interface LifetimeStats {
@@ -52,38 +62,10 @@ export type BadgeGroup =
   | 'Cardio'
   | 'Habits'
 
-export interface Badge {
-  key: string
-  label: string
-  caption: string
-  icon: string
-  group: BadgeGroup
-  /** 0–1; ≥ 1 is earned. */
-  progress: (s: LifetimeStats) => number
-  detail: (s: LifetimeStats) => string
-}
+export type Badge = EngineBadge<LifetimeStats, BadgeGroup>
 
 const METERS_PER_MILE = distanceToM(1, 'mi')
 const lbToKg = (lb: number) => weightToKg(lb, 'lb')
-
-function ratio(current: number, target: number): number {
-  if (target <= 0) return 0
-  const r = current / target
-  // A NaN stat from bad data must not poison the score.
-  return Number.isFinite(r) ? r : 0
-}
-
-/**
- * Coerce every stat to a finite number, so one bad value can't render "NaN".
- * Key-driven rather than field-by-field, so a new stat can't be forgotten here.
- */
-function sanitizeStats(s: LifetimeStats): LifetimeStats {
-  const out = {} as Record<keyof LifetimeStats, number>
-  for (const [key, value] of Object.entries(s) as [keyof LifetimeStats, number][]) {
-    out[key] = Number.isFinite(value) ? value : 0
-  }
-  return out as LifetimeStats
-}
 
 function lbDetail(valueKg: number, targetLb: number): string {
   return `${formatDisplayWeight(valueKg, 'lb', { withUnit: false })} / ${targetLb.toLocaleString()} lb`
@@ -96,7 +78,7 @@ type Pick_ = (s: LifetimeStats) => number
  * so they're built from these factories — one line per badge, and the progress and
  * detail text can't drift apart.
  */
-function countBadge(
+const countBadge = (
   key: string,
   label: string,
   caption: string,
@@ -105,18 +87,7 @@ function countBadge(
   pick: Pick_,
   target: number,
   unit = '',
-): Badge {
-  return {
-    key,
-    label,
-    caption,
-    icon,
-    group,
-    progress: (s) => ratio(pick(s), target),
-    detail: (s) =>
-      `${Math.min(pick(s), target).toLocaleString()} / ${target.toLocaleString()}${unit}`,
-  }
-}
+): Badge => countTarget<LifetimeStats, BadgeGroup>(key, label, caption, icon, group, pick, target, unit)
 
 function weightBadge(
   key: string,
@@ -355,48 +326,18 @@ export const BADGES: Badge[] = [
   hoursBadge('time-500h', 'Five Hundred Hours', 'Spend 500 hours training.', '🔮', 'Habits', (s) => s.totalTrainingSeconds, 500),
 ]
 
-export interface BadgeState extends Badge {
-  earned: boolean
-  fraction: number
-  detailText: string
-}
+export type BadgeState = EngineBadgeState<LifetimeStats, BadgeGroup>
 
-export function evaluateBadges(rawStats: LifetimeStats): BadgeState[] {
-  const stats = sanitizeStats(rawStats)
-  return BADGES.map((badge) => {
-    const raw = badge.progress(stats)
-    const fraction = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0
-    return { ...badge, earned: fraction >= 1, fraction, detailText: badge.detail(stats) }
-  }).sort((a, b) => {
-    if (a.earned !== b.earned) return a.earned ? -1 : 1
-    // Among unearned, closest to earning comes first (most motivating).
-    if (!a.earned) return b.fraction - a.fraction
-    return 0
-  })
-}
+const GROUP_ORDER: BadgeGroup[] = [
+  'Milestones',
+  'Consistency',
+  'Strength',
+  'Bodyweight',
+  'Volume',
+  'Cardio',
+  'Habits',
+]
 
-// Earned badges plus started ones (fraction > 0); untouched targets are hidden as
-// noise. Falls back to the single closest badge so Home is never empty for a new user.
-export function homeBadges(all: BadgeState[]): BadgeState[] {
-  const inPlay = all.filter((b) => b.earned || b.fraction > 0)
-  if (inPlay.length > 0) return inPlay
-  const next = all.find((b) => !b.earned)
-  return next ? [next] : []
-}
-
-export function groupedBadges(
-  all: BadgeState[],
-): { group: BadgeGroup; badges: BadgeState[] }[] {
-  const order: BadgeGroup[] = [
-    'Milestones',
-    'Consistency',
-    'Strength',
-    'Bodyweight',
-    'Volume',
-    'Cardio',
-    'Habits',
-  ]
-  return order
-    .map((group) => ({ group, badges: all.filter((b) => b.group === group) }))
-    .filter((section) => section.badges.length > 0)
-}
+export const evaluateBadges = (stats: LifetimeStats): BadgeState[] => evaluate(BADGES, stats)
+export const homeBadges = startedBadges<LifetimeStats, BadgeGroup>
+export const groupedBadges = (all: BadgeState[]) => groupBadges(all, GROUP_ORDER)

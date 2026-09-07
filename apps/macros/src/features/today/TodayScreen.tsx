@@ -1,84 +1,108 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, formatDayHeading } from '@tracker-engine/core'
-import { Card, ProgressRing } from '@tracker-engine/ui'
-import { Sparkles, Trash2 } from 'lucide-react'
+import { dayKey, dayKeyOffset, dayStreaks, formatDayHeading, formatTimeOfDay } from '@tracker-engine/core'
+import { Card } from '@tracker-engine/ui'
+import { Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { dayTotals, remaining } from '@/lib/nutrition'
-import { MEAL_SLOTS, type LogEntry, type MealSlot } from '@/domain/types'
-import { grams, MACRO_META } from '@/features/shared/format'
+import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
+import { MEAL_LABELS, mealForHour } from '@/features/shared/meals'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
+import { BadgeStrip } from '@/features/badges/BadgeStrip'
+import type { LogEntry, MealSlot } from '@/domain/types'
+import { BudgetCard } from './BudgetCard'
+import { EntrySheet } from './EntrySheet'
 import { GoalCard } from './GoalCard'
-import { MacroBar } from './MacroBar'
 import { NutritionCard } from './NutritionCard'
+import { SaveMealSheet } from './SaveMealSheet'
+import { Timeline } from './Timeline'
 import { WeighInCard } from './WeighInCard'
 
-const MEAL_LABELS: Record<MealSlot, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snacks',
-}
+/** The micronutrient window: a week, because one day of fibre means nothing. */
+const NUTRITION_DAYS = 7
 
 export function TodayScreen({
   onLog,
   onOpenCoach,
+  onOpenAbout,
+  onOpenBadges,
 }: {
   onLog: (meal: MealSlot) => void
   onOpenCoach: () => void
+  onOpenAbout: () => void
+  onOpenBadges: () => void
 }) {
   const today = dayKey(Date.now())
+  const [editing, setEditing] = useState<LogEntry | null>(null)
+  const [savingMeal, setSavingMeal] = useState<LogEntry[] | null>(null)
+
   const entries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
+  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
+  const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
+  const weights = useLiveQuery(() => repo.weights(), [], [])
+
+  // One lookup for the whole day rather than a live query per row.
+  const foods = useLiveQuery(
+    async () => repo.foodsByIds((entries ?? []).map((e) => e.foodId).filter(isString)),
+    [entries],
+    new Map(),
+  )
+
+  const week = useLiveQuery(
+    () => repo.entriesBetween(dayKeyOffset(Date.now(), NUTRITION_DAYS - 1), today),
+    [today],
+    [],
+  )
+  const loggedDays = useLiveQuery(() => repo.loggedDays(), [], [])
 
   const totals = dayTotals(entries ?? [])
   const left = targets ? remaining(totals, targets) : null
+  const streak = dayStreaks(loggedDays ?? [])
+  const weekDayCount = new Set((week ?? []).map((entry) => entry.day)).size
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <h1 className="px-1 text-[17px] font-semibold tracking-tight">
-        {formatDayHeading(Date.now())}
-      </h1>
-
-      <Card className="p-4">
-        <div className="flex items-center gap-4">
-          <ProgressRing value={totals.kcal} max={targets?.kcal ?? 0} size={92}>
-            <div className="text-center">
-              <div className="tabular text-[20px] font-bold leading-none">{totals.kcal}</div>
-              <div className="text-[10.5px] text-ink-muted">kcal</div>
-            </div>
-          </ProgressRing>
-
-          <div className="flex-1 space-y-2.5">
-            {MACRO_META.map((macro) => (
-              <MacroBar
-                key={macro.key}
-                label={macro.label}
-                eatenMg={totals[macro.key]}
-                targetMg={targets?.[macro.key] ?? 0}
-                barClassName={macro.bar}
-              />
-            ))}
-          </div>
-        </div>
-
-        {left ? (
-          <p className="mt-3 text-[13px] text-ink-secondary">
-            {left.kcal >= 0
-              ? `${left.kcal} kcal and ${grams(Math.max(0, left.proteinMg))} protein left today.`
-              : `${Math.abs(left.kcal)} kcal over target.`}
-          </p>
-        ) : (
-          <p className="mt-3 text-[13px] text-ink-muted">
-            No target yet — log a few days and a weight, and the app works one out.
-          </p>
+      <div className="flex items-baseline justify-between px-1">
+        <h1 className="text-[17px] font-semibold tracking-tight">
+          {formatDayHeading(Date.now())}
+        </h1>
+        {streak.current > 1 && (
+          <span className="flex items-center gap-1 text-[12.5px] font-semibold text-accent">
+            <Flame size={14} />
+            {streak.current} day streak
+          </span>
         )}
-      </Card>
+      </div>
+
+      <BudgetCard
+        totals={totals}
+        targets={targets}
+        left={left}
+        window={profile?.eatingWindow ?? null}
+        entries={entries ?? []}
+        missing={missingForTarget(profile, program != null, weights ?? [])}
+        onFix={onOpenAbout}
+      />
+
+      <Timeline
+        entries={entries ?? []}
+        foods={foods ?? new Map()}
+        onAdd={() => onLog(mealForHour(new Date().getHours()))}
+        onEdit={setEditing}
+        onSaveMeal={setSavingMeal}
+      />
+
+      <WeighInCard />
 
       <GoalCard />
 
-      <NutritionCard totals={totals} />
-
       <CheckInCard />
+
+      {weekDayCount > 0 && (
+        <NutritionCard averages={dailyAverage(week ?? [])} dayCount={weekDayCount} />
+      )}
+
+      <BadgeStrip onOpen={onOpenBadges} />
 
       <button
         onClick={onOpenCoach}
@@ -89,83 +113,60 @@ export function TodayScreen({
         <span className="text-[12.5px] text-ink-muted">about your numbers</span>
       </button>
 
-      <WeighInCard />
+      {profile?.eatingWindow === null && (entries ?? []).length > 0 && <FastingHint />}
 
-      {MEAL_SLOTS.map((meal) => (
-        <MealSection
-          key={meal}
-          meal={meal}
-          entries={(entries ?? []).filter((e) => e.meal === meal)}
-          onAdd={() => onLog(meal)}
+      {editing && (
+        <EntrySheet
+          entry={editing}
+          name={
+            (editing.foodId ? foods?.get(editing.foodId)?.description : null) ??
+            editing.note ??
+            'Entry'
+          }
+          onDismiss={() => setEditing(null)}
         />
-      ))}
+      )}
+
+      {savingMeal && (
+        <SaveMealSheet
+          entries={savingMeal}
+          defaultName={`${MEAL_LABELS[savingMeal[0]!.meal]} · ${formatTimeOfDay(savingMeal[0]!.eatenAt)}`}
+          onDismiss={() => setSavingMeal(null)}
+        />
+      )}
     </div>
   )
 }
 
-function MealSection({
-  meal,
-  entries,
-  onAdd,
-}: {
-  meal: MealSlot
-  entries: LogEntry[]
-  onAdd: () => void
-}) {
-  const totals = dayTotals(entries)
+/** Only for people who haven't set a window: one line, once they have data to apply it to. */
+function FastingHint() {
   return (
-    <Card className="p-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-[15px] font-semibold tracking-tight">{MEAL_LABELS[meal]}</h2>
-        <span className="tabular text-[13px] text-ink-muted">{totals.kcal} kcal</span>
-      </div>
-
-      {entries.length > 0 && (
-        <ul className="mt-2 divide-y divide-line">
-          {entries
-            .sort((a, b) => a.sortIndex - b.sortIndex)
-            .map((entry) => (
-              <EntryRow key={entry.id} entry={entry} />
-            ))}
-        </ul>
-      )}
-
-      <button
-        onClick={onAdd}
-        className="mt-2 w-full rounded-xl border border-dashed border-line-strong py-2 text-[13.5px] font-semibold text-accent active:opacity-60"
-      >
-        + Add food
-      </button>
+    <Card className="p-3.5">
+      <p className="text-[12.5px] text-ink-muted">
+        Eat in a set window? Turning one on in Preferences adds a fasting timer and lets the app
+        tell you whether you&rsquo;re ahead or behind for the time of day — which it can&rsquo;t
+        honestly guess otherwise.
+      </p>
     </Card>
   )
 }
 
-function EntryRow({ entry }: { entry: LogEntry }) {
-  const food = useLiveQuery(
-    () => (entry.foodId ? repo.getFood(entry.foodId) : Promise.resolve(undefined)),
-    [entry.foodId],
-  )
-  const name = food?.description ?? entry.note ?? 'Quick add'
-
-  return (
-    <li className="flex items-center gap-2 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px]">{name}</div>
-        <div className="tabular text-[12px] text-ink-muted">
-          {entry.grams > 0 && `${Math.round(entry.grams)}g · `}
-          {grams(entry.nutrients.proteinMg)}P {grams(entry.nutrients.carbsMg)}C{' '}
-          {grams(entry.nutrients.fatMg)}F
-          {entry.estimate && <span className="text-confidence-medium"> · estimate</span>}
-        </div>
-      </div>
-      <span className="tabular text-[14px] font-semibold">{entry.nutrients.kcal}</span>
-      <button
-        onClick={() => void repo.deleteEntry(entry.id)}
-        aria-label="Remove"
-        className="flex size-8 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-      >
-        <Trash2 size={16} />
-      </button>
-    </li>
-  )
+/**
+ * What the app still needs before it can produce a first target. Named explicitly, because
+ * "no target yet" with a goal selected in Settings reads as a bug rather than a missing input.
+ */
+function missingForTarget(
+  profile: { heightCm: number | null; birthYear: number | null; sex: string | null } | undefined,
+  hasProgram: boolean,
+  weights: readonly unknown[],
+): string[] {
+  if (!hasProgram || !profile) return []
+  const missing: string[] = []
+  if (weights.length === 0) missing.push('weight')
+  if (profile.heightCm === null) missing.push('height')
+  if (profile.birthYear === null) missing.push('age')
+  if (profile.sex === null) missing.push('sex')
+  return missing
 }
+
+const isString = (value: string | null): value is string => value !== null

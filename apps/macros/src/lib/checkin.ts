@@ -58,6 +58,11 @@ export function currentWeekKey(now: number): string {
   return weekKey(now, WEEK_STARTS_ON)
 }
 
+/** The week a `yyyy-MM-dd` day belongs to. Midday, so no timezone can shift the day. */
+export function weekKeyForDay(day: string): string {
+  return weekKey(Date.parse(`${day}T12:00:00`), WEEK_STARTS_ON)
+}
+
 /** The week that just ended — the one a check-in is about. */
 export function lastCompleteWeekKey(now: number): string {
   return weekKey(weekStart(now, WEEK_STARTS_ON) - 1, WEEK_STARTS_ON)

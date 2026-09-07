@@ -18,6 +18,7 @@
     "@tracker-engine/ai-coach": "*",
     "@tracker-engine/auth": "*",
     "@tracker-engine/body": "*",
+    "@tracker-engine/badges": "*",
     "@tracker-engine/core": "*",
     "@tracker-engine/local-first": "*",
     "@tracker-engine/platform": "*",

@@ -15,18 +15,23 @@ import { OnboardingScreen, ONBOARDING_VERSION } from '@/features/onboarding/Onbo
 import { TodayScreen } from '@/features/today/TodayScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { InsightsScreen } from '@/features/insights/InsightsScreen'
-import { SettingsScreen } from '@/features/settings/SettingsScreen'
+import { SettingsScreen, type SettingsRoute } from '@/features/settings/SettingsScreen'
 import { DataScreen } from '@/features/settings/DataScreen'
+import { TargetsScreen } from '@/features/settings/TargetsScreen'
+import { AboutYouScreen } from '@/features/settings/AboutYouScreen'
+import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
+import { AppearanceScreen } from '@/features/settings/AppearanceScreen'
+import { BadgesScreen } from '@/features/badges/BadgesScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
-import { LogSheet } from '@/features/log/LogSheet'
+import { LogScreen } from '@/features/log/LogScreen'
+import { mealForHour } from '@/features/shared/meals'
 import type { MealSlot } from '@/domain/types'
 
 type View =
   | { kind: 'tabs' }
-  | { kind: 'account' }
-  | { kind: 'data' }
+  | { kind: 'log'; meal: MealSlot }
+  | { kind: 'settings'; route: SettingsRoute }
   | { kind: 'connect' }
-  | { kind: 'coach' }
 
 export function App() {
   return (
@@ -47,23 +52,16 @@ function AuthGate() {
   if (isRecoveringPassword) return <SetPasswordScreen />
   if (isLoading) return <Splash>Loading…</Splash>
   if (!session) return <SignInScreen />
-  return <SignedInApp />
-}
-
-/** The meal a "log food" tap defaults to, so the common case needs no extra choice. */
-function currentMeal(): MealSlot {
-  const hour = new Date().getHours()
-  if (hour < 11) return 'breakfast'
-  if (hour < 15) return 'lunch'
-  if (hour < 21) return 'dinner'
-  return 'snack'
+  // Keyed on the user, so connecting an account remounts and drops the screen state that
+  // belonged to the old owner — including the "connect an account" view itself, which would
+  // otherwise stay on screen after the sign-in it just completed.
+  return <SignedInApp key={session.userId} />
 }
 
 function SignedInApp() {
   const [isReady, setIsReady] = useState(false)
   const [tab, setTab] = useState<TabKey>('today')
   const [view, setView] = useState<View>({ kind: 'tabs' })
-  const [logMeal, setLogMeal] = useState<MealSlot | null>(null)
 
   useSync()
 
@@ -105,45 +103,59 @@ function SignedInApp() {
     return <OnboardingScreen onDone={() => setView({ kind: 'tabs' })} />
   }
 
-  if (view.kind === 'account') {
-    return (
-      <AccountScreen
-        onBack={() => setView({ kind: 'tabs' })}
-        onConnect={() => setView({ kind: 'connect' })}
-      />
-    )
-  }
-  if (view.kind === 'data') {
-    return <DataScreen onBack={() => setView({ kind: 'tabs' })} />
-  }
-  if (view.kind === 'connect') {
-    return <SignInScreen onCancel={() => setView({ kind: 'tabs' })} />
-  }
-  if (view.kind === 'coach') {
-    return <CoachScreen onBack={() => setView({ kind: 'tabs' })} />
+  const toTabs = () => setView({ kind: 'tabs' })
+
+  if (view.kind === 'connect') return <SignInScreen onCancel={toTabs} />
+  if (view.kind === 'log') return <LogScreen meal={view.meal} onClose={toTabs} />
+  if (view.kind === 'settings') {
+    switch (view.route) {
+      case 'targets':
+        return <TargetsScreen onBack={toTabs} />
+      case 'about':
+        return <AboutYouScreen onBack={toTabs} />
+      case 'preferences':
+        return <PreferencesScreen onBack={toTabs} />
+      case 'appearance':
+        return <AppearanceScreen onBack={toTabs} />
+      case 'badges':
+        return <BadgesScreen onBack={toTabs} />
+      case 'coach':
+        return <CoachScreen onBack={toTabs} />
+      case 'data':
+        return <DataScreen onBack={toTabs} />
+      case 'account':
+        return (
+          <AccountScreen onBack={toTabs} onConnect={() => setView({ kind: 'connect' })} />
+        )
+    }
   }
 
   return (
     <div className="flex h-full flex-col">
       <main className="flex-1 overflow-y-auto pb-6 pt-safe">
         {tab === 'today' && (
-          <TodayScreen onLog={setLogMeal} onOpenCoach={() => setView({ kind: 'coach' })} />
+          <TodayScreen
+            onLog={(meal) => setView({ kind: 'log', meal })}
+            onOpenCoach={() => setView({ kind: 'settings', route: 'coach' })}
+            onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
+            onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}
+          />
         )}
         {tab === 'history' && <HistoryScreen />}
         {tab === 'insights' && <InsightsScreen />}
         {tab === 'settings' && (
           <SettingsScreen
+            onOpen={(route) => setView({ kind: 'settings', route })}
             onConnect={() => setView({ kind: 'connect' })}
-            onOpenAccount={() => setView({ kind: 'account' })}
-            onOpenData={() => setView({ kind: 'data' })}
-            onOpenCoach={() => setView({ kind: 'coach' })}
           />
         )}
       </main>
 
-      <TabBar active={tab} onSelect={setTab} onLog={() => setLogMeal(currentMeal())} />
-
-      {logMeal && <LogSheet meal={logMeal} onDismiss={() => setLogMeal(null)} />}
+      <TabBar
+        active={tab}
+        onSelect={setTab}
+        onLog={() => setView({ kind: 'log', meal: mealForHour(new Date().getHours()) })}
+      />
     </div>
   )
 }

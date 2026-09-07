@@ -48,11 +48,18 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   // Log a seeded food end to end: search, portion, then it lands on the day.
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search foods').fill('chicken breast')
+  // The meal and the time are always on screen — the slot is data, not an assumption.
+  await expect(page.getByRole('button', { name: 'Breakfast' })).toBeVisible()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: 'Log it' })).toBeEnabled()
   await page.getByRole('button', { name: 'Log it' }).click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
+
+  // The timeline shows when it was eaten, and tapping it opens the correction sheet.
+  await expect(page.getByText(/1 eating occasion/)).toBeVisible()
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await expect(page.getByRole('button', { name: /Remove from today/ })).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -68,6 +75,13 @@ test('every tab and the coach render without errors', async ({ page }) => {
   for (const tab of ['History', 'Insights', 'Settings']) {
     await page.getByRole('button', { name: tab, exact: true }).click()
     await expect(page.getByRole('heading', { name: tab })).toBeVisible()
+  }
+
+  // Settings is a list of destinations; each one has to be reachable and come back.
+  for (const route of ['Targets & goal', 'About you', 'Food & units', 'Appearance', 'Badges']) {
+    await page.getByRole('button', { name: new RegExp(route) }).click()
+    await expect(page.getByRole('heading', { name: route })).toBeVisible()
+    await page.getByRole('button', { name: 'Back' }).click()
   }
 
   // The offline coach must answer with no key and no session — that's the whole point of it.

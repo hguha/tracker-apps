@@ -101,6 +101,8 @@ export type EntrySource =
   | 'recipe'
   | 'quick'
   | 'copy'
+  /** Logged from a saved meal. */
+  | 'template'
 
 export interface EstimateMeta {
   confidence: 'high' | 'medium' | 'low'
@@ -263,6 +265,21 @@ export interface Profile extends SyncColumns {
    * on the profile rather than device-local.
    */
   dietNotes: string
+  /** Null when the user eats whenever; set when they keep an eating window. */
+  eatingWindow: EatingWindow | null
+}
+
+/**
+ * An eating window, in minutes from local midnight.
+ *
+ * Fasting changes no arithmetic — a day's calories are its calories — so this deliberately
+ * does not touch targets. What it changes is what the app is entitled to say: "you're behind
+ * on protein" at 10am is wrong advice for someone whose window opens at noon, and a plain
+ * remaining-calorie figure is the honest thing to show until it does.
+ */
+export interface EatingWindow {
+  startMinute: number
+  endMinute: number
 }
 
 /** Device-local, never synced: the REPutation grant token belongs to this device's keychain. */

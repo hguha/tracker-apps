@@ -13,16 +13,24 @@ const VERDICT_COLOR: Record<string, string> = {
 }
 
 /**
- * Diet completeness, collapsed by default.
+ * Diet completeness over the last week, collapsed by default.
  *
- * Someone tracking macros didn't ask to be nagged about potassium, so this is one quiet line
- * until they open it. It also never claims more than it knows: nutrients the day's foods had no
- * data for are counted as unknown rather than zero, and the header says so.
+ * A week rather than today, because a single day says almost nothing about micronutrients —
+ * fibre and calcium swing wildly day to day and nobody should change what they eat over one
+ * low reading. Someone tracking macros also didn't ask to be nagged about potassium, so this
+ * stays one quiet line until they open it, and it names the nutrients rather than reducing
+ * them to a score that would mean nothing (see lib/micronutrients).
  */
-export function NutritionCard({ totals }: { totals: Nutrients }) {
+export function NutritionCard({
+  averages,
+  dayCount,
+}: {
+  averages: Nutrients
+  dayCount: number
+}) {
   const [isOpen, setIsOpen] = useState(false)
-  const quality = dietQuality(totals)
-  const statuses = nutrientStatus(totals)
+  const quality = dietQuality(averages)
+  const statuses = nutrientStatus(averages)
 
   return (
     <Card className="p-0">
@@ -35,19 +43,17 @@ export function NutritionCard({ totals }: { totals: Nutrients }) {
           <div className="text-[14px] font-medium">Nutrition</div>
           <div className="truncate text-[12.5px] text-ink-muted">{quality.summary}</div>
         </div>
-        {quality.score !== null && (
-          <span
-            className="tabular shrink-0 text-[13px] font-semibold"
-            style={{
-              color:
-                quality.score >= 80
-                  ? 'var(--target-on)'
-                  : quality.score >= 50
-                    ? 'var(--confidence-medium)'
-                    : 'var(--target-under)',
-            }}
-          >
-            {quality.score}%
+        {quality.measured > 0 && (
+          <span className="flex shrink-0 gap-1">
+            {quality.short.length > 0 && (
+              <Pill count={quality.short.length} label="low" color="var(--target-under)" />
+            )}
+            {quality.over.length > 0 && (
+              <Pill count={quality.over.length} label="high" color="var(--target-over)" />
+            )}
+            {quality.short.length === 0 && quality.over.length === 0 && (
+              <Pill count={quality.onTarget.length} label="in range" color="var(--target-on)" />
+            )}
           </span>
         )}
         <ChevronDown
@@ -58,7 +64,11 @@ export function NutritionCard({ totals }: { totals: Nutrients }) {
 
       {isOpen && (
         <div className="border-t border-line px-4 py-3">
-          <ul className="space-y-2">
+          <p className="text-[12px] text-ink-muted">
+            Daily average across {dayCount} logged day{dayCount === 1 ? '' : 's'}, against adult
+            reference intakes.
+          </p>
+          <ul className="mt-2 space-y-2">
             {statuses.map((status) => (
               <li key={status.key}>
                 <div className="flex items-baseline justify-between text-[12.5px]">
@@ -67,11 +77,9 @@ export function NutritionCard({ totals }: { totals: Nutrients }) {
                     {!status.isFloor && <span className="text-ink-muted"> (limit)</span>}
                   </span>
                   <span className="tabular text-ink-muted">
-                    {formatAmount(status)}
-                    {status.verdict !== 'unknown' && (
-                      <span> / {Math.round(status.reference / (status.key === 'ironMg' ? 1 : 1000))}
-                        {status.key === 'ironMg' ? 'mg' : 'g'}</span>
-                    )}
+                    {status.verdict === 'unknown'
+                      ? 'not recorded'
+                      : `${formatAmount(status)} / ${formatAmount({ ...status, amount: status.reference })}`}
                   </span>
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-sunken">
@@ -87,14 +95,26 @@ export function NutritionCard({ totals }: { totals: Nutrients }) {
             ))}
           </ul>
 
-          {quality.unknownCount > 0 && (
+          {quality.measured < quality.tracked && (
             <p className="mt-3 text-[12px] text-ink-muted">
-              {quality.unknownCount} of {statuses.length} not recorded for today&rsquo;s foods —
-              scored over the rest, not counted as zero.
+              {quality.tracked - quality.measured} of {quality.tracked} aren&rsquo;t recorded for
+              the foods you logged — judged over the rest, never counted as zero. Foods from the
+              USDA database carry the most detail.
             </p>
           )}
         </div>
       )}
     </Card>
+  )
+}
+
+function Pill({ count, label, color }: { count: number; label: string; color: string }) {
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
+      style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
+    >
+      {count} {label}
+    </span>
   )
 }

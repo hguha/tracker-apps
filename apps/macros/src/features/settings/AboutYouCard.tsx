@@ -1,13 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import type { CoachingMode } from '@/domain/types'
-
-const MODES: { id: CoachingMode; label: string; blurb: string }[] = [
-  { id: 'coached', label: 'Coached', blurb: 'Targets update themselves each week.' },
-  { id: 'collaborative', label: 'Ask me', blurb: 'New targets wait for your approval.' },
-  { id: 'manual', label: 'Manual', blurb: 'Never changes your targets.' },
-]
 
 /**
  * Height, age and sex exist only to seed the very first target, before any week of data
@@ -16,7 +9,6 @@ const MODES: { id: CoachingMode; label: string; blurb: string }[] = [
  */
 export function AboutYouCard() {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   if (!profile) return null
 
   return (
@@ -56,30 +48,6 @@ export function AboutYouCard() {
         </label>
       </div>
 
-      <h3 className="mt-4 text-[13.5px] font-semibold">Weekly check-in</h3>
-      <div className="mt-1.5 flex gap-1.5">
-        {MODES.map((mode) => (
-          <button
-            key={mode.id}
-            disabled={!program}
-            onClick={() => {
-              if (!program) return
-              void repo.setCoachingMode(program.id, mode.id)
-            }}
-            className={
-              program?.coachingMode === mode.id
-                ? 'flex-1 rounded-xl bg-accent py-2 text-[13px] font-semibold text-accent-contrast'
-                : 'flex-1 rounded-xl bg-sunken py-2 text-[13px] text-ink-secondary disabled:opacity-40'
-            }
-          >
-            {mode.label}
-          </button>
-        ))}
-      </div>
-      <p className="mt-1.5 text-[12px] text-ink-muted">
-        {MODES.find((mode) => mode.id === program?.coachingMode)?.blurb ??
-          'Pick a goal first.'}
-      </p>
     </Card>
   )
 }

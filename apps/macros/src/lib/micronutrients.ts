@@ -66,22 +66,29 @@ export function nutrientStatus(totals: Nutrients): NutrientStatus[] {
 }
 
 export interface DietQuality {
-  /** 0–100, over what could actually be judged. null when nothing was measurable. */
-  score: number | null
   short: NutrientStatus[]
   over: NutrientStatus[]
-  /** How many of the tracked nutrients the day's food had no data for. */
-  unknownCount: number
+  onTarget: NutrientStatus[]
+  /** How many of the tracked nutrients had data at all. */
+  measured: number
+  tracked: number
+  /** One line: what's off, and how much of the picture is actually visible. */
   summary: string
 }
 
 /**
- * Scores only the nutrients that were measured.
+ * Which nutrients are short, high, or fine — and nothing more.
  *
- * Counting an unrecorded nutrient as zero would punish the user for the database's gaps —
- * Open Food Facts rows in particular routinely carry macros and nothing else — so the score is
- * a fraction of what was knowable, and `unknownCount` is surfaced so a high score built on two
- * data points can't masquerade as a clean bill of health.
+ * Deliberately not a score. A single percentage was actively misleading here: it read as "how
+ * healthy your diet is" while it really meant "of the nutrients your foods happened to record,
+ * this fraction were in range", so eating one high-fibre food could show 57% and a day of
+ * branded foods carrying only macros could show 100%. Two numbers doing different jobs
+ * cannot be averaged into one that means anything, so this reports the nutrients by name and
+ * says how many it could not judge.
+ *
+ * Unmeasured is never zero: Open Food Facts rows in particular routinely carry macros and
+ * nothing else, and counting those as an absence would punish the user for a gap in the
+ * database.
  */
 export function dietQuality(totals: Nutrients): DietQuality {
   const statuses = nutrientStatus(totals)
@@ -89,33 +96,34 @@ export function dietQuality(totals: Nutrients): DietQuality {
   const short = known.filter((s) => s.verdict === 'short')
   const over = known.filter((s) => s.verdict === 'over')
 
-  if (known.length === 0) {
-    return {
-      score: null,
-      short: [],
-      over: [],
-      unknownCount: statuses.length,
-      summary: "Not enough nutrient data in today's foods to say.",
-    }
-  }
-
-  const score = Math.round(((known.length - short.length - over.length) / known.length) * 100)
   return {
-    score,
     short,
     over,
-    unknownCount: statuses.length - known.length,
-    summary: summarize(short, over),
+    onTarget: known.filter((s) => s.verdict === 'ok'),
+    measured: known.length,
+    tracked: statuses.length,
+    summary: summarize(short, over, known.length, statuses.length),
   }
 }
 
-function summarize(short: NutrientStatus[], over: NutrientStatus[]): string {
-  if (short.length === 0 && over.length === 0) return 'Everything measured is in a good range.'
+function summarize(
+  short: NutrientStatus[],
+  over: NutrientStatus[],
+  measured: number,
+  tracked: number,
+): string {
+  if (measured === 0) return 'No nutrient data in these foods yet.'
+  const coverage = measured < tracked ? ` · ${measured} of ${tracked} recorded` : ''
+  if (short.length === 0 && over.length === 0) {
+    return `Everything recorded is in range${coverage}`
+  }
   const parts: string[] = []
   if (short.length > 0) parts.push(`low on ${list(short.map((s) => s.label.toLowerCase()))}`)
   if (over.length > 0) parts.push(`high on ${list(over.map((s) => s.label.toLowerCase()))}`)
-  return `Today looks ${parts.join(', and ')}.`
+  return `${capitalize(parts.join(', '))}${coverage}`
 }
+
+const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
 function list(items: string[]): string {
   if (items.length <= 1) return items[0] ?? ''

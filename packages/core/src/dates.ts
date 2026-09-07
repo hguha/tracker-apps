@@ -36,6 +36,51 @@ export function dayKey(ts: number): string {
   return format(ts, 'yyyy-MM-dd')
 }
 
+/** The day key `offset` days before `ts`. Derived from the calendar rather than by subtracting
+ *  DAY_MS, so a DST boundary can't skip or repeat a day. */
+export function dayKeyOffset(ts: number, offset: number): string {
+  const date = new Date(ts)
+  date.setDate(date.getDate() - offset)
+  return dayKey(date.getTime())
+}
+
+export interface DayStreaks {
+  /** Consecutive days ending today, or ending yesterday — today may just not be done yet. */
+  current: number
+  best: number
+}
+
+/**
+ * Streaks over a set of day keys.
+ *
+ * Works on calendar keys rather than timestamps because a streak is a calendar fact: counting
+ * by 24-hour spans makes the day a clock change lands on either two days or none.
+ */
+export function dayStreaks(days: Iterable<string>, now = Date.now()): DayStreaks {
+  const present = new Set(days)
+  if (present.size === 0) return { current: 0, best: 0 }
+
+  const sorted = [...present].sort()
+  let best = 0
+  let run = 0
+  let previous: string | null = null
+  for (const day of sorted) {
+    run = previous !== null && dayKeyOffset(Date.parse(`${day}T12:00:00`), 1) === previous ? run + 1 : 1
+    if (run > best) best = run
+    previous = day
+  }
+
+  // An unlogged today doesn't break the run: it isn't over.
+  let cursor = present.has(dayKey(now)) ? dayKey(now) : dayKeyOffset(now, 1)
+  let current = 0
+  while (present.has(cursor)) {
+    current += 1
+    cursor = dayKeyOffset(Date.parse(`${cursor}T12:00:00`), 1)
+  }
+
+  return { current, best }
+}
+
 /** The YYYY-MM bucket an ISO date (yyyy-mm-dd) falls in. */
 export function monthKey(isoDate: string): string {
   return isoDate.slice(0, 7)

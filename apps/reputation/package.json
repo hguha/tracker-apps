@@ -23,6 +23,7 @@
     "@capacitor/app": "^8.1.1",
     "@tracker-engine/ai-coach": "*",
     "@tracker-engine/auth": "*",
+    "@tracker-engine/badges": "*",
     "@tracker-engine/core": "*",
     "@tracker-engine/local-first": "*",
     "@tracker-engine/platform": "*",

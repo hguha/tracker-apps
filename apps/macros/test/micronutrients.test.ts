@@ -36,27 +36,29 @@ describe('nutrientStatus', () => {
 describe('dietQuality', () => {
   it('says it cannot judge when nothing was recorded', () => {
     const quality = dietQuality(EMPTY_NUTRIENTS)
-    expect(quality.score).toBeNull()
-    expect(quality.summary).toMatch(/Not enough nutrient data/)
+    expect(quality.measured).toBe(0)
+    expect(quality.summary).toMatch(/No nutrient data/)
   })
 
-  it('scores over what was measurable, not over everything', () => {
-    // One nutrient recorded and in range: 100% of what could be judged, with the rest reported
-    // as unknown so a two-data-point score can't pose as a clean bill of health.
+  it('reports how much of the picture it could see, and never invents a score', () => {
+    // One nutrient recorded and in range. The old code reduced this to "100%", which read as a
+    // verdict on the whole diet from a single data point.
     const quality = dietQuality(nutrients({ fiberMg: 30_000 }))
-    expect(quality.score).toBe(100)
-    expect(quality.unknownCount).toBe(6)
+    expect(quality).not.toHaveProperty('score')
+    expect(quality.measured).toBe(1)
+    expect(quality.tracked).toBe(7)
+    expect(quality.summary).toMatch(/1 of 7 recorded/)
   })
 
-  it('drops the score for each nutrient out of range', () => {
+  it('names each nutrient out of range rather than averaging them away', () => {
     const quality = dietQuality(nutrients({ fiberMg: 2_000, sodiumMg: 500 }))
-    expect(quality.score).toBe(50)
     expect(quality.short.map((s) => s.key)).toEqual(['fiberMg'])
+    expect(quality.onTarget.map((s) => s.key)).toEqual(['sodiumMg'])
   })
 
   it('names what is low and what is high, in one sentence', () => {
     const quality = dietQuality(nutrients({ fiberMg: 2_000, sodiumMg: 5_000 }))
-    expect(quality.summary).toMatch(/low on fibre/)
+    expect(quality.summary).toMatch(/Low on fibre/)
     expect(quality.summary).toMatch(/high on sodium/)
   })
 
@@ -64,8 +66,9 @@ describe('dietQuality', () => {
     const quality = dietQuality(
       nutrients({ fiberMg: 30_000, potassiumMg: 5_000, sodiumMg: 1_500 }),
     )
-    expect(quality.score).toBe(100)
-    expect(quality.summary).toMatch(/good range/)
+    expect(quality.short).toEqual([])
+    expect(quality.over).toEqual([])
+    expect(quality.summary).toMatch(/in range/)
   })
 })
 
