@@ -15,6 +15,20 @@ functions are live.
 anon key and no session; the coach requires a session, so device-only gets the offline coach
 instead.
 
+## Demo account
+
+`demo@macrocosm.app` — five weeks of logs, 26 weigh-ins and five check-ins, all synced. Re-seed
+after a schema change:
+
+```
+npm run dev:macros
+DEMO_EMAIL=demo@macrocosm.app DEMO_PASSWORD='…' node apps/macros/scripts/seed-demo.mjs
+```
+
+It drives the real app rather than inserting rows, which is the point: that's what caught the
+timestamp, duplicate-id and expenditure bugs. Clear the account's rows first if you want a clean
+run, or a legacy row can still own a (user, day) pair.
+
 ## Still outstanding
 
 **SMTP is not configured**, so email goes through Supabase's built-in sender — team addresses
