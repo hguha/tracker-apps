@@ -44,6 +44,8 @@ export interface CoachContext {
   targetKcal: number | null
   goal: string | null
   units: string
+  /** The user's stated diets, allergies and dislikes. Read before suggesting any meal. */
+  dietNotes: string
 }
 
 export interface CoachProvider {

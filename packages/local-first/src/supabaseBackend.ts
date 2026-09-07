@@ -3,16 +3,35 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import type { PulledRow, PushOutcome, PushRow, SyncBackend } from './backend'
 import {
+  DEFAULT_TIMESTAMP_COLUMNS,
   isoToMs,
   keysToCamel,
   keysToSnake,
   msToIso,
-  TIMESTAMP_COLUMNS,
   tableToPostgres,
 } from './columnCase'
 
+export interface SupabaseBackendOptions {
+  /**
+   * Extra `timestamptz` columns this app has, beyond the universal ones. Anything a schema
+   * declares as timestamptz but the domain models as epoch milliseconds must be listed, or the
+   * push is rejected with "date/time field value out of range".
+   */
+  timestampColumns?: Iterable<string>
+}
+
 export class SupabaseBackend implements SyncBackend {
-  constructor(private client: SupabaseClient) {}
+  private timestamps: Set<string>
+
+  constructor(
+    private client: SupabaseClient,
+    options: SupabaseBackendOptions = {},
+  ) {
+    this.timestamps = new Set([
+      ...DEFAULT_TIMESTAMP_COLUMNS,
+      ...(options.timestampColumns ?? []),
+    ])
+  }
 
   async push(row: PushRow): Promise<PushOutcome> {
     const table = tableToPostgres(row.table)
@@ -22,7 +41,7 @@ export class SupabaseBackend implements SyncBackend {
       // partial tuple lacks user_id, which RLS then rejects.
       const { error } = await this.client
         .from(table)
-        .upsert({ ...toPostgresRow(row.row), id: row.rowId }, { onConflict: 'id' })
+        .upsert({ ...toPostgresRow(row.row, this.timestamps), id: row.rowId }, { onConflict: 'id' })
       return error ? classify(error) : { status: 'ok' }
     } catch (cause) {
       // A thrown error (network down, DNS) is always transient.
@@ -41,7 +60,7 @@ export class SupabaseBackend implements SyncBackend {
     if (error) throw new Error(error.message)
     return (data ?? []).map((row) => ({
       table,
-      row: fromPostgresRow(row as Record<string, unknown>),
+      row: fromPostgresRow(row as Record<string, unknown>, this.timestamps),
     }))
   }
 
@@ -60,9 +79,12 @@ export class SupabaseBackend implements SyncBackend {
   }
 }
 
-export function toPostgresRow(row: Record<string, unknown>): Record<string, unknown> {
+export function toPostgresRow(
+  row: Record<string, unknown>,
+  timestamps: Set<string> = DEFAULT_TIMESTAMP_COLUMNS,
+): Record<string, unknown> {
   const snake = keysToSnake(row)
-  for (const column of TIMESTAMP_COLUMNS) {
+  for (const column of timestamps) {
     if (column in snake && typeof snake[column] === 'number') {
       snake[column] = msToIso(snake[column] as number)
     }
@@ -70,11 +92,13 @@ export function toPostgresRow(row: Record<string, unknown>): Record<string, unkn
   return snake
 }
 
-function fromPostgresRow(row: Record<string, unknown>): Record<string, unknown> {
+function fromPostgresRow(
+  row: Record<string, unknown>,
+  timestamps: Set<string>,
+): Record<string, unknown> {
   const withMs: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(row)) {
-    withMs[key] =
-      TIMESTAMP_COLUMNS.has(key) && typeof value === 'string' ? isoToMs(value) : value
+    withMs[key] = timestamps.has(key) && typeof value === 'string' ? isoToMs(value) : value
   }
   return keysToCamel(withMs)
 }

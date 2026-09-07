@@ -50,6 +50,7 @@ function defaultProfile(userId: string): Profile {
     sex: null,
     onboardedAt: null,
     onboardingVersion: 0,
+    dietNotes: '',
     ...syncStamp(),
   }
 }
@@ -274,15 +275,34 @@ export function weights(): Promise<BodyWeightRow[]> {
   return db.bodyWeights.filter(alive).toArray()
 }
 
-/** One weigh-in per day: re-weighing replaces, so the trend can't be skewed by doing it twice. */
+/**
+ * One weigh-in per day: re-weighing replaces rather than adding, so the trend can't be skewed
+ * by stepping on the scale twice.
+ *
+ * The id is derived from (user, day) rather than random, because that pair *is* the natural key
+ * — the table has a unique index on it. With a random id, a device that hadn't yet pulled an
+ * existing weigh-in would insert a second row for the same day and the push would 409 against
+ * that index, dead-lettering silently. Upserting on a deterministic id makes the write
+ * idempotent from any device.
+ */
+export const weightIdFor = (userId: string, day: string): string => `bw:${userId}:${day}`
+
 export async function recordWeight(kg: number, day = dayKey(Date.now())): Promise<void> {
-  const existing = await db.bodyWeights.where('day').equals(day).filter(alive).first()
+  const id = weightIdFor(activeUserId, day)
+  const existing = (await db.bodyWeights.get(id)) ?? (await byDay(day))
+
   if (existing) {
-    await patch('bodyWeights', existing.id, { kg, source: 'macros' })
-    return
+    if (existing.id === id) {
+      await patch('bodyWeights', id, { kg, source: 'macros', deletedAt: null })
+      return
+    }
+    // A row from before ids were deterministic, or one pulled from another device. Tombstone it
+    // so both copies don't count toward the trend.
+    await patch('bodyWeights', existing.id, { deletedAt: Date.now() })
   }
+
   const row: BodyWeightRow = {
-    id: newId(),
+    id,
     userId: activeUserId,
     day,
     kg,
@@ -292,6 +312,8 @@ export async function recordWeight(kg: number, day = dayKey(Date.now())): Promis
   await db.bodyWeights.put(row)
   await enqueue('bodyWeights', row.id)
 }
+
+const byDay = (day: string) => db.bodyWeights.where('day').equals(day).filter(alive).first()
 
 // --- Program & check-ins ----------------------------------------------------------
 
@@ -326,6 +348,15 @@ export function setCoachingMode(programId: string, coachingMode: CoachingMode): 
   return patch('programs', programId, { coachingMode })
 }
 
+/** Tuning an existing program in place. Changing the *goal* starts a new one instead, so the
+ *  check-in history stays attributable to the program it was measured under. */
+export function setProgramFields(
+  programId: string,
+  changes: Partial<Pick<Program, 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal'>>,
+): Promise<void> {
+  return patch('programs', programId, changes)
+}
+
 export function checkIns(): Promise<CheckIn[]> {
   return db.checkIns.filter(alive).toArray()
 }
@@ -340,13 +371,31 @@ export type CheckInInput = Omit<
   'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'clientRev'
 >
 
+/**
+ * Derived from (user, week) for the same reason weigh-ins are: the table has a unique index on
+ * that pair, and the sync engine upserts on `id` alone. A random id lets a second device insert
+ * a duplicate week and the push 409s against the index, dead-lettering with nothing on screen to
+ * explain it.
+ *
+ * Rule of thumb for this schema: any table with a unique constraint on a natural key must derive
+ * its id from that key.
+ */
+export const checkInIdFor = (userId: string, weekStart: string): string =>
+  `ci:${userId}:${weekStart}`
+
 export async function saveCheckIn(input: CheckInInput): Promise<string> {
-  const existing = (await checkIns()).find((c) => c.weekStart === input.weekStart)
+  const id = checkInIdFor(activeUserId, input.weekStart)
+  const existing = (await db.checkIns.get(id)) ?? (await checkIns()).find((c) => c.weekStart === input.weekStart)
+
   if (existing) {
-    await patch('checkIns', existing.id, { ...input })
-    return existing.id
+    if (existing.id === id) {
+      await patch('checkIns', id, { ...input })
+      return id
+    }
+    await patch('checkIns', existing.id, { deletedAt: Date.now() })
   }
-  const row: CheckIn = { id: newId(), userId: activeUserId, ...input, ...syncStamp() }
+
+  const row: CheckIn = { id, userId: activeUserId, ...input, ...syncStamp() }
   await db.checkIns.put(row)
   await enqueue('checkIns', row.id)
   return row.id

@@ -169,3 +169,58 @@ describe('buildCheckIn', () => {
     expect(outcome.kind).toBe('ready')
   })
 })
+
+describe('expenditure accuracy over a real history', () => {
+  /**
+   * The regression this exists for. Windows used to smooth each week's weigh-ins in isolation,
+   * which re-seeded the EWMA every seven days and left almost no measurable trend — a demo user
+   * losing 0.45 kg/week came out at 1697 kcal/day instead of ~2100, and the target followed it
+   * down to 1246.
+   */
+  const KCAL = 1620
+
+  function history(days: number, startKg: number, kgPerWeek: number) {
+    const weights: BodyWeight[] = []
+    const intake: { day: string; kcal: number }[] = []
+    for (let i = 0; i < days; i += 1) {
+      const date = new Date(NOW - (days - i) * 86_400_000)
+      const day = date.toISOString().slice(0, 10)
+      weights.push({
+        id: `w${i}`,
+        day,
+        kg: startKg + (kgPerWeek / 7) * i,
+        source: 'macros',
+        updatedAt: 1,
+        deletedAt: null,
+      })
+      intake.push({ day, kcal: KCAL })
+    }
+    return { weights, intake }
+  }
+
+  it('recovers an expenditure consistent with the deficit it was given', () => {
+    const { weights: w, intake: i } = history(35, 84, -0.45)
+    const outcome = buildCheckIn(inputs({ weights: w, intake: i }))
+    if (outcome.kind !== 'ready') throw new Error(outcome.reason)
+
+    // intake + |Δweight| × 7700 / 7 ≈ 1620 + 495 ≈ 2115.
+    expect(outcome.draft.expenditureKcal).toBeGreaterThan(1950)
+    expect(outcome.draft.expenditureKcal).toBeLessThan(2300)
+  })
+
+  it('measures the weekly rate it was given, not a fraction of it', () => {
+    const { weights: w, intake: i } = history(35, 84, -0.45)
+    const outcome = buildCheckIn(inputs({ weights: w, intake: i }))
+    if (outcome.kind !== 'ready') throw new Error(outcome.reason)
+    expect(outcome.draft.trendChangeKgPerWeek).toBeLessThan(-0.3)
+    expect(outcome.draft.trendChangeKgPerWeek).toBeGreaterThan(-0.6)
+  })
+
+  it('sets a target below the measured expenditure, but a liveable one', () => {
+    const { weights: w, intake: i } = history(35, 84, -0.45)
+    const outcome = buildCheckIn(inputs({ weights: w, intake: i }))
+    if (outcome.kind !== 'ready') throw new Error(outcome.reason)
+    expect(outcome.draft.targets.kcal).toBeLessThan(outcome.draft.expenditureKcal)
+    expect(outcome.draft.targets.kcal).toBeGreaterThan(1500)
+  })
+})

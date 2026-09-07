@@ -11,6 +11,7 @@ const CONTEXT: CoachContext = {
   targetKcal: null,
   goal: null,
   units: 'metric',
+  dietNotes: '',
 }
 
 beforeEach(async () => {

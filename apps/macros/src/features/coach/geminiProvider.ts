@@ -72,5 +72,6 @@ export async function buildCoachContext(): Promise<CoachContext> {
     targetKcal: targets?.kcal ?? null,
     goal: program?.goal ?? null,
     units: profile.units,
+    dietNotes: profile.dietNotes,
   }
 }

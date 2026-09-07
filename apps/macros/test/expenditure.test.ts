@@ -10,7 +10,7 @@ import {
   windowEstimate,
   type ExpenditureWindow,
 } from '@/lib/expenditure'
-import type { BodyWeight } from '@tracker-engine/body'
+import { weightTrend, type BodyWeight } from '@tracker-engine/body'
 
 function weights(start: number, perDay: number, days = 7): BodyWeight[] {
   return Array.from({ length: days }, (_, i) => ({
@@ -22,6 +22,9 @@ function weights(start: number, perDay: number, days = 7): BodyWeight[] {
     deletedAt: null,
   }))
 }
+
+/** windowEstimate now takes globally smoothed points, so tests smooth before slicing too. */
+const trendOf = (rows: BodyWeight[]) => weightTrend(rows)
 
 function intake(kcal: number, days = 7) {
   return Array.from({ length: days }, (_, i) => ({
@@ -46,28 +49,28 @@ describe('kcalPerKg', () => {
 
 describe('windowEstimate', () => {
   it('reports intake as expenditure when weight is stable', () => {
-    const w = windowEstimate('2026-09-01', intake(2500), weights(80, 0), KCAL_PER_KG_FAT)!
+    const w = windowEstimate('2026-09-01', intake(2500), trendOf(weights(80, 0)), KCAL_PER_KG_FAT)!
     expect(w.estimateKcal).toBeCloseTo(2500, 0)
   })
 
   it('reports expenditure above intake when the trend is falling', () => {
-    const w = windowEstimate('2026-09-01', intake(2000), weights(80, -0.07), KCAL_PER_KG_FAT)!
+    const w = windowEstimate('2026-09-01', intake(2000), trendOf(weights(80, -0.07)), KCAL_PER_KG_FAT)!
     expect(w.estimateKcal).toBeGreaterThan(2000)
   })
 
   it('refuses to estimate from too few logged days', () => {
-    expect(windowEstimate('2026-09-01', intake(2000, 3), weights(80, 0), KCAL_PER_KG_FAT)).toBeNull()
+    expect(windowEstimate('2026-09-01', intake(2000, 3), trendOf(weights(80, 0)), KCAL_PER_KG_FAT)).toBeNull()
   })
 
   it('refuses to estimate from too few weigh-ins', () => {
     expect(
-      windowEstimate('2026-09-01', intake(2000), weights(80, 0, 2), KCAL_PER_KG_FAT),
+      windowEstimate('2026-09-01', intake(2000), trendOf(weights(80, 0, 2)), KCAL_PER_KG_FAT),
     ).toBeNull()
   })
 
   it('trusts a partial week less than a full one', () => {
-    const full = windowEstimate('2026-09-01', intake(2200), weights(80, 0), KCAL_PER_KG_FAT)!
-    const partial = windowEstimate('2026-09-01', intake(2200, 5), weights(80, 0, 5), KCAL_PER_KG_FAT)!
+    const full = windowEstimate('2026-09-01', intake(2200), trendOf(weights(80, 0)), KCAL_PER_KG_FAT)!
+    const partial = windowEstimate('2026-09-01', intake(2200, 5), trendOf(weights(80, 0, 5)), KCAL_PER_KG_FAT)!
     expect(partial.variance).toBeGreaterThan(full.variance)
   })
 })

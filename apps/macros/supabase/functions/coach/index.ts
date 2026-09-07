@@ -34,6 +34,8 @@ interface Body {
   tools?: { name: string; description: string; parameters: unknown }[]
   /** For `estimate`: a meal in the user's own words, e.g. "turkey sandwich and an apple". */
   description?: string
+  /** Diets, allergies and dislikes. Changes what a vague description should be read as. */
+  dietNotes?: string
 }
 
 /**
@@ -100,7 +102,9 @@ Deno.serve(async (request) => {
 
   const body = (await request.json().catch(() => ({}))) as Body
 
-  if (body.mode === 'estimate') return estimate(key, body.description ?? '')
+  if (body.mode === 'estimate') {
+    return estimate(key, body.description ?? '', body.dietNotes ?? '')
+  }
 
   if (!Array.isArray(body.contents) || body.contents.length === 0) {
     return json({ error: 'contents is required' }, 400)
@@ -150,16 +154,25 @@ Deno.serve(async (request) => {
   return json({ kind: 'message', text })
 })
 
-async function estimate(key: string, description: string): Promise<Response> {
+async function estimate(
+  key: string,
+  description: string,
+  dietNotes: string,
+): Promise<Response> {
   const text = description.trim()
   if (!text) return json({ error: 'description is required' }, 400)
+
+  const preferences = dietNotes.trim()
+    ? `\n\nThe user has stated: ${dietNotes.trim()}. Read any vague description in that light —
+do not assume an ingredient they have ruled out.`
+    : ''
 
   const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text }] }],
-      systemInstruction: { parts: [{ text: ESTIMATE_SYSTEM }] },
+      systemInstruction: { parts: [{ text: ESTIMATE_SYSTEM + preferences }] },
       generationConfig: {
         temperature: 0.2,
         // Generous: a thinking model spends this budget on reasoning as well as output, and at

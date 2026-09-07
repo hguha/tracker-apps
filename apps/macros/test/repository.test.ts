@@ -194,3 +194,64 @@ describe('quick add', () => {
     expect(entry?.source).toBe('quick')
   })
 })
+
+describe('weigh-in ids', () => {
+  it('derives the id from (user, day), which is the table’s natural key', async () => {
+    await repo.recordWeight(80, '2026-09-01')
+    const [row] = await repo.weights()
+    // A random id would let a device that hadn't pulled yet insert a second row for the same
+    // day, and the push would 409 against the unique index and dead-letter silently.
+    expect(row!.id).toBe(repo.weightIdFor('local-user', '2026-09-01'))
+  })
+
+  it('is idempotent across repeats', async () => {
+    await repo.recordWeight(80, '2026-09-01')
+    await repo.recordWeight(81, '2026-09-01')
+    await repo.recordWeight(82, '2026-09-01')
+    const rows = await repo.weights()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.kg).toBe(82)
+  })
+
+  it('tombstones a legacy random-id row rather than double-counting the day', async () => {
+    await db.bodyWeights.put({
+      id: 'legacy-random',
+      userId: 'local-user',
+      day: '2026-09-02',
+      kg: 79,
+      source: 'macros',
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+      clientRev: 1,
+    })
+    await repo.recordWeight(80.5, '2026-09-02')
+
+    const alive = await repo.weights()
+    expect(alive).toHaveLength(1)
+    expect(alive[0]!.kg).toBe(80.5)
+    expect((await db.bodyWeights.get('legacy-random'))?.deletedAt).not.toBeNull()
+  })
+})
+
+describe('check-in ids', () => {
+  const base = {
+    expenditureKcal: 2500, expenditureSe: 120, trendKg: 80,
+    trendChangeKgPerWeek: -0.4, meanIntakeKcal: 2100, daysLogged: 7,
+    kcalPerKg: 7700, note: '', status: 'applied' as const,
+    targets: { kcal: 2100, proteinMg: 1, carbsMg: 1, fatMg: 1 },
+  }
+
+  it('derives the id from (user, week), matching the unique index', async () => {
+    const id = await repo.saveCheckIn({ ...base, weekStart: '2026-08-31' })
+    expect(id).toBe(repo.checkInIdFor('local-user', '2026-08-31'))
+  })
+
+  it('re-saving a week updates it rather than adding a second row', async () => {
+    await repo.saveCheckIn({ ...base, weekStart: '2026-08-31' })
+    await repo.saveCheckIn({ ...base, weekStart: '2026-08-31', daysLogged: 5 })
+    const all = await repo.checkIns()
+    expect(all).toHaveLength(1)
+    expect(all[0]!.daysLogged).toBe(5)
+  })
+})

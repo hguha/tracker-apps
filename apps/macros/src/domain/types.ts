@@ -257,6 +257,12 @@ export interface Profile extends SyncColumns {
   onboardedAt: number | null
   /** The onboarding revision this account last completed; below ONBOARDING_VERSION re-runs it. */
   onboardingVersion: number
+  /**
+   * Free text the coach reads: allergies, "vegetarian", "I hate mushrooms", "no dairy". The
+   * single highest-value field for meal suggestions, and worthless if it doesn't sync — hence
+   * on the profile rather than device-local.
+   */
+  dietNotes: string
 }
 
 /** Device-local, never synced: the REPutation grant token belongs to this device's keychain. */

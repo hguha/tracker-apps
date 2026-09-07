@@ -36,10 +36,12 @@ export function tableToPostgres(table: string): string {
  * Timestamps: IndexedDB stores epoch ms (numbers); Postgres stores timestamptz.
  * These columns convert on the way in and out so both sides stay in their native
  * representation. NOTE: this set is currently REPutation-flavored; make it
- * injectable per-app (e.g. via SupabaseBackend options) when a second app needs
- * different timestamp columns — created_at/updated_at/deleted_at are universal.
+ * The defaults cover created_at/updated_at/deleted_at, which are universal, plus the columns
+ * the first app happened to need. Any app with its own timestamp columns passes them to
+ * SupabaseBackend — a column missing from this set is sent to Postgres as epoch milliseconds,
+ * which `timestamptz` rejects with a "date/time field value out of range" 400.
  */
-export const TIMESTAMP_COLUMNS = new Set([
+export const DEFAULT_TIMESTAMP_COLUMNS = new Set([
   'created_at',
   'updated_at',
   'deleted_at',
@@ -51,6 +53,9 @@ export const TIMESTAMP_COLUMNS = new Set([
   'last_used_at',
   'onboarded_at',
 ])
+
+/** @deprecated Pass the set explicitly; kept so existing importers keep compiling. */
+export const TIMESTAMP_COLUMNS = DEFAULT_TIMESTAMP_COLUMNS
 
 export function msToIso(ms: number | null): string | null {
   return ms === null ? null : new Date(ms).toISOString()

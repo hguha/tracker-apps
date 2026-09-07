@@ -73,19 +73,18 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
   }
 
   const energyPerKg = kcalPerKg(program.goal, program.ratePctPerWeek)
-  const weightWeeks = groupByWeek(
-    weights.filter((w) => w.deletedAt === null),
-    (w) => w.day,
-  )
+  // Smoothed once over the whole history, then sliced — see windowEstimate on why per-week
+  // smoothing destroys the signal.
+  const trendWeeks = groupByWeek(trend, (point) => point.day)
   const intakeWeeks = groupByWeek(intake, (d) => d.day)
 
   // Every week up to and including the one being checked in, oldest first: the filter needs
   // the sequence, not just the latest window, or it can't distinguish signal from noise.
-  const windows = [...new Set([...intakeWeeks.keys(), ...weightWeeks.keys()])]
+  const windows = [...new Set([...intakeWeeks.keys(), ...trendWeeks.keys()])]
     .filter((key) => key <= week)
     .sort()
     .map((key) =>
-      windowEstimate(key, intakeWeeks.get(key) ?? [], weightWeeks.get(key) ?? [], energyPerKg),
+      windowEstimate(key, intakeWeeks.get(key) ?? [], trendWeeks.get(key) ?? [], energyPerKg),
     )
     .filter((w): w is NonNullable<typeof w> => w !== null)
 

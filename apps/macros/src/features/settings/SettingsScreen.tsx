@@ -7,7 +7,8 @@ import * as repo from '@/data/repository'
 import { THEME_PRESETS } from '@/lib/theme'
 import type { ColorSchemePreference } from '@/domain/types'
 import { AboutYouCard } from './AboutYouCard'
-import { ProgramCard } from './ProgramCard'
+import { PreferencesCard } from './PreferencesCard'
+import { TargetsCard } from './TargetsCard'
 
 const SCHEMES: { value: ColorSchemePreference; label: string }[] = [
   { value: 'system', label: 'Auto' },
@@ -34,8 +35,9 @@ export function SettingsScreen({
     <div className="space-y-3 px-3 py-3">
       <h1 className="px-1 text-[17px] font-semibold tracking-tight">Settings</h1>
 
-      <ProgramCard />
+      <TargetsCard />
       <AboutYouCard />
+      <PreferencesCard />
 
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Appearance</h2>
@@ -100,6 +102,19 @@ export function SettingsScreen({
           </button>
         </Card>
       )}
+
+      <Card className="p-4">
+        <h2 className="text-[15px] font-semibold tracking-tight">Getting started</h2>
+        <p className="mt-1 text-[12.5px] text-ink-muted">
+          Nothing you&rsquo;ve logged is affected.
+        </p>
+        <button
+          onClick={() => void repo.saveProfile({ onboardingVersion: 0 })}
+          className="mt-2 w-full rounded-xl border border-line py-2.5 text-[14px] font-semibold text-accent active:bg-accent-wash"
+        >
+          Replay setup
+        </button>
+      </Card>
 
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Connect REPutation</h2>

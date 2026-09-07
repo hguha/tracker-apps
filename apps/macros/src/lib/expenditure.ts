@@ -1,4 +1,4 @@
-import { trendChangePerWeek, weightTrend, type BodyWeight } from '@tracker-engine/body'
+import { trendChangePerWeek, type TrendPoint } from '@tracker-engine/body'
 import type { Goal, Program } from '@/domain/types'
 
 /**
@@ -53,6 +53,9 @@ export interface ExpenditureState {
   se: number
 }
 
+/** Week-to-week drift in true expenditure, as a variance (≈±50 kcal). */
+const PROCESS_NOISE = 2500
+
 const MIN_DAYS_LOGGED = 4
 const MIN_WEIGH_INS = 3
 /** Cap on how far a target may move week to week, so a noisy week can't whipsaw the user. */
@@ -62,15 +65,19 @@ export const MAX_TARGET_STEP_KCAL = 150
  * One window's raw estimate: intake minus the energy the trend says was banked or spent.
  *
  * `TDEE = mean_intake − ΔE / days`
+ *
+ * Takes trend points already smoothed over the FULL history, not raw weigh-ins for this week
+ * alone. Smoothing inside the window re-seeds the EWMA at its first reading, so the trend barely
+ * moves across seven days and the rate comes out a fraction of the truth — which understated a
+ * demo user's expenditure by ~400 kcal/day and set targets accordingly.
  */
 export function windowEstimate(
   weekStart: string,
   intake: readonly IntakeDay[],
-  weights: readonly BodyWeight[],
+  trend: readonly TrendPoint[],
   energyPerKg: number,
 ): ExpenditureWindow | null {
   const logged = intake.filter((d) => d.kcal > 0)
-  const trend = weightTrend(weights)
   if (logged.length < MIN_DAYS_LOGGED || trend.length < MIN_WEIGH_INS) return null
 
   const meanIntakeKcal = logged.reduce((a, d) => a + d.kcal, 0) / logged.length
@@ -112,9 +119,11 @@ export function filterExpenditure(
   let variance = prior ? prior.se ** 2 : 250_000
 
   for (const window of windows) {
-    // Expenditure genuinely drifts (adaptation, activity, mass change), so let uncertainty
-    // grow between windows rather than converging on a stale value forever.
-    variance += 400
+    // Expenditure genuinely drifts (adaptation, activity, mass change), so let uncertainty grow
+    // between windows rather than converging on a stale value forever. ~±50 kcal/week: at the
+    // ±20 this started with, the filter reported ±32 while its own estimate was still moving
+    // 200+ kcal across three weeks, which is a confidence it had not earned.
+    variance += PROCESS_NOISE
     const gain = variance / (variance + window.variance)
     mean += gain * (window.estimateKcal - mean)
     variance *= 1 - gain

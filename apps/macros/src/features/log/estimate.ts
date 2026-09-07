@@ -46,11 +46,14 @@ export async function estimateMeal(description: string): Promise<MealEstimate> {
     )
   }
 
+  // Preferences go along: "a sandwich" means something different to someone who wrote down
+  // "vegetarian", and guessing turkey would be worse than asking.
+  const { dietNotes } = await repo.getProfile()
   const { data, error } = await client.functions.invoke<{
     items?: RawItem[]
     assumptions?: string
     error?: string
-  }>('coach', { body: { mode: 'estimate', description } })
+  }>('coach', { body: { mode: 'estimate', description, dietNotes } })
 
   if (error || !data || data.error || !Array.isArray(data.items)) {
     throw new EstimateUnavailable(

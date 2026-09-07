@@ -45,11 +45,13 @@ export function InsightsScreen() {
     days.map((d) => ({ day: d.day, kcal: d.kcal })),
     (d) => d.day,
   )
-  const weightWeeks = groupByWeek(weights ?? [], (w) => w.day)
-  const windows = [...new Set([...intakeWeeks.keys(), ...weightWeeks.keys()])]
+  // Grouped from the globally smoothed trend, exactly as buildCheckIn does — smoothing per
+  // week would make this screen disagree with the check-in it is explaining.
+  const trendWeeks = groupByWeek(trend, (point) => point.day)
+  const windows = [...new Set([...intakeWeeks.keys(), ...trendWeeks.keys()])]
     .sort()
     .map((week) =>
-      windowEstimate(week, intakeWeeks.get(week) ?? [], weightWeeks.get(week) ?? [], energyPerKg),
+      windowEstimate(week, intakeWeeks.get(week) ?? [], trendWeeks.get(week) ?? [], energyPerKg),
     )
     .filter((w): w is NonNullable<typeof w> => w !== null)
   const expenditure = filterExpenditure(windows, null)
