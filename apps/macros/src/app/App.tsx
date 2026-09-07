@@ -106,7 +106,12 @@ function SignedInApp() {
   }
 
   if (view.kind === 'account') {
-    return <AccountScreen onBack={() => setView({ kind: 'tabs' })} />
+    return (
+      <AccountScreen
+        onBack={() => setView({ kind: 'tabs' })}
+        onConnect={() => setView({ kind: 'connect' })}
+      />
+    )
   }
   if (view.kind === 'data') {
     return <DataScreen onBack={() => setView({ kind: 'tabs' })} />

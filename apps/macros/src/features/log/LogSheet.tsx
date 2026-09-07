@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ScanLine } from 'lucide-react'
+import { ScanLine, Sparkles } from 'lucide-react'
 import { BottomSheet, Button, useToast } from '@tracker-engine/ui'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import { searchRemote } from '@/data/foodLookup'
 import { ScanPanel } from './ScanPanel'
+import { DescribePanel } from './DescribePanel'
+import { MealPicker } from './MealPicker'
 import * as repo from '@/data/repository'
 import { gramsToMg, nutrientsFor, portionFor } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food, type MealSlot } from '@/domain/types'
@@ -18,7 +20,7 @@ import { grams } from '@/features/shared/format'
 export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () => void }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Food | null>(null)
-  const [isScanning, setIsScanning] = useState(false)
+  const [panel, setPanel] = useState<'search' | 'scan' | 'describe'>('search')
   const canScan = isBarcodeScanningAvailable()
 
   const results = useLiveQuery(() => repo.searchFoods(query), [query], [])
@@ -42,16 +44,18 @@ export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () =>
 
   return (
     <BottomSheet onDismiss={onDismiss} panelClassName="flex max-h-[85%] flex-col">
-      {isScanning ? (
+      {panel === 'scan' ? (
         <ScanPanel
           // Leaving scan mode matters: the portion step renders in the same slot, so a found
           // barcode would otherwise stay stuck on the camera view.
           onFound={(food) => {
-            setIsScanning(false)
+            setPanel('search')
             setSelected(food)
           }}
-          onCancel={() => setIsScanning(false)}
+          onCancel={() => setPanel('search')}
         />
+      ) : panel === 'describe' ? (
+        <DescribePanel meal={meal} onBack={() => setPanel('search')} onDone={onDismiss} />
       ) : selected ? (
         <PortionStep
           food={selected}
@@ -72,7 +76,7 @@ export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () =>
             {/* Hidden rather than shown-and-broken where BarcodeDetector is absent. */}
             {canScan && (
               <button
-                onClick={() => setIsScanning(true)}
+                onClick={() => setPanel('scan')}
                 aria-label="Scan a barcode"
                 className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-secondary active:opacity-60"
               >
@@ -105,6 +109,16 @@ export function LogSheet({ meal, onDismiss }: { meal: MealSlot; onDismiss: () =>
             </ul>
           </div>
 
+          {/* Ahead of quick-add: describing a meal is the fast path for anything the search
+              box can't name in one go, and it still resolves to real food rows. */}
+          <button
+            onClick={() => setPanel('describe')}
+            className="flex items-center justify-center gap-2 border-t border-line py-3 text-[13.5px] font-semibold text-accent active:opacity-60"
+          >
+            <Sparkles size={15} />
+            Describe a meal instead
+          </button>
+
           <QuickAddRow meal={meal} onDone={onDismiss} />
         </>
       )}
@@ -128,6 +142,7 @@ function PortionStep({
   const [portionId, setPortionId] = useState<string | null>(defaultPortion?.id ?? null)
   const [count, setCount] = useState('1')
   const [gramsInput, setGramsInput] = useState('')
+  const [slot, setSlot] = useState<MealSlot>(meal)
 
   const portion = portionFor(food, portionId)
   const resolvedGrams = gramsInput
@@ -201,6 +216,8 @@ function PortionStep({
           {grams(preview.fatMg)}F
         </p>
 
+        <MealPicker value={slot} onChange={setSlot} />
+
         <Button
           className="w-full"
           disabled={resolvedGrams <= 0}
@@ -208,8 +225,8 @@ function PortionStep({
             void repo
               .logFood(
                 gramsInput
-                  ? { food, meal, grams: Number(gramsInput) }
-                  : { food, meal, portionId, portionCount: Number(count) },
+                  ? { food, meal: slot, grams: Number(gramsInput) }
+                  : { food, meal: slot, portionId, portionCount: Number(count) },
               )
               .then(() => {
                 toast.show(`Logged ${food.description}`)
@@ -229,6 +246,7 @@ function PortionStep({
 function QuickAddRow({ meal, onDone }: { meal: MealSlot; onDone: () => void }) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
+  const [slot, setSlot] = useState<MealSlot>(meal)
   const [fields, setFields] = useState({ kcal: '', protein: '', carbs: '', fat: '' })
 
   useEffect(() => {
@@ -269,11 +287,12 @@ function QuickAddRow({ meal, onDone }: { meal: MealSlot; onDone: () => void }) {
           </label>
         ))}
       </div>
+      <MealPicker value={slot} onChange={setSlot} />
       <Button
         className="w-full"
         disabled={numbers.kcal <= 0}
         onClick={() => {
-          void repo.logQuickAdd({ ...EMPTY_NUTRIENTS, ...numbers }, meal).then(() => {
+          void repo.logQuickAdd({ ...EMPTY_NUTRIENTS, ...numbers }, slot).then(() => {
             toast.show('Logged')
             onDone()
           })

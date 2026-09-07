@@ -18,6 +18,7 @@ import {
   type Program,
 } from '@/domain/types'
 import { nutrientsFor, portionFor } from '@/lib/nutrition'
+import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
 import { buildCheckIn, initialTargets, lastCompleteWeekKey } from '@/lib/checkin'
 import type { IntakeDay } from '@/lib/expenditure'
 
@@ -102,31 +103,16 @@ export function findByBarcode(barcode: string): Promise<Food | undefined> {
   return db.foods.where('barcode').equals(barcode).first()
 }
 
-/**
- * Offline substring search over the seeded subset. Ranked so a whole-food match beats a
- * branded one: someone typing "chicken breast" wants the ingredient, not a frozen dinner.
- */
+/** Substring search over everything cached locally, ranked by lib/foodSearch. */
 export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
-  const q = query.trim().toLowerCase()
-  if (q.length < 2) return []
-  const terms = q.split(/\s+/)
-  const matches: { food: Food; score: number }[] = []
+  const terms = queryTerms(query)
+  if (query.trim().length < 2) return []
 
+  const matches: Food[] = []
   await db.foods.each((food) => {
-    const haystack = `${food.description} ${food.brand ?? ''}`.toLowerCase()
-    if (!terms.every((term) => haystack.includes(term))) return
-    let score = 0
-    if (haystack.startsWith(q)) score += 10
-    if (food.brand === null) score += 4
-    if (food.source === 'usda') score += 2
-    score -= Math.min(5, food.description.length / 40)
-    matches.push({ food, score })
+    if (matchesQuery(food, terms)) matches.push(food)
   })
-
-  return matches
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((m) => m.food)
+  return rankFoods(matches, query, limit)
 }
 
 export async function putFoods(foods: readonly Food[]): Promise<void> {

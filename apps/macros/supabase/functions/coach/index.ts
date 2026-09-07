@@ -28,10 +28,60 @@ Rules you must follow:
   floors; if asked to, say why you won't and suggest a slower rate instead.`
 
 interface Body {
+  mode?: 'chat' | 'estimate'
   contents?: unknown[]
   context?: unknown
   tools?: { name: string; description: string; parameters: unknown }[]
+  /** For `estimate`: a meal in the user's own words, e.g. "turkey sandwich and an apple". */
+  description?: string
 }
+
+/**
+ * Breaking a described meal into weighed components.
+ *
+ * The model returns ingredient NAMES AND GRAMS ONLY — never nutrients. The client matches each
+ * name against the food database and computes the macros from the matched row, so a wrong guess
+ * shows up as a wrong ingredient the user can fix, never as a plausible calorie count that came
+ * from nowhere.
+ */
+const ESTIMATE_SCHEMA = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          // A generic, searchable name — "whole wheat bread", not "Dave's Killer Bread".
+          query: { type: 'string' },
+          grams: { type: 'number' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+        required: ['query', 'grams', 'confidence'],
+      },
+    },
+    /** What had to be assumed, so the user corrects the assumption rather than the number. */
+    assumptions: { type: 'string' },
+  },
+  required: ['items', 'assumptions'],
+}
+
+const ESTIMATE_SYSTEM = `Break a described meal into its weighed components.
+
+Return ONLY generic, searchable ingredient names and a weight in grams for each. Never return
+calories or macros — the app computes those from its own food database, and a number from you
+would be a fabrication.
+
+Rules:
+- Use plain generic names a food database would hold: "whole wheat bread", "roasted turkey
+  breast", "mayonnaise", "cheddar cheese". Not brands, not adjectives.
+- Use ordinary portions when the user doesn't say: a sandwich is 2 slices of bread (~56 g), a
+  slice of deli meat ~28 g, a teaspoon of mayo ~5 g, a medium apple ~180 g.
+- Mark confidence low for any component the user did not mention and you are guessing at.
+- State every assumption in one short sentence, so the user corrects the assumption rather than
+  the arithmetic.
+- If the description is already one recognisable dish, you may return it as a single item with
+  its typical total weight.`
 
 // A browser preflights every cross-origin POST, so without these the function is unreachable
 // from the app entirely — which unit tests and an empty-env E2E run can never surface.
@@ -49,6 +99,9 @@ Deno.serve(async (request) => {
   if (!key) return json({ error: 'GEMINI_API_KEY is not configured' }, 503)
 
   const body = (await request.json().catch(() => ({}))) as Body
+
+  if (body.mode === 'estimate') return estimate(key, body.description ?? '')
+
   if (!Array.isArray(body.contents) || body.contents.length === 0) {
     return json({ error: 'contents is required' }, 400)
   }
@@ -96,6 +149,49 @@ Deno.serve(async (request) => {
   }
   return json({ kind: 'message', text })
 })
+
+async function estimate(key: string, description: string): Promise<Response> {
+  const text = description.trim()
+  if (!text) return json({ error: 'description is required' }, 400)
+
+  const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text }] }],
+      systemInstruction: { parts: [{ text: ESTIMATE_SYSTEM }] },
+      generationConfig: {
+        temperature: 0.2,
+        // Generous: a thinking model spends this budget on reasoning as well as output, and at
+        // 800 the JSON was being truncated intermittently — which surfaced as a parse failure
+        // on roughly every other "turkey sandwich".
+        maxOutputTokens: 2048,
+        responseMimeType: 'application/json',
+        responseSchema: ESTIMATE_SCHEMA,
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text()
+    return json({ error: `Gemini ${response.status}: ${detail.slice(0, 300)}` }, 502)
+  }
+
+  const payload = (await response.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[]
+  }
+  const raw = payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  try {
+    const parsed = JSON.parse(raw) as { items?: unknown; assumptions?: unknown }
+    return json({
+      items: Array.isArray(parsed.items) ? parsed.items : [],
+      assumptions: typeof parsed.assumptions === 'string' ? parsed.assumptions : '',
+    })
+  } catch {
+    // Include what came back: a truncated response and a refusal look identical otherwise.
+    return json({ error: `Could not read the estimate: ${raw.slice(0, 200)}` }, 502)
+  }
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

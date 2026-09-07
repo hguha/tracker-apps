@@ -6,7 +6,13 @@ import { isValidPassword, passwordProblem } from '@tracker-engine/auth'
 import { useAuth } from '@/auth/AuthContext'
 import * as repo from '@/data/repository'
 
-export function AccountScreen({ onBack }: { onBack: () => void }) {
+export function AccountScreen({
+  onBack,
+  onConnect,
+}: {
+  onBack: () => void
+  onConnect?: () => void
+}) {
   const toast = useToast()
   const auth = useAuth()
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
@@ -75,31 +81,54 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
 
         {!session?.isLocal && <PasswordCard />}
 
-        <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Sign out</h2>
-          <p className="mt-1 text-[12.5px] text-ink-muted">
-            Your synced data stays on your account. This device's copy is cleared.
-          </p>
-          <Button
-            variant="secondary"
-            className="mt-2 w-full"
-            onClick={() => void auth.signOut()}
-          >
-            Sign out
-          </Button>
-        </Card>
+        {/* Device-only has nothing to sign out *of*: the session is this browser, so signing
+            out would strand the user at the welcome screen with their data still sitting here.
+            Offer connecting an account instead — that's the action they actually want. */}
+        {session?.isLocal ? (
+          <Card className="p-4">
+            <h2 className="text-[15px] font-semibold tracking-tight">This device only</h2>
+            <p className="mt-1 text-[12.5px] text-ink-muted">
+              Everything you&rsquo;ve logged lives in this browser. Connect an account to sync it
+              across devices and back it up — nothing is replaced.
+            </p>
+            {onConnect && (
+              <Button variant="secondary" className="mt-2 w-full" onClick={onConnect}>
+                Connect an account
+              </Button>
+            )}
+          </Card>
+        ) : (
+          <Card className="p-4">
+            <h2 className="text-[15px] font-semibold tracking-tight">Sign out</h2>
+            <p className="mt-1 text-[12.5px] text-ink-muted">
+              Your synced data stays on your account. This device&rsquo;s copy is cleared.
+            </p>
+            <Button
+              variant="secondary"
+              className="mt-2 w-full"
+              onClick={() => void auth.signOut()}
+            >
+              Sign out
+            </Button>
+          </Card>
+        )}
 
         <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Delete account</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight">
+            {session?.isLocal ? 'Erase this device' : 'Delete account'}
+          </h2>
           <p className="mt-1 text-[12.5px] text-ink-muted">
-            Removes your account and every row of it from the server, and wipes this device.
-            Cannot be undone.
+            {session?.isLocal
+              ? 'Removes every log, weigh-in and check-in from this browser. There is no account to delete and nothing is stored elsewhere, so this cannot be undone.'
+              : 'Removes your account and every row of it from the server, and wipes this device. Cannot be undone.'}
           </p>
           <button
             disabled={isDeleting}
             onClick={() => {
               const ok = window.confirm(
-                'Permanently delete your account and all of its data? This cannot be undone.',
+                session?.isLocal
+                  ? 'Erase everything logged on this device? This cannot be undone.'
+                  : 'Permanently delete your account and all of its data? This cannot be undone.',
               )
               if (!ok) return
               setIsDeleting(true)
@@ -122,7 +151,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
             className="mt-2 w-full rounded-xl py-2.5 text-[14px] font-semibold active:opacity-60"
             style={{ color: 'var(--status-critical)' }}
           >
-            {isDeleting ? 'Deleting…' : 'Delete my account'}
+            {isDeleting ? 'Deleting…' : session?.isLocal ? 'Erase my data' : 'Delete my account'}
           </button>
         </Card>
       </div>

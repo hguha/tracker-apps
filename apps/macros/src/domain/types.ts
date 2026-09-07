@@ -92,7 +92,15 @@ export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
 export const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 
-export type EntrySource = 'search' | 'barcode' | 'photo' | 'recipe' | 'quick' | 'copy'
+export type EntrySource =
+  | 'search'
+  | 'barcode'
+  /** Broken out of a description the user typed, then matched to real foods. */
+  | 'describe'
+  | 'photo'
+  | 'recipe'
+  | 'quick'
+  | 'copy'
 
 export interface EstimateMeta {
   confidence: 'high' | 'medium' | 'low'

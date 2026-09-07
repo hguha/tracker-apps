@@ -181,21 +181,27 @@ export function AccountScreen({
           </Card>
         )}
 
+        {/* A device-only account has nothing to sign out *of* — the session is just this
+            browser, so "Sign out" would strand the user at the welcome screen with their data
+            still sitting there. And "Delete account" is the wrong name for what it does: there
+            is no account, only local data. Both are relabelled rather than shown as-is. */}
         <Card className="overflow-hidden">
-          <button
-            onClick={() => setDialog('sign-out')}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-sunken"
-          >
-            <LogOut size={18} className="shrink-0 text-ink-muted" />
-            <span className="text-[15px] font-semibold">Sign out</span>
-          </button>
+          {!session.isLocal && (
+            <button
+              onClick={() => setDialog('sign-out')}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-sunken"
+            >
+              <LogOut size={18} className="shrink-0 text-ink-muted" />
+              <span className="text-[15px] font-semibold">Sign out</span>
+            </button>
+          )}
           <button
             onClick={() => setDialog('delete')}
-            className="flex w-full items-center gap-3 border-t border-line px-4 py-3.5 text-left active:bg-sunken"
+            className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-sunken not-first:border-t not-first:border-line"
           >
             <Trash2 size={18} className="shrink-0 text-critical" />
             <span className="text-[15px] font-semibold text-critical">
-              Delete account
+              {session.isLocal ? 'Erase all data on this device' : 'Delete account'}
             </span>
           </button>
         </Card>
@@ -240,7 +246,7 @@ export function AccountScreen({
 
       {dialog === 'delete' && (
         <Dialog
-          title="Delete your account?"
+          title={session.isLocal ? 'Erase everything on this device?' : 'Delete your account?'}
           onDismiss={() => {
             setDialog('none')
             setDeleteConfirmation('')
@@ -257,7 +263,9 @@ export function AccountScreen({
             <span className="font-semibold text-ink">
               {stats?.workoutCount ?? 0} workouts
             </span>{' '}
-            and every body measurement. It cannot be undone.
+            and every body measurement
+            {session.isLocal ? ' from this device' : ', and your account with it'}. It cannot be
+            undone.
           </p>
           <p className="mt-3 text-[13px] font-semibold text-ink-secondary">
             Type <span className="font-bold text-ink">delete</span> to confirm.

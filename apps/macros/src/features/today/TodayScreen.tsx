@@ -7,7 +7,9 @@ import { dayTotals, remaining } from '@/lib/nutrition'
 import { MEAL_SLOTS, type LogEntry, type MealSlot } from '@/domain/types'
 import { grams, MACRO_META } from '@/features/shared/format'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
+import { GoalCard } from './GoalCard'
 import { MacroBar } from './MacroBar'
+import { NutritionCard } from './NutritionCard'
 import { WeighInCard } from './WeighInCard'
 
 const MEAL_LABELS: Record<MealSlot, string> = {
@@ -71,6 +73,10 @@ export function TodayScreen({
           </p>
         )}
       </Card>
+
+      <GoalCard />
+
+      <NutritionCard totals={totals} />
 
       <CheckInCard />
 
