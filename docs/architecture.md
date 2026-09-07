@@ -68,6 +68,8 @@ it batches version bumps + changelogs + publish. Apps pin `^1.x` and upgrade del
 │   │   ├── auth/            providers + AuthContext + supabase client
 │   │   ├── platform/        Capacitor wrappers
 │   │   ├── ui/              component kit + Tailwind preset
+│   │   ├── badges/          progress-badge engine (catalogs stay in the apps)
+│   │   ├── body/            bodyweight + trend — the join key between the apps
 │   │   └── ai-coach/        chat shell + provider interface + mock
 │   ├── .changeset/          version management
 │   └── .github/workflows/   build + test + publish on tag

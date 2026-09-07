@@ -1,5 +1,5 @@
 import { mgToGrams } from '@/lib/nutrition'
-import type { Nutrients, Profile } from '@/domain/types'
+import type { Nutrients } from '@/domain/types'
 
 /**
  * Whether a day's food was nutritionally complete, not just on target for calories.
@@ -148,10 +148,6 @@ export function goalWeightKg(
 ): number | null {
   if (ratePctPerWeek === 0) return null
   return trendKg * (1 + (ratePctPerWeek / 100) * weeks)
-}
-
-export function heightForBmi(profile: Pick<Profile, 'heightCm'>): number | null {
-  return profile.heightCm && profile.heightCm > 0 ? profile.heightCm : null
 }
 
 export function bmi(trendKg: number, heightCm: number): number {

@@ -574,15 +574,15 @@ app inherits it. Duplicated storage is acceptable here; a duplicated *definition
 
 | Screen | Contents |
 |---|---|
-| **Today** | Calorie ring + macro bars vs target, remaining, meals in order, weigh-in prompt, one-tap log |
-| **Log** | Barcode · photo · search · recents · frequents · meal templates · quick-add. Reachable in one tap from anywhere, like the workout app's centre action |
+| **Today** | Calorie ring + macro bars vs target, remaining (paced against an eating window if there is one), the day as **eating occasions with times** rather than four fixed meal boxes, weigh-in prompt, weight/BMI projection, diet completeness, badges |
+| **Log** | A screen, not a sheet. One input that either searches or breaks the text down as a meal; meal + time always visible; barcode · photo · saved meals (loggable at ½/2×) · eat-again from the last fortnight · what-fits-your-remaining-macros · quick-add |
 | **Food detail** | Portion picker, per-portion macros, micronutrients, source badge (`USDA` / `OFF` / `estimate`) |
 | **Recipes** | Builder with live per-serving macros, scaling, yield, shopping list, AI generation constrained to remaining macros |
 | **Bowl builder** | Cookwell-style component picker (base / protein / veg / sauce / topping) that assembles a meal to hit a macro gap |
 | **Trends** | Weight (raw + trend), expenditure with its confidence band, intake vs target, adherence |
 | **Check-in** | This week's numbers, the proposed targets, and *why* — accept/adjust in collaborative mode |
 | **Coach** | Chat with tools over the user's own data; meal ideas; "what can I make with what's in my kitchen" |
-| **Settings** | Program & rate, coaching mode, macro floors, units, **Connect REPutation**, data & sync, account |
+| **Settings** | A list of destinations: targets & goal (with coaching mode), about you, food & units (diet notes, **eating window**), appearance, coach, badges, account, data & sync, **Connect REPutation** |
 
 Reuses as-is from the engine: `Button`, `Card`, `ProgressRing`, `PillSelect`, `BottomSheet`,
 `Toast`, `SwipeableRow`, `DragList`, `ErrorBoundary`, appearance/theming, the whole auth
@@ -602,8 +602,8 @@ lifecycle, sync status UI, backup/export, badges.
    cycling.
 5. **Recipes + bowl builder + coach.** Computed macros, shopping lists, constrained AI
    generation.
-6. **Breadth.** Micronutrient targets, fibre/sodium goals, water, refeeds and diet breaks,
-   maintenance phases, badges, CSV export.
+6. **Breadth.** Micronutrient targets, fibre/sodium goals, meal timing and eating windows,
+   water, refeeds and diet breaks, maintenance phases, badges, CSV export.
 
 ## 9. Not doing
 

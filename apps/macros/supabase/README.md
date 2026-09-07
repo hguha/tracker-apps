@@ -5,7 +5,7 @@ functions are live.
 
 ## What's configured
 
-- Migrations `0001_schema.sql` + `0002_rls.sql` applied.
+- Migrations `0001`–`0004` applied (`0003` diet notes, `0004` eating window).
 - Secrets: `USDA_API_KEY`, `GEMINI_API_KEY`.
 - Functions: `foods` (verify_jwt **off**), `coach` and `delete-account` (verify_jwt **on**).
 - `site_url` / redirect allow-list: `http://localhost:5175/**`, `macros://auth-callback`.

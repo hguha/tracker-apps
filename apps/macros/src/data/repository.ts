@@ -40,8 +40,6 @@ export function setActiveUserId(userId: string): void {
   activeUserId = userId
 }
 
-export const currentUserId = (): string => activeUserId
-
 // --- Profile (synced, one row per user) -------------------------------------------
 
 function defaultProfile(userId: string): Profile {

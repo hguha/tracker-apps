@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  cycleTargets,
   dayTotals,
   gramsToMg,
-  kcalFromMacros,
-  macroSplitPct,
   nutrientsFor,
-  perServing,
-  recipeNutrients,
   remaining,
   scale,
+  proteinPer100Kcal,
   splitTargets,
   sum,
 } from '@/lib/nutrition'
@@ -85,44 +81,6 @@ describe('scale', () => {
   })
 })
 
-describe('recipeNutrients', () => {
-  const foods = new Map([['usda:1', food()]])
-
-  it('sums matched ingredients', () => {
-    const total = recipeNutrients(
-      { ingredients: [{ id: 'i1', foodId: 'usda:1', label: 'chicken', grams: 100, optional: false }] },
-      foods,
-    )
-    expect(total.kcal).toBe(120)
-  })
-
-  it('contributes nothing for an unmatched ingredient rather than guessing', () => {
-    const total = recipeNutrients(
-      { ingredients: [{ id: 'i1', foodId: null, label: 'a pinch of magic', grams: 5, optional: false }] },
-      foods,
-    )
-    expect(total.kcal).toBe(0)
-  })
-
-  it('skips optional ingredients', () => {
-    const total = recipeNutrients(
-      { ingredients: [{ id: 'i1', foodId: 'usda:1', label: 'chicken', grams: 100, optional: true }] },
-      foods,
-    )
-    expect(total.kcal).toBe(0)
-  })
-})
-
-describe('perServing', () => {
-  it('divides by servings', () => {
-    expect(perServing({ nutrients: nutrients({ kcal: 800 }), servings: 4 }).kcal).toBe(200)
-  })
-
-  it('treats zero servings as one instead of dividing by zero', () => {
-    expect(perServing({ nutrients: nutrients({ kcal: 800 }), servings: 0 }).kcal).toBe(800)
-  })
-})
-
 describe('remaining', () => {
   it('goes negative when over, because that is information', () => {
     const left = remaining(nutrients({ kcal: 2200 }), {
@@ -132,21 +90,6 @@ describe('remaining', () => {
       fatMg: 0,
     })
     expect(left.kcal).toBe(-200)
-  })
-})
-
-describe('kcalFromMacros / macroSplitPct', () => {
-  it('uses 4/4/9', () => {
-    expect(kcalFromMacros(nutrients({ proteinMg: 10_000, carbsMg: 10_000, fatMg: 10_000 }))).toBe(170)
-  })
-
-  it('splits to roughly 100%', () => {
-    const split = macroSplitPct(nutrients({ proteinMg: 150_000, carbsMg: 200_000, fatMg: 70_000 }))
-    expect(split.protein + split.carbs + split.fat).toBeGreaterThan(98)
-  })
-
-  it('is all zero with no macros, not NaN', () => {
-    expect(macroSplitPct(EMPTY_NUTRIENTS)).toEqual({ protein: 0, carbs: 0, fat: 0 })
   })
 })
 
@@ -163,21 +106,20 @@ describe('splitTargets', () => {
   })
 })
 
-describe('cycleTargets', () => {
-  it('redistributes without changing the weekly total', () => {
-    const weekly = 7 * 2400
-    const days = cycleTargets(weekly, [1.15, 0.9, 1.15, 0.9, 1.15, 0.9, 0.85])
-    expect(days.reduce((a, b) => a + b, 0)).toBeCloseTo(weekly, -1)
-  })
-
-  it('gives training days more than rest days', () => {
-    const days = cycleTargets(7 * 2000, [1.2, 0.8, 1.2, 0.8, 1.2, 0.8, 1])
-    expect(days[0]!).toBeGreaterThan(days[1]!)
-  })
-})
-
 describe('dayTotals', () => {
   it('adds the day’s entries', () => {
     expect(dayTotals([{ nutrients: nutrients({ kcal: 500 }) }, { nutrients: nutrients({ kcal: 700 }) }]).kcal).toBe(1200)
+  })
+})
+
+describe('proteinPer100Kcal', () => {
+  it('ranks a lean food above a fatty one', () => {
+    const chicken = nutrients({ kcal: 165, proteinMg: 31_000 })
+    const oil = nutrients({ kcal: 884, proteinMg: 0 })
+    expect(proteinPer100Kcal(chicken)).toBeGreaterThan(proteinPer100Kcal(oil))
+  })
+
+  it('is zero rather than Infinity for a zero-calorie row', () => {
+    expect(proteinPer100Kcal(nutrients({ kcal: 0, proteinMg: 5_000 }))).toBe(0)
   })
 })
