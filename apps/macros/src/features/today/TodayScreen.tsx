@@ -8,7 +8,7 @@ import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
 import { MEAL_LABELS, mealForHour } from '@/features/shared/meals'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
-import type { LogEntry, MealSlot } from '@/domain/types'
+import type { BodyWeightRow, LogEntry, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
 import { EntrySheet } from './EntrySheet'
 import { GoalCard } from './GoalCard'
@@ -156,9 +156,9 @@ function FastingHint() {
  * "no target yet" with a goal selected in Settings reads as a bug rather than a missing input.
  */
 function missingForTarget(
-  profile: { heightCm: number | null; birthYear: number | null; sex: string | null } | undefined,
+  profile: Profile | undefined,
   hasProgram: boolean,
-  weights: readonly unknown[],
+  weights: readonly BodyWeightRow[],
 ): string[] {
   if (!hasProgram || !profile) return []
   const missing: string[] = []

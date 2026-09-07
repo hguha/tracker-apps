@@ -1,6 +1,11 @@
 import { syncStamp } from '@tracker-engine/local-first'
 import { getSupabase } from '@/backend/supabaseClient'
-import { mapOffProduct, type OffProduct } from '@/lib/openFoodFacts'
+import {
+  mapOffProduct,
+  mapOffSearch,
+  OFF_SEARCH_FIELDS,
+  type OffProduct,
+} from '@/lib/openFoodFacts'
 import * as repo from '@/data/repository'
 import type { Food } from '@/domain/types'
 
@@ -28,19 +33,57 @@ export async function lookupBarcode(barcode: string): Promise<Food | null> {
   return viaOff ? cache(viaOff) : null
 }
 
-/** Remote search, for the long tail the seeded subset doesn't cover. Empty without a backend. */
+/**
+ * Remote search over both sources at once, for the long tail the seeded subset doesn't cover.
+ *
+ * Two databases because they cover different things and neither is enough: USDA has generic and
+ * composite foods with full micronutrients ("turkey sandwich on wheat"), Open Food Facts has the
+ * packaged products in someone's cupboard by name rather than only by barcode. Queried in
+ * parallel and merged, so a slow or down source costs nothing beyond its own results — and OFF
+ * needs no key, which is what keeps search useful with no backend configured at all.
+ */
 export async function searchRemote(query: string): Promise<Food[]> {
+  const q = query.trim()
+  if (q.length < 2) return []
+
+  const [usda, off] = await Promise.all([searchBackend(q), searchOpenFoodFacts(q)])
+  // USDA first: it carries portions and micronutrients, and lib/foodSearch ranks it above
+  // branded rows anyway. Barcodes de-duplicate the overlap between the two.
+  const merged = new Map<string, Food>()
+  for (const food of [...usda, ...off]) merged.set(food.id, food)
+
+  const foods = [...merged.values()]
+  if (foods.length > 0) await repo.putFoods(foods)
+  return foods
+}
+
+async function searchBackend(query: string): Promise<Food[]> {
   const client = getSupabase()
-  if (!client || query.trim().length < 2) return []
+  if (!client) return []
   try {
     const { data, error } = await client.functions.invoke<{ foods: Food[] }>('foods', {
-      body: { op: 'search', q: query.trim(), limit: 25 },
+      body: { op: 'search', q: query, limit: 25 },
     })
-    if (error || !data?.foods) return []
-    await repo.putFoods(data.foods)
-    return data.foods
+    return error ? [] : (data?.foods ?? [])
   } catch {
-    // Offline or the function isn't deployed: local results stand on their own.
+    // Offline or the function isn't deployed: the other source stands on its own.
+    return []
+  }
+}
+
+/** Text search against Open Food Facts. No key, CORS-enabled, and often the only source that
+ *  has a supermarket own-brand product. */
+async function searchOpenFoodFacts(query: string): Promise<Food[]> {
+  const url =
+    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
+    `&search_simple=1&action=process&json=1&page_size=20&fields=${OFF_SEARCH_FIELDS}`
+  try {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } })
+    if (!response.ok) return []
+    const body = (await response.json()) as { products?: OffProduct[] }
+    const stamp = syncStamp()
+    return mapOffSearch(body.products ?? []).map((food) => ({ ...food, ...stamp }) as Food)
+  } catch {
     return []
   }
 }

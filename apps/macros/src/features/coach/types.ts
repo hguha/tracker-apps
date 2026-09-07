@@ -46,6 +46,10 @@ export interface CoachContext {
   units: string
   /** The user's stated diets, allergies and dislikes. Read before suggesting any meal. */
   dietNotes: string
+  /** Local clock, e.g. "12:00-20:00", or null when they eat whenever. */
+  eatingWindow: string | null
+  /** How the day has been eaten so far: "13:10 lunch 620 kcal; 19:40 dinner 900 kcal". */
+  todayTiming: string | null
 }
 
 export interface CoachProvider {

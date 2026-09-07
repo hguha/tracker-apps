@@ -3,6 +3,7 @@ import { dayKey } from '@tracker-engine/core'
 import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams } from '@/lib/nutrition'
+import { eatingOccasions, formatClock, minutesIntoDay } from '@/lib/mealTiming'
 import {
   executeRetrievalTool,
   isActionTool,
@@ -63,15 +64,36 @@ export const geminiCoachProvider: CoachProvider = {
 
 /** Built once per turn, so the opening context isn't recomputed on every tool round. */
 export async function buildCoachContext(): Promise<CoachContext> {
-  const totals = dayTotals(await repo.entriesForDay(dayKey(Date.now())))
+  const entries = await repo.entriesForDay(dayKey(Date.now()))
+  const totals = dayTotals(entries)
   const targets = await repo.currentTargets()
   const program = await repo.activeProgram()
   const profile = await repo.getProfile()
+  const window = profile.eatingWindow
+
   return {
     today: { kcal: totals.kcal, proteinG: Math.round(mgToGrams(totals.proteinMg)) },
     targetKcal: targets?.kcal ?? null,
     goal: program?.goal ?? null,
     units: profile.units,
     dietNotes: profile.dietNotes,
+    // In the opening context rather than behind a tool: it changes what advice is even
+    // appropriate, so the model must not have to think to ask for it.
+    eatingWindow: window
+      ? `${formatClock(window.startMinute)}-${formatClock(window.endMinute)}`
+      : null,
+    todayTiming: describeTiming(entries),
   }
+}
+
+/** The day as eating occasions, so "should I eat now" has the times to answer it. */
+function describeTiming(entries: Awaited<ReturnType<typeof repo.entriesForDay>>): string | null {
+  const occasions = eatingOccasions(entries)
+  if (occasions.length === 0) return null
+  return occasions
+    .map(
+      (occasion) =>
+        `${formatClock(minutesIntoDay(occasion.startAt))} ${occasion.entries[0]!.meal} ${occasion.nutrients.kcal} kcal`,
+    )
+    .join('; ')
 }

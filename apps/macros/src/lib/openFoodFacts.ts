@@ -67,6 +67,30 @@ export function mapOffProduct(product: OffProduct): Omit<Food, keyof SyncCols> |
 
 type SyncCols = { createdAt: number; updatedAt: number; deletedAt: number | null; clientRev: number }
 
+/**
+ * The fields a text search needs. Requested explicitly because the default response carries
+ * hundreds of fields per product — megabytes for one query on a phone.
+ */
+export const OFF_SEARCH_FIELDS = [
+  'code',
+  'product_name',
+  'brands',
+  'categories',
+  'serving_quantity',
+  'serving_size',
+  'nutriments',
+].join(',')
+
+/** Maps a search response, dropping every product too incomplete to log honestly. */
+export function mapOffSearch(products: readonly OffProduct[]): Omit<Food, keyof SyncCols>[] {
+  const mapped: Omit<Food, keyof SyncCols>[] = []
+  for (const product of products) {
+    const food = mapOffProduct(product)
+    if (food) mapped.push(food)
+  }
+  return mapped
+}
+
 /** A "1 serving" portion when OFF states a serving mass, since that's how packages are eaten. */
 function servingPortion(product: OffProduct): FoodPortion[] {
   const grams = num(product.serving_quantity)

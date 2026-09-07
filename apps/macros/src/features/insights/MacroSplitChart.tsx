@@ -1,13 +1,13 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { shortDay, useChartTokens } from './chartTokens'
-import type { DayTotals } from './IntakeChart'
+import type { InsightsDay } from './useInsightsData'
 
 /** Where the calories came from, day by day. Stacked grams rather than percentages: grams are
  *  what the targets are set in, so the chart and the target speak the same units. */
-export function MacroSplitChart({ days }: { days: DayTotals[] }) {
+export function MacroSplitChart({ days }: { days: InsightsDay[] }) {
   const tokens = useChartTokens()
-  const recent = days.slice(-30)
+  const recent = days
 
   const series = (
     [

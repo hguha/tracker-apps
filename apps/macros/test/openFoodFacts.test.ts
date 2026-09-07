@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapOffProduct, type OffProduct } from '@/lib/openFoodFacts'
+import { mapOffProduct, mapOffSearch, type OffProduct } from '@/lib/openFoodFacts'
 
 function product(over: Partial<OffProduct> = {}): OffProduct {
   return {
@@ -86,5 +86,20 @@ describe('mapOffProduct', () => {
   it('never marks crowd-sourced data verified', () => {
     expect(mapOffProduct(product())!.verifiedAt).toBeNull()
     expect(mapOffProduct(product())!.source).toBe('off')
+  })
+})
+
+describe('mapOffSearch', () => {
+  it('keeps the loggable products and drops the rest', () => {
+    const products = [
+      { code: '1', product_name: 'Complete bar', nutriments: { 'energy-kcal_100g': 400, proteins_100g: 20, carbohydrates_100g: 40, fat_100g: 15 } },
+      // No macros: a row like this can't be logged honestly, so it must not reach the list.
+      { code: '2', product_name: 'Mystery drink', nutriments: {} },
+      // No name: nothing to show the user.
+      { code: '3', nutriments: { 'energy-kcal_100g': 100, proteins_100g: 1, carbohydrates_100g: 1, fat_100g: 1 } },
+    ]
+    const mapped = mapOffSearch(products)
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0]!.description).toBe('Complete bar')
   })
 })

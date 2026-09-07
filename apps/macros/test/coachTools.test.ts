@@ -4,6 +4,7 @@ import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
 import { executeRetrievalTool, isActionTool, toolToAction } from '@/features/coach/tools'
 import { mockCoachProvider } from '@/features/coach/mockProvider'
+import { dayKey } from '@tracker-engine/core'
 import type { CoachContext } from '@/features/coach/types'
 
 const CONTEXT: CoachContext = {
@@ -12,6 +13,8 @@ const CONTEXT: CoachContext = {
   goal: null,
   units: 'metric',
   dietNotes: '',
+  eatingWindow: null,
+  todayTiming: null,
 }
 
 beforeEach(async () => {
@@ -153,5 +156,26 @@ describe('offline coach', () => {
     )
     expect(result.text).toContain('2500')
     expect(result.text).toMatch(/includes your training/)
+  })
+})
+
+describe('meal timing reaches the coach', () => {
+  it('reports each eating occasion with its time, and the fast so far', async () => {
+    const [food] = await repo.searchFoods('chicken breast')
+    const today = dayKey(Date.now())
+    const at = (hour: number) => Date.parse(`${today}T${String(hour).padStart(2, '0')}:00:00`)
+    await repo.logFood({ food: food!, grams: 150, meal: 'lunch', eatenAt: at(12) })
+    await repo.logFood({ food: food!, grams: 200, meal: 'dinner', eatenAt: at(19) })
+    await repo.saveProfile({ eatingWindow: { startMinute: 12 * 60, endMinute: 20 * 60 } })
+
+    const result = (await executeRetrievalTool('getToday', {})) as {
+      occasions: { at: string; meal: string }[]
+      eatingWindow: string | null
+      windowPhase: string | null
+    }
+
+    expect(result.occasions.map((o) => o.at)).toEqual(['12:00', '19:00'])
+    expect(result.eatingWindow).toBe('12:00-20:00')
+    expect(result.windowPhase).not.toBeNull()
   })
 })

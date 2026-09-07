@@ -19,7 +19,12 @@ import {
   type Profile,
   type Program,
 } from '@/domain/types'
-import { nutrientsFor, portionFor, sum as sumNutrients } from '@/lib/nutrition'
+import {
+  nutrientsFor,
+  portionFor,
+  scale as scaleNutrients,
+  sum as sumNutrients,
+} from '@/lib/nutrition'
 import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
 import { buildCheckIn, initialTargets, lastCompleteWeekKey, weekKeyForDay } from '@/lib/checkin'
 import type { IntakeDay } from '@/lib/expenditure'
@@ -351,10 +356,18 @@ export function deleteMealTemplate(id: string): Promise<void> {
   return patch('mealTemplates', id, { deletedAt: Date.now() })
 }
 
+/**
+ * Logs a saved meal, optionally at a fraction or multiple of the saved amount.
+ *
+ * The multiplier is what makes a saved meal cover batch cooking: save the whole tray, then log a
+ * third of it. Grams and nutrients scale together through lib/nutrition, so a half portion can't
+ * end up with full-portion macros.
+ */
 export async function logMealTemplate(
   template: MealTemplate,
   meal: MealSlot,
   at = Date.now(),
+  multiple = 1,
 ): Promise<number> {
   for (const item of template.items) {
     const entry: LogEntry = {
@@ -366,11 +379,14 @@ export async function logMealTemplate(
       sortIndex: at,
       foodId: item.foodId,
       recipeId: item.recipeId,
-      quickAdd: item.foodId === null && item.recipeId === null ? item.nutrients : null,
-      grams: item.grams,
+      quickAdd:
+        item.foodId === null && item.recipeId === null
+          ? scaleNutrients(item.nutrients, multiple)
+          : null,
+      grams: item.grams * multiple,
       portionId: null,
       portionCount: null,
-      nutrients: item.nutrients,
+      nutrients: scaleNutrients(item.nutrients, multiple),
       source: 'template',
       estimate: null,
       note: template.name,

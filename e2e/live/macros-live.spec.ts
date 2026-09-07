@@ -31,8 +31,10 @@ test('remote search reaches USDA for a food not in the local seed', async ({ pag
   const errors = await setUpDeviceOnly(page)
 
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search foods').fill('pistachios roasted')
-  const hit = page.getByRole('button', { name: /pistachio/i }).first()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('pistachios roasted')
+  // Matched on the "kcal / 100g" a food row carries: a bare /pistachio/ also matches the
+  // "break down as a meal" row, which is a different button entirely.
+  const hit = page.getByRole('button', { name: /pistachio.*kcal \/ 100g/is }).first()
   await expect(hit).toBeVisible({ timeout: 20_000 })
 
   // A remote food must arrive with real energy, not the 0 kcal the first deploy returned.

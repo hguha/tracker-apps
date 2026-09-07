@@ -71,7 +71,7 @@ export function LogScreen({
             onMeal={setMeal}
             onAt={setAt}
             onSelect={(food) => setPanel({ kind: 'portion', food })}
-            onPanel={(kind) => setPanel({ kind } as Panel)}
+            onPanel={setPanel}
             onDone={onClose}
           />
         )}
@@ -108,7 +108,7 @@ function BrowsePanel({
   onMeal: (meal: MealSlot) => void
   onAt: (at: number) => void
   onSelect: (food: Food) => void
-  onPanel: (kind: 'describe' | 'scan' | 'quick') => void
+  onPanel: (panel: Panel) => void
   onDone: () => void
 }) {
   const toast = useToast()
@@ -142,9 +142,12 @@ function BrowsePanel({
   )
 
   const canScan = isBarcodeScanningAvailable()
-  // Worth offering a breakdown whenever the text names more than one thing — which is exactly
-  // when the search box is least likely to have a single row that means it.
+  // Worth offering a breakdown when the text names more than one thing. It leads only when the
+  // search came up thin, though: a query with real matches is answered by those matches, and
+  // putting the AI path above them would push the right answer below the fold.
   const looksComposed = trimmed.split(/\s+/).length >= 2
+  const describeRow = isSearching && looksComposed ? <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} /> : null
+  const describeLeads = (results?.length ?? 0) < 3
 
   return (
     <div className="space-y-3 px-3 py-3">
@@ -162,7 +165,7 @@ function BrowsePanel({
         />
         {canScan && (
           <button
-            onClick={() => onPanel('scan')}
+            onClick={() => onPanel({ kind: 'scan' })}
             aria-label="Scan a barcode"
             className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-secondary active:opacity-60"
           >
@@ -171,25 +174,13 @@ function BrowsePanel({
         )}
       </div>
 
-      {isSearching && looksComposed && (
-        <button
-          onClick={() => onPanel('describe')}
-          className="flex w-full items-center gap-2 rounded-2xl bg-accent-wash px-3.5 py-3 text-left active:opacity-70"
-        >
-          <Sparkles size={16} className="shrink-0 text-accent" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] font-semibold text-accent">
-              Break down “{trimmed}”
-            </span>
-            <span className="block text-[12px] text-ink-muted">
-              Into real foods you can correct, with the macros added up
-            </span>
-          </span>
-        </button>
-      )}
+      {describeLeads && describeRow}
 
       {isSearching ? (
-        <FoodList foods={results ?? []} onSelect={onSelect} emptyLabel="Nothing matched." />
+        <>
+          <FoodList foods={results ?? []} onSelect={onSelect} emptyLabel="Nothing matched." />
+          {!describeLeads && describeRow}
+        </>
       ) : (
         <>
           {suggestions.length > 0 && (
@@ -211,14 +202,14 @@ function BrowsePanel({
           )}
 
           {(templates ?? []).length > 0 && (
-            <Section title="Saved meals">
+            <Section title="Saved meals" hint="Tap ½ or 2× to scale">
               <ul className="divide-y divide-line">
                 {(templates ?? []).map((template) => (
                   <SavedMealRow
                     key={template.id}
                     template={template}
-                    onLog={() => {
-                      void repo.logMealTemplate(template, meal, at).then((count) => {
+                    onLog={(multiple) => {
+                      void repo.logMealTemplate(template, meal, at, multiple).then((count) => {
                         toast.show(`Logged ${count} item${count === 1 ? '' : 's'}`)
                         onDone()
                       })
@@ -277,14 +268,14 @@ function BrowsePanel({
 
       <div className="flex gap-2">
         <button
-          onClick={() => onPanel('describe')}
+          onClick={() => onPanel({ kind: 'describe' })}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
         >
           <Sparkles size={15} />
           Describe a meal
         </button>
         <button
-          onClick={() => onPanel('quick')}
+          onClick={() => onPanel({ kind: 'quick' })}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
         >
           <Plus size={15} />
@@ -295,22 +286,56 @@ function BrowsePanel({
   )
 }
 
+/** The escape hatch from search: let a sentence be broken into foods. */
+function DescribeRow({ text, onOpen }: { text: string; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="flex w-full items-center gap-2 rounded-2xl bg-accent-wash px-3.5 py-3 text-left active:opacity-70"
+    >
+      <Sparkles size={16} className="shrink-0 text-accent" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-semibold text-accent">
+          Break down “{text}” as a meal
+        </span>
+        <span className="block text-[12px] text-ink-muted">
+          Into real foods you can correct, with the macros added up
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/** A saved meal, loggable whole or scaled — which is what makes it cover a batch cook. */
 function SavedMealRow({
   template,
   onLog,
 }: {
   template: MealTemplate
-  onLog: () => void
+  onLog: (multiple: number) => void
 }) {
   return (
-    <li className="flex items-center">
-      <button onClick={onLog} className="min-w-0 flex-1 px-4 py-2.5 text-left active:bg-sunken">
+    <li className="flex items-center gap-1">
+      <button
+        onClick={() => onLog(1)}
+        className="min-w-0 flex-1 px-4 py-2.5 text-left active:bg-sunken"
+      >
         <div className="truncate text-[14px]">{template.name}</div>
         <div className="tabular text-[12px] text-ink-muted">
           {template.nutrients.kcal} kcal · {grams(template.nutrients.proteinMg)}P{' '}
           {grams(template.nutrients.carbsMg)}C {grams(template.nutrients.fatMg)}F
         </div>
       </button>
+      {([0.5, 2] as const).map((multiple) => (
+        <button
+          key={multiple}
+          onClick={() => onLog(multiple)}
+          aria-label={`Log ${multiple === 0.5 ? 'half' : 'double'} of ${template.name}`}
+          className="tabular shrink-0 rounded-lg bg-sunken px-2 py-1 text-[12px] font-semibold text-ink-secondary active:opacity-60"
+        >
+          {multiple === 0.5 ? '½' : '2×'}
+        </button>
+      ))}
       <button
         onClick={() => void repo.deleteMealTemplate(template.id)}
         aria-label={`Delete ${template.name}`}

@@ -1,25 +1,19 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { shortDay, useChartTokens } from './chartTokens'
+import type { InsightsDay } from './useInsightsData'
 
-export interface DayTotals {
-  day: string
-  kcal: number
-  protein: number
-  carbs: number
-  fat: number
-}
-
-/** Calories per day against the target line — the one chart that answers "am I on plan?". */
-export function IntakeChart({
-  days,
-  targetKcal,
-}: {
-  days: DayTotals[]
-  targetKcal: number | null
-}) {
+/**
+ * Calories per day against the target line — the one chart that answers "am I on plan?".
+ *
+ * The target is a *series*, not one horizontal line: it changes at each check-in, and drawing
+ * today's number across the whole window would mark days as failures against a target that
+ * didn't exist then.
+ */
+export function IntakeChart({ days }: { days: InsightsDay[] }) {
   const tokens = useChartTokens()
-  const recent = days.slice(-30)
+  const recent = days
+  const latestTarget = [...recent].reverse().find((day) => day.targetKcal !== null)?.targetKcal ?? null
 
   const option: EChartsOption = {
     animation: false,
@@ -41,22 +35,22 @@ export function IntakeChart({
         type: 'bar',
         data: recent.map((d) => ({
           value: d.kcal,
-          // Colour by side of target rather than a legend: the question is only ever
+          // Colour by side of that day's target rather than a legend: the question is only ever
           // over or under.
           itemStyle: {
-            color: targetKcal !== null && d.kcal > targetKcal ? tokens.over : tokens.accent,
+            color: d.targetKcal !== null && d.kcal > d.targetKcal ? tokens.over : tokens.accent,
           },
         })),
         barMaxWidth: 14,
-        ...(targetKcal !== null && {
-          markLine: {
-            silent: true,
-            symbol: 'none',
-            label: { formatter: 'target', color: tokens.inkMuted, fontSize: 10 },
-            lineStyle: { color: tokens.on, type: 'dashed' },
-            data: [{ yAxis: targetKcal }],
-          },
-        }),
+      },
+      {
+        name: 'Target',
+        type: 'line',
+        step: 'middle',
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { color: tokens.on, type: 'dashed', width: 1.5 },
+        data: recent.map((d) => d.targetKcal),
       },
     ],
   }
@@ -64,12 +58,16 @@ export function IntakeChart({
   return (
     <ChartCard
       title="Calories"
-      subtitle={targetKcal === null ? 'Last 30 days' : `Last 30 days vs ${targetKcal} kcal`}
+      subtitle={
+        latestTarget === null
+          ? 'Each logged day'
+          : `Against the target in force each day — now ${latestTarget} kcal`
+      }
       isEmpty={recent.length === 0}
       emptyMessage="Log a few days to see this."
       table={{
-        columns: ['Day', 'kcal'],
-        rows: recent.map((d) => [d.day, d.kcal]),
+        columns: ['Day', 'kcal', 'Target'],
+        rows: recent.map((d) => [d.day, d.kcal, d.targetKcal ?? '—']),
       }}
     >
       <Chart option={option} ariaLabel="Calories per day against target" />

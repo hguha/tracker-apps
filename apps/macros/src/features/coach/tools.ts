@@ -3,6 +3,7 @@ import { DAY_MS, dayKey } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, nutrientsFor, remaining } from '@/lib/nutrition'
+import { dayTiming, eatingOccasions, formatClock, minutesIntoDay, windowState } from '@/lib/mealTiming'
 import type { CoachAction } from './types'
 import { MEAL_SLOTS, type MealSlot } from '@/domain/types'
 
@@ -22,12 +23,13 @@ export const TOOL_DECLARATIONS: ToolDeclaration[] = [
   {
     name: 'getToday',
     description:
-      "Today's calorie and macro totals, the current targets, and what's left. Use before any advice about what to eat next.",
+      "Today's calorie and macro totals, the current targets, what's left, and when the user has eaten so far (with their eating window and how long they have been fasting, if they keep one). Use before any advice about what or when to eat next.",
     parameters: { type: 'object', properties: {} },
   },
   {
     name: 'getRecentDays',
-    description: 'Daily calorie and macro totals for the last N days (max 30).',
+    description:
+      'Daily calorie and macro totals for the last N days (max 30), with how many separate eating occasions each day had and when the first and last were.',
     parameters: {
       type: 'object',
       properties: { days: { type: 'integer', description: 'How many days back, 1-30.' } },
@@ -117,8 +119,12 @@ export async function executeRetrievalTool(
   switch (name) {
     case 'getToday': {
       const day = dayKey(Date.now())
-      const totals = dayTotals(await repo.entriesForDay(day))
+      const entries = await repo.entriesForDay(day)
+      const totals = dayTotals(entries)
       const targets = await repo.currentTargets()
+      const window = (await repo.getProfile()).eatingWindow
+      const state = window ? windowState(window, entries) : null
+
       return {
         day,
         eaten: describe(totals),
@@ -129,6 +135,17 @@ export async function executeRetrievalTool(
           fatG: Math.round(mgToGrams(targets.fatMg)),
         },
         left: targets ? describe(remaining(totals, targets)) : null,
+        now: formatClock(minutesIntoDay(Date.now())),
+        occasions: eatingOccasions(entries).map((occasion) => ({
+          at: formatClock(minutesIntoDay(occasion.startAt)),
+          meal: occasion.entries[0]!.meal,
+          kcal: occasion.nutrients.kcal,
+        })),
+        eatingWindow: window
+          ? `${formatClock(window.startMinute)}-${formatClock(window.endMinute)}`
+          : null,
+        windowPhase: state?.phase ?? null,
+        fastedMinutes: state?.fastedMinutes ?? null,
       }
     }
 
@@ -142,7 +159,16 @@ export async function executeRetrievalTool(
       }
       return [...byDay.entries()]
         .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([day, rows]) => ({ day, ...describe(dayTotals(rows)) }))
+        .map(([day, rows]) => {
+          const timing = dayTiming(rows)
+          return {
+            day,
+            ...describe(dayTotals(rows)),
+            occasions: timing.occasions,
+            firstAt: timing.firstAt === null ? null : formatClock(minutesIntoDay(timing.firstAt)),
+            lastAt: timing.lastAt === null ? null : formatClock(minutesIntoDay(timing.lastAt)),
+          }
+        })
     }
 
     case 'getWeightTrend': {
