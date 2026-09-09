@@ -8,6 +8,8 @@ functions are live.
 - Migrations `0001`–`0004` applied (`0003` diet notes, `0004` eating window).
 - Secrets: `USDA_API_KEY`, `GEMINI_API_KEY`.
 - Functions: `foods` (verify_jwt **off**), `coach` and `delete-account` (verify_jwt **on**).
+- `coach` serves three modes: `chat` (tool loop), `estimate` (a described meal) and `photo`
+  (an image). All three return names and grams only — the client computes every nutrient.
 - `site_url` / redirect allow-list: `http://localhost:5175/**`, `macros://auth-callback`.
 - `mailer_autoconfirm` off, `mailer_otp_length` 6 — same anti-spam posture as REPutation.
 
