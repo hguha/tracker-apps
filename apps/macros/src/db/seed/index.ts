@@ -24,7 +24,7 @@ import * as repo from '@/data/repository'
  * every open to usually change nothing — so the version is compared instead, and the payload is only
  * fetched when it has actually moved.
  */
-const SEED_VERSION = 2
+const SEED_VERSION = 3
 const VERSION_KEY = 'macros.seed.version'
 
 export async function seedFoods(): Promise<number> {
