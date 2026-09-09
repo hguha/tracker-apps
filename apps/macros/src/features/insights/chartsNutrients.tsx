@@ -1,6 +1,11 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { formatAmount, nutrientStatus, NUTRIENT_TARGETS } from '@/lib/micronutrients'
+import {
+  formatAmount,
+  nutrientStatus,
+  nutrientTargets,
+  type ReferenceSex,
+} from '@/lib/micronutrients'
 import { mgToGrams } from '@/lib/nutrition'
 import { shortDay, useChartTokens } from './chartTokens'
 import type { Nutrients } from '@/domain/types'
@@ -16,12 +21,14 @@ import type { InsightsDay } from './useInsightsData'
 export function AdequacyChart({
   averages,
   dayCount,
+  sex,
 }: {
   averages: Nutrients
   dayCount: number
+  sex: ReferenceSex
 }) {
   const tokens = useChartTokens()
-  const statuses = nutrientStatus(averages)
+  const statuses = nutrientStatus(averages, sex)
   const known = statuses.filter((status) => status.verdict !== 'unknown')
 
   const colorFor = (verdict: string): string =>
@@ -99,10 +106,10 @@ export function AdequacyChart({
  * because a day with no fibre *data* has to look different from a day with no fibre — the gaps
  * here are gaps in the database, not in the diet.
  */
-export function FiberChart({ days }: { days: InsightsDay[] }) {
+export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceSex }) {
   const tokens = useChartTokens()
   const reference =
-    NUTRIENT_TARGETS.find((target) => target.key === 'fiberMg')?.reference ?? 28_000
+    nutrientTargets(sex).find((target) => target.key === 'fiberMg')?.reference ?? 28_000
   const referenceG = Math.round(mgToGrams(reference))
   const measured = days.filter((day) => day.fiber !== null)
 

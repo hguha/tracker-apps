@@ -10,6 +10,7 @@ import { useSync } from '@/sync/useSync'
 import {
   BackupParseError,
   countsOf,
+  exportToCsv,
   exportToJson,
   importBackup,
   parseBackup,
@@ -135,6 +136,30 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
           <p className="mt-2 text-[12.5px] text-ink-muted">
             A JSON copy of your logs, weigh-ins, recipes and check-ins. Foods aren't included —
             they're reference data the app can re-fetch.
+          </p>
+
+          <Button
+            variant="secondary"
+            className="mt-2 w-full"
+            disabled={isBusy}
+            onClick={() => {
+              void exportToCsv()
+                .then((csv) =>
+                  exportBackup(
+                    csv,
+                    `macrocosm-log-${new Date().toISOString().slice(0, 10)}.csv`,
+                    'Food log',
+                  ),
+                )
+                .then((shared) => shared && toast.show('CSV saved'))
+            }}
+          >
+            <Download size={16} />
+            Export a spreadsheet (CSV)
+          </Button>
+          <p className="mt-1.5 text-[12px] text-ink-muted">
+            One row per item with names, grams and macros — for reading, not restoring. The JSON
+            export is the one that can be imported back.
           </p>
         </Card>
 

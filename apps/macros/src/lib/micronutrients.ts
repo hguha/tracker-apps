@@ -23,16 +23,38 @@ export interface NutrientTarget {
   isFloor: boolean
 }
 
-export const NUTRIENT_TARGETS: NutrientTarget[] = [
-  { key: 'fiberMg', label: 'Fibre', reference: 28_000, isFloor: true },
-  { key: 'potassiumMg', label: 'Potassium', reference: 4_700, isFloor: true },
-  { key: 'calciumMg', label: 'Calcium', reference: 1_300, isFloor: true },
-  { key: 'ironMg', label: 'Iron', reference: 18, isFloor: true },
-  // Ceilings: the useful signal is being consistently over, not under.
-  { key: 'sodiumMg', label: 'Sodium', reference: 2_300, isFloor: false },
-  { key: 'satFatMg', label: 'Saturated fat', reference: 20_000, isFloor: false },
-  { key: 'sugarMg', label: 'Added sugar', reference: 50_000, isFloor: false },
-]
+export type ReferenceSex = 'male' | 'female' | null
+
+/**
+ * Reference intakes, adjusted for sex where the sexes genuinely differ.
+ *
+ * Iron is the reason this isn't one flat list: the label Daily Value is 18 mg, set for
+ * menstruating women, and applying it to a man flags him as short of iron more or less every day
+ * — a warning that is wrong and that teaches people to ignore the whole panel. Fibre and potassium
+ * differ too, so those use the DRI figures; the rest are label Daily Values, which is what
+ * packaging quotes. Informational, not clinical, and not age- or pregnancy-specific.
+ */
+export function nutrientTargets(sex: ReferenceSex = null): NutrientTarget[] {
+  const isFemale = sex === 'female'
+  return [
+    { key: 'fiberMg', label: 'Fibre', reference: isFemale ? 25_000 : 34_000, isFloor: true },
+    {
+      key: 'potassiumMg',
+      label: 'Potassium',
+      reference: isFemale ? 2_600 : 3_400,
+      isFloor: true,
+    },
+    { key: 'calciumMg', label: 'Calcium', reference: 1_000, isFloor: true },
+    { key: 'ironMg', label: 'Iron', reference: isFemale ? 18 : 8, isFloor: true },
+    // Ceilings: the useful signal is being consistently over, not under.
+    { key: 'sodiumMg', label: 'Sodium', reference: 2_300, isFloor: false },
+    { key: 'satFatMg', label: 'Saturated fat', reference: 20_000, isFloor: false },
+    { key: 'sugarMg', label: 'Added sugar', reference: 50_000, isFloor: false },
+  ]
+}
+
+/** The unadjusted set, for anything that has no profile to hand. */
+export const NUTRIENT_TARGETS: NutrientTarget[] = nutrientTargets(null)
 
 export type NutrientVerdict = 'short' | 'ok' | 'over' | 'unknown'
 
@@ -47,8 +69,8 @@ export interface NutrientStatus extends NutrientTarget {
 /** Below this fraction of a floor counts as short; a ceiling is "over" above 1. */
 const SHORT_BELOW = 0.7
 
-export function nutrientStatus(totals: Nutrients): NutrientStatus[] {
-  return NUTRIENT_TARGETS.map((target) => {
+export function nutrientStatus(totals: Nutrients, sex: ReferenceSex = null): NutrientStatus[] {
+  return nutrientTargets(sex).map((target) => {
     const amount = totals[target.key]
     if (amount === null) {
       return { ...target, amount: null, ratio: null, verdict: 'unknown' as const }
@@ -90,8 +112,8 @@ export interface DietQuality {
  * nothing else, and counting those as an absence would punish the user for a gap in the
  * database.
  */
-export function dietQuality(totals: Nutrients): DietQuality {
-  const statuses = nutrientStatus(totals)
+export function dietQuality(totals: Nutrients, sex: ReferenceSex = null): DietQuality {
+  const statuses = nutrientStatus(totals, sex)
   const known = statuses.filter((s) => s.verdict !== 'unknown')
   const short = known.filter((s) => s.verdict === 'short')
   const over = known.filter((s) => s.verdict === 'over')

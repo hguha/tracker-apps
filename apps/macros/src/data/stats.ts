@@ -2,7 +2,7 @@ import { dayKey, dayStreaks } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { dayTotals } from '@/lib/nutrition'
 import { groupByWeek } from '@/lib/checkin'
-import { NUTRIENT_TARGETS } from '@/lib/micronutrients'
+import { nutrientTargets } from '@/lib/micronutrients'
 import type { LogEntry } from '@/domain/types'
 
 /**
@@ -33,14 +33,15 @@ export interface NutritionStatsShape {
 
 /** Within this fraction of the calorie target counts as on plan. */
 const TARGET_TOLERANCE = 0.1
-const FIBER_REFERENCE =
-  NUTRIENT_TARGETS.find((target) => target.key === 'fiberMg')?.reference ?? 28_000
 
 export async function nutritionStats(): Promise<NutritionStatsShape> {
   const entries = await repo.allEntries()
   const weights = await repo.weights()
   const checkIns = await repo.checkIns()
   const templates = await repo.mealTemplates()
+  const fiberReference =
+    nutrientTargets((await repo.getProfile()).sex).find((target) => target.key === 'fiberMg')
+      ?.reference ?? 28_000
 
   const byDay = new Map<string, LogEntry[]>()
   for (const entry of entries) {
@@ -61,7 +62,7 @@ export async function nutritionStats(): Promise<NutritionStatsShape> {
         daysWithinTarget += 1
       }
     }
-    if (totals.fiberMg !== null && totals.fiberMg >= FIBER_REFERENCE) daysFiberMet += 1
+    if (totals.fiberMg !== null && totals.fiberMg >= fiberReference) daysFiberMet += 1
   }
 
   const logStreaks = dayStreaks(days)

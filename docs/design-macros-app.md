@@ -577,7 +577,8 @@ app inherits it. Duplicated storage is acceptable here; a duplicated *definition
 | **Today** | Calorie ring + macro bars vs target, remaining (paced against an eating window if there is one), the day as **eating occasions with times** rather than four fixed meal boxes, weigh-in prompt, weight/BMI projection, diet completeness, badges |
 | **Log** | A screen, not a sheet. One input that either searches or breaks the text down as a meal; meal + full datetime always visible; barcode · **photo** · quick-add in the action row; tabs for Suggested · Eat again · Frequent · Saved, with a preview before anything is written (at ½–2×) |
 | **Food detail** | Portion picker, per-portion macros, micronutrients, source badge (`USDA` / `OFF` / `estimate`) |
-| **Recipes** | Builder with live per-serving macros, scaling, yield, shopping list, AI generation constrained to remaining macros |
+| **Recipes** | Built by describing the dish or searching ingredient by ingredient; live per-serving macros; logged a serving (or half, or two) at a time |
+| **Your foods** | A food from its label, per 100 g with the stated serving as a portion. Offered on an empty search or an unknown barcode |
 | **Bowl builder** | Cookwell-style component picker (base / protein / veg / sauce / topping) that assembles a meal to hit a macro gap |
 | **Trends** | Weight (raw + trend), expenditure with its confidence band, intake vs target, adherence |
 | **Check-in** | This week's numbers, the proposed targets, and *why* — accept/adjust in collaborative mode |

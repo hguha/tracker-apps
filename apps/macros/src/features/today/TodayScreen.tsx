@@ -92,7 +92,11 @@ export function TodayScreen({
       <CheckInCard />
 
       {weekDayCount > 0 && (
-        <NutritionCard averages={dailyAverage(week ?? [])} dayCount={weekDayCount} />
+        <NutritionCard
+          averages={dailyAverage(week ?? [])}
+          dayCount={weekDayCount}
+          sex={profile?.sex ?? null}
+        />
       )}
 
       <BadgeStrip onOpen={onOpenBadges} />

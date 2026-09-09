@@ -31,6 +31,65 @@ export interface Backup {
 
 export class BackupParseError extends Error {}
 
+/**
+ * A spreadsheet of the log: one row per entry, with the food's name and every macro.
+ *
+ * Deliberately not the backup format. A backup has to round-trip, so it keeps ids and integer
+ * milligrams; a CSV is for reading, so it carries names and grams and can't be imported back.
+ * Saying which is which matters — a "CSV backup" nobody can restore is worse than none.
+ */
+export async function exportToCsv(): Promise<string> {
+  const entries = (await db.logEntries.filter((row) => row.deletedAt === null).toArray()).sort(
+    (a, b) => a.eatenAt - b.eatenAt,
+  )
+  const foods = new Map(
+    [...(await db.foods.bulkGet(ids(entries))), ...(await db.customFoods.bulkGet(ids(entries)))]
+      .filter((food) => food !== undefined)
+      .map((food) => [food.id, food.description]),
+  )
+
+  const header = [
+    'day',
+    'time',
+    'meal',
+    'item',
+    'grams',
+    'kcal',
+    'protein_g',
+    'carbs_g',
+    'fat_g',
+    'fibre_g',
+    'source',
+  ]
+  const rows = entries.map((entry) => [
+    entry.day,
+    new Date(entry.eatenAt).toTimeString().slice(0, 5),
+    entry.meal,
+    (entry.foodId ? foods.get(entry.foodId) : null) ?? (entry.note || 'Quick add'),
+    round(entry.grams),
+    entry.nutrients.kcal,
+    grams(entry.nutrients.proteinMg),
+    grams(entry.nutrients.carbsMg),
+    grams(entry.nutrients.fatMg),
+    entry.nutrients.fiberMg === null ? '' : grams(entry.nutrients.fiberMg),
+    entry.source,
+  ])
+
+  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n')
+}
+
+const ids = (entries: readonly LogEntry[]): string[] =>
+  entries.map((entry) => entry.foodId).filter((id): id is string => id !== null)
+
+const round = (value: number): number => Math.round(value * 10) / 10
+const grams = (mg: number): number => Math.round(mg / 100) / 10
+
+/** Quote anything with a comma, quote or newline in it — food names have all three. */
+function csvCell(value: string | number): string {
+  const text = String(value)
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
 export async function exportToJson(): Promise<string> {
   const backup: Backup = {
     format: BACKUP_FORMAT,

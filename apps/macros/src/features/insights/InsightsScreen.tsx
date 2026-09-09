@@ -128,8 +128,12 @@ export function InsightsScreen() {
 
             {tab === 'nutrients' && (
               <>
-                <AdequacyChart averages={data.averages} dayCount={data.loggedDayCount} />
-                <FiberChart days={data.days} />
+                <AdequacyChart
+                  averages={data.averages}
+                  dayCount={data.loggedDayCount}
+                  sex={data.profile?.sex ?? null}
+                />
+                <FiberChart days={data.days} sex={data.profile?.sex ?? null} />
               </>
             )}
           </>

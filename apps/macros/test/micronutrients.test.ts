@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { bmi, dietQuality, goalWeightKg, nutrientStatus } from '@/lib/micronutrients'
+import {
+  NUTRIENT_TARGETS,
+  bmi,
+  dietQuality,
+  goalWeightKg,
+  nutrientStatus,
+  nutrientTargets,
+} from '@/lib/micronutrients'
 import { EMPTY_NUTRIENTS, type Nutrients } from '@/domain/types'
 
 function nutrients(over: Partial<Nutrients>): Nutrients {
@@ -89,5 +96,30 @@ describe('goalWeightKg', () => {
 describe('bmi', () => {
   it('computes from kg and cm', () => {
     expect(bmi(80, 180)).toBeCloseTo(24.7, 1)
+  })
+})
+
+describe('sex-adjusted references', () => {
+  it('uses 8 mg of iron for a man and 18 for a woman', () => {
+    // The 18 mg label Daily Value is set for menstruating women. Applied to a man it flagged him
+    // short of iron nearly every day — a warning that is wrong and teaches people to ignore the
+    // whole panel.
+    const male = nutrientStatus(nutrients({ ironMg: 10 }), 'male').find((s) => s.key === 'ironMg')
+    const female = nutrientStatus(nutrients({ ironMg: 10 }), 'female').find(
+      (s) => s.key === 'ironMg',
+    )
+    expect(male?.verdict).toBe('ok')
+    expect(female?.verdict).toBe('short')
+  })
+
+  it('keeps ceilings the same for both', () => {
+    for (const sex of ['male', 'female'] as const) {
+      const sodium = nutrientTargets(sex).find((target) => target.key === 'sodiumMg')
+      expect(sodium?.reference).toBe(2_300)
+    }
+  })
+
+  it('falls back to a neutral set with no sex on file', () => {
+    expect(nutrientTargets(null).map((t) => t.key)).toEqual(NUTRIENT_TARGETS.map((t) => t.key))
   })
 })

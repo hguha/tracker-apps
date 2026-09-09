@@ -5,11 +5,15 @@ functions are live.
 
 ## What's configured
 
-- Migrations `0001`–`0004` applied (`0003` diet notes, `0004` eating window).
+- Migrations `0001`–`0005` applied (`0003` diet notes, `0004` eating window, `0005` custom foods).
 - Secrets: `USDA_API_KEY`, `GEMINI_API_KEY`.
 - Functions: `foods` (verify_jwt **off**), `coach` and `delete-account` (verify_jwt **on**).
 - `coach` serves three modes: `chat` (tool loop), `estimate` (a described meal) and `photo`
-  (an image). All three return names and grams only — the client computes every nutrient.
+  (an image). All three return names and grams only — the client computes every nutrient. A
+  503/429 is retried twice and then reported as `{ busy: true }` with HTTP **200**, because
+  supabase-js discards the body of a non-2xx response.
+- `foods` search queries the generic/composite datasets separately from Branded and merges them:
+  one call for all four returns almost nothing but packaged rows.
 - `site_url` / redirect allow-list: `http://localhost:5175/**`, `macros://auth-callback`.
 - `mailer_autoconfirm` off, `mailer_otp_length` 6 — same anti-spam posture as REPutation.
 

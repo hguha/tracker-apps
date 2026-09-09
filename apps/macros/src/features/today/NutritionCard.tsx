@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Card } from '@tracker-engine/ui'
 import { cn } from '@/lib/cn'
-import { dietQuality, formatAmount, nutrientStatus } from '@/lib/micronutrients'
+import {
+  dietQuality,
+  formatAmount,
+  nutrientStatus,
+  type ReferenceSex,
+} from '@/lib/micronutrients'
 import type { Nutrients } from '@/domain/types'
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -24,13 +29,16 @@ const VERDICT_COLOR: Record<string, string> = {
 export function NutritionCard({
   averages,
   dayCount,
+  sex,
 }: {
   averages: Nutrients
   dayCount: number
+  /** References differ by sex for iron, fibre and potassium — see lib/micronutrients. */
+  sex: ReferenceSex
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const quality = dietQuality(averages)
-  const statuses = nutrientStatus(averages)
+  const quality = dietQuality(averages, sex)
+  const statuses = nutrientStatus(averages, sex)
 
   return (
     <Card className="p-0">
