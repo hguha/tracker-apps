@@ -43,7 +43,7 @@ export function MealPreviewSheet({
   preview: MealPreview
   meal: MealSlot
   onDismiss: () => void
-  onLogged: () => void
+  onLogged: (count: number) => void
 }) {
   const toast = useToast()
   const [multiple, setMultiple] = useState<number>(1)
@@ -119,7 +119,7 @@ export function MealPreviewSheet({
               .log(multiple)
               .then((count) => {
                 toast.show(`Logged ${count} item${count === 1 ? '' : 's'}`)
-                onLogged()
+                onLogged(count)
               })
               .finally(() => setIsSaving(false))
           }}

@@ -135,7 +135,11 @@ export function parseIngredientLine(raw: string): ParsedIngredient {
 
   // A parenthetical mass or volume is the *real* amount: "1 (28 oz) can crushed tomatoes" is 28 oz,
   // and the "1" counts cans. Checked first, because it beats the leading count every time.
-  const paren = matchAmount(line.match(/\(([^)]*)\)/)?.[1] ?? '')
+  //
+  // Innermost bracket, and the first one that actually parses: "(, chopped (or 2 tsp dried))" has
+  // two, and only the inner one holds a number — but it describes an *alternative*, so a leading
+  // comma or an "or" disqualifies it. Otherwise parsley measured in teaspoons of dried parsley.
+  const paren = parentheticalAmount(line)
   const lead = matchAmount(stripParens(line))
 
   const chosen = paren?.unit && paren.unit in GRAMS_PER ? paren : (lead ?? paren)
@@ -156,6 +160,23 @@ export function parseIngredientLine(raw: string): ParsedIngredient {
 interface Amount {
   quantity: number | null
   unit: AmountUnit | null
+}
+
+/**
+ * The amount stated inside brackets, if one of them states a size rather than an alternative.
+ *
+ * "(28 oz)" is the size of the can. "(or 2 tsp dried)" and "(, chopped)" are asides about something
+ * else, and reading the second as the amount measured fresh parsley in teaspoons of dried.
+ */
+function parentheticalAmount(line: string): Amount | null {
+  for (const match of line.matchAll(/\(([^()]*)\)/g)) {
+    const inner = (match[1] ?? '').trim()
+    if (inner === '' || /^[,;]/.test(inner) || /\bor\b/i.test(inner)) continue
+    const amount = matchAmount(inner)
+    if (amount?.unit && amount.unit in GRAMS_PER) return amount
+    if (amount?.unit && ML_PER[amount.unit] !== undefined) return amount
+  }
+  return null
 }
 
 /** A leading number and an optional unit: "1 1/2 cups", "227g", "½ tsp", "2-3 tbsp". */
@@ -211,7 +232,23 @@ function matchQuantity(text: string): { value: number; length: number } | null {
   return null
 }
 
-const stripParens = (line: string): string => line.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
+/**
+ * Removes parentheses, however deeply they nest.
+ *
+ * One pass of `\([^)]*\)` on "ricotta cheese ((or cottage cheese))" removes the *inner* pair and
+ * leaves the outer closer behind, so the food came out as "ricotta cheese )" — which then matched
+ * nothing and logged as zero. Recipe sites nest parentheses constantly ("(, chopped (or 2 tsp
+ * dried))"), so this repeats until nothing changes, then sweeps up any unbalanced bracket left over.
+ */
+function stripParens(line: string): string {
+  let text = line
+  for (let pass = 0; pass < 5; pass += 1) {
+    const next = text.replace(/\([^()]*\)/g, ' ')
+    if (next === text) break
+    text = next
+  }
+  return text.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim()
+}
 
 /**
  * The searchable food name: no quantity, no unit, no parentheses, no prep notes.
@@ -223,11 +260,19 @@ function cleanName(line: string): { name: string; note: string } {
   const notes: string[] = []
   let text = line
 
-  // Parentheses hold amounts and asides, never the food itself.
-  text = text.replace(/\([^)]*\)/g, (match) => {
-    notes.push(match.slice(1, -1).trim())
-    return ' '
-  })
+  // Parentheses hold amounts and asides, never the food itself. Innermost first and repeatedly,
+  // because a single pass over a nested pair leaves the outer bracket in the food's name.
+  for (let pass = 0; pass < 5; pass += 1) {
+    const next = text.replace(/\(([^()]*)\)/g, (_match, inner: string) => {
+      const trimmed = inner.trim()
+      if (trimmed) notes.push(trimmed)
+      return ' '
+    })
+    if (next === text) break
+    text = next
+  }
+  // Anything unbalanced the site left behind is punctuation, not part of the food.
+  text = text.replace(/[()]/g, ' ')
 
   // The leading amount, however it was written.
   const lead = matchQuantity(text.trim().toLowerCase())

@@ -1,27 +1,32 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
+import { givenFoods, testFood } from './fixtures'
 import { dayKey } from '@tracker-engine/core'
 import { dayTotals, nutrientsFor } from '@/lib/nutrition'
 import { lastCompleteWeekKey } from '@/lib/checkin'
 import { multipliersForHighDays } from '@/lib/cycling'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
 
-async function reset() {
-  await Promise.all(db.tables.map((t) => t.clear()))
-  localStorage.clear()
+// Once per file. `foods` is reference data nobody owns, so re-seeding 1,400 rows between tests is
+// pure cost — and with a generated seed that cost grew enough to time them out.
+beforeAll(async () => {
   await seedFoods()
+})
+
+async function reset() {
+  await Promise.all(db.tables.filter((table) => table.name !== 'foods').map((t) => t.clear()))
+  localStorage.clear()
   repo.setActiveUserId('local-user')
+  // A food this file controls. The seed is generated, so asserting on its top hit for "chicken
+  // breast" made these tests fail whenever USDA gained a row — which is not a regression.
+  await givenFoods()
 }
 
 beforeEach(reset)
 
-async function chicken() {
-  const [food] = await repo.searchFoods('chicken breast')
-  if (!food) throw new Error('seed missing')
-  return food
-}
+const chicken = async () => testFood()
 
 describe('seedFoods', () => {
   it('is idempotent, so editing the seed corrects existing installs', async () => {

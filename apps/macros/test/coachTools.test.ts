@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
-import { seedFoods } from '@/db/seed'
+import { givenFoods, testFood } from './fixtures'
 import { executeRetrievalTool, isActionTool, toolToAction } from '@/features/coach/tools'
 import { mockCoachProvider } from '@/features/coach/mockProvider'
 import { dayKey } from '@tracker-engine/core'
@@ -20,15 +20,12 @@ const CONTEXT: CoachContext = {
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()))
   localStorage.clear()
-  await seedFoods()
   repo.setActiveUserId('local-user')
+  await givenFoods()
 })
 
-async function chicken() {
-  const [food] = await repo.searchFoods('chicken breast')
-  if (!food) throw new Error('seed missing')
-  return food
-}
+/** The fixture, not whatever the generated seed ranks first for "chicken breast". */
+const chicken = async () => testFood()
 
 describe('tool classification', () => {
   it('marks only the proposing tools terminal', () => {
@@ -45,7 +42,7 @@ describe('retrieval tools', () => {
     const result = (await executeRetrievalTool('getToday', {})) as {
       eaten: { kcal: number; proteinG: number }
     }
-    // 200g of the seeded chicken: 240 kcal, 45g protein. mg would read as 45000 to a model.
+    // 200 g of the fixture chicken: 240 kcal, 45 g protein. mg would read as 45000 to a model.
     expect(result.eaten).toMatchObject({ kcal: 240, proteinG: 45 })
   })
 
@@ -58,7 +55,7 @@ describe('retrieval tools', () => {
     const result = (await executeRetrievalTool('searchFoods', { query: 'chicken' })) as {
       foodId: string
     }[]
-    expect(result[0]?.foodId).toMatch(/^seed:/)
+    expect(result[0]?.foodId).toBe('usda:test-chicken')
   })
 
   it('rejects an unknown tool rather than silently returning nothing', async () => {

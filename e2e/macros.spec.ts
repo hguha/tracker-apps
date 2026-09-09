@@ -16,6 +16,61 @@ async function bootWithoutErrors(page: import('@playwright/test').Page) {
   return errors
 }
 
+/**
+ * Through first-run setup, in one place.
+ *
+ * Every spec had its own copy of these six clicks, so inserting a units step broke five tests at
+ * once — which is a fair signal that the sequence is shared behaviour rather than test detail.
+ *
+ * `facts: false` skips height/age/sex, which is the path where the app deliberately has no calorie
+ * target at all; several specs need exactly that.
+ */
+async function completeOnboarding(
+  page: import('@playwright/test').Page,
+  {
+    goal = 'lose' as 'lose' | 'maintain' | 'gain',
+    facts = true,
+    weight = '80',
+    units = 'metric' as 'metric' | 'imperial',
+  } = {},
+) {
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  if (goal === 'lose') await page.getByRole('button', { name: /Lose fat/ }).click()
+  if (goal === 'gain') await page.getByRole('button', { name: /Build/ }).click()
+  if (goal === 'maintain') await page.getByRole('button', { name: /Maintain/ }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+  // Units come before the numbers, so the height field can be labelled in the right one.
+  await page.getByRole('button', { name: units === 'metric' ? 'Metric' : 'Imperial' }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+  if (facts) {
+    // By position: the height pair, then born, then sex. Labels repeat across the ft/in pair.
+    const pickers = page.locator('select')
+    if (units === 'metric') {
+      await pickers.nth(0).selectOption('178')
+      await pickers.nth(1).selectOption('1994')
+      await pickers.nth(2).selectOption('male')
+    } else {
+      await pickers.nth(0).selectOption('5')
+      await pickers.nth(1).selectOption('10')
+      await pickers.nth(2).selectOption('1994')
+      await pickers.nth(3).selectOption('male')
+    }
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  } else {
+    await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  }
+
+  if (weight) {
+    await page.getByPlaceholder(/Today's weight/).fill(weight)
+    await page.getByRole('button', { name: 'Start logging' }).click()
+  } else {
+    await page.getByRole('button', { name: 'Skip for now' }).click()
+  }
+}
+
 test('macros boots with no page errors', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
 
@@ -31,16 +86,23 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   await page.getByRole('button', { name: /Use this device only/ }).click()
 
-  // Onboarding: welcome -> goal -> the cold-start facts -> first weigh-in.
+  // Onboarding: welcome -> goal -> units -> the cold-start facts -> first weigh-in. Units come
+  // before the numbers so the height field can be labelled in the right one; it used to say
+  // "Height (cm)" whatever you picked, and stored inches as centimetres.
   await expect(page.getByRole('heading', { name: 'MACROcosm' })).toBeVisible()
   await page.getByRole('button', { name: 'Get started' }).click()
   await expect(page.getByRole('heading', { name: /What are you after/ })).toBeVisible()
   await page.getByRole('button', { name: /Lose fat/ }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page.getByRole('heading', { name: /Which units/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Imperial' }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'A few numbers' })).toBeVisible()
+  // Feet and inches, because imperial was chosen — not a centimetres box under an "in" label.
+  await expect(page.locator('select').first().locator('option', { hasText: '5 ft' })).toHaveCount(1)
   await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
   await expect(page.getByRole('heading', { name: /Today's weight/ })).toBeVisible()
-  await page.getByPlaceholder('Weight (kg)').fill('80')
+  await page.getByPlaceholder(/Today's weight \(lb\)/).fill('176')
   await page.getByRole('button', { name: 'Start logging' }).click()
 
   // Today, with the weigh-in recorded and a target derived from it.
@@ -80,6 +142,11 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: 'Log it' })).toBeEnabled()
   await page.getByRole('button', { name: 'Log it' }).click()
+
+  // The screen stays open and keeps score, so a five-item breakfast is one visit rather than five.
+  // It used to close on every write, which meant re-picking the meal and the time each round.
+  await expect(page.getByText('1 item added')).toBeVisible()
+  await page.getByRole('button', { name: /Done · 1/ }).click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
 
   // The budget card is the way into the day. It used to sit above a second card listing the same
@@ -111,11 +178,7 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
 test('a food the databases do not have can be entered and logged offline', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByRole('button', { name: 'Skip for now' }).click()
+  await completeOnboarding(page, { facts: false, weight: '' })
 
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByPlaceholder('Search a food, or describe a meal').fill('corner shop wrap')
@@ -139,11 +202,7 @@ test('a food the databases do not have can be entered and logged offline', async
 
 test('every tab and the coach render without errors', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByRole('button', { name: 'Skip for now' }).click()
+  await completeOnboarding(page, { facts: false, weight: '' })
 
   // Each tab is asserted on its own furniture: History and Insights lead with controls rather
   // than a title, the way REPutation's do.
@@ -196,11 +255,7 @@ test('every tab and the coach render without errors', async ({ page }) => {
 
 test('a recipe can be built, browsed, and logged a serving at a time', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByRole('button', { name: 'Skip for now' }).click()
+  await completeOnboarding(page, { facts: false, weight: '' })
 
   // Built entirely offline: the model is only needed to convert *written* amounts.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -227,12 +282,14 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await page.getByRole('button', { name: /Test bowl/ }).first().click()
   await expect(page.getByRole('heading', { name: 'Test bowl', level: 1 })).toBeVisible()
   await expect(page.getByText('Cook it.')).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Log \d+ kcal$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Log \d+ kcal as ingredients$/ })).toBeVisible()
 
   // Halves, because that is how a batch dish is eaten.
   await page.getByRole('button', { name: /More Servings/ }).click()
   await expect(page.getByLabel('Servings of this recipe', { exact: true })).toHaveText('1.5')
-  await page.getByRole('button', { name: /^Log \d+ kcal$/ }).click()
+  // As ingredients, which is the default because a single row has no food behind it — so no
+  // micronutrients, no re-portioning, and no way to see that the chicken was most of the calories.
+  await page.getByRole('button', { name: /^Log \d+ kcal as ingredients$/ }).click()
 
   // Back on Today: logged, and filed as cooked at home without being asked.
   await page.getByRole('button', { name: 'Back' }).click()
@@ -259,12 +316,7 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
 
 test('switching to imperial changes every weight on screen', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByPlaceholder(/Weight \(kg\)/).fill('80')
-  await page.getByRole('button', { name: 'Start logging' }).click()
+  await completeOnboarding(page, { goal: 'maintain', facts: false, weight: '80' })
 
   // This exists because a unit test cannot catch it: the setting was stored, synced, and shown in
   // Settings, while every screen printed kg regardless. Nothing was wrong with the value.
@@ -299,11 +351,7 @@ test('switching to imperial changes every weight on screen', async ({ page }) =>
 
 test('several foods log at once, at the amount each was last eaten in', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByRole('button', { name: 'Skip for now' }).click()
+  await completeOnboarding(page, { facts: false, weight: '' })
 
   // Log one food the ordinary way, at an amount nothing would have guessed.
   await page.getByRole('button', { name: 'Log food' }).click()
@@ -312,15 +360,16 @@ test('several foods log at once, at the amount each was last eaten in', async ({
   await page.locator('input[type=number]').nth(1).fill('183')
   await page.getByRole('button', { name: 'Log it' }).click()
 
-  // Now the tick path: two foods, one write, and no portion screen for either.
-  await page.getByRole('button', { name: 'Log food' }).click()
+  // Now the tick path, without leaving: the screen stayed open, which is the point of it.
+  await expect(page.getByText('1 item added')).toBeVisible()
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /^Add Chicken breast/ }).first().click()
   await page.getByPlaceholder('Search a food, or describe a meal').fill('egg')
   await page.getByRole('button', { name: /^Add Egg/ }).first().click()
   await expect(page.getByRole('button', { name: 'Log 2 items' })).toBeVisible()
-  await page.getByRole('button', { name: 'Log 2 items' })
-.click()
+  await page.getByRole('button', { name: 'Log 2 items' }).click()
+  await expect(page.getByText('3 items added')).toBeVisible()
+  await page.getByRole('button', { name: /Done · 3/ }).click()
 
   // Three items on the day, and the chicken came back at 183 g rather than a database default —
   // which is the whole reason logging in MyFitnessPal feels quick.
@@ -332,13 +381,7 @@ test('several foods log at once, at the amount each was last eaten in', async ({
 
 test('a goal weight gives the goal a bar and a date', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: /Lose fat/ }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByPlaceholder(/Weight \(kg\)/).fill('85')
-  await page.getByRole('button', { name: 'Start logging' }).click()
+  await completeOnboarding(page, { facts: false, weight: '85' })
 
   // A rate alone had no end: nothing ever satisfied "lose 0.5% a week".
   await expect(page.getByRole('button', { name: /Set a goal weight/ })).toBeVisible()
@@ -357,11 +400,7 @@ test('a goal weight gives the goal a bar and a date', async ({ page }) => {
 
 test('an eating window shows itself on the day it applies to', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
-  await page.getByRole('button', { name: /Use this device only/ }).click()
-  await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
-  await page.getByRole('button', { name: 'Skip for now' }).click()
+  await completeOnboarding(page, { facts: false, weight: '' })
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: /Food & units/ }).click()
@@ -373,6 +412,85 @@ test('an eating window shows itself on the day it applies to', async ({ page }) 
   // someone who turned it on reasonably concluded it did nothing.
   await expect(page.getByText('12:00–20:00')).toBeVisible()
   await expect(page.getByText(/Opens in|left$|Closed for today/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a recipe logs as its ingredients, each with its own macros', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Your library/ }).click()
+  await page.getByRole('button', { name: /New recipe/ }).click()
+  await page.getByPlaceholder('Sunday chilli').fill('Two things')
+  await page.getByPlaceholder('Add an ingredient by hand').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByPlaceholder('Add an ingredient by hand').fill('rice')
+  await page.getByRole('button', { name: /Rice/ }).first().click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await page.getByRole('button', { name: /Two things/ }).first().click()
+  // Ingredients is the default and the primary button, because one row carrying the recipe's total
+  // has no food behind it — no micronutrients, no re-portioning, no way to correct one part of it.
+  await page.getByRole('button', { name: /as ingredients$/ }).click()
+
+  // Logging returns to the list; Back out until the tab bar is reachable again.
+  for (let i = 0; i < 3; i += 1) {
+    if (await page.getByRole("button", { name: "Today", exact: true }).count()) break
+    await page.getByRole("button", { name: "Back" }).first().click()
+  }
+  await page.getByRole("button", { name: "Today", exact: true }).click()
+  await page.getByText(/items? today/).click()
+  // Two rows, each a real food, both attributed to the recipe by name.
+  await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
+  await expect(page.getByText(/Rice/).first()).toBeVisible()
+  await expect(page.locator('input[aria-label^="Grams of"]')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  // And the recipe still counts as cooked — the rows carry it as provenance, since a row's subject
+  // is a food and the schema allows exactly one subject.
+  await page.getByRole('button', { name: 'Insights', exact: true }).click()
+  await page.getByRole('button', { name: 'Habits' }).click()
+  await expect(page.getByText('What you cook')).toBeVisible()
+  await expect(page.getByText(/1 recipe serving/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a saved meal can be opened and renamed', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: 'Log it' }).click()
+  await page.getByRole('button', { name: /Done · 1/ }).click()
+
+  await page.getByText(/items? today/).click()
+  await page.getByRole('button', { name: /Save this meal/ }).click()
+  // A date, not a clock time: "Breakfast · 11 Aug" is findable in a list a month later, and
+  // "Breakfast · 11:15" is a fact about one morning that says nothing about which morning.
+  await expect(page.getByPlaceholder('Usual breakfast')).toHaveValue(/· .*\d+/)
+  await page.getByRole('button', { name: 'Save meal' }).click()
+
+  // Openable and renameable, both of which were missing — and with a default name that is a date,
+  // renaming is what makes the list usable at all.
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Your library/ }).click()
+  await page.getByRole('button', { name: 'Meals', exact: true }).click()
+  const saved = page.getByRole('button', { name: /\d+ item.*kcal/ }).first()
+  await saved.click()
+  await expect(page.getByText(/Chicken breast/)).toBeVisible()
+  await page.getByLabel('Name').fill('Usual breakfast')
+  await page.getByLabel('Name').blur()
+  // A write plus a live-query round trip, which under a parallel run is slower than the default
+  // assertion window — and slow is not the same as broken.
+  await expect(page.getByRole('button', { name: /Usual breakfast/ })).toBeVisible({
+    timeout: 15_000,
+  })
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

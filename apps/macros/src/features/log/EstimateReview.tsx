@@ -69,8 +69,18 @@ export function EstimateReview({
         {estimate.nutrients.kcal} kcal · {fmtGrams(estimate.nutrients.proteinMg)}P{' '}
         {fmtGrams(estimate.nutrients.carbsMg)}C {fmtGrams(estimate.nutrients.fatMg)}F
       </p>
+      {/*
+        The totals are for everything listed above, which is the answer to "did it handle the 3 in
+        '3 steak tacos'". It does — but a reader can't tell whether 75 g of tortilla is one taco or
+        three, so the rule is stated rather than left to be inferred from a number.
+      */}
+      <p className="text-[12px] text-ink-muted">
+        That&rsquo;s the total for all {estimate.items.length} item
+        {estimate.items.length === 1 ? '' : 's'} at the amounts shown — any quantity you gave is
+        already in them. Check the grams and correct anything that looks off.
+      </p>
       {estimate.assumptions && (
-        <p className="text-[12.5px] text-ink-muted">{estimate.assumptions}</p>
+        <p className="text-[12.5px] text-ink-secondary">{estimate.assumptions}</p>
       )}
 
       <Button

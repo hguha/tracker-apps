@@ -97,7 +97,7 @@ export function LibraryCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
               aria-label={`Log one serving of ${recipe.name}`}
               className="mr-2 shrink-0 rounded-lg bg-accent-wash px-2.5 py-1.5 text-[12px] font-semibold text-accent active:opacity-60"
             >
-              Ate 1
+              Log 1
             </button>
           </li>
         ))}

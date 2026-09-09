@@ -142,11 +142,26 @@ export function cuisineMix(
   cuisineOf: ReadonlyMap<string, CuisineKey | null>,
 ): CuisineShare[] {
   const tally = new Map<string, { occasions: number; kcal: number }>()
+
+  /**
+   * One serving per recipe *sitting*, not per row.
+   *
+   * A recipe can be logged as one row or as nine ingredient rows, and the second is now the default.
+   * Counting rows would report the same dinner as nine servings of Italian, so servings are grouped
+   * by (recipe, day, minute) — the same reasoning as counting venues by occasion.
+   */
+  const seen = new Set<string>()
   for (const entry of entries) {
-    if (!entry.recipeId) continue
-    const key = cuisineOf.get(entry.recipeId) ?? UNRECORDED
+    const recipeId = entry.recipeId ?? entry.fromRecipeId
+    if (!recipeId) continue
+    const key = cuisineOf.get(recipeId) ?? UNRECORDED
+    const sitting = `${recipeId}|${entry.day}|${Math.round(entry.eatenAt / 60_000)}`
     const current = tally.get(key) ?? { occasions: 0, kcal: 0 }
-    tally.set(key, { occasions: current.occasions + 1, kcal: current.kcal + entry.nutrients.kcal })
+    tally.set(key, {
+      occasions: current.occasions + (seen.has(sitting) ? 0 : 1),
+      kcal: current.kcal + entry.nutrients.kcal,
+    })
+    seen.add(sitting)
   }
   return [...tally.entries()]
     .map(([key, row]) => ({

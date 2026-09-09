@@ -8,7 +8,7 @@ import {
   SegmentedTabs,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { Camera, Check, ChefHat, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
+import { Camera, Check, ChefHat, Plus, PlusCircle, ScanLine, Sparkles, Star } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
@@ -42,7 +42,7 @@ type Panel =
   | { kind: 'custom'; name: string; barcode?: string }
   | { kind: 'recipe' }
 
-type BrowseTab = 'suggested' | 'again' | 'often' | 'recipes' | 'saved'
+type BrowseTab = 'suggested' | 'again' | 'often' | 'recipes' | 'meals'
 
 /**
  * Adding food, as a screen rather than a sheet.
@@ -69,8 +69,22 @@ export function LogScreen({
   const [venue, setVenue] = useState<Venue | null>(null)
   const [query, setQuery] = useState('')
   const [panel, setPanel] = useState<Panel>({ kind: 'browse' })
+  /**
+   * How much has been added since this screen opened.
+   *
+   * The screen used to close on every single write, so logging a five-item breakfast meant opening
+   * it five times and retyping the meal and the time each round. Now a write returns to the browse
+   * panel, the count keeps score, and closing is a deliberate act — which is how MyFitnessPal's
+   * diary works and why adding a whole meal there doesn't feel like five separate tasks.
+   */
+  const [added, setAdded] = useState(0)
 
   const target: LogTarget = { meal, at, venue }
+  const onLogged = (count = 1) => {
+    setAdded((current) => current + count)
+    setQuery('')
+    setPanel({ kind: 'browse' })
+  }
 
   // The recipe editor owns the whole screen: it has its own header, and a recipe is a different
   // job from logging today's food even though both start at the same "+".
@@ -84,7 +98,17 @@ export function LogScreen({
         title={panel.kind === 'browse' ? `Add to ${MEAL_LABELS[meal].toLowerCase()}` : 'Add food'}
         onBack={() => (panel.kind === 'browse' ? onClose() : setPanel({ kind: 'browse' }))}
         action={
-          panel.kind === 'browse' ? (
+          // Done, once anything has been added — so leaving is a choice rather than a side effect
+          // of having logged something.
+          added > 0 ? (
+            <button
+              onClick={onClose}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-semibold text-accent-contrast active:brightness-90"
+            >
+              <Check size={15} />
+              Done · {added}
+            </button>
+          ) : panel.kind === 'browse' ? (
             <button
               onClick={() => setPanel({ kind: 'recipe' })}
               className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold text-accent active:bg-sunken"
@@ -107,17 +131,18 @@ export function LogScreen({
             onVenue={setVenue}
             onSelect={(food) => setPanel({ kind: 'portion', food })}
             onPanel={setPanel}
-            onDone={onClose}
+            added={added}
+            onDone={onLogged}
           />
         )}
         {panel.kind === 'portion' && (
-          <PortionPanel food={panel.food} target={target} onDone={onClose} />
+          <PortionPanel food={panel.food} target={target} onDone={onLogged} />
         )}
         {panel.kind === 'describe' && (
-          <DescribePanel target={target} initialText={query} onDone={onClose} />
+          <DescribePanel target={target} initialText={query} onDone={onLogged} />
         )}
-        {panel.kind === 'quick' && <QuickAddPanel target={target} onDone={onClose} />}
-        {panel.kind === 'photo' && <PhotoPanel target={target} onDone={onClose} />}
+        {panel.kind === 'quick' && <QuickAddPanel target={target} onDone={onLogged} />}
+        {panel.kind === 'photo' && <PhotoPanel target={target} onDone={onLogged} />}
         {panel.kind === 'custom' && (
           <CustomFoodPanel
             initialName={panel.name}
@@ -145,6 +170,7 @@ function BrowsePanel({
   onVenue,
   onSelect,
   onPanel,
+  added,
   onDone,
 }: {
   target: LogTarget
@@ -155,7 +181,8 @@ function BrowsePanel({
   onVenue: (venue: Venue | null) => void
   onSelect: (food: Food) => void
   onPanel: (panel: Panel) => void
-  onDone: () => void
+  added: number
+  onDone: (count?: number) => void
 }) {
   const { meal, at, venue } = target
   const trimmed = query.trim()
@@ -180,9 +207,20 @@ function BrowsePanel({
 
   const { results, isSearching } = useFoodSearch(query)
   const frequentIds = useLiveQuery(() => repo.frequentFoodIds(40), [], [])
+  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
+  const favouriteIds = profile?.favouriteFoodIds ?? []
   const frequents = useLiveQuery(
-    async () => [...(await repo.foodsByIds(frequentIds ?? [])).values()],
-    [frequentIds],
+    async () => {
+      // Starred first, in the order they were starred, then the rest by how often they're logged.
+      // Frequency alone takes a fortnight to admit a new staple and never forgets an old one.
+      const ids = [...favouriteIds, ...(frequentIds ?? []).filter((id) => !favouriteIds.includes(id))]
+      const found = await repo.foodsByIds(ids)
+      return ids.flatMap((id) => {
+        const food = found.get(id)
+        return food ? [food] : []
+      })
+    },
+    [frequentIds, favouriteIds.join(',')],
     [],
   )
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
@@ -233,14 +271,23 @@ function BrowsePanel({
 
   const tabs: SegmentedTab<BrowseTab>[] = [
     { key: 'suggested', label: 'Suggested' },
-    { key: 'again', label: 'Eat again', badge: (recents ?? []).length || undefined },
-    { key: 'often', label: 'Frequent', badge: (frequents ?? []).length || undefined },
+    // Deliberately the same words the library uses. "Saved" here and "Meals" there described the
+    // same thing, which is most of why it was unclear where anything would show up.
+    { key: 'again', label: 'Recent', badge: (recents ?? []).length || undefined },
+    { key: 'often', label: 'My foods', badge: (frequents ?? []).length || undefined },
     { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
-    { key: 'saved', label: 'Saved', badge: (templates ?? []).length || undefined },
+    { key: 'meals', label: 'Meals', badge: (templates ?? []).length || undefined },
   ]
 
   return (
     <div className="space-y-3 px-3 py-3">
+      {added > 0 && (
+        <p className="rounded-xl bg-accent-wash px-3 py-2 text-[12.5px] text-accent">
+          {added} item{added === 1 ? '' : 's'} added. Keep going, or tap{' '}
+          <span className="font-semibold">Done</span> when you&rsquo;ve finished this meal.
+        </p>
+      )}
+
       <Card className="p-3">
         <MealTimePicker
           meal={meal}
@@ -294,6 +341,7 @@ function BrowsePanel({
             onSelect={onSelect}
             picked={picked}
             onToggle={toggle}
+            favourites={favouriteIds}
             emptyLabel="Nothing matched."
             footer={isSearching ? <SearchingRow /> : null}
           />
@@ -319,7 +367,12 @@ function BrowsePanel({
                   <h2 className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
                     Log one of your recipes
                   </h2>
-                  <RecipeRows rows={cookable.slice(0, 3)} onPreview={setPreview} onLog={logRecipe} />
+                  <RecipeRows
+                    rows={cookable.slice(0, 3)}
+                    onPreview={setPreview}
+                    onLog={logRecipe}
+                    onLogged={onDone}
+                  />
                 </Card>
               )}
 
@@ -414,13 +467,17 @@ function BrowsePanel({
 
           {tab === 'often' &&
             ((frequents ?? []).length === 0 ? (
-              <Empty>Foods you log more than once collect here.</Empty>
+              <Empty>
+                Foods you log more than once collect here. Tap the star on any food to pin it to the
+                top of this list.
+              </Empty>
             ) : (
               <FoodList
                 foods={frequents ?? []}
                 onSelect={onSelect}
                 picked={picked}
                 onToggle={toggle}
+                favourites={favouriteIds}
                 emptyLabel=""
               />
             ))}
@@ -433,11 +490,16 @@ function BrowsePanel({
               </Empty>
             ) : (
               <Card className="p-0">
-                <RecipeRows rows={cookable} onPreview={setPreview} onLog={logRecipe} />
+                <RecipeRows
+                  rows={cookable}
+                  onPreview={setPreview}
+                  onLog={logRecipe}
+                  onLogged={onDone}
+                />
               </Card>
             ))}
 
-          {tab === 'saved' &&
+          {tab === 'meals' &&
             ((templates ?? []).length === 0 ? (
               <Empty>
                 Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap here,
@@ -506,7 +568,10 @@ function BrowsePanel({
                 setIsLogging(true)
                 void repo
                   .logFoods(picked, { meal, eatenAt: at, venue })
-                  .then(() => onDone())
+                  .then((count) => {
+                    setPicked([])
+                    onDone(count)
+                  })
                   .finally(() => setIsLogging(false))
               }}
               className="min-w-0 flex-1 rounded-xl bg-accent py-2.5 text-[14px] font-semibold text-accent-contrast active:brightness-90"
@@ -527,7 +592,10 @@ function BrowsePanel({
           preview={preview}
           meal={meal}
           onDismiss={() => setPreview(null)}
-          onLogged={onDone}
+          onLogged={(count) => {
+            setPreview(null)
+            onDone(count)
+          }}
         />
       )}
     </div>
@@ -546,10 +614,12 @@ function RecipeRows({
   rows,
   onPreview,
   onLog,
+  onLogged,
 }: {
   rows: readonly RecipeRecommendation[]
   onPreview: (preview: MealPreview) => void
   onLog: (recipeId: string, servings: number) => Promise<number>
+  onLogged: (count: number) => void
 }) {
   return (
     <ul className="divide-y divide-line">
@@ -583,17 +653,17 @@ function RecipeRows({
               </span>
               <span className="tabular block text-[12px] text-ink-muted">{why}</span>
               <span className="block text-[11px] text-ink-muted">
-                Tap for the amount, or &ldquo;Ate 1&rdquo; for one serving
+                Tap to choose the amount, or log one serving straight away
               </span>
             </button>
-            {/* Spelled out. An unlabelled "+" beside a recipe reads as "add a recipe", not "I ate
-                one serving of this" — and the two are opposite operations. */}
+            {/* Spelled out. An unlabelled "+" beside a recipe reads as "add a recipe" rather than
+                "record one serving of it", and the two are opposite operations. */}
             <button
-              onClick={() => void onLog(recipe.id, 1)}
+              onClick={() => void onLog(recipe.id, 1).then((count) => onLogged(count))}
               aria-label={`Log one serving of ${recipe.name}`}
               className="mr-2 shrink-0 rounded-lg bg-accent-wash px-2.5 py-2 text-[12px] font-semibold text-accent active:opacity-60"
             >
-              Ate 1
+              Log 1
             </button>
           </li>
         )
@@ -641,6 +711,7 @@ function FoodList({
   onSelect,
   picked,
   onToggle,
+  favourites,
   emptyLabel,
   footer = null,
 }: {
@@ -648,6 +719,7 @@ function FoodList({
   onSelect: (food: Food) => void
   picked: readonly Food[]
   onToggle: (food: Food) => void
+  favourites: readonly string[]
   emptyLabel: string
   /** Shown under the rows — a "still searching" line, so results never have to disappear. */
   footer?: React.ReactNode
@@ -675,6 +747,17 @@ function FoodList({
                     {food.per100.kcal} kcal / 100g
                     {food.portions.length > 0 && ` · ${portionWithGrams(food.portions[0]!)}`}
                   </div>
+                </button>
+                <button
+                  onClick={() => void repo.toggleFavourite(food.id)}
+                  aria-pressed={favourites.includes(food.id)}
+                  aria-label={`${favourites.includes(food.id) ? 'Unpin' : 'Pin'} ${food.description}`}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:opacity-60"
+                >
+                  <Star
+                    size={16}
+                    className={favourites.includes(food.id) ? 'fill-accent text-accent' : ''}
+                  />
                 </button>
                 <button
                   onClick={() => onToggle(food)}

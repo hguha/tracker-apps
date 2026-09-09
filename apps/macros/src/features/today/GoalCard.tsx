@@ -1,10 +1,12 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DAY_MS, bodyWeightFromKg, convertWeight, formatRelativeDay } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
-import { PartyPopper, Target } from 'lucide-react'
+import { ChevronDown, PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { bmi } from '@/lib/micronutrients'
+import { cn } from '@/lib/cn'
 import { goalProgress } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
 
@@ -30,6 +32,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const weights = useLiveQuery(() => repo.weights(), [], [])
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const units = useUnits()
+  const [isOpen, setIsOpen] = useState(false)
 
   const trend = weightTrend(weights ?? [])
   const latest = trend[trend.length - 1]
@@ -40,7 +43,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const targetPerWeek = (program.ratePctPerWeek / 100) * latest.trendKg
   const show = (kg: number) => bodyWeightFromKg(kg, units.weight)
 
-  // No target set: offer to set one, because that's the missing half of the feature.
+  // No target set: say what one would buy you, and offer it. The missing half of the feature.
   if (program.targetKg === null) {
     return (
       <Card className="p-4">
@@ -56,13 +59,21 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
           {height !== null && ` · BMI ${bmi(latest.trendKg, height).toFixed(1)}`}
         </p>
         {program.goal !== 'maintain' && (
-          <button
-            onClick={onOpenTargets}
-            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
-          >
-            <Target size={15} />
-            Set a goal weight
-          </button>
+          <>
+            <p className="mt-2 text-[12.5px] text-ink-secondary">
+              Without one there&rsquo;s nothing to arrive at: &ldquo;
+              {program.ratePctPerWeek < 0 ? 'lose' : 'gain'}{' '}
+              {Math.abs(program.ratePctPerWeek)}% a week&rdquo; is never finished. A goal weight adds
+              a progress bar and a date worked out from your own measured rate.
+            </p>
+            <button
+              onClick={onOpenTargets}
+              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-[13.5px] font-semibold text-accent-contrast active:brightness-90"
+            >
+              <Target size={15} />
+              Set a goal weight
+            </button>
+          </>
         )}
       </Card>
     )
@@ -118,6 +129,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   }
 
   const remaining = Math.abs(convertWeight(progress.remainingKg, units.weight))
+  const weeklyTarget = convertWeight(targetPerWeek, units.weight)
 
   return (
     <Card className="p-4">
@@ -158,7 +170,14 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
         {height !== null && ` · BMI ${bmi(latest.trendKg, height).toFixed(1)}`}
       </p>
 
-      <p className="mt-1 text-[12.5px]">
+      {/* Tapping opens the detail rather than doing nothing: the card carries two dates and a rate,
+          and the reason they differ is worth a sentence that doesn't fit on the card. */}
+      <button
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+        className="mt-1 flex w-full items-baseline gap-1.5 text-left active:opacity-60"
+      >
+        <span className="min-w-0 flex-1 text-[12.5px]">
         {progress.isWrongWay ? (
           <span style={{ color: 'var(--confidence-medium)' }}>
             The trend is moving away from your goal. Worth a look at the target rather than the week.
@@ -178,8 +197,60 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
               : `Flat so far. The plan puts it at ${formatRelativeDay(progress.plannedEtaAt)}.`}
           </span>
         )}
-      </p>
+        </span>
+        <ChevronDown
+          size={15}
+          className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="mt-2 space-y-2 border-t border-line pt-2.5 text-[12.5px] text-ink-secondary">
+          <Row
+            label="Started at"
+            value={
+              program.startKg === null
+                ? 'not recorded'
+                : `${show(program.startKg)} ${units.weight}`
+            }
+          />
+          <Row label="Now" value={`${show(latest.trendKg)} ${units.weight} (trend)`} />
+          <Row label="Goal" value={`${show(program.targetKg)} ${units.weight}`} />
+          <Row
+            label="Aiming for"
+            value={`${signed(weeklyTarget)} ${units.weight}/week`}
+          />
+          <Row
+            label="Actually doing"
+            value={
+              rate === null
+                ? 'not enough weigh-ins'
+                : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week`
+            }
+          />
+          <p className="pt-1 text-[12px] text-ink-muted">
+            The date comes from what you are actually doing, not from the plan — a projection off the
+            intended rate only tells you what would happen if the plan were working. Weigh in most
+            mornings and it sharpens; the weekly check-in adjusts your calories to close any gap.
+          </p>
+          <button
+            onClick={onOpenTargets}
+            className="w-full rounded-xl bg-sunken py-2 text-[13px] font-semibold text-accent active:opacity-60"
+          >
+            Change the goal or the pace
+          </button>
+        </div>
+      )}
     </Card>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="flex items-baseline justify-between gap-3">
+      <span className="text-ink-muted">{label}</span>
+      <span className="tabular text-right">{value}</span>
+    </p>
   )
 }
 

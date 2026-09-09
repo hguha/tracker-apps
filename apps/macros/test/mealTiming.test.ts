@@ -22,6 +22,7 @@ function entry(hour: number, minute: number, kcal: number): LogEntry {
     foodId: null,
     recipeId: null,
     quickAdd: null,
+    fromRecipeId: null,
     grams: 0,
     portionId: null,
     portionCount: null,

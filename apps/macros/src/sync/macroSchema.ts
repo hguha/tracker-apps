@@ -28,6 +28,18 @@ export const macroSyncSchema: SyncSchema = {
       return { ...row, ingredients: row.ingredients ?? [], steps: row.steps ?? [], tags: row.tags ?? [] }
     }
     if (table === 'mealTemplates') return { ...row, items: row.items ?? [] }
+    // Columns added after launch: an older client's row has them absent, and `undefined === null`
+    // is false everywhere they're checked.
+    if (table === 'programs') {
+      return {
+        ...row,
+        targetKg: row.targetKg ?? null,
+        startKg: row.startKg ?? null,
+        reachedAt: row.reachedAt ?? null,
+      }
+    }
+    if (table === 'logEntries') return { ...row, venue: row.venue ?? null }
+    if (table === 'profiles') return { ...row, favouriteFoodIds: row.favouriteFoodIds ?? [] }
     if (table === 'foods' || table === 'customFoods') {
       return { ...row, portions: row.portions ?? [] }
     }

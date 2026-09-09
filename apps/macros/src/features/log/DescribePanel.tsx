@@ -53,7 +53,7 @@ export function DescribePanel({
               void run()
             }
           }}
-          placeholder="Turkey sandwich and an apple"
+          placeholder="3 steak tacos, or a turkey sandwich and an apple"
           className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
         />
 

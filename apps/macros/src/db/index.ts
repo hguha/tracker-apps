@@ -62,6 +62,29 @@ export class MacrosDatabase extends Dexie {
       recipes: 'id, name, cuisine, *tags, updatedAt, userId',
       logEntries: 'id, day, [day+meal], eatenAt, foodId, recipeId, venue, updatedAt, userId',
     })
+
+    /**
+     * v4 backfills the goal-weight fields onto programs that predate them.
+     *
+     * This one needs an upgrade function where v3's didn't, and the difference is what the code
+     * checks. A missing `venue` reads as `undefined`, and every venue check is `!== null` or a
+     * truthiness test, so absent behaves as unset. `targetKg` is checked with `=== null` to mean
+     * "no goal set" — and `undefined === null` is false, so an older program fell through to the
+     * has-a-goal branch and rendered `NaN lb goal`, then put "NaN" in the Targets field.
+     *
+     * The lesson is about the check, not the migration: a nullable field added to a live store has
+     * two empty values, and code that only handles one of them is broken for every existing row.
+     */
+    this.version(4).upgrade(async (tx) =>
+      tx
+        .table('programs')
+        .toCollection()
+        .modify((program: Record<string, unknown>) => {
+          program.targetKg ??= null
+          program.startKg ??= null
+          program.reachedAt ??= null
+        }),
+    )
   }
 }
 

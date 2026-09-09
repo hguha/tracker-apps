@@ -35,6 +35,11 @@ export function SaveMealSheet({
         placeholder="Usual breakfast"
         className="mt-3 w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
       />
+      <p className="mt-1.5 text-[12px] text-ink-muted">
+        Saved meals live in <span className="font-semibold">Your library → Meals</span>, and under{' '}
+        <span className="font-semibold">Meals</span> on the Add food screen. Rename it there any
+        time.
+      </p>
 
       <Button
         className="mt-3 w-full"
@@ -45,7 +50,7 @@ export function SaveMealSheet({
           void repo
             .saveMealTemplate(name, entries)
             .then(() => {
-              toast.show('Saved — it’s on the Add food screen')
+              toast.show('Saved to your library')
               onDismiss()
             })
             .finally(() => setIsSaving(false))

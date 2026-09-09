@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
@@ -6,10 +6,15 @@ import { loadDemoData } from '@/data/demo'
 import { buildDemoPlan, DEMO_DAYS } from '@/lib/demoData'
 import { dayTotals } from '@/lib/nutrition'
 
-beforeEach(async () => {
-  await Promise.all(db.tables.map((t) => t.clear()))
-  localStorage.clear()
+// Once per file. `foods` is reference data nobody owns, so re-seeding 1,400 rows between tests is
+// pure cost — and with a generated seed that cost grew enough to time them out.
+beforeAll(async () => {
   await seedFoods()
+})
+
+beforeEach(async () => {
+  await Promise.all(db.tables.filter((table) => table.name !== 'foods').map((t) => t.clear()))
+  localStorage.clear()
   repo.setActiveUserId('local-user')
 })
 

@@ -93,9 +93,28 @@ to USDA. It exists because **"80/20 ground beef" returned nothing at all** — n
 rows — while "ground beef 80" returns the exact entry. A search that silently returns nothing is the
 worst failure this app can have: it is indistinguishable from the food not existing.
 
-The local seed is only 46 foods, so nearly everything real arrives from USDA three to six seconds
-later. `useFoodSearch` therefore exposes `isSearching`, and every screen says so rather than
-printing "Nothing matched" while still looking.
+### The seed
+
+`scripts/build-food-seed.mjs` generates `src/db/seed/foods.ts` from ~260 everyday queries through
+our own `foods` function — so the mapping, the generic-first ranking, the portion labelling and the
+zero-energy filter are the ones the app already uses, rather than a second copy of those decisions.
+Roughly 1,400 foods, nearly all of them generic or composite (Foundation, SR Legacy, FNDDS), so they
+carry portions and micronutrients.
+
+`src/db/seed/staples.ts` is **hand-written and not regenerated**: 46 verified rows that the demo data
+refers to by exact description, so a re-run can't silently drop them.
+
+Two consequences worth knowing:
+
+- **The seed is a lazy chunk, versioned.** Over a megabyte of JSON inlined in the main bundle was
+  parsed on every launch to usually change nothing. `SEED_VERSION` is compared against localStorage
+  and the payload only loads when it moves. Bump it after regenerating.
+- **Search is indexed in memory.** `repo.searchFoods` ran a Dexie cursor over the whole table on
+  every keystroke. Free at 46 rows, a stall at 1,400 — and 150 lookups in a row (the demo seeder)
+  went from fast to timing out. Every write path calls `invalidateFoodIndex`.
+
+`useFoodSearch` still exposes `isSearching` for the long tail that isn't seeded — a screen must never
+print "Nothing matched" while it is still looking.
 
 ## Logging quickly
 
@@ -110,6 +129,18 @@ round trips through a portion screen. Two things fix that:
 
 Portion labels always carry their weight — "4 oz · 113 g", "1 RACC · 112 g" — because USDA's own
 labels are a mix of units with no common scale and "1 RACC" means nothing to anybody.
+
+## Recipes: one row or several
+
+Logging a recipe writes **one entry per ingredient** by default. A single row carrying the recipe's
+total has no food behind it, so it contributes no micronutrients, can't be re-portioned, can't be
+searched, and can't tell you the ricotta was a third of the calories. Logging as one item is still
+offered, because a tidy day is a real preference.
+
+Ingredient rows carry `fromRecipeId` — **provenance, not subject**. The row's subject is a food, and
+the schema constrains exactly one of `food_id`/`recipe_id`/`quick_add`, so reusing `recipe_id` would
+violate it. Without the column, logging a recipe the better way silently detached it from the recipe
+and "what you cook" stopped counting it. `cuisineMix` counts one serving per *sitting*, not per row.
 
 ## Goals
 

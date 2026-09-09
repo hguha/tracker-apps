@@ -233,7 +233,7 @@ export function DayScreen({
       {savingMeal && (
         <SaveMealSheet
           entries={savingMeal}
-          defaultName={`${MEAL_LABELS[savingMeal[0]!.meal]} · ${formatTimeOfDay(savingMeal[0]!.eatenAt)}`}
+          defaultName={defaultMealName(savingMeal[0]!)}
           onDismiss={() => setSavingMeal(null)}
         />
       )}
@@ -421,3 +421,16 @@ function sameEntries(a: readonly LogEntry[], b: readonly LogEntry[]): boolean {
   const right = b.map(key).sort()
   return left.every((value, index) => value === right[index])
 }
+
+/**
+ * What to call a saved meal, before the user renames it.
+ *
+ * The date, not the clock time: "Breakfast · 11 Aug" is a thing you can find again in a list a month
+ * later, and "Breakfast · 11:15" is a fact about one morning that tells you nothing about which
+ * morning.
+ */
+const defaultMealName = (entry: LogEntry): string =>
+  `${MEAL_LABELS[entry.meal]} · ${new Date(entry.eatenAt).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  })}`

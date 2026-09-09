@@ -72,6 +72,8 @@ export function RecipeEditor({
   const [source, setSource] = useState<string | null>(null)
   /** What the parse assumed or skipped — shown, because a silent skip is a silent undercount. */
   const [notes, setNotes] = useState('')
+  /** Which ingredient row has its food-swap box open. */
+  const [editing, setEditing] = useState<number | null>(null)
 
   const [mode, setMode] = useState<StartMode>('link')
   const [input, setInput] = useState('')
@@ -444,15 +446,20 @@ export function RecipeEditor({
                 <GramsRow
                   key={index}
                   after={
-                    // A nineteen-line import always leaves a few lines the database has no row
-                    // for, and those count zero — so the total reads low and there was no way to
-                    // fix it but delete the row and search again from the bottom of the screen.
-                    item.foodId === null ? (
+                    // Every row, not only the unmatched ones. An import always leaves a few lines
+                    // with no row (which count zero, so the total reads low) — but it also matches
+                    // some of them to the *wrong* row, and there was no way to correct that but
+                    // delete and search again from the bottom of the screen.
+                    editing === index || item.foodId === null ? (
                       <FoodSearchPicker
-                        placeholder={`Find a match for “${item.label}”`}
+                        placeholder={
+                          item.foodId === null
+                            ? `Find a match for “${item.label}”`
+                            : `Swap “${item.label}” for something else`
+                        }
                         branded={false}
                         limit={5}
-                        onPick={(food) =>
+                        onPick={(food) => {
                           setItems(
                             items.map((draft, i) =>
                               i === index
@@ -460,7 +467,8 @@ export function RecipeEditor({
                                 : draft,
                             ),
                           )
-                        }
+                          setEditing(null)
+                        }}
                       />
                     ) : undefined
                   }
@@ -473,6 +481,13 @@ export function RecipeEditor({
                     ) : (
                       <span className="tabular text-ink-muted">
                         {food ? `${Math.round(nutrientsFor(food, item.grams).kcal)} kcal` : '…'}
+                        {' · '}
+                        <button
+                          onClick={() => setEditing(editing === index ? null : index)}
+                          className="font-semibold text-accent active:opacity-60"
+                        >
+                          {editing === index ? 'cancel' : 'change food'}
+                        </button>
                       </span>
                     )
                   }
@@ -487,7 +502,7 @@ export function RecipeEditor({
 
         <div className="border-t border-line px-4 py-3">
           <FoodSearchPicker
-            placeholder="Add an ingredient"
+            placeholder="Add an ingredient by hand"
             branded={false}
             onPick={(food) =>
               setItems((current) => [
@@ -496,6 +511,10 @@ export function RecipeEditor({
               ])
             }
           />
+          <p className="mt-1 text-[11.5px] text-ink-muted">
+            Comes in at 100 g — set the amount on the row. Usually quicker to paste the whole
+            ingredient list above and correct what it got wrong.
+          </p>
         </div>
       </Card>
 

@@ -8,6 +8,8 @@ function entry(options: {
   kcal: number
   venue?: Venue | null
   recipeId?: string | null
+  /** Set instead of `recipeId` when the recipe was logged as its ingredients. */
+  fromRecipeId?: string | null
 }): LogEntry {
   const eatenAt = Date.parse(`${options.day}T${String(options.hour).padStart(2, '0')}:00:00`)
   return {
@@ -20,6 +22,7 @@ function entry(options: {
     foodId: options.recipeId ? null : 'usda:1',
     recipeId: options.recipeId ?? null,
     quickAdd: null,
+    fromRecipeId: options.fromRecipeId ?? null,
     grams: 100,
     portionId: null,
     portionCount: null,
@@ -148,6 +151,21 @@ describe('cuisineMix', () => {
   it('ignores food entries, which carry no cuisine to read', () => {
     const mix = cuisineMix([entry({ day: '2026-09-01', hour: 13, kcal: 400 })], cuisines)
     expect(mix).toEqual([])
+  })
+
+  it('counts a recipe logged as ingredients, and counts it once', () => {
+    // Logging as ingredients is the default, and it writes one row per food with the recipe only as
+    // provenance. Missing that removed the dish from this chart entirely; counting the rows would
+    // report one dinner as three servings of Italian.
+    const mix = cuisineMix(
+      [
+        entry({ day: '2026-09-01', hour: 19, kcal: 200, fromRecipeId: 'r1' }),
+        entry({ day: '2026-09-01', hour: 19, kcal: 300, fromRecipeId: 'r1' }),
+        entry({ day: '2026-09-01', hour: 19, kcal: 100, fromRecipeId: 'r1' }),
+      ],
+      cuisines,
+    )
+    expect(mix).toEqual([{ cuisine: 'italian', occasions: 1, kcal: 600 }])
   })
 
   it('keeps recipes with no cuisine as their own row rather than dropping them', () => {

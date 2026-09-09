@@ -58,6 +58,28 @@ export function RecipeDetail({
   const portion = scale(each, servings)
   const cooked = usage?.get(recipe.id)
 
+  // An arrow after the guard, not a hoisted `function`: a hoisted declaration is not covered by the
+  // `if (!recipe) return` above it, so `recipe` would still be possibly-undefined inside.
+  const log = (how: 'ingredients' | 'one') => {
+    if (isSaving) return
+    setIsSaving(true)
+    const write =
+      how === 'ingredients'
+        ? repo.logRecipeIngredients(recipe, servings, meal, at)
+        : repo.logRecipeServing(recipe, servings, meal, at)
+    return write
+      .then((result) => {
+        const rows = typeof result === 'number' ? result : 1
+        toast.show(
+          `Logged ${servings === 1 ? 'a serving' : `${servings} servings`}` +
+            (how === 'ingredients' ? ` · ${rows} item${rows === 1 ? '' : 's'}` : '') +
+            ` · ${MEAL_LABELS[meal].toLowerCase()}`,
+        )
+        onBack()
+      })
+      .finally(() => setIsSaving(false))
+  }
+
   return (
     <Screen
       title={recipe.name}
@@ -128,27 +150,33 @@ export function RecipeDetail({
           />
         </label>
 
+        {/*
+          Two ways to write it, and the difference is real rather than cosmetic.
+          As ingredients you get micronutrients, per-food editing, and the fact that the ricotta was
+          a third of the calories. As one item the day is tidier. Ingredients lead because they carry
+          strictly more information — a single row has no food behind it at all.
+
+          Venue is not asked either way: logging a recipe means you cooked it, which is the one
+          action in the app where "home" is a fact rather than a guess.
+        */}
         <Button
           className="w-full"
           disabled={isSaving}
-          onClick={() => {
-            if (isSaving) return
-            setIsSaving(true)
-            // Venue is not asked here: logging a recipe means you cooked it, which is the one
-            // action in the app where "home" is a fact rather than a guess.
-            void repo
-              .logRecipeServing(recipe, servings, meal, at)
-              .then(() => {
-                toast.show(
-                  `Logged ${servings === 1 ? 'a serving' : `${servings} servings`} · ${MEAL_LABELS[meal].toLowerCase()}`,
-                )
-                onBack()
-              })
-              .finally(() => setIsSaving(false))
-          }}
+          onClick={() => void log('ingredients')}
         >
-          {isSaving ? 'Logging…' : `Log ${portion.kcal} kcal`}
+          {isSaving ? 'Logging…' : `Log ${portion.kcal} kcal as ingredients`}
         </Button>
+        <button
+          disabled={isSaving}
+          onClick={() => void log('one')}
+          className="w-full py-1.5 text-[12.5px] font-semibold text-ink-muted active:opacity-60"
+        >
+          Or log it as a single item
+        </button>
+        <p className="text-[12px] text-ink-muted">
+          As ingredients, each food lands on its own line — so the micronutrients count, and you can
+          correct one of them without redoing the meal.
+        </p>
       </Card>
 
       <Card className="p-0">

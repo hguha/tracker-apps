@@ -144,10 +144,20 @@ export interface LogEntry extends SyncColumns {
   meal: MealSlot
   sortIndex: number
 
-  /** Exactly one of these three is set. */
+  /** Exactly one of these three is set — the *subject* of the row. */
   foodId: string | null
   recipeId: string | null
   quickAdd: Nutrients | null
+
+  /**
+   * The recipe this row came out of, when it was logged as ingredients.
+   *
+   * Provenance, not subject — which is why it can't reuse `recipeId`: the subject of the row is a
+   * food, and the database constrains exactly one subject. Without it, logging a recipe as its
+   * ingredients silently detached those rows from the recipe, so "what you cook" stopped counting
+   * them and `recipeUsage` forgot the dish had ever been made.
+   */
+  fromRecipeId: string | null
 
   /** Grams is canonical; the portion is what the user picked, kept for display. */
   grams: number
@@ -351,6 +361,15 @@ export interface Profile extends SyncColumns {
   dietNotes: string
   /** Null when the user eats whenever; set when they keep an eating window. */
   eatingWindow: EatingWindow | null
+  /**
+   * Foods the user pinned, newest first.
+   *
+   * "Frequent" is derived from the log and can't be curated — it takes a fortnight to admit a new
+   * staple and never forgets an old one. A star is the answer to "where do I save just this food":
+   * on the profile rather than in its own table because it's a short list of ids, and it has to
+   * follow the account onto a second device the same way appearance does.
+   */
+  favouriteFoodIds: string[]
 }
 
 /**

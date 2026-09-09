@@ -74,6 +74,7 @@ function defaultProfile(userId: string): Profile {
     onboardingVersion: 0,
     dietNotes: '',
     eatingWindow: null,
+    favouriteFoodIds: [],
     ...syncStamp(),
   }
 }
@@ -84,7 +85,24 @@ function defaultProfile(userId: string): Profile {
  * when there's no row yet; `ensureProfile` is what creates it, from the boot effect.
  */
 export async function getProfile(): Promise<Profile> {
-  return (await db.profiles.get(activeUserId)) ?? defaultProfile(activeUserId)
+  const row = await db.profiles.get(activeUserId)
+  if (!row) return defaultProfile(activeUserId)
+  // A field added after launch is absent on older rows, and `.map` on undefined throws.
+  return { ...row, favouriteFoodIds: row.favouriteFoodIds ?? [] }
+}
+
+/**
+ * Pins or unpins a food.
+ *
+ * Newest first, so the list reads as "what I've been eating lately" rather than as an archive, and
+ * capped — a favourites list of ninety is the frequents list with extra steps.
+ */
+export async function toggleFavourite(foodId: string): Promise<void> {
+  const current = (await getProfile()).favouriteFoodIds
+  const next = current.includes(foodId)
+    ? current.filter((id) => id !== foodId)
+    : [foodId, ...current].slice(0, 60)
+  await saveProfile({ favouriteFoodIds: next })
 }
 
 /** Creates the profile row if absent. Boot-effect only — never call this from a query. */
@@ -132,18 +150,57 @@ export async function findByBarcode(barcode: string): Promise<Food | undefined> 
   )
 }
 
+/**
+ * An in-memory index of every cached food, built once and reused.
+ *
+ * `searchFoods` runs on every keystroke through a live query, and it used to walk a Dexie cursor
+ * over the whole `foods` table each time. At 46 seeded foods that was free; at 1,462 it is a
+ * measurable stall on typing, and `loadDemoData` — 150 lookups in a row — went from fast to timing
+ * out. A cursor per keystroke is the wrong shape for this query whatever the row count.
+ *
+ * Invalidated by every write path, so a newly cached remote food is searchable immediately. The
+ * whole point of the local index is that it agrees with the database.
+ */
+let foodIndex: { rows: Food[]; size: number } | null = null
+
+export function invalidateFoodIndex(): void {
+  foodIndex = null
+}
+
+/**
+ * Every cached food, from memory when it's valid.
+ *
+ * The `count()` calls are not incidental — they do two jobs and the first one is easy to lose.
+ *
+ * 1. **They keep the live query alive.** `useLiveQuery` re-runs a query when a Dexie table it
+ *    *touched* changes. A pure cache hit touches nothing, so the moment this returned early without
+ *    reading anything, the search stopped re-rendering when remote results arrived: the food was
+ *    fetched, cached, and never displayed. That looked exactly like the search finding nothing.
+ * 2. They're the validity check, so a write that forgets `invalidateFoodIndex` still can't serve a
+ *    stale list — a count is an index-only read and costs nothing next to a full scan.
+ */
+async function allCachedFoods(): Promise<Food[]> {
+  const [referenceCount, customCount] = await Promise.all([
+    db.foods.count(),
+    db.customFoods.count(),
+  ])
+  const size = referenceCount + customCount
+  if (foodIndex && foodIndex.size === size) return foodIndex.rows
+
+  const [reference, custom] = await Promise.all([
+    db.foods.toArray(),
+    db.customFoods.filter(alive).toArray(),
+  ])
+  foodIndex = { rows: [...reference, ...custom], size }
+  return foodIndex.rows
+}
+
 /** Substring search over everything cached locally, ranked by lib/foodSearch. */
 export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
   const terms = queryTerms(query)
   if (query.trim().length < 2) return []
 
-  const matches: Food[] = []
-  await db.foods.each((food) => {
-    if (matchesQuery(food, terms)) matches.push(food)
-  })
-  await db.customFoods.each((food) => {
-    if (alive(food) && matchesQuery(food, terms)) matches.push(food)
-  })
+  const matches = (await allCachedFoods()).filter((food) => matchesQuery(food, terms))
   return rankFoods(matches, query, limit)
 }
 
@@ -206,15 +263,18 @@ export async function saveCustomFood(
 
   await db.customFoods.put(row)
   await enqueue('customFoods', row.id)
+  invalidateFoodIndex()
   return row.id
 }
 
-export function deleteCustomFood(id: string): Promise<void> {
-  return patch('customFoods', id, { deletedAt: Date.now() })
+export async function deleteCustomFood(id: string): Promise<void> {
+  await patch('customFoods', id, { deletedAt: Date.now() })
+  invalidateFoodIndex()
 }
 
 export async function putFoods(foods: readonly Food[]): Promise<void> {
   await db.foods.bulkPut(foods as Food[])
+  invalidateFoodIndex()
 }
 
 // --- Log entries ------------------------------------------------------------------
@@ -277,13 +337,13 @@ export async function recentRecipeCuisines(limit = 10): Promise<(CuisineKey | nu
   const entries = await db.logEntries
     .orderBy('eatenAt')
     .reverse()
-    .filter((entry) => alive(entry) && entry.recipeId !== null)
+    .filter((entry) => alive(entry) && recipeOf(entry) !== null)
     .limit(limit)
     .toArray()
-  const byId = new Map((await db.recipes.bulkGet(entries.map((e) => e.recipeId!))).flatMap((row) =>
+  const byId = new Map((await db.recipes.bulkGet(entries.map((e) => recipeOf(e)!))).flatMap((row) =>
     row ? [[row.id, row] as const] : [],
   ))
-  return entries.map((entry) => byId.get(entry.recipeId!)?.cuisine ?? null)
+  return entries.map((entry) => byId.get(recipeOf(entry)!)?.cuisine ?? null)
 }
 
 /**
@@ -373,6 +433,8 @@ export interface LogFoodInput {
   source?: LogEntry['source']
   estimate?: LogEntry['estimate']
   venue?: Venue | null
+  /** Set when this food came out of a recipe logged as ingredients. */
+  fromRecipeId?: string | null
 }
 
 /**
@@ -397,6 +459,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     foodId: input.food.id,
     recipeId: null,
     quickAdd: null,
+    fromRecipeId: input.fromRecipeId ?? null,
     grams,
     portionId: input.grams !== undefined ? null : (portion?.id ?? null),
     portionCount: input.grams !== undefined ? null : count,
@@ -430,6 +493,7 @@ export async function logQuickAdd(
     foodId: null,
     recipeId: null,
     quickAdd: { ...EMPTY_NUTRIENTS, ...nutrients },
+    fromRecipeId: null,
     grams: 0,
     portionId: null,
     portionCount: null,
@@ -664,9 +728,11 @@ export async function recipeUsage(days = 365): Promise<Map<string, RecipeUsage>>
     .aboveOrEqual(from)
     .filter(alive)
     .each((entry) => {
-      if (!entry.recipeId) return
-      const current = usage.get(entry.recipeId) ?? { timesCooked: 0, lastCookedDay: null }
-      usage.set(entry.recipeId, {
+      // Either shape counts as having cooked it: one row for the dish, or one row per ingredient.
+      const recipeId = entry.recipeId ?? entry.fromRecipeId
+      if (!recipeId) return
+      const current = usage.get(recipeId) ?? { timesCooked: 0, lastCookedDay: null }
+      usage.set(recipeId, {
         timesCooked: current.timesCooked + 1,
         lastCookedDay:
           current.lastCookedDay === null || entry.day > current.lastCookedDay
@@ -675,6 +741,51 @@ export async function recipeUsage(days = 365): Promise<Map<string, RecipeUsage>>
       })
     })
   return usage
+}
+
+/**
+ * Logs `servings` of a recipe as one entry per ingredient.
+ *
+ * The default, because a single row carrying the recipe's total is a dead end: it has no food behind
+ * it, so it contributes no micronutrients, can't be searched, can't be re-portioned, and can't tell
+ * you that the ricotta was a third of the calories. Ingredients scale by
+ * `servings / recipe.servings` and each row resolves its own nutrients from its own food, exactly
+ * like any other logged food.
+ *
+ * Ingredients that matched nothing are skipped — as they already are in the recipe's stored total
+ * (see `recipeNutrients`), so the two agree rather than one silently exceeding the other.
+ */
+export async function logRecipeIngredients(
+  recipe: Recipe,
+  servings: number,
+  meal: MealSlot,
+  at = Date.now(),
+  venue: Venue | null = 'home',
+): Promise<number> {
+  const share = servings / Math.max(1, recipe.servings)
+  const foods = await foodsByIds(recipe.ingredients.map((row) => row.foodId).filter(isPresent))
+
+  let written = 0
+  for (const ingredient of recipe.ingredients) {
+    const food = ingredient.foodId === null ? undefined : foods.get(ingredient.foodId)
+    const grams = ingredient.grams * share
+    if (!food || grams <= 0) continue
+    await logFood({
+      food,
+      grams,
+      meal,
+      eatenAt: at,
+      venue,
+      source: 'recipe',
+      // The recipe's name on every row, so the day still reads as one dish rather than as nine
+      // unrelated foods that happen to share a timestamp.
+      note: recipe.name,
+      // And its id, so "what you cook" and `recipeUsage` still see the dish.
+      fromRecipeId: recipe.id,
+    })
+    written += 1
+  }
+  return written
 }
 
 /** Logs `servings` of a recipe as one entry, so the day reads "Chilli · 1.5 servings". */
@@ -698,6 +809,7 @@ export async function logRecipeServing(
     foodId: null,
     recipeId: recipe.id,
     quickAdd: null,
+    fromRecipeId: null,
     grams: recipe.yieldGrams ? (recipe.yieldGrams / Math.max(1, recipe.servings)) * servings : 0,
     portionId: null,
     portionCount: servings,
@@ -714,6 +826,9 @@ export async function logRecipeServing(
 }
 
 const isPresent = (value: string | null): value is string => value !== null
+
+/** The recipe a row belongs to, whether it *is* the recipe or came out of one. */
+export const recipeOf = (entry: LogEntry): string | null => entry.recipeId ?? entry.fromRecipeId
 
 // --- Saved meals ------------------------------------------------------------------
 
@@ -752,6 +867,11 @@ export async function saveMealTemplate(
   return template.id
 }
 
+/** A saved meal's default name is a date, so renaming it is what makes the list usable. */
+export function renameMealTemplate(id: string, name: string): Promise<void> {
+  return patch('mealTemplates', id, { name: name.trim() || 'Saved meal' })
+}
+
 export function deleteMealTemplate(id: string): Promise<void> {
   return patch('mealTemplates', id, { deletedAt: Date.now() })
 }
@@ -780,6 +900,7 @@ export async function logMealTemplate(
       sortIndex: at,
       foodId: item.foodId,
       recipeId: item.recipeId,
+      fromRecipeId: null,
       quickAdd:
         item.foodId === null && item.recipeId === null
           ? scaleNutrients(item.nutrients, multiple)
@@ -923,14 +1044,29 @@ const byDay = (day: string) => db.bodyWeights.where('day').equals(day).filter(al
 
 export async function activeProgram(): Promise<Program | undefined> {
   const all = await db.programs.filter((p) => alive(p) && p.endedAt === null).toArray()
-  return all.sort((a, b) => b.startedAt - a.startedAt)[0]
+  return all.map(withGoalFields).sort((a, b) => b.startedAt - a.startedAt)[0]
 }
 
 /** Past and present programs, newest first — what a diet break needs to know what to resume. */
 export async function programHistory(): Promise<Program[]> {
   const all = await db.programs.filter(alive).toArray()
-  return all.sort((a, b) => b.startedAt - a.startedAt)
+  return all.map(withGoalFields).sort((a, b) => b.startedAt - a.startedAt)
 }
+
+/**
+ * A nullable field added to a live store has two empty values, and `undefined === null` is false.
+ *
+ * The Dexie v4 upgrade backfills local rows, but a row can still arrive from sync written by an
+ * older client, so every read normalises as well. Belt and braces on purpose: the failure this
+ * prevents is `NaN lb goal` on the home screen, which is the kind of thing a user reports rather
+ * than a test catches.
+ */
+const withGoalFields = (program: Program): Program => ({
+  ...program,
+  targetKg: program.targetKg ?? null,
+  startKg: program.startKg ?? null,
+  reachedAt: program.reachedAt ?? null,
+})
 
 export async function startProgram(
   input: Pick<Program, 'goal' | 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal'> &

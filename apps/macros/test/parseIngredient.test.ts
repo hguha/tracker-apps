@@ -82,6 +82,27 @@ describe('parseIngredientLine — names', () => {
     expect(parseIngredientLine('1/2 teaspoon Dried oregano').name).toBe('Dried oregano')
   })
 
+  it('handles nested parentheses, which recipe sites use constantly', () => {
+    // One pass of /\([^)]*\)/ removes the inner pair and leaves the outer closer, so this logged
+    // as "ricotta cheese )" — matching nothing and counting zero.
+    expect(parseIngredientLine('10 ounces ricotta cheese ((or cottage cheese))')).toMatchObject({
+      name: 'ricotta cheese',
+      grams: 283,
+    })
+    expect(parseIngredientLine('2 cups fresh spinach leaves ((optional),)').name).toBe(
+      'fresh spinach leaves',
+    )
+    expect(parseIngredientLine('salt and pepper (, to taste)').name).toBe('salt and pepper')
+  })
+
+  it('reads a bracketed size but ignores a bracketed alternative', () => {
+    // "(28 oz)" is how big the can is. "(or 2 tsp dried)" is about a different ingredient, and
+    // reading it as the amount measured fresh parsley in teaspoons of dried parsley.
+    const parsley = parseIngredientLine('2 Tablespoons fresh parsley (, chopped (or 2 tsp dried))')
+    expect(parsley).toMatchObject({ quantity: 2, unit: 'tbsp', name: 'fresh parsley' })
+    expect(parseIngredientLine('1 (28 oz) can crushed tomatoes').grams).toBe(794)
+  })
+
   it('records what it removed rather than discarding it silently', () => {
     expect(parseIngredientLine('1 onion, finely chopped').note).toContain('finely chopped')
   })

@@ -24,7 +24,17 @@ export function VenuePicker({
 }) {
   return (
     <div>
-      <span className="text-[11px] text-ink-muted">{label}</span>
+      {/*
+        Louder than the label above it, because the question isn't obvious from three icons. This
+        control had the same weight as "Meal", which everyone understands, and answered a question
+        nobody had been asked — so it read as decoration.
+      */}
+      <span className="text-[11px] text-ink-muted">
+        {label}
+        {value === null && (
+          <span className="text-ink-secondary"> — did you cook this, or eat out?</span>
+        )}
+      </span>
       <div className="mt-1 flex gap-1.5">
         {VENUES.map((venue) => {
           const Icon = VENUE_ICONS[venue]
@@ -37,10 +47,14 @@ export function VenuePicker({
               onClick={() => onChange(isActive ? null : venue)}
               aria-pressed={isActive}
               className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[12.5px]',
+                'flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2 text-[12.5px]',
                 isActive
-                  ? 'bg-accent font-semibold text-accent-contrast'
-                  : 'bg-sunken text-ink-secondary',
+                  ? 'border-accent bg-accent font-semibold text-accent-contrast'
+                  // Dashed while unanswered: an outline that looks like a blank to be filled, rather
+                  // than three more grey pills of the kind the screen is already full of.
+                  : value === null
+                    ? 'border-dashed border-accent/50 bg-accent-wash text-accent'
+                    : 'border-transparent bg-sunken text-ink-secondary',
               )}
             >
               <Icon size={14} />

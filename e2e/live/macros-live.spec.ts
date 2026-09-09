@@ -36,9 +36,12 @@ async function setUpDeviceOnly(page: import('@playwright/test').Page) {
   // Device-only on purpose: this path must work with a project configured but no session.
   await page.getByRole('button', { name: /Use this device only/ }).click()
   await page.getByRole('button', { name: 'Get started' }).click()
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip/ }).first().click()
-  await page.getByPlaceholder('Weight (kg)').fill('80')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  // Units are asked before the numbers, so the height field can be labelled in the right one.
+  await page.getByRole('button', { name: 'Metric' }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByPlaceholder(/Today's weight/).fill('80')
   await page.getByRole('button', { name: 'Start logging' }).click()
   await expect(page.getByText('Weighed in today')).toBeVisible()
   return errors
@@ -48,17 +51,19 @@ test('remote search reaches USDA for a food not in the local seed', async ({ pag
   const errors = await setUpDeviceOnly(page)
 
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('pistachios roasted')
-  // Matched on the "kcal / 100g" a food row carries: a bare /pistachio/ also matches the
-  // "break down as a meal" row, which is a different button entirely.
-  const hit = page.getByRole('button', { name: /pistachio.*kcal \/ 100g/is }).first()
+  // Deliberately obscure: the seed now holds ~1,400 everyday foods, so this has to be something it
+  // would never include for the test to be about the network at all.
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('jackfruit raw')
+  // Matched on the "kcal / 100g" a food row carries: a bare name also matches the "break down as a
+  // meal" row, which is a different button entirely.
+  const hit = page.getByRole('button', { name: /jackfruit.*kcal \/ 100g/is }).first()
   await expect(hit).toBeVisible({ timeout: 20_000 })
 
   // A remote food must arrive with real energy, not the 0 kcal the first deploy returned.
   await expect(hit).not.toContainText('0 kcal / 100g')
   await hit.click()
   await page.getByRole('button', { name: 'Log it' }).click()
-  await expect(page.getByText(/pistachio/i).first()).toBeVisible()
+  await expect(page.getByText(/jackfruit/i).first()).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
