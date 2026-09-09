@@ -7,7 +7,6 @@ import {
   ChefHat,
   ChevronRight,
   Database,
-  Link2,
   Palette,
   Ruler,
   Sparkles,
@@ -173,12 +172,6 @@ export function SettingsScreen({
           hint={dataHint(sync)}
           tone={sync.deadLettered > 0 ? 'warning' : undefined}
           onClick={() => onOpen('data')}
-        />
-        <NavRow
-          icon={<Link2 size={17} />}
-          label="Connect REPutation"
-          hint="Not built yet — training days will sharpen your targets"
-          onClick={() => onOpen('preferences')}
         />
       </NavList>
 

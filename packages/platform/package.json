@@ -21,5 +21,13 @@
   },
   "devDependencies": {
     "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "capacitor-health": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "capacitor-health": {
+      "optional": true
+    }
   }
 }

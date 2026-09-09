@@ -1,10 +1,13 @@
-import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
-import { Button, useToast } from '@tracker-engine/ui'
+import { useEffect, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Button, SearchField, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { grams as fmtGrams } from '@/features/shared/format'
-import type { EntrySource, MealSlot } from '@/domain/types'
-import { totalOf, type EstimatedItem, type MealEstimate } from './estimate'
+import { searchRemote } from '@/data/foodLookup'
+import { portionFor } from '@/lib/nutrition'
+import { grams as fmtGrams, portionLabel } from '@/features/shared/format'
+import type { EntrySource, Food, MealSlot } from '@/domain/types'
+import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
 
 /**
  * A draft estimate, editable, with the totals it currently implies.
@@ -52,9 +55,14 @@ export function EstimateReview({
 
       {estimate.items.length === 0 && (
         <p className="text-[13px] text-ink-muted">
-          Nothing recognisable came back. Try again, or search for the foods.
+          Nothing recognisable came back. Add the parts yourself below, or search for them.
         </p>
       )}
+
+      <AddToDraft
+        onAdd={(added) => update([...estimate.items, ...added])}
+        nextIndex={estimate.items.length}
+      />
 
       <p className="tabular text-[13.5px] font-semibold">
         {estimate.nutrients.kcal} kcal · {fmtGrams(estimate.nutrients.proteinMg)}P{' '}
@@ -96,6 +104,115 @@ export function EstimateReview({
           : `Log ${loggable.length} item${loggable.length === 1 ? '' : 's'}`}
       </Button>
     </>
+  )
+}
+
+/**
+ * Adding what the breakdown missed, without leaving the draft.
+ *
+ * The alternative was logging the six items it did find and then searching for the noodles as a
+ * separate entry — which works, but splits one meal into two and makes the user do the assembly.
+ * One box, two ways out of the same problem: pick a food, or ask for the thing by name and let it
+ * be broken down too, exactly as on the main log screen.
+ */
+function AddToDraft({
+  onAdd,
+  nextIndex,
+}: {
+  onAdd: (items: EstimatedItem[]) => void
+  nextIndex: number
+}) {
+  const [query, setQuery] = useState('')
+  const [isAsking, setIsAsking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const trimmed = query.trim()
+
+  const results = useLiveQuery(() => repo.searchFoods(trimmed, 6), [trimmed], [])
+  useEffect(() => {
+    if (trimmed.length < 3 || (results?.length ?? 0) >= 3) return
+    const id = window.setTimeout(() => void searchRemote(trimmed, { branded: false }), 400)
+    return () => clearTimeout(id)
+  }, [trimmed, results?.length])
+
+  function addFood(food: Food) {
+    const portion = portionFor(food, null)
+    onAdd([
+      {
+        id: `est-added-${nextIndex}-${food.id}`,
+        query: food.description,
+        // A portion if the food has one, else 100 g — a figure the user can see and correct.
+        grams: portion ? Math.round(portion.grams) : 100,
+        confidence: 'high',
+        food,
+        matchedBy: 'exact',
+      },
+    ])
+    setQuery('')
+  }
+
+  async function ask() {
+    if (trimmed.length < 3 || isAsking) return
+    setIsAsking(true)
+    setError(null)
+    try {
+      const extra = await estimateMeal(trimmed)
+      onAdd(
+        extra.items.map((item, index) => ({ ...item, id: `est-asked-${nextIndex}-${index}` })),
+      )
+      setQuery('')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not work that out.')
+    } finally {
+      setIsAsking(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl bg-sunken/60 p-2.5">
+      <SearchField
+        value={query}
+        onChange={setQuery}
+        placeholder="Something missing? Add it here"
+      />
+
+      {trimmed.length >= 2 && (
+        <>
+          <ul className="mt-1.5">
+            {(results ?? []).map((food) => (
+              <li key={food.id}>
+                <button
+                  onClick={() => addFood(food)}
+                  className="flex w-full items-center gap-2 py-1.5 text-left active:opacity-60"
+                >
+                  <Plus size={14} className="shrink-0 text-accent" />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px]">
+                    {food.description}
+                    {food.portions.length > 0 && (
+                      <span className="text-ink-muted"> · {portionLabel(food.portions[0]!)}</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={() => void ask()}
+            disabled={isAsking}
+            className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-semibold text-accent active:opacity-60"
+          >
+            <Sparkles size={14} />
+            {isAsking ? 'Working it out…' : `Ask for “${trimmed}” instead`}
+          </button>
+        </>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-1 text-[12.5px]" style={{ color: 'var(--status-critical)' }}>
+          {error}
+        </p>
+      )}
+    </div>
   )
 }
 

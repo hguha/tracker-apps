@@ -482,93 +482,17 @@ actually eat, with the network only for the long tail and barcodes.
 
 ---
 
-## 6. Connecting REPutation
+## 6. Connecting REPutation — dropped
 
-An explicit, revocable, opt-in link. Consent is the point, so it's modelled as one.
+Cut deliberately, not deferred. The link would have bought a measured `sessionsPerWeek` for the
+cold-start formula and one bodyweight instead of two — both of which the weekly check-in makes
+irrelevant within a fortnight, since it measures expenditure from what actually happened. The cost
+was a grant/token flow, a `link_grants` table, a `training-summary` endpoint and a permanent
+cross-app coupling, for a fortnight of slightly better guessing.
 
-### Flow
-
-1. Settings → **Connect REPutation** → deep-links to REPutation
-   (`fitnote://link?app=macros&challenge=…`), or a web handoff if it isn't installed.
-2. REPutation shows what will be shared, in plain words, and on approval calls its own
-   `issue-link-grant` function.
-3. That mints a **grant** row in REPutation's project: a random opaque token, the scopes, and
-   an expiry. Returns via `macros://auth-callback?grant=…`.
-4. MACROcosm stores the token in its device-local profile and calls REPutation's
-   `training-summary` function with it.
-5. Either side can revoke; MACROcosm shows last-sync time and exactly what came across.
-
-```sql
--- in REPUTATION's project
-create table link_grants (
-  id          text primary key,
-  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  app         text not null,                    -- 'macros'
-  token_hash  text not null,                    -- sha256; the raw token is never stored
-  scopes      text[] not null,
-  created_at  timestamptz not null default now(),
-  expires_at  timestamptz not null,
-  revoked_at  timestamptz,
-  last_used_at timestamptz
-);
-alter table link_grants enable row level security;
--- Owner may see and revoke their grants; only the service role validates a token.
-create policy "own grants" on link_grants for select using (user_id = auth.uid());
-create policy "revoke own grants" on link_grants for update
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
-```
-
-Store `token_hash`, not the token, so a dump of this table can't be replayed. RLS has **no
-insert policy** — grants are minted only by the edge function under service role, the same
-deny-all-to-clients shape as COINcidence's `plaid_items`.
-
-### What crosses, and what doesn't
-
-`training-summary` returns **derived numbers only**. No sets, no notes, no exercise history —
-the same rule the social/leagues design settled on.
-
-```ts
-// GET /functions/v1/training-summary   Authorization: Bearer <grant token>
-interface TrainingSummary {
-  generatedAt: number
-  weeks: {
-    weekStart: string
-    sessions: number
-    /** Sum of duration × MET-derived intensity. The only "burn" number, and it is
-     *  never added to the calorie budget — see §1. */
-    trainingKcal: number
-    setsHard: number
-    minutes: number
-    avgRpe: number | null
-  }[]
-  days: { day: string; trained: boolean; trainingKcal: number }[]
-  bodyWeights: { day: string; kg: number }[]
-  latest: { bodyweightKg: number | null; goal: string | null }
-}
-```
-
-### Bodyweight
-
-The genuine two-way case: you weigh yourself in whichever app you happen to open. Both apps
-keep their own row and reconcile by `(userId, day)` with `source` recorded, last-write-wins on
-`updatedAt` — the engine's existing rule. The shared domain and the reconcile function live in
-a new **`@tracker-engine/body`** package so neither app owns the definition, and so the third
-app inherits it. Duplicated storage is acceptable here; a duplicated *definition* is not.
-
-### What connection actually buys
-
-1. **A better cold start** — activity factor from measured training frequency, so the first
-   two weeks aren't a guess.
-2. **Calorie cycling** — the weekly target is fixed by the algorithm, but distributed across
-   days by training load: more carbs on a squat day, fewer on a rest day, same weekly total.
-   `Program.cycling` holds the multipliers.
-3. **Protein from real bodyweight**, updated as the trend moves, not typed once at signup.
-4. **Explained variance** — "expenditure is up 180 kcal; you trained 5× instead of 3×" turns
-   a mysterious number into a legible one.
-5. **Back to REPutation** — yesterday's calories and protein, so its coach can distinguish
-   under-recovering from under-eating.
-
----
+What survives from the design is the rule it existed to protect: **a measured expenditure already
+includes training, so nothing may ever add "calories burned" to the budget.** That's in the coach's
+system prompt and in lib/expenditure's own comments.
 
 ## 7. Screens
 
@@ -583,7 +507,7 @@ app inherits it. Duplicated storage is acceptable here; a duplicated *definition
 | **Trends** | Weight (raw + trend), expenditure with its confidence band, intake vs target, adherence |
 | **Check-in** | This week's numbers, the proposed targets, and *why* — accept/adjust in collaborative mode |
 | **Coach** | Chat with tools over the user's own data; meal ideas; "what can I make with what's in my kitchen" |
-| **Settings** | Account first, then a list of destinations: coach, saved meals, badges · targets & goal (coaching mode, **calorie cycling**), weekly check-in (explains the method, forces a run), about you, food & units (diet notes, **eating window**), appearance · data & sync, **Connect REPutation** |
+| **Settings** | Account first, then a list of destinations: coach, saved meals, badges · targets & goal (coaching mode, **calorie cycling**), weekly check-in (explains the method, forces a run), about you, food & units (diet notes, **eating window**), appearance · data & sync |
 | **Insights** | Five sub-tabs (Overview · Intake · Body · Habits · Nutrients) over one range filter, fourteen charts |
 
 Reuses as-is from the engine: `Button`, `Card`, `ProgressRing`, `PillSelect`, `BottomSheet`,

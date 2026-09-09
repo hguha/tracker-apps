@@ -32,7 +32,7 @@ Rules you must follow:
   floors; if asked to, say why you won't and suggest a slower rate instead.`
 
 interface Body {
-  mode?: 'chat' | 'estimate' | 'photo'
+  mode?: 'chat' | 'estimate' | 'photo' | 'ingredients'
   contents?: unknown[]
   context?: unknown
   tools?: { name: string; description: string; parameters: unknown }[]
@@ -43,6 +43,8 @@ interface Body {
   /** For `photo`: base64 image bytes (no data: prefix) and its mime type. */
   image?: string
   mimeType?: string
+  /** For `ingredients`: recipe lines exactly as the page wrote them. */
+  lines?: string[]
 }
 
 /**
@@ -92,6 +94,25 @@ Rules:
 - If the description is already one recognisable dish, you may return it as a single item with
   its typical total weight.`
 
+const INGREDIENTS_SYSTEM = `Convert a recipe's ingredient lines into weighed components.
+
+Each input line is one ingredient, written the way a recipe writes it. Return ONLY a generic,
+searchable food name and a weight in grams for each. Never return calories or macros — the app
+computes those from its own food database, and a number from you would be a fabrication.
+
+Rules:
+- Use the quantity the line states. "1/2 pound lean ground beef" is 227 g, "2 cups cooked lasagna
+  noodles" is about 320 g, "1 (28 oz) can crushed tomatoes" is 794 g. Do NOT substitute a typical
+  serving size — these are amounts for the whole dish.
+- Use plain generic names a food database would hold: "ground beef, lean", "lasagna noodles,
+  cooked", "crushed tomatoes, canned". Drop preparation notes ("chopped", "to taste", "divided").
+- Skip lines with no usable quantity — "salt and pepper to taste", "olive oil for drizzling" — and
+  say in your assumptions that you did. A weight you invented for seasoning is worse than its
+  absence.
+- Mark confidence low where a volume-to-weight conversion is a guess (leafy greens, shredded
+  cheese, anything "handful").
+- State the conversions you made in one short sentence.`
+
 const PHOTO_SYSTEM = `
 
 You are looking at a photo. Additional rules for that:
@@ -122,6 +143,12 @@ Deno.serve(async (request) => {
 
   if (body.mode === 'estimate') {
     return estimate(key, body.description ?? '', body.dietNotes ?? '')
+  }
+
+  if (body.mode === 'ingredients') {
+    const lines = (body.lines ?? []).filter((line) => typeof line === 'string').slice(0, 40)
+    if (lines.length === 0) return json({ error: 'lines is required' }, 400)
+    return estimate(key, lines.join('\n'), body.dietNotes ?? '', undefined, INGREDIENTS_SYSTEM)
   }
 
   if (body.mode === 'photo') {
@@ -178,6 +205,8 @@ async function estimate(
   description: string,
   dietNotes: string,
   image?: { data: string; mimeType: string },
+  /** Replaces the portion-guessing rules when the amounts are already stated. */
+  systemOverride?: string,
 ): Promise<Response> {
   const text = description.trim()
   if (!text && !image?.data) return json({ error: 'description or image is required' }, 400)
@@ -200,7 +229,9 @@ do not assume an ingredient they have ruled out.`
       },
     ],
     systemInstruction: {
-      parts: [{ text: ESTIMATE_SYSTEM + (image ? PHOTO_SYSTEM : '') + preferences }],
+      parts: [
+        { text: (systemOverride ?? ESTIMATE_SYSTEM) + (image ? PHOTO_SYSTEM : '') + preferences },
+      ],
     },
     generationConfig: {
       temperature: 0.2,

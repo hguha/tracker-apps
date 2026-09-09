@@ -25,7 +25,6 @@ beforeEach(async () => {
 describe('reads used from live queries never write', () => {
   const cases: [string, () => Promise<unknown>][] = [
     ['getProfile', () => repo.getProfile()],
-    ['getDeviceSettings', () => repo.getDeviceSettings()],
     ['currentTargets', () => repo.currentTargets()],
     ['activeProgram', () => repo.activeProgram()],
     ['checkIns', () => repo.checkIns()],

@@ -470,3 +470,38 @@ describe('recipes', () => {
     expect(recipe.nutrients.kcal).toBe(nutrientsFor(food, 100).kcal)
   })
 })
+
+describe('importing weigh-ins from Health', () => {
+  it('takes the earliest reading of each day', async () => {
+    // Weight climbs through the day; mixing a morning and an evening reading adds noise the
+    // trend then has to smooth back out.
+    await repo.importWeights([
+      { day: '2026-09-01', kg: 81.4, at: Date.parse('2026-09-01T19:00:00') },
+      { day: '2026-09-01', kg: 80.2, at: Date.parse('2026-09-01T07:00:00') },
+    ])
+    const rows = await repo.weights()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.kg).toBe(80.2)
+    expect(rows[0]!.source).toBe('apple-health')
+  })
+
+  it('never overwrites a weigh-in entered in the app', async () => {
+    await repo.recordWeight(80, '2026-09-02')
+    await repo.importWeights([
+      { day: '2026-09-02', kg: 83, at: Date.parse('2026-09-02T07:00:00') },
+    ])
+    expect((await repo.weights())[0]!.kg).toBe(80)
+  })
+
+  it('updates its own earlier import when the reading changes', async () => {
+    await repo.importWeights([
+      { day: '2026-09-03', kg: 80, at: Date.parse('2026-09-03T07:00:00') },
+    ])
+    await repo.importWeights([
+      { day: '2026-09-03', kg: 79.6, at: Date.parse('2026-09-03T07:00:00') },
+    ])
+    const rows = await repo.weights()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.kg).toBe(79.6)
+  })
+})

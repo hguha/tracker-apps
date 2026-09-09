@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, Screen, SearchField, useToast } from '@tracker-engine/ui'
-import { Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Link as LinkIcon, Plus, Sparkles, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { searchRemote } from '@/data/foodLookup'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { grams } from '@/features/shared/format'
-import { estimateMeal } from '@/features/log/estimate'
+import { estimateIngredients, estimateMeal } from '@/features/log/estimate'
+import { importRecipeFromUrl } from '@/data/recipeImport'
 import type { Food } from '@/domain/types'
 
 interface Draft {
@@ -41,6 +42,8 @@ export function RecipeEditor({
   const [items, setItems] = useState<Draft[]>([])
   const [query, setQuery] = useState('')
   const [describe, setDescribe] = useState('')
+  const [link, setLink] = useState('')
+  const [source, setSource] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -77,6 +80,38 @@ export function RecipeEditor({
     foods ?? new Map(),
   )
   const each = scale(total, 1 / Math.max(1, Number(servings) || 1))
+
+  /**
+   * Import a link: the page gives the text, the model gives the weights, the client matches.
+   *
+   * The ingredient lines are shown as they were read, so a bad conversion is visible as a wrong
+   * ingredient rather than a wrong calorie count.
+   */
+  async function fromLink() {
+    if (link.trim().length < 8) return
+    setIsBusy(true)
+    setError(null)
+    try {
+      const imported = await importRecipeFromUrl(link.trim())
+      const estimate = await estimateIngredients(imported.ingredients)
+      setName((current) => current || imported.name)
+      if (imported.servings) setServings(String(imported.servings))
+      setItems([
+        ...items,
+        ...estimate.items.map((item) => ({
+          foodId: item.food?.id ?? null,
+          label: item.food?.description ?? item.query,
+          grams: item.grams,
+        })),
+      ])
+      setSource(imported.sourceUrl)
+      setLink('')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not import that link.')
+    } finally {
+      setIsBusy(false)
+    }
+  }
 
   async function fromDescription() {
     if (describe.trim().length < 3) return
@@ -127,7 +162,37 @@ export function RecipeEditor({
 
       <Card className="space-y-2 p-4">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-          Describe it
+          Import a link
+        </h2>
+        <input
+          value={link}
+          onChange={(event) => setLink(event.target.value)}
+          inputMode="url"
+          placeholder="https://…"
+          className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+        />
+        <Button
+          variant="secondary"
+          className="w-full"
+          disabled={link.trim().length < 8 || isBusy}
+          onClick={() => void fromLink()}
+        >
+          <LinkIcon size={15} />
+          {isBusy ? 'Reading it…' : 'Import the ingredients'}
+        </Button>
+        <p className="text-[12px] text-ink-muted">
+          Reads the recipe the site publishes for search engines — its name, servings and ingredient
+          lines. Nothing nutritional comes from the page: the weights are converted from the
+          amounts it states, and every macro still comes from the food database.
+        </p>
+        {source && (
+          <p className="truncate text-[12px] text-ink-muted">Imported from {source}</p>
+        )}
+      </Card>
+
+      <Card className="space-y-2 p-4">
+        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+          Or describe it
         </h2>
         <textarea
           rows={2}
@@ -255,6 +320,7 @@ export function RecipeEditor({
                   name,
                   servings: Number(servings) || 1,
                   ingredients: items,
+                  sourceUrl: source,
                 },
                 recipeId ?? undefined,
               )

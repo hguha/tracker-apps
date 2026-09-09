@@ -38,3 +38,28 @@ npm run lint --workspace macros     # layering + calc-consistency
 `proteinMg: 31_400` is 31.4 g. Floats in grams reintroduce the drift REPutation fixed by
 storing kg canonically and COINcidence by storing minor units — a day's total has to equal
 the sum of its rows. `kcal` is an integer; sub-calorie precision is noise.
+
+## Native shell
+
+MACROcosm has the same Capacitor setup as REPutation — `capacitor.config.ts`, a committed
+`ios/` project, and `contentInset: 'never'` so the web app keeps handling its own safe areas
+(the `'always'` default insets the WebView *as well* and leaves a gap at the bottom).
+
+```
+npm run build:native        # tsc + vite build with BASE_PATH=/
+npm run native:sync         # build, then cap sync
+npm run native:ios          # build, sync, open Xcode
+```
+
+Two things Xcode owns and a script can't:
+
+- **Icons.** `npm run native:icons` needs `resources/icon.png`; until that art exists the app
+  carries Capacitor's placeholder.
+- **The HealthKit capability.** `ios/App/App/App.entitlements` declares it and `Info.plist` has the
+  usage strings, but the capability itself has to be added once under Signing & Capabilities —
+  editing the `.pbxproj` by hand to do it risks corrupting the project for no gain.
+
+Apple Health is **read-only and weight-only**, via `capacitor-health`. That is a deliberate
+limit, not a first step: expenditure here is measured from the user's own logs and already
+includes training, so reading active energy and adding it to the budget would double-count. There
+is nothing to misuse because nothing else is read.

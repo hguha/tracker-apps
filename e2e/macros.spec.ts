@@ -48,6 +48,8 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   // Log a seeded food end to end: search, portion, then it lands on the day.
   await page.getByRole('button', { name: 'Log food' }).click()
+  // Creating a recipe starts from the same "+", without slowing the common case down.
+  await expect(page.getByRole('button', { name: /New recipe/ })).toBeVisible()
   // The meal and the time are always on screen — the slot is data, not an assumption.
   await expect(page.getByRole('button', { name: 'Breakfast' })).toBeVisible()
   // Every logging path is reachable from here, including the ones that need a network.

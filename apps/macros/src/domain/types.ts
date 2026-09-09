@@ -299,9 +299,3 @@ export interface EatingWindow {
   endMinute: number
 }
 
-/** Device-local, never synced: the REPutation grant token belongs to this device's keychain. */
-export interface DeviceSettings {
-  id: 'device'
-  /** Opaque grant token for the REPutation link; null until connected. */
-  reputationGrant: string | null
-}

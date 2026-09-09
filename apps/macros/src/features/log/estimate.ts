@@ -58,6 +58,17 @@ export async function estimatePhoto(
   return runEstimate({ mode: 'photo', image: base64, mimeType, description: note })
 }
 
+/**
+ * Recipe ingredient lines, at the amounts the recipe states.
+ *
+ * A separate mode from `estimateMeal` because the rules are opposite: a described meal needs
+ * ordinary portions guessed for it, while a recipe already says "1/2 pound" and guessing a serving
+ * size instead would quietly divide the dish.
+ */
+export async function estimateIngredients(lines: readonly string[]): Promise<MealEstimate> {
+  return runEstimate({ mode: 'ingredients', lines })
+}
+
 async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate> {
   const client = getSupabase()
   if (!client) {
@@ -116,7 +127,9 @@ async function bestMatch(query: string): Promise<Food | null> {
   const local = await repo.searchFoods(query, 1)
   if (local[0]) return local[0]
 
-  await searchRemote(query)
+  // Generic sources only: these are ingredients, and Open Food Facts' packaged rows are both the
+  // wrong answer for "cooked spaghetti" and the slowest part of breaking down a six-item meal.
+  await searchRemote(query, { branded: false })
   return (await repo.searchFoods(query, 1))[0] ?? null
 }
 

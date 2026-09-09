@@ -8,7 +8,7 @@ import {
   SegmentedTabs,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { Camera, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
+import { Camera, ChefHat, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import { searchRemote } from '@/data/foodLookup'
 import * as repo from '@/data/repository'
@@ -25,6 +25,7 @@ import { PhotoPanel } from './PhotoPanel'
 import { PortionPanel } from './PortionPanel'
 import { QuickAddPanel } from './QuickAddPanel'
 import { ScanPanel } from './ScanPanel'
+import { RecipeEditor } from '@/features/recipes/RecipeEditor'
 
 type Panel =
   | { kind: 'browse' }
@@ -34,6 +35,7 @@ type Panel =
   | { kind: 'photo' }
   | { kind: 'quick' }
   | { kind: 'custom'; name: string; barcode?: string }
+  | { kind: 'recipe' }
 
 type BrowseTab = 'suggested' | 'again' | 'often' | 'saved'
 
@@ -57,11 +59,28 @@ export function LogScreen({
   const [query, setQuery] = useState('')
   const [panel, setPanel] = useState<Panel>({ kind: 'browse' })
 
+  // The recipe editor owns the whole screen: it has its own header, and a recipe is a different
+  // job from logging today's food even though both start at the same "+".
+  if (panel.kind === 'recipe') {
+    return <RecipeEditor recipeId={null} onBack={() => setPanel({ kind: 'browse' })} />
+  }
+
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader
         title={panel.kind === 'browse' ? `Add to ${MEAL_LABELS[meal].toLowerCase()}` : 'Add food'}
         onBack={() => (panel.kind === 'browse' ? onClose() : setPanel({ kind: 'browse' }))}
+        action={
+          panel.kind === 'browse' ? (
+            <button
+              onClick={() => setPanel({ kind: 'recipe' })}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold text-accent active:bg-sunken"
+            >
+              <ChefHat size={16} />
+              New recipe
+            </button>
+          ) : undefined
+        }
       />
 
       <div className="flex-1 overflow-y-auto pb-8">
@@ -365,8 +384,8 @@ function BrowsePanel({
               (recipes ?? []).length === 0 && (
                 <Empty>
                   Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap
-                  here, at any multiple. Recipes (Settings → Recipes) are for dishes you cook in
-                  batches.
+                  here, at any multiple. For a dish you cook in batches, use{' '}
+                  <span className="font-semibold text-accent">New recipe</span> at the top.
                 </Empty>
               )
             ) : (

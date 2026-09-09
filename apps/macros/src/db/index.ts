@@ -5,7 +5,6 @@ import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import type {
   BodyWeightRow,
   CustomFood,
-  DeviceSettings,
   CheckIn,
   Food,
   LogEntry,
@@ -29,7 +28,6 @@ export class MacrosDatabase extends Dexie {
   programs!: EntityTable<Program, 'id'>
   checkIns!: EntityTable<CheckIn, 'id'>
   profiles!: EntityTable<Profile, 'id'>
-  device!: EntityTable<DeviceSettings, 'id'>
   outbox!: EntityTable<OutboxEntry, 'seq'>
   deadLetter!: EntityTable<DeadLetterEntry, 'seq'>
   syncState!: EntityTable<SyncState, 'table'>
@@ -45,7 +43,6 @@ export class MacrosDatabase extends Dexie {
       programs: 'id, startedAt, updatedAt, userId',
       checkIns: 'id, weekStart, updatedAt, userId',
       profiles: 'id, updatedAt, userId',
-      device: 'id',
       outbox: '++seq, table, rowId, [table+rowId]',
       deadLetter: '++seq, table, rowId',
       syncState: 'table',
@@ -72,7 +69,6 @@ const OWNED_TABLES = [
   db.programs,
   db.checkIns,
   db.profiles,
-  db.device,
   db.outbox,
   db.deadLetter,
   db.syncState,

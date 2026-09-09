@@ -33,22 +33,45 @@ export async function lookupBarcode(barcode: string): Promise<Food | null> {
   return viaOff ? cache(viaOff) : null
 }
 
+/** Open Food Facts' text search is slow and flaky under load; a browser will wait far longer
+ *  than a person will. Past this the request is abandoned and USDA's results stand alone. */
+const OFF_TIMEOUT_MS = 2_500
+
+/** How long a failed OFF search is remembered, so a run of ingredients doesn't hammer a
+ *  service that's already returning 503s. */
+const OFF_COOLDOWN_MS = 60_000
+let offUnavailableUntil = 0
+
+export interface SearchOptions {
+  /**
+   * Whether to include Open Food Facts. Off for ingredient lookups: breaking down a meal fires one
+   * search per ingredient, and OFF holds packaged products — it has nothing useful to say about
+   * "cooked spaghetti", while its 503s made a six-ingredient soup feel broken.
+   */
+  branded?: boolean
+}
+
 /**
- * Remote search over both sources at once, for the long tail the seeded subset doesn't cover.
+ * Remote search over both sources, for the long tail the seeded subset doesn't cover.
  *
- * Two databases because they cover different things and neither is enough: USDA has generic and
- * composite foods with full micronutrients ("turkey sandwich on wheat"), Open Food Facts has the
- * packaged products in someone's cupboard by name rather than only by barcode. Queried in
- * parallel and merged, so a slow or down source costs nothing beyond its own results — and OFF
- * needs no key, which is what keeps search useful with no backend configured at all.
+ * Two databases because they cover different things: USDA has generic and composite foods with
+ * full micronutrients ("turkey sandwich on wheat"), Open Food Facts has the packaged products in
+ * someone's cupboard by name rather than only by barcode. Queried in parallel and merged, so a
+ * slow or down source costs nothing beyond its own results.
  */
-export async function searchRemote(query: string): Promise<Food[]> {
+export async function searchRemote(
+  query: string,
+  { branded = true }: SearchOptions = {},
+): Promise<Food[]> {
   const q = query.trim()
   if (q.length < 2) return []
 
-  const [usda, off] = await Promise.all([searchBackend(q), searchOpenFoodFacts(q)])
+  const [usda, off] = await Promise.all([
+    searchBackend(q),
+    branded ? searchOpenFoodFacts(q) : Promise.resolve([]),
+  ])
   // USDA first: it carries portions and micronutrients, and lib/foodSearch ranks it above
-  // branded rows anyway. Barcodes de-duplicate the overlap between the two.
+  // branded rows anyway. Ids de-duplicate the overlap between the two.
   const merged = new Map<string, Food>()
   for (const food of [...usda, ...off]) merged.set(food.id, food)
 
@@ -74,16 +97,27 @@ async function searchBackend(query: string): Promise<Food[]> {
 /** Text search against Open Food Facts. No key, CORS-enabled, and often the only source that
  *  has a supermarket own-brand product. */
 async function searchOpenFoodFacts(query: string): Promise<Food[]> {
+  if (Date.now() < offUnavailableUntil) return []
+
   const url =
     `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
     `&search_simple=1&action=process&json=1&page_size=20&fields=${OFF_SEARCH_FIELDS}`
   try {
-    const response = await fetch(url, { headers: { Accept: 'application/json' } })
-    if (!response.ok) return []
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(OFF_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      // 5xx means the service is struggling, not that this query has no answer. Backing off for a
+      // minute keeps the next five ingredient lookups fast instead of each waiting for a timeout.
+      if (response.status >= 500) offUnavailableUntil = Date.now() + OFF_COOLDOWN_MS
+      return []
+    }
     const body = (await response.json()) as { products?: OffProduct[] }
     const stamp = syncStamp()
     return mapOffSearch(body.products ?? []).map((food) => ({ ...food, ...stamp }) as Food)
   } catch {
+    offUnavailableUntil = Date.now() + OFF_COOLDOWN_MS
     return []
   }
 }
