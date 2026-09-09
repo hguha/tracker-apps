@@ -77,6 +77,26 @@ export function dailyAverage(entries: readonly Pick<LogEntry, 'nutrients' | 'day
   return scale(sum(entries.map((entry) => entry.nutrients)), 1 / days)
 }
 
+/**
+ * Each macro's share of the calories it accounts for, as a percentage.
+ *
+ * Computed from the macros at 4/4/9 rather than from `kcal`, so the three shares add to 100 even
+ * when the label's calorie figure disagrees with its macros (fibre, sugar alcohols, rounding —
+ * they routinely differ by a few percent).
+ */
+export function macroSharePct(n: Nutrients): { proteinMg: number; carbsMg: number; fatMg: number } {
+  const protein = mgToGrams(n.proteinMg) * 4
+  const carbs = mgToGrams(n.carbsMg) * 4
+  const fat = mgToGrams(n.fatMg) * 9
+  const total = protein + carbs + fat
+  if (total <= 0) return { proteinMg: 0, carbsMg: 0, fatMg: 0 }
+  return {
+    proteinMg: (protein / total) * 100,
+    carbsMg: (carbs / total) * 100,
+    fatMg: (fat / total) * 100,
+  }
+}
+
 /** Grams of protein per 100 kcal — the comparison that matters when a deficit squeezes protein. */
 export function proteinPer100Kcal(n: Nutrients): number {
   if (n.kcal <= 0) return 0

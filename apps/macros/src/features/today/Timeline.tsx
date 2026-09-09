@@ -1,10 +1,15 @@
+import { useState } from 'react'
 import { formatTimeOfDay } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
-import { Bookmark, Plus } from 'lucide-react'
+import { Bookmark, ChevronDown, Plus } from 'lucide-react'
+import { cn } from '@/lib/cn'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
-import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
 import type { Food, LogEntry } from '@/domain/types'
+
+/** Past this many items the card starts collapsed: a long log otherwise pushes every other
+ *  card off the screen, and the totals above it are what most opens are actually for. */
+const COLLAPSE_ABOVE = 5
 
 /**
  * What was eaten, in the order it was eaten.
@@ -12,8 +17,9 @@ import type { Food, LogEntry } from '@/domain/types'
  * Grouped by eating occasion rather than by breakfast/lunch/dinner: five small meals and one
  * large one are genuinely different days, and a screen with four fixed meal boxes can't show
  * that difference — it also can't show a 2pm snack as anything other than a filing decision.
- * The meal label rides along on each occasion instead, where it's a description rather than
- * the structure.
+ *
+ * One line per item, with the macro breakdown a tap away in the edit sheet. Repeating
+ * "39gP 0gC 5gF" down a screen of fifteen items is noise at the size it has to be rendered.
  */
 export function Timeline({
   entries,
@@ -30,94 +36,99 @@ export function Timeline({
 }) {
   const occasions = eatingOccasions(entries)
   const timing = dayTiming(entries)
+  // null = follow the length; once tapped, the user's choice wins for this mount.
+  const [isOpen, setIsOpen] = useState<boolean | null>(null)
+  const shown = isOpen ?? entries.length <= COLLAPSE_ABOVE
 
   return (
     <Card className="p-0">
-      <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
-        <h2 className="text-[15px] font-semibold tracking-tight">Today&rsquo;s food</h2>
-        {timing.firstAt !== null && (
-          <span className="tabular text-[12px] text-ink-muted">
-            {formatTimeOfDay(timing.firstAt)}–{formatTimeOfDay(timing.lastAt ?? timing.firstAt)}
-            {timing.spanMinutes !== null && ` · ${formatDuration(timing.spanMinutes)}`}
-          </span>
-        )}
-      </div>
+      <button
+        onClick={() => setIsOpen(!shown)}
+        aria-expanded={shown}
+        className="flex w-full items-baseline gap-2 px-4 py-3 text-left active:bg-sunken"
+      >
+        <h2 className="shrink-0 text-[15px] font-semibold tracking-tight">Today&rsquo;s food</h2>
+        <span className="tabular min-w-0 flex-1 truncate text-[12px] text-ink-muted">
+          {entries.length === 0
+            ? 'nothing yet'
+            : `${entries.length} item${entries.length === 1 ? '' : 's'}` +
+              (occasions.length > 1 ? ` · ${occasions.length} meals` : '') +
+              (timing.firstAt !== null
+                ? ` · ${formatTimeOfDay(timing.firstAt)}–${formatTimeOfDay(timing.lastAt ?? timing.firstAt)}`
+                : '')}
+        </span>
+        <ChevronDown
+          size={17}
+          className={cn('shrink-0 text-ink-muted transition-transform', shown && 'rotate-180')}
+        />
+      </button>
 
-      {occasions.length === 0 ? (
-        <p className="px-4 py-5 text-center text-[13.5px] text-ink-muted">
-          Nothing logged yet today.
-        </p>
-      ) : (
+      {shown && (
         <>
-          <p className="px-4 pb-2 text-[12px] text-ink-muted">
-            {occasions.length} eating occasion{occasions.length === 1 ? '' : 's'}
-            {timing.largestShare !== null &&
-              ` · biggest was ${Math.round(timing.largestShare * 100)}% of the day`}
-          </p>
-          <ul>
-            {occasions.map((occasion) => (
-              <li key={occasion.startAt} className="border-t border-line">
-                <div className="flex items-baseline justify-between px-4 pb-1 pt-2.5">
-                  <span className="text-[13px] font-semibold">
-                    {formatTimeOfDay(occasion.startAt)}
-                    <span className="font-normal text-ink-muted">
-                      {' '}
-                      · {MEAL_LABELS[occasion.entries[0]!.meal]}
-                    </span>
+          {occasions.length > 1 && timing.spanMinutes !== null && (
+            <p className="px-4 pb-2 text-[12px] text-ink-muted">
+              {formatDuration(timing.spanMinutes)} from first to last
+              {timing.largestShare !== null &&
+                ` · biggest meal ${Math.round(timing.largestShare * 100)}% of the day`}
+            </p>
+          )}
+
+          {occasions.map((occasion) => (
+            <div key={occasion.startAt} className="border-t border-line">
+              <div className="flex items-center gap-2 px-4 pb-0.5 pt-2">
+                <span className="tabular flex-1 text-[12.5px] font-semibold">
+                  {formatTimeOfDay(occasion.startAt)}
+                  <span className="font-normal text-ink-muted">
+                    {' '}
+                    · {MEAL_LABELS[occasion.entries[0]!.meal]} · {occasion.nutrients.kcal} kcal
                   </span>
-                  <span className="flex items-center gap-2">
-                    <span className="tabular text-[13px] font-semibold">
-                      {occasion.nutrients.kcal} kcal
-                    </span>
+                </span>
+                <button
+                  onClick={() => onSaveMeal(occasion.entries)}
+                  aria-label="Save as a meal"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+                >
+                  <Bookmark size={14} />
+                </button>
+              </div>
+              <ul>
+                {occasion.entries.map((entry) => (
+                  <li key={entry.id}>
                     <button
-                      onClick={() => onSaveMeal(occasion.entries)}
-                      aria-label="Save as a meal"
-                      className="flex size-7 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+                      onClick={() => onEdit(entry)}
+                      className="flex w-full items-baseline gap-2 px-4 py-1.5 text-left active:bg-sunken"
                     >
-                      <Bookmark size={15} />
+                      <span className="min-w-0 flex-1 truncate text-[13.5px]">
+                        {nameOf(entry, foods)}
+                        {entry.grams > 0 && (
+                          <span className="tabular text-ink-muted">
+                            {' '}
+                            {Math.round(entry.grams)}g
+                          </span>
+                        )}
+                        {entry.estimate && (
+                          <span className="text-[11.5px] text-confidence-medium"> est</span>
+                        )}
+                      </span>
+                      <span className="tabular shrink-0 text-[13px] text-ink-secondary">
+                        {entry.nutrients.kcal}
+                      </span>
                     </button>
-                  </span>
-                </div>
-                <ul className="divide-y divide-line">
-                  {occasion.entries.map((entry) => (
-                    <li key={entry.id}>
-                      <button
-                        onClick={() => onEdit(entry)}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-left active:bg-sunken"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[14px]">
-                            {nameOf(entry, foods)}
-                          </span>
-                          <span className="tabular block text-[12px] text-ink-muted">
-                            {entry.grams > 0 && `${Math.round(entry.grams)}g · `}
-                            {grams(entry.nutrients.proteinMg)}P {grams(entry.nutrients.carbsMg)}C{' '}
-                            {grams(entry.nutrients.fatMg)}F
-                            {entry.estimate && (
-                              <span className="text-confidence-medium"> · estimate</span>
-                            )}
-                          </span>
-                        </span>
-                        <span className="tabular text-[14px] font-semibold">
-                          {entry.nutrients.kcal}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          <button
+            onClick={onAdd}
+            className="flex w-full items-center justify-center gap-1.5 border-t border-line py-2.5 text-[13.5px] font-semibold text-accent active:bg-sunken"
+          >
+            <Plus size={16} />
+            Add food
+          </button>
         </>
       )}
-
-      <button
-        onClick={onAdd}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-line py-3 text-[13.5px] font-semibold text-accent active:bg-sunken"
-      >
-        <Plus size={16} />
-        Add food
-      </button>
     </Card>
   )
 }

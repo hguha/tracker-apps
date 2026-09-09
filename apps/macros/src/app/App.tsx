@@ -22,6 +22,8 @@ import { AboutYouScreen } from '@/features/settings/AboutYouScreen'
 import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
 import { AppearanceScreen } from '@/features/settings/AppearanceScreen'
 import { BadgesScreen } from '@/features/badges/BadgesScreen'
+import { SavedMealsScreen } from '@/features/settings/SavedMealsScreen'
+import { CheckInScreen } from '@/features/checkin/CheckInScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogScreen } from '@/features/log/LogScreen'
 import { mealForHour } from '@/features/shared/meals'
@@ -119,6 +121,10 @@ function SignedInApp() {
         return <AppearanceScreen onBack={toTabs} />
       case 'badges':
         return <BadgesScreen onBack={toTabs} />
+      case 'meals':
+        return <SavedMealsScreen onBack={toTabs} />
+      case 'checkin':
+        return <CheckInScreen onBack={toTabs} />
       case 'coach':
         return <CoachScreen onBack={toTabs} />
       case 'data':

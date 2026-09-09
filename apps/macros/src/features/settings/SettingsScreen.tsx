@@ -2,34 +2,38 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow } from '@tracker-engine/ui'
 import {
   Award,
+  Bookmark,
+  ChevronRight,
   Database,
+  Link2,
   Palette,
   Ruler,
   Sparkles,
   Target,
-  User,
   Utensils,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import * as repo from '@/data/repository'
 import { formatClock } from '@/lib/mealTiming'
+import type { Profile, Program } from '@/domain/types'
 
 export type SettingsRoute =
   | 'targets'
+  | 'checkin'
   | 'about'
   | 'preferences'
   | 'appearance'
   | 'badges'
+  | 'meals'
   | 'account'
   | 'data'
   | 'coach'
 
 /**
- * Settings as a list of destinations, matching REPutation.
- *
- * Everything used to be stacked on one scroll, which made the page long enough that the things
- * people change most — the goal and the pace — were below the fold under an accent-colour picker.
+ * Settings as a list of destinations, in REPutation's order: who you are, then things you do,
+ * then things you set, then data. The order isn't cosmetic — two apps in the same family that
+ * bury the account in different places make the pair feel unrelated.
  */
 export function SettingsScreen({
   onOpen,
@@ -42,30 +46,83 @@ export function SettingsScreen({
   const sync = useSync()
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
+  const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
+  const lastCheckIn = useLiveQuery(() => repo.latestCheckIn(), [], undefined)
 
-  const missing = profile
-    ? [
-        profile.heightCm === null && 'height',
-        profile.birthYear === null && 'age',
-        profile.sex === null && 'sex',
-      ].filter((value): value is string => typeof value === 'string')
-    : []
+  const missing = missingFacts(profile)
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <h1 className="px-1 text-[17px] font-semibold tracking-tight">Settings</h1>
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => onOpen('account')}
+          className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-accent-wash"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-[14px] font-bold text-accent-contrast">
+            {initials(session?.displayName ?? profile?.displayName ?? '')}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold">
+              {session?.displayName ?? 'Account'}
+            </span>
+            <span className="block truncate text-[12.5px] text-ink-muted">
+              {session && !session.isLocal ? session.email : 'This device only'}
+            </span>
+          </span>
+          <ChevronRight size={17} className="shrink-0 text-ink-muted" />
+        </button>
+      </Card>
+
+      <NavList>
+        <NavRow
+          icon={<Sparkles size={17} />}
+          label="Coach"
+          hint="Ask about your own numbers"
+          onClick={() => onOpen('coach')}
+        />
+        <NavRow
+          icon={<Bookmark size={17} />}
+          label="Saved meals"
+          hint={
+            (templates ?? []).length === 0
+              ? 'Save a meal from Today to log it again'
+              : `${templates!.length} saved`
+          }
+          onClick={() => onOpen('meals')}
+        />
+        <NavRow
+          icon={<Award size={17} />}
+          label="Badges"
+          hint="What you've earned so far"
+          onClick={() => onOpen('badges')}
+        />
+      </NavList>
 
       <NavList>
         <NavRow
           icon={<Target size={17} />}
           label="Targets & goal"
-          hint={program ? goalHint(program.goal, program.ratePctPerWeek) : 'No goal set'}
+          hint={goalHint(program)}
           onClick={() => onOpen('targets')}
         />
         <NavRow
           icon={<Ruler size={17} />}
+          label="Weekly check-in"
+          hint={
+            lastCheckIn
+              ? `Last run for the week of ${lastCheckIn.weekStart}`
+              : 'Not enough data for one yet'
+          }
+          onClick={() => onOpen('checkin')}
+        />
+        <NavRow
+          icon={<Ruler size={17} />}
           label="About you"
-          hint={missing.length > 0 ? `Missing your ${missing.join(', ')}` : 'Height, age, sex'}
+          hint={
+            missing.length > 0
+              ? `Missing your ${missing.join(', ')} — no target without them`
+              : 'Height, age, sex'
+          }
           tone={missing.length > 0 ? 'warning' : undefined}
           onClick={() => onOpen('about')}
         />
@@ -85,29 +142,17 @@ export function SettingsScreen({
 
       <NavList>
         <NavRow
-          icon={<Sparkles size={17} />}
-          label="Coach"
-          hint="Ask about your numbers"
-          onClick={() => onOpen('coach')}
-        />
-        <NavRow
-          icon={<Award size={17} />}
-          label="Badges"
-          hint="What you've earned"
-          onClick={() => onOpen('badges')}
-        />
-        <NavRow
-          icon={<User size={17} />}
-          label="Account"
-          hint={session?.email ?? 'This device only'}
-          onClick={() => onOpen('account')}
-        />
-        <NavRow
           icon={<Database size={17} />}
           label="Data & sync"
-          hint={sync.enabled ? 'Syncing to your account' : 'This device only'}
+          hint={dataHint(sync)}
           tone={sync.deadLettered > 0 ? 'warning' : undefined}
           onClick={() => onOpen('data')}
+        />
+        <NavRow
+          icon={<Link2 size={17} />}
+          label="Connect REPutation"
+          hint="Not built yet — training days will sharpen your targets"
+          onClick={() => onOpen('preferences')}
         />
       </NavList>
 
@@ -127,15 +172,6 @@ export function SettingsScreen({
       )}
 
       <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">Connect REPutation</h2>
-        <p className="mt-1 text-[12.5px] text-ink-muted">
-          Not built yet. It will read training days and bodyweight to sharpen your targets — and
-          deliberately won&rsquo;t add &ldquo;calories burned&rdquo; to your budget, because a
-          measured expenditure already includes training.
-        </p>
-      </Card>
-
-      <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Getting started</h2>
         <p className="mt-1 text-[12.5px] text-ink-muted">
           Nothing you&rsquo;ve logged is affected.
@@ -151,19 +187,48 @@ export function SettingsScreen({
   )
 }
 
-function goalHint(goal: string, ratePctPerWeek: number): string {
-  const verb = goal === 'lose' ? 'Losing' : goal === 'gain' ? 'Building' : 'Maintaining'
-  return ratePctPerWeek === 0 ? verb : `${verb} · ${ratePctPerWeek}%/week`
+/** The facts the cold-start target needs. Surfaced here as well as on Today, since this is
+ *  where someone goes looking when the bars won't fill. */
+export function missingFacts(profile: Profile | undefined): string[] {
+  if (!profile) return []
+  return [
+    profile.heightCm === null && 'height',
+    profile.birthYear === null && 'age',
+    profile.sex === null && 'sex',
+  ].filter((value): value is string => typeof value === 'string')
 }
 
-function preferencesHint(
-  profile: { units: string; eatingWindow: { startMinute: number; endMinute: number } | null } | undefined,
-): string {
+function goalHint(program: Program | undefined): string {
+  if (!program) return 'No goal set'
+  const verb =
+    program.goal === 'lose' ? 'Losing' : program.goal === 'gain' ? 'Building' : 'Maintaining'
+  return program.ratePctPerWeek === 0 ? verb : `${verb} · ${program.ratePctPerWeek}%/week`
+}
+
+function preferencesHint(profile: Profile | undefined): string {
   if (!profile) return ''
   const units = profile.units === 'metric' ? 'kg / cm' : 'lb / in'
   if (!profile.eatingWindow) return units
   return `${units} · ${formatClock(profile.eatingWindow.startMinute)}–${formatClock(profile.eatingWindow.endMinute)}`
 }
 
+function dataHint(sync: { deadLettered: number; pending: number; enabled: boolean }): string {
+  if (sync.deadLettered > 0) {
+    return `${sync.deadLettered} change${sync.deadLettered === 1 ? '' : 's'} failed to sync`
+  }
+  if (sync.pending > 0) {
+    return `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
+  }
+  return sync.enabled ? 'Backup, restore, and reset' : 'This device only'
+}
+
 const schemeLabel = (scheme: string): string =>
   scheme === 'system' ? 'Auto' : scheme === 'light' ? 'Light' : 'Dark'
+
+const initials = (name: string): string =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || '?'

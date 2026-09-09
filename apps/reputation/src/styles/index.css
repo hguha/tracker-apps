@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
+@import '@tracker-engine/ui/styles/themes.css';
 @import './themes.css';
 
 /* Shared UI kit lives outside this app's tree (node_modules is not auto-scanned),

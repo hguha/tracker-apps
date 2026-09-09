@@ -1,5 +1,6 @@
 import { Card, ProgressRing } from '@tracker-engine/ui'
 import { MACRO_META, grams } from '@/features/shared/format'
+import { macroSharePct } from '@/lib/nutrition'
 import { formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import type { EatingWindow, LogEntry, MacroTargets, Nutrients } from '@/domain/types'
 import { MacroBar } from './MacroBar'
@@ -30,6 +31,8 @@ export function BudgetCard({
   missing: string[]
   onFix: () => void
 }) {
+  const shares = macroSharePct(totals)
+
   return (
     <Card className="p-4">
       <div className="flex items-center gap-4">
@@ -49,6 +52,7 @@ export function BudgetCard({
               label={macro.label}
               eatenMg={totals[macro.key]}
               targetMg={targets?.[macro.key] ?? 0}
+              sharePct={shares[macro.key]}
               barClassName={macro.bar}
             />
           ))}

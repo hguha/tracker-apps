@@ -1,57 +1,48 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AccentPicker, Card, PillSelect, Screen } from '@tracker-engine/ui'
+import { AppearanceCard, Card, Screen } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { THEME_PRESETS } from '@/lib/theme'
-import type { ColorSchemePreference } from '@/domain/types'
-
-const SCHEMES: { value: ColorSchemePreference; label: string }[] = [
-  { value: 'system', label: 'Auto' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-]
+import type { ColorSchemePreference, ThemePreset } from '@/domain/types'
 
 export function AppearanceScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
 
   return (
     <Screen title="Appearance" onBack={onBack}>
+      <AppearanceCard
+        themes={THEME_PRESETS}
+        theme={profile?.theme ?? 'default'}
+        colorScheme={profile?.colorScheme ?? 'system'}
+        accentOverride={profile?.accentOverride ?? null}
+        onChange={(patch) =>
+          void repo.saveProfile({
+            ...(patch.theme !== undefined && { theme: patch.theme as ThemePreset }),
+            ...(patch.colorScheme !== undefined && {
+              colorScheme: patch.colorScheme as ColorSchemePreference,
+            }),
+            ...(patch.accentOverride !== undefined && { accentOverride: patch.accentOverride }),
+          })
+        }
+      />
+
       <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">Colour scheme</h2>
-        <div className="mt-2.5">
-          <PillSelect
-            value={profile?.colorScheme ?? 'system'}
-            options={SCHEMES}
-            // PillSelect allows a null selection; this control never should, so an empty choice
-            // falls back to Auto rather than clearing the preference.
-            onChange={(colorScheme) =>
-              void repo.saveProfile({ colorScheme: colorScheme ?? 'system' })
-            }
-          />
-        </div>
-
-        <h2 className="mt-4 text-[15px] font-semibold tracking-tight">Theme</h2>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {THEME_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => void repo.saveProfile({ theme: preset.id })}
-              className={
-                profile?.theme === preset.id
-                  ? 'rounded-full bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-contrast'
-                  : 'rounded-full bg-sunken px-3 py-1.5 text-[13px] text-ink-secondary'
-              }
-            >
-              {preset.label}
-            </button>
+        <h2 className="text-[15px] font-semibold tracking-tight">Chart colours</h2>
+        <p className="mt-1 text-[13px] text-ink-secondary">
+          Protein, carbs and fat keep the same colour in every theme, so a colour always means
+          the same macro.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-x-3.5 gap-y-2">
+          {[
+            ['Protein', 'var(--macro-protein)'],
+            ['Carbs', 'var(--macro-carbs)'],
+            ['Fat', 'var(--macro-fat)'],
+            ['Fibre', 'var(--macro-fiber)'],
+          ].map(([label, color]) => (
+            <span key={label} className="flex items-center gap-1.5 text-[12.5px]">
+              <span className="size-2.5 rounded-full" style={{ background: color }} aria-hidden />
+              <span className="text-ink-secondary">{label}</span>
+            </span>
           ))}
-        </div>
-
-        <h2 className="mt-4 text-[15px] font-semibold tracking-tight">Accent</h2>
-        <div className="mt-2">
-          <AccentPicker
-            accentOverride={profile?.accentOverride ?? null}
-            onChange={(accentOverride) => void repo.saveProfile({ accentOverride })}
-          />
         </div>
       </Card>
     </Screen>

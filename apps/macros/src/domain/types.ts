@@ -237,7 +237,14 @@ export interface BodyWeightRow extends SyncColumns {
 }
 
 export type UnitSystem = 'metric' | 'imperial'
-export type ThemePreset = 'default' | 'slate' | 'mono'
+export type ThemePreset =
+  | 'default'
+  | 'slate'
+  | 'forest'
+  | 'ocean'
+  | 'sunset'
+  | 'crimson'
+  | 'mono'
 export type ColorSchemePreference = 'system' | 'light' | 'dark'
 
 /**

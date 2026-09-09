@@ -1,8 +1,10 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { formatAmount, nutrientStatus } from '@/lib/micronutrients'
-import { useChartTokens } from './chartTokens'
+import { formatAmount, nutrientStatus, NUTRIENT_TARGETS } from '@/lib/micronutrients'
+import { mgToGrams } from '@/lib/nutrition'
+import { shortDay, useChartTokens } from './chartTokens'
 import type { Nutrients } from '@/domain/types'
+import type { InsightsDay } from './useInsightsData'
 
 /**
  * Micronutrients as a share of their reference intake, over the whole window.
@@ -86,6 +88,78 @@ export function AdequacyChart({
       }}
     >
       <Chart option={option} ariaLabel="Micronutrient averages as a share of reference intake" />
+    </ChartCard>
+  )
+}
+
+/**
+ * Fibre per day against the reference intake.
+ *
+ * Broken out of the micronutrient bars because it's the one most people can actually act on, and
+ * because a day with no fibre *data* has to look different from a day with no fibre — the gaps
+ * here are gaps in the database, not in the diet.
+ */
+export function FiberChart({ days }: { days: InsightsDay[] }) {
+  const tokens = useChartTokens()
+  const reference =
+    NUTRIENT_TARGETS.find((target) => target.key === 'fiberMg')?.reference ?? 28_000
+  const referenceG = Math.round(mgToGrams(reference))
+  const measured = days.filter((day) => day.fiber !== null)
+
+  const option: EChartsOption = {
+    animation: false,
+    grid: { left: 36, right: 12, top: 12, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: days.map((day) => shortDay(day.day)),
+      axisLine: { lineStyle: { color: tokens.axis } },
+      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: tokens.gridline } },
+      axisLabel: { color: tokens.inkMuted, fontSize: 10, formatter: '{value}g' },
+    },
+    tooltip: { trigger: 'axis' },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 14,
+        data: days.map((day) =>
+          day.fiber === null
+            ? null
+            : {
+                value: Math.round(day.fiber),
+                itemStyle: { color: day.fiber >= referenceG ? tokens.on : tokens.inkMuted },
+              },
+        ),
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { formatter: `${referenceG}g`, color: tokens.inkMuted, fontSize: 10 },
+          lineStyle: { color: tokens.on, type: 'dashed' },
+          data: [{ yAxis: referenceG }],
+        },
+      },
+    ],
+  }
+
+  return (
+    <ChartCard
+      title="Fibre"
+      subtitle={
+        measured.length === 0
+          ? undefined
+          : `Recorded on ${measured.length} of ${days.length} logged days · reference ${referenceG}g`
+      }
+      isEmpty={measured.length === 0}
+      emptyMessage="None of the foods logged carried a fibre figure."
+      table={{
+        columns: ['Day', 'Fibre (g)'],
+        rows: days.map((day) => [day.day, day.fiber === null ? 'not recorded' : Math.round(day.fiber)]),
+      }}
+    >
+      <Chart option={option} ariaLabel="Fibre per day against the reference intake" />
     </ChartCard>
   )
 }

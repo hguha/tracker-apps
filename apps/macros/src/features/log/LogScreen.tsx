@@ -1,17 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, formatRelativeDay } from '@tracker-engine/core'
-import { Card, useToast } from '@tracker-engine/ui'
-import { ChevronLeft, Plus, ScanLine, Sparkles, Trash2 } from 'lucide-react'
+import {
+  Card,
+  ScreenHeader,
+  SearchField,
+  SegmentedTabs,
+  type SegmentedTab,
+} from '@tracker-engine/ui'
+import { Plus, ScanLine, Sparkles } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import { searchRemote } from '@/data/foodLookup'
 import * as repo from '@/data/repository'
 import { dayTotals, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
-import { grams } from '@/features/shared/format'
+import { portionLabel } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
-import type { Food, MealSlot, MealTemplate } from '@/domain/types'
+import type { Food, MealSlot } from '@/domain/types'
 import { DescribePanel } from './DescribePanel'
+import { MealPreviewSheet, type MealPreview } from './MealPreviewSheet'
 import { MealTimePicker } from './MealTimePicker'
 import { PortionPanel } from './PortionPanel'
 import { QuickAddPanel } from './QuickAddPanel'
@@ -24,13 +31,15 @@ type Panel =
   | { kind: 'scan' }
   | { kind: 'quick' }
 
+type BrowseTab = 'suggested' | 'again' | 'often' | 'saved'
+
 /**
  * Adding food, as a screen rather than a sheet.
  *
  * One input, not a mode switch: the same text either matches foods or gets broken down as a
  * meal, because a person typing "turkey sandwich and an apple" has no way of knowing in advance
- * which of those the app can do. Everything else on the screen exists to avoid typing at all —
- * the meals you already eat, ranked ahead of a search box that assumes you don't.
+ * which of those the app can do. Everything else exists to avoid typing at all — the meals you
+ * already eat, in tabs, so a long list of frequents doesn't bury the rest.
  */
 export function LogScreen({
   meal: initialMeal,
@@ -44,22 +53,12 @@ export function LogScreen({
   const [query, setQuery] = useState('')
   const [panel, setPanel] = useState<Panel>({ kind: 'browse' })
 
-  const back = () => setPanel({ kind: 'browse' })
-
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={() => (panel.kind === 'browse' ? onClose() : back())}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">
-          {panel.kind === 'browse' ? `Add to ${MEAL_LABELS[meal].toLowerCase()}` : 'Add food'}
-        </h1>
-      </header>
+      <ScreenHeader
+        title={panel.kind === 'browse' ? `Add to ${MEAL_LABELS[meal].toLowerCase()}` : 'Add food'}
+        onBack={() => (panel.kind === 'browse' ? onClose() : setPanel({ kind: 'browse' }))}
+      />
 
       <div className="flex-1 overflow-y-auto pb-8">
         {panel.kind === 'browse' && (
@@ -111,12 +110,13 @@ function BrowsePanel({
   onPanel: (panel: Panel) => void
   onDone: () => void
 }) {
-  const toast = useToast()
   const trimmed = query.trim()
   const isSearching = trimmed.length >= 2
+  const [tab, setTab] = useState<BrowseTab>('suggested')
+  const [preview, setPreview] = useState<MealPreview | null>(null)
 
   const results = useLiveQuery(() => repo.searchFoods(query), [query], [])
-  const frequentIds = useLiveQuery(() => repo.frequentFoodIds(24), [], [])
+  const frequentIds = useLiveQuery(() => repo.frequentFoodIds(40), [], [])
   const frequents = useLiveQuery(
     async () => [...(await repo.foodsByIds(frequentIds ?? [])).values()],
     [frequentIds],
@@ -143,11 +143,20 @@ function BrowsePanel({
 
   const canScan = isBarcodeScanningAvailable()
   // Worth offering a breakdown when the text names more than one thing. It leads only when the
-  // search came up thin, though: a query with real matches is answered by those matches, and
-  // putting the AI path above them would push the right answer below the fold.
+  // search came up thin: a query with real matches is answered by those matches.
   const looksComposed = trimmed.split(/\s+/).length >= 2
-  const describeRow = isSearching && looksComposed ? <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} /> : null
+  const describeRow =
+    isSearching && looksComposed ? (
+      <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} />
+    ) : null
   const describeLeads = (results?.length ?? 0) < 3
+
+  const tabs: SegmentedTab<BrowseTab>[] = [
+    { key: 'suggested', label: 'Suggested' },
+    { key: 'again', label: 'Eat again', badge: (recents ?? []).length || undefined },
+    { key: 'often', label: 'Frequent', badge: (frequents ?? []).length || undefined },
+    { key: 'saved', label: 'Saved', badge: (templates ?? []).length || undefined },
+  ]
 
   return (
     <div className="space-y-3 px-3 py-3">
@@ -156,13 +165,14 @@ function BrowsePanel({
       </Card>
 
       <div className="flex items-center gap-2">
-        <input
-          autoFocus
-          value={query}
-          onChange={(event) => onQuery(event.target.value)}
-          placeholder="Search a food, or describe a meal"
-          className="min-w-0 flex-1 rounded-xl bg-sunken px-3.5 py-2.5 text-[15px] outline-none"
-        />
+        <div className="min-w-0 flex-1">
+          <SearchField
+            autoFocus
+            value={query}
+            onChange={onQuery}
+            placeholder="Search a food, or describe a meal"
+          />
+        </div>
         {canScan && (
           <button
             onClick={() => onPanel({ kind: 'scan' })}
@@ -172,118 +182,170 @@ function BrowsePanel({
             <ScanLine size={20} />
           </button>
         )}
+        <button
+          onClick={() => onPanel({ kind: 'quick' })}
+          aria-label="Quick add macros"
+          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-secondary active:opacity-60"
+        >
+          <Plus size={20} />
+        </button>
       </div>
-
-      {describeLeads && describeRow}
 
       {isSearching ? (
         <>
+          {describeLeads && describeRow}
           <FoodList foods={results ?? []} onSelect={onSelect} emptyLabel="Nothing matched." />
           {!describeLeads && describeRow}
         </>
       ) : (
         <>
-          {suggestions.length > 0 && (
-            <Section title="Fits what's left" hint={left ? `${left.kcal} kcal to go` : undefined}>
-              <ul className="divide-y divide-line">
-                {suggestions.map((suggestion) => (
-                  <li key={suggestion.food.id}>
-                    <button
-                      onClick={() => onSelect(suggestion.food)}
-                      className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                    >
-                      <div className="truncate text-[14px]">{suggestion.food.description}</div>
-                      <div className="tabular text-[12px] text-ink-muted">{suggestion.why}</div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
+          <SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />
 
-          {(templates ?? []).length > 0 && (
-            <Section title="Saved meals" hint="Tap ½ or 2× to scale">
-              <ul className="divide-y divide-line">
-                {(templates ?? []).map((template) => (
-                  <SavedMealRow
-                    key={template.id}
-                    template={template}
-                    onLog={(multiple) => {
-                      void repo.logMealTemplate(template, meal, at, multiple).then((count) => {
-                        toast.show(`Logged ${count} item${count === 1 ? '' : 's'}`)
-                        onDone()
-                      })
-                    }}
-                  />
-                ))}
-              </ul>
-            </Section>
-          )}
+          {tab === 'suggested' &&
+            (suggestions.length === 0 ? (
+              <Empty>
+                {left === null
+                  ? 'Suggestions need a calorie target — add your height, age and sex in Settings.'
+                  : `Only ${left.kcal} kcal left, which isn't enough to build a suggestion around.`}
+              </Empty>
+            ) : (
+              <Card className="p-0">
+                <ul className="divide-y divide-line">
+                  {suggestions.map((suggestion) => (
+                    <li key={suggestion.food.id}>
+                      <button
+                        onClick={() => onSelect(suggestion.food)}
+                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
+                      >
+                        <div className="truncate text-[14px]">{suggestion.food.description}</div>
+                        <div className="tabular text-[12px] text-ink-muted">{suggestion.why}</div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
 
-          {(recents ?? []).length > 0 && (
-            <Section title="Eat again" hint="From the last two weeks">
-              <ul className="divide-y divide-line">
-                {(recents ?? []).map((recent) => (
-                  <li key={`${recent.day}|${recent.meal}`}>
-                    <button
-                      onClick={() => {
-                        void repo
-                          .relogEntries(recent.entries, { meal, at })
-                          .then((count) => {
-                            toast.show(`Logged ${count} item${count === 1 ? '' : 's'}`)
-                            onDone()
+          {tab === 'again' &&
+            ((recents ?? []).length === 0 ? (
+              <Empty>Meals you log will show up here to repeat.</Empty>
+            ) : (
+              <Card className="p-0">
+                <ul className="divide-y divide-line">
+                  {(recents ?? []).map((recent) => (
+                    <li key={`${recent.day}|${recent.meal}`}>
+                      <button
+                        onClick={() =>
+                          setPreview({
+                            title: `${MEAL_LABELS[recent.meal]} · ${formatRelativeDay(
+                              Date.parse(`${recent.day}T12:00:00`),
+                            )}`,
+                            subtitle: `${recent.entries.length} item${
+                              recent.entries.length === 1 ? '' : 's'
+                            } · ${recent.nutrients.kcal} kcal`,
+                            items: recent.entries.map((entry) => ({
+                              foodId: entry.foodId,
+                              label: entry.note || 'Quick add',
+                              grams: entry.grams,
+                              nutrients: entry.nutrients,
+                            })),
+                            nutrients: recent.nutrients,
+                            log: (multiple) =>
+                              repo.relogEntries(recent.entries, { meal, at, multiple }),
                           })
-                      }}
-                      className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                    >
-                      <div className="truncate text-[14px]">
-                        {MEAL_LABELS[recent.meal]} ·{' '}
-                        <span className="text-ink-muted">
-                          {formatRelativeDay(Date.parse(`${recent.day}T12:00:00`))}
-                        </span>
-                      </div>
-                      <div className="tabular text-[12px] text-ink-muted">
-                        {recent.nutrients.kcal} kcal ·{' '}
-                        {recent.entries.length} item{recent.entries.length === 1 ? '' : 's'} ·{' '}
-                        {recent.entries
-                          .map((entry) => entry.note || '')
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .join(', ')}
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
+                        }
+                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
+                      >
+                        <div className="truncate text-[14px]">
+                          {MEAL_LABELS[recent.meal]}{' '}
+                          <span className="text-ink-muted">
+                            · {formatRelativeDay(Date.parse(`${recent.day}T12:00:00`))}
+                          </span>
+                        </div>
+                        <div className="tabular text-[12px] text-ink-muted">
+                          {recent.nutrients.kcal} kcal · {recent.entries.length} item
+                          {recent.entries.length === 1 ? '' : 's'}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
 
-          {(frequents ?? []).length > 0 && (
-            <Section title="Foods you log often">
-              <FoodList foods={frequents ?? []} onSelect={onSelect} emptyLabel="" bare />
-            </Section>
-          )}
+          {tab === 'often' &&
+            ((frequents ?? []).length === 0 ? (
+              <Empty>Foods you log more than once collect here.</Empty>
+            ) : (
+              <FoodList foods={frequents ?? []} onSelect={onSelect} emptyLabel="" />
+            ))}
+
+          {tab === 'saved' &&
+            ((templates ?? []).length === 0 ? (
+              <Empty>
+                Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap
+                here, at any multiple.
+              </Empty>
+            ) : (
+              <Card className="p-0">
+                <ul className="divide-y divide-line">
+                  {(templates ?? []).map((template) => (
+                    <li key={template.id}>
+                      <button
+                        onClick={() =>
+                          setPreview({
+                            title: template.name,
+                            subtitle: `${template.items.length} item${
+                              template.items.length === 1 ? '' : 's'
+                            } · ${template.nutrients.kcal} kcal`,
+                            items: template.items.map((item) => ({
+                              foodId: item.foodId,
+                              label: template.name,
+                              grams: item.grams,
+                              nutrients: item.nutrients,
+                            })),
+                            nutrients: template.nutrients,
+                            log: (multiple) => repo.logMealTemplate(template, meal, at, multiple),
+                          })
+                        }
+                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
+                      >
+                        <div className="truncate text-[14px]">{template.name}</div>
+                        <div className="tabular text-[12px] text-ink-muted">
+                          {template.nutrients.kcal} kcal · {template.items.length} item
+                          {template.items.length === 1 ? '' : 's'}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
+
+          <button
+            onClick={() => onPanel({ kind: 'describe' })}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
+          >
+            <Sparkles size={15} />
+            Describe a meal instead
+          </button>
         </>
       )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={() => onPanel({ kind: 'describe' })}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
-        >
-          <Sparkles size={15} />
-          Describe a meal
-        </button>
-        <button
-          onClick={() => onPanel({ kind: 'quick' })}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
-        >
-          <Plus size={15} />
-          Quick add
-        </button>
-      </div>
+      {preview && (
+        <MealPreviewSheet
+          preview={preview}
+          meal={meal}
+          onDismiss={() => setPreview(null)}
+          onLogged={onDone}
+        />
+      )}
     </div>
   )
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <Card className="p-4 text-center text-[13px] text-ink-muted">{children}</Card>
 }
 
 /** The escape hatch from search: let a sentence be broken into foods. */
@@ -306,106 +368,37 @@ function DescribeRow({ text, onOpen }: { text: string; onOpen: () => void }) {
   )
 }
 
-/** A saved meal, loggable whole or scaled — which is what makes it cover a batch cook. */
-function SavedMealRow({
-  template,
-  onLog,
-}: {
-  template: MealTemplate
-  onLog: (multiple: number) => void
-}) {
-  return (
-    <li className="flex items-center gap-1">
-      <button
-        onClick={() => onLog(1)}
-        className="min-w-0 flex-1 px-4 py-2.5 text-left active:bg-sunken"
-      >
-        <div className="truncate text-[14px]">{template.name}</div>
-        <div className="tabular text-[12px] text-ink-muted">
-          {template.nutrients.kcal} kcal · {grams(template.nutrients.proteinMg)}P{' '}
-          {grams(template.nutrients.carbsMg)}C {grams(template.nutrients.fatMg)}F
-        </div>
-      </button>
-      {([0.5, 2] as const).map((multiple) => (
-        <button
-          key={multiple}
-          onClick={() => onLog(multiple)}
-          aria-label={`Log ${multiple === 0.5 ? 'half' : 'double'} of ${template.name}`}
-          className="tabular shrink-0 rounded-lg bg-sunken px-2 py-1 text-[12px] font-semibold text-ink-secondary active:opacity-60"
-        >
-          {multiple === 0.5 ? '½' : '2×'}
-        </button>
-      ))}
-      <button
-        onClick={() => void repo.deleteMealTemplate(template.id)}
-        aria-label={`Delete ${template.name}`}
-        className="mr-2 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-      >
-        <Trash2 size={15} />
-      </button>
-    </li>
-  )
-}
-
-function Section({
-  title,
-  hint,
-  children,
-}: {
-  title: string
-  hint?: string
-  children: React.ReactNode
-}) {
-  return (
-    <Card className="p-0">
-      <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-          {title}
-        </h2>
-        {hint && <span className="tabular text-[12px] text-ink-muted">{hint}</span>}
-      </div>
-      {children}
-    </Card>
-  )
-}
-
 function FoodList({
   foods,
   onSelect,
   emptyLabel,
-  bare = false,
 }: {
   foods: readonly Food[]
   onSelect: (food: Food) => void
   emptyLabel: string
-  bare?: boolean
 }) {
-  const list = (
-    <ul className="divide-y divide-line">
-      {foods.map((food) => (
-        <li key={food.id}>
-          <button
-            onClick={() => onSelect(food)}
-            className="w-full px-4 py-2.5 text-left active:bg-sunken"
-          >
-            <div className="truncate text-[14px]">{food.description}</div>
-            <div className="tabular text-[12px] text-ink-muted">
-              {food.brand ? `${food.brand} · ` : ''}
-              {food.per100.kcal} kcal / 100g
-            </div>
-          </button>
-        </li>
-      ))}
-    </ul>
-  )
-
-  if (bare) return list
   return (
     <Card className="p-0">
       {foods.length === 0 ? (
         <p className="px-4 py-6 text-center text-[13.5px] text-ink-muted">{emptyLabel}</p>
       ) : (
-        list
+        <ul className="divide-y divide-line">
+          {foods.map((food) => (
+            <li key={food.id}>
+              <button
+                onClick={() => onSelect(food)}
+                className="w-full px-4 py-2.5 text-left active:bg-sunken"
+              >
+                <div className="truncate text-[14px]">{food.description}</div>
+                <div className="tabular truncate text-[12px] text-ink-muted">
+                  {food.brand ? `${food.brand} · ` : ''}
+                  {food.per100.kcal} kcal / 100g
+                  {food.portions.length > 0 && ` · ${portionLabel(food.portions[0]!)}`}
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   )

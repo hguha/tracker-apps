@@ -5,6 +5,7 @@ import {
   nutrientsFor,
   remaining,
   scale,
+  macroSharePct,
   proteinPer100Kcal,
   splitTargets,
   sum,
@@ -121,5 +122,18 @@ describe('proteinPer100Kcal', () => {
 
   it('is zero rather than Infinity for a zero-calorie row', () => {
     expect(proteinPer100Kcal(nutrients({ kcal: 0, proteinMg: 5_000 }))).toBe(0)
+  })
+})
+
+describe('macroSharePct', () => {
+  it('splits the calories the macros account for', () => {
+    const share = macroSharePct(nutrients({ proteinMg: 100_000, carbsMg: 100_000, fatMg: 0 }))
+    expect(share.proteinMg).toBeCloseTo(50)
+    expect(share.carbsMg).toBeCloseTo(50)
+    expect(share.fatMg).toBe(0)
+  })
+
+  it('is zero rather than NaN with nothing logged', () => {
+    expect(macroSharePct(EMPTY_NUTRIENTS)).toEqual({ proteinMg: 0, carbsMg: 0, fatMg: 0 })
   })
 })

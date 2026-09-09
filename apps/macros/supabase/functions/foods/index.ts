@@ -56,7 +56,16 @@ interface FdcFood {
   foodCategory?: string | { description?: string }
   dataType?: string
   foodNutrients?: FdcNutrient[]
-  foodPortions?: { id?: number; gramWeight?: number; modifier?: string; amount?: number }[]
+  foodPortions?: {
+    id?: number
+    gramWeight?: number
+    /** Human ("cup, diced") on Foundation/SR, a numeric FNDDS code ("10205") on Survey foods. */
+    modifier?: string
+    amount?: number
+    /** FNDDS puts the readable label here: "1 cup", "1 slice". */
+    portionDescription?: string
+    measureUnit?: { name?: string; abbreviation?: string }
+  }[]
   servingSize?: number
   servingSizeUnit?: string
 }
@@ -87,9 +96,12 @@ function mapFood(food: FdcFood) {
 
   const portions = (food.foodPortions ?? [])
     .filter((p) => typeof p.gramWeight === 'number' && p.gramWeight > 0)
+    // FNDDS ships a "Quantity not specified" portion — a real gram weight behind a label that
+    // tells the user nothing, so it can't be a choice on a portion picker.
+    .filter((p) => !/not specified/i.test(p.portionDescription ?? ''))
     .map((p, index) => ({
       id: `usda-${p.id ?? index}`,
-      label: [p.amount, p.modifier].filter(Boolean).join(' ') || '1 portion',
+      label: portionLabel(p, p.gramWeight as number),
       grams: p.gramWeight as number,
       isDefault: index === 0,
     }))
@@ -115,6 +127,35 @@ function mapFood(food: FdcFood) {
     portions,
     verified_at: new Date().toISOString(),
   }
+}
+
+/**
+ * A label a person can act on.
+ *
+ * FNDDS (Survey) foods put a numeric portion *code* in `modifier` and the readable text in
+ * `portionDescription`, so reading `modifier` first offered "10205" and "61700" as the portion
+ * choices for lasagna. Order: the description, then amount + unit, then a modifier that contains
+ * actual letters, and finally the gram weight — which is never wrong, only terse.
+ */
+function portionLabel(
+  portion: {
+    modifier?: string
+    amount?: number
+    portionDescription?: string
+    measureUnit?: { name?: string }
+  },
+  gramWeight: number,
+): string {
+  const described = portion.portionDescription?.trim()
+  if (described && /[a-z]/i.test(described)) return described
+
+  const unit = portion.measureUnit?.name?.trim()
+  const usableUnit = unit && unit !== 'undetermined' ? unit : null
+  const modifier = portion.modifier?.trim()
+  const usableModifier = modifier && /[a-z]/i.test(modifier) ? modifier : null
+
+  const parts = [portion.amount, usableUnit, usableModifier].filter(Boolean)
+  return parts.length > 0 ? parts.join(' ') : `${Math.round(gramWeight)} g`
 }
 
 function toClient(row: ReturnType<typeof mapFood>) {

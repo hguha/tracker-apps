@@ -84,14 +84,6 @@ export function TodayScreen({
         onFix={onOpenAbout}
       />
 
-      <Timeline
-        entries={entries ?? []}
-        foods={foods ?? new Map()}
-        onAdd={() => onLog(mealForHour(new Date().getHours()))}
-        onEdit={setEditing}
-        onSaveMeal={setSavingMeal}
-      />
-
       <WeighInCard />
 
       <GoalCard />
@@ -103,6 +95,14 @@ export function TodayScreen({
       )}
 
       <BadgeStrip onOpen={onOpenBadges} />
+
+      <Timeline
+        entries={entries ?? []}
+        foods={foods ?? new Map()}
+        onAdd={() => onLog(mealForHour(new Date().getHours()))}
+        onEdit={setEditing}
+        onSaveMeal={setSavingMeal}
+      />
 
       <button
         onClick={onOpenCoach}

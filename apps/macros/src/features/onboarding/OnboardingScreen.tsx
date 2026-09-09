@@ -157,14 +157,21 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
               ))}
             </div>
 
-            <Button size="lg" className="mt-4 w-full" onClick={() => setStep('weight')}>
+            <Button
+              size="lg"
+              className="mt-4 w-full"
+              disabled={!height || !birthYear || !sex}
+              onClick={() => setStep('weight')}
+            >
               Continue
             </Button>
+            {/* Skipping is allowed, but named honestly: without these three there is no formula
+                to seed the first target from, so the app can show totals and nothing to aim at. */}
             <button
               onClick={() => setStep('weight')}
               className="mt-2 w-full py-2 text-[13.5px] font-semibold text-ink-muted active:opacity-60"
             >
-              Skip — I'll add them later
+              Skip — no calorie target until I add them
             </button>
           </Panel>
         )}

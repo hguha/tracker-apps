@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { nutrientsFor, portionFor } from '@/lib/nutrition'
-import { grams } from '@/features/shared/format'
+import { grams, portionLabel } from '@/features/shared/format'
 import type { Food, MealSlot } from '@/domain/types'
 
 /**
@@ -79,7 +79,7 @@ export function PortionPanel({
                   : 'rounded-full bg-sunken px-3 py-1.5 text-[13px] text-ink-secondary'
               }
             >
-              {option.label}
+              {portionLabel(option)}
             </button>
           ))}
         </div>

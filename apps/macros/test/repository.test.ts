@@ -330,3 +330,39 @@ describe('relogEntries', () => {
     expect(copies[1]!.eatenAt - copies[0]!.eatenAt).toBe(25 * 60_000)
   })
 })
+
+describe('forced check-ins', () => {
+  it('explains what the week is missing rather than just refusing', async () => {
+    const status = await repo.checkInStatus()
+    expect(status.daysLogged).toBe(0)
+    expect(status.weighIns).toBe(0)
+    expect(status.existing).toBeUndefined()
+  })
+
+  it('re-runs a week that already has a check-in, overwriting rather than duplicating', async () => {
+    const week = lastCompleteWeekKey(Date.now())
+    await repo.startProgram({
+      goal: 'lose',
+      ratePctPerWeek: -0.5,
+      proteinGPerKg: 1.8,
+      fatMinPctKcal: 25,
+    })
+    await repo.saveCheckIn({
+      weekStart: week,
+      expenditureKcal: 2500,
+      expenditureSe: 120,
+      trendKg: 80,
+      trendChangeKgPerWeek: -0.4,
+      meanIntakeKcal: 2100,
+      daysLogged: 7,
+      kcalPerKg: 7700,
+      targets: { kcal: 2100, proteinMg: 1, carbsMg: 1, fatMg: 1 },
+      status: 'applied',
+      note: '',
+    })
+
+    // Without data it still can't invent one — but it must not append a second row either.
+    await repo.runCheckIn(Date.now(), { force: true })
+    expect((await repo.checkIns()).filter((c) => c.weekStart === week)).toHaveLength(1)
+  })
+})

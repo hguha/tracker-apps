@@ -38,7 +38,7 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await page.getByRole('button', { name: /Lose fat/ }).click()
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { name: 'A few numbers' })).toBeVisible()
-  await page.getByRole('button', { name: /Skip — I'll add them later/ }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
   await expect(page.getByRole('heading', { name: /Today's weight/ })).toBeVisible()
   await page.getByPlaceholder('Weight (kg)').fill('80')
   await page.getByRole('button', { name: 'Start logging' }).click()
@@ -56,8 +56,8 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await page.getByRole('button', { name: 'Log it' }).click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
 
-  // The timeline shows when it was eaten, and tapping it opens the correction sheet.
-  await expect(page.getByText(/1 eating occasion/)).toBeVisible()
+  // The timeline summarises the day, and tapping an item opens the correction sheet.
+  await expect(page.getByRole('button', { name: /Today.s food 1 item/ })).toBeVisible()
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: /Remove from today/ })).toBeVisible()
 
@@ -69,23 +69,37 @@ test('every tab and the coach render without errors', async ({ page }) => {
   await page.getByRole('button', { name: /Use this device only/ }).click()
   await page.getByRole('button', { name: 'Get started' }).click()
   await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('button', { name: /Skip — I'll add them later/ }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
   await page.getByRole('button', { name: 'Skip for now' }).click()
 
-  for (const tab of ['History', 'Insights', 'Settings']) {
-    await page.getByRole('button', { name: tab, exact: true }).click()
-    await expect(page.getByRole('heading', { name: tab })).toBeVisible()
-  }
+  // Each tab is asserted on its own furniture: History and Insights lead with controls rather
+  // than a title, the way REPutation's do.
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  await expect(page.getByPlaceholder('Search what you ate')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Insights', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await expect(page.getByRole('button', { name: /Data & sync/ })).toBeVisible()
 
   // Settings is a list of destinations; each one has to be reachable and come back.
-  for (const route of ['Targets & goal', 'About you', 'Food & units', 'Appearance', 'Badges']) {
+  for (const route of [
+    'Targets & goal',
+    'Weekly check-in',
+    'About you',
+    'Food & units',
+    'Appearance',
+    'Badges',
+    'Saved meals',
+  ]) {
     await page.getByRole('button', { name: new RegExp(route) }).click()
-    await expect(page.getByRole('heading', { name: route })).toBeVisible()
+    await expect(page.getByRole('heading', { name: route, level: 1 })).toBeVisible()
     await page.getByRole('button', { name: 'Back' }).click()
   }
 
   // The offline coach must answer with no key and no session — that's the whole point of it.
-  await page.getByRole('button', { name: /^Coach Ask about your numbers/ }).click()
+  await page.getByRole('button', { name: /^Coach Ask about your own numbers/ }).click()
   await expect(page.getByRole('heading', { name: /Ask about your own numbers/ })).toBeVisible()
   await page.getByRole('button', { name: /What's left for today\?/ }).click()
   await expect(page.getByText(/target|protein|kcal/i).first()).toBeVisible()

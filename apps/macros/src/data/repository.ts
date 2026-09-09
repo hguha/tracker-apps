@@ -26,7 +26,13 @@ import {
   sum as sumNutrients,
 } from '@/lib/nutrition'
 import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
-import { buildCheckIn, initialTargets, lastCompleteWeekKey, weekKeyForDay } from '@/lib/checkin'
+import {
+  buildCheckIn,
+  initialTargets,
+  lastCompleteWeekKey,
+  weekKeyForDay,
+  type CheckInOutcome,
+} from '@/lib/checkin'
 import type { IntakeDay } from '@/lib/expenditure'
 
 /**
@@ -282,13 +288,15 @@ export async function copyDay(fromDay: string, toDay: string): Promise<number> {
  *
  * Times are shifted rather than collapsed onto `now`: repeating yesterday's dinner at 19:40
  * should land at 19:40, not stamp four items with the same second and lose the order they
- * were eaten in.
+ * were eaten in. `at` overrides that when the user has picked a time; `multiple` scales the whole
+ * meal, for the half or double portion.
  */
 export async function relogEntries(
   entries: readonly LogEntry[],
-  into: { day?: string; meal?: MealSlot; at?: number } = {},
+  into: { day?: string; meal?: MealSlot; at?: number; multiple?: number } = {},
 ): Promise<number> {
-  const day = into.day ?? dayKey(Date.now())
+  const multiple = into.multiple ?? 1
+  const day = into.at !== undefined ? dayKey(into.at) : (into.day ?? dayKey(Date.now()))
   for (const entry of entries) {
     const eatenAt = into.at ?? Date.parse(`${day}T00:00:00`) + minutesIntoDay(entry.eatenAt) * 60_000
     const copy: LogEntry = {
@@ -299,6 +307,9 @@ export async function relogEntries(
       meal: into.meal ?? entry.meal,
       eatenAt,
       sortIndex: eatenAt,
+      grams: entry.grams * multiple,
+      nutrients: scaleNutrients(entry.nutrients, multiple),
+      quickAdd: entry.quickAdd === null ? null : scaleNutrients(entry.quickAdd, multiple),
       source: 'copy',
       ...syncStamp(),
     }
@@ -627,32 +638,84 @@ export async function intakeByDay(fromDay: string, toDay: string): Promise<Intak
  * Recalculates the week that just ended, and saves the result.
  *
  * Idempotent per week: re-running replaces that week's row rather than appending, so opening
- * the app twice on a Monday can't produce two conflicting conclusions. Returns null when
- * there is already a check-in for the week, or not enough data to draw one.
+ * the app twice on a Monday can't produce two conflicting conclusions. Returns null when there
+ * is already a check-in for the week (unless forced), or not enough data to draw one.
+ *
+ * `force` exists because "why hasn't my target moved?" is otherwise unanswerable — it recomputes
+ * and overwrites the week, which is safe precisely because the id is derived from it.
  */
-export async function runCheckIn(now = Date.now()): Promise<CheckIn | null> {
+export async function runCheckIn(
+  now = Date.now(),
+  { force = false }: { force?: boolean } = {},
+): Promise<CheckIn | null> {
+  const outcome = await draftCheckIn(now, { force })
+  if (outcome === null || outcome.kind !== 'ready') return null
+
+  const id = await saveCheckIn(outcome.draft)
+  return (await db.checkIns.get(id)) ?? null
+}
+
+/**
+ * The check-in the current data would produce, without saving it. Null when there's no program,
+ * the user has turned check-ins off, or the week already has one and this isn't a forced run.
+ */
+async function draftCheckIn(
+  now: number,
+  { force }: { force: boolean },
+): Promise<CheckInOutcome | null> {
   const program = await activeProgram()
-  if (!program || program.coachingMode === 'manual') return null
+  if (!program) return null
+  if (program.coachingMode === 'manual' && !force) return null
 
   const week = lastCompleteWeekKey(now)
-  const existing = (await checkIns()).find((c) => c.weekStart === week)
-  if (existing) return null
+  const all = await checkIns()
+  if (!force && all.some((c) => c.weekStart === week)) return null
 
-  const outcome = buildCheckIn({
+  return buildCheckIn({
     now,
     program,
     profile: await getProfile(),
     weights: await weights(),
     // Eight weeks: enough for the filter to settle, short enough to stay cheap.
     intake: await intakeByDay(dayKey(now - 56 * DAY_MS), dayKey(now)),
-    prior: (await checkIns())
-      .filter((c) => c.status === 'applied')
-      .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0] ?? null,
+    prior:
+      all
+        .filter((c) => c.status === 'applied' && c.weekStart < week)
+        .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0] ?? null,
   })
-  if (outcome.kind !== 'ready') return null
+}
 
-  const id = await saveCheckIn(outcome.draft)
-  return (await db.checkIns.get(id)) ?? null
+export interface CheckInStatus {
+  /** The week a check-in would be about: the one that just ended. */
+  weekStart: string
+  daysLogged: number
+  weighIns: number
+  /** The check-in already stored for that week, if any. */
+  existing: CheckIn | undefined
+  coachingMode: CoachingMode | null
+  /** What a run right now would produce, or why it can't. */
+  outcome: CheckInOutcome | null
+}
+
+/**
+ * Everything the check-in screen needs to explain itself: which week, what it has to work
+ * with, and what a run would conclude. "Not enough data" without the counts is not an
+ * explanation — it's the same dead end as a spinner.
+ */
+export async function checkInStatus(now = Date.now()): Promise<CheckInStatus> {
+  const week = lastCompleteWeekKey(now)
+  const from = week
+  const to = dayKey(Date.parse(`${week}T12:00:00`) + 6 * DAY_MS)
+  const program = await activeProgram()
+
+  return {
+    weekStart: week,
+    daysLogged: (await intakeByDay(from, to)).filter((day) => day.kcal > 0).length,
+    weighIns: (await weights()).filter((row) => row.day >= from && row.day <= to).length,
+    existing: (await checkIns()).find((c) => c.weekStart === week),
+    coachingMode: program?.coachingMode ?? null,
+    outcome: await draftCheckIn(now, { force: true }),
+  }
 }
 
 /** The proposal waiting on the user, in collaborative mode. */

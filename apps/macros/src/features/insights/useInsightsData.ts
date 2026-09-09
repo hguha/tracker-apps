@@ -23,6 +23,8 @@ export interface InsightsDay {
   protein: number
   carbs: number
   fat: number
+  /** Null when nothing logged that day recorded fibre — never zero (see lib/nutrition). */
+  fiber: number | null
   targetKcal: number | null
   targetProtein: number | null
   occasions: number
@@ -47,6 +49,12 @@ export interface InsightsData {
   loggedDayCount: number
   /** kcal eaten in each hour of the day, summed across the window. */
   kcalByHour: number[]
+  /** How entries were logged, for the habit tab: search, barcode, describe, quick, … */
+  sourceCounts: { source: string; count: number }[]
+  /** Trend change across the window, in kg. Null with fewer than two weigh-ins. */
+  weightChangeKg: number | null
+  /** Share of days with a target that landed within 10% of it. Null when no day had one. */
+  adherencePct: number | null
 }
 
 export function useInsightsData(windowDays: number): InsightsData {
@@ -82,6 +90,7 @@ export function useInsightsData(windowDays: number): InsightsData {
       protein: mgToGrams(totals.proteinMg),
       carbs: mgToGrams(totals.carbsMg),
       fat: mgToGrams(totals.fatMg),
+      fiber: totals.fiberMg === null ? null : mgToGrams(totals.fiberMg),
       targetKcal: target?.kcal ?? null,
       targetProtein: target ? mgToGrams(target.proteinMg) : null,
       occasions: occasions.length,
@@ -114,6 +123,15 @@ export function useInsightsData(windowDays: number): InsightsData {
     kcalByHour[hour] = (kcalByHour[hour] ?? 0) + entry.nutrients.kcal
   }
 
+  const sourceTally = new Map<string, number>()
+  for (const entry of entries ?? []) {
+    sourceTally.set(entry.source, (sourceTally.get(entry.source) ?? 0) + 1)
+  }
+
+  const scored = days.filter((day) => day.targetKcal !== null)
+  const first = trend[0]
+  const last = trend[trend.length - 1]
+
   return {
     isLoading: entries === undefined || weights === undefined,
     days,
@@ -129,5 +147,16 @@ export function useInsightsData(windowDays: number): InsightsData {
     averages: dailyAverage(entries ?? []),
     loggedDayCount: dayKeys.length,
     kcalByHour,
+    sourceCounts: [...sourceTally.entries()]
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count),
+    weightChangeKg: first && last && trend.length > 1 ? last.trendKg - first.trendKg : null,
+    adherencePct:
+      scored.length === 0
+        ? null
+        : (scored.filter((day) => Math.abs(day.kcal - day.targetKcal!) <= day.targetKcal! * 0.1)
+            .length /
+            scored.length) *
+          100,
   }
 }

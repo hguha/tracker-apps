@@ -177,3 +177,69 @@ function isInsideWindow(hour: number, window: EatingWindow): boolean {
   // Crosses midnight: inside means late evening or the small hours.
   return minute >= window.startMinute || minute < window.endMinute
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  search: 'Searched',
+  barcode: 'Scanned',
+  describe: 'Described',
+  quick: 'Quick add',
+  copy: 'Repeated',
+  template: 'Saved meal',
+  recipe: 'Recipe',
+  photo: 'Photo',
+}
+
+/**
+ * How the food got logged.
+ *
+ * Not vanity: it says which shortcut is carrying the habit, and a log dominated by quick-adds is
+ * one whose micronutrient numbers can't be trusted — a quick add has macros and nothing else.
+ */
+export function SourceMixChart({
+  sourceCounts,
+}: {
+  sourceCounts: { source: string; count: number }[]
+}) {
+  const tokens = useChartTokens()
+  const total = sourceCounts.reduce((sum, row) => sum + row.count, 0)
+
+  const option: EChartsOption = {
+    animation: false,
+    grid: { left: 84, right: 30, top: 8, bottom: 24 },
+    xAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: tokens.gridline } },
+      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
+    },
+    yAxis: {
+      type: 'category',
+      data: sourceCounts.map((row) => SOURCE_LABELS[row.source] ?? row.source).reverse(),
+      axisLine: { lineStyle: { color: tokens.axis } },
+      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
+    },
+    tooltip: { trigger: 'axis' },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 14,
+        itemStyle: { color: tokens.accent },
+        data: sourceCounts.map((row) => row.count).reverse(),
+      },
+    ],
+  }
+
+  return (
+    <ChartCard
+      title="How you log"
+      subtitle={total === 0 ? undefined : `${total} items over the window`}
+      isEmpty={total === 0}
+      emptyMessage="Log a few things to see this."
+      table={{
+        columns: ['Method', 'Items'],
+        rows: sourceCounts.map((row) => [SOURCE_LABELS[row.source] ?? row.source, row.count]),
+      }}
+    >
+      <Chart option={option} ariaLabel="Items logged by method" />
+    </ChartCard>
+  )
+}
