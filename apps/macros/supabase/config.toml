@@ -3,3 +3,9 @@
 # session — could not look up a barcode, and offline-first means exactly that case works.
 [functions.foods]
 verify_jwt = false
+
+# Reads a recipe off a public web page. JWT required on purpose: it makes outbound requests, so an
+# unauthenticated version would be an open request forwarder (the SSRF guard in the function is the
+# second line of defence, not the first).
+[functions.recipe-import]
+verify_jwt = true

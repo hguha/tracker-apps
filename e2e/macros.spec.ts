@@ -49,7 +49,13 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   // Log a seeded food end to end: search, portion, then it lands on the day.
   await page.getByRole('button', { name: 'Log food' }).click()
   // Creating a recipe starts from the same "+", without slowing the common case down.
-  await expect(page.getByRole('button', { name: /New recipe/ })).toBeVisible()
+  const newRecipe = page.getByRole('button', { name: /New recipe/ })
+  await expect(newRecipe).toBeVisible()
+  // The editor renders offline: the link import needs a session, everything else does not.
+  await newRecipe.click()
+  await expect(page.getByRole('heading', { name: 'New recipe', level: 1 })).toBeVisible()
+  await expect(page.getByPlaceholder('Sunday chilli')).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
   // The meal and the time are always on screen — the slot is data, not an assumption.
   await expect(page.getByRole('button', { name: 'Breakfast' })).toBeVisible()
   // Every logging path is reachable from here, including the ones that need a network.
