@@ -1,21 +1,18 @@
-import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, dayStreaks, formatDayHeading, formatTimeOfDay } from '@tracker-engine/core'
+import { dayKey, dayKeyOffset, dayStreaks, formatDayHeading } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import { Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
-import { MEAL_LABELS, mealForHour } from '@/features/shared/meals'
-import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { mealForHour } from '@/features/shared/meals'
+import { foodIdsOf } from '@/features/shared/entryName'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
-import type { BodyWeightRow, LogEntry, MealSlot, Profile } from '@/domain/types'
+import type { BodyWeightRow, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
 import { CookCard } from './CookCard'
-import { EntrySheet } from './EntrySheet'
 import { GoalCard } from './GoalCard'
 import { NutritionCard } from './NutritionCard'
-import { SaveMealSheet } from './SaveMealSheet'
 import { Timeline } from './Timeline'
 import { WeighInCard } from './WeighInCard'
 
@@ -28,16 +25,16 @@ export function TodayScreen({
   onOpenAbout,
   onOpenBadges,
   onOpenRecipes,
+  onOpenDay,
 }: {
   onLog: (meal: MealSlot) => void
   onOpenCoach: () => void
   onOpenAbout: () => void
   onOpenBadges: () => void
   onOpenRecipes: () => void
+  onOpenDay: (day: string) => void
 }) {
   const today = dayKey(Date.now())
-  const [editing, setEditing] = useState<{ entry: LogEntry; siblings: LogEntry[] } | null>(null)
-  const [savingMeal, setSavingMeal] = useState<LogEntry[] | null>(null)
 
   const entries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
@@ -110,8 +107,7 @@ export function TodayScreen({
         entries={entries ?? []}
         foods={foods ?? new Map()}
         onAdd={() => onLog(mealForHour(new Date().getHours()))}
-        onEdit={(entry, siblings) => setEditing({ entry, siblings })}
-        onSaveMeal={setSavingMeal}
+        onOpen={() => onOpenDay(today)}
       />
 
       <button
@@ -125,22 +121,6 @@ export function TodayScreen({
 
       {profile?.eatingWindow === null && (entries ?? []).length > 0 && <FastingHint />}
 
-      {editing && (
-        <EntrySheet
-          entry={editing.entry}
-          name={entryName(editing.entry, foods ?? new Map())}
-          siblings={editing.siblings}
-          onDismiss={() => setEditing(null)}
-        />
-      )}
-
-      {savingMeal && (
-        <SaveMealSheet
-          entries={savingMeal}
-          defaultName={`${MEAL_LABELS[savingMeal[0]!.meal]} · ${formatTimeOfDay(savingMeal[0]!.eatenAt)}`}
-          onDismiss={() => setSavingMeal(null)}
-        />
-      )}
     </div>
   )
 }

@@ -410,6 +410,51 @@ export function deleteEntry(id: string): Promise<void> {
   return patch('logEntries', id, { deletedAt: Date.now() })
 }
 
+/**
+ * Puts a day back exactly as it was.
+ *
+ * The day editor writes every change immediately — a draft that only commits on "Save" can be lost
+ * by a back-swipe, and losing a correction is worse than not offering to discard one. So "revert"
+ * is implemented against a snapshot taken when the screen opened: rows that were edited go back to
+ * their old values, rows that were deleted come back with their original ids, and rows added since
+ * are tombstoned.
+ *
+ * `clientRev` advances on every restored row rather than being restored too. The revert is a real
+ * change as far as sync is concerned; rewinding the revision would let another device's older copy
+ * win the merge and undo the undo.
+ */
+export async function restoreDay(
+  day: string,
+  snapshot: readonly LogEntry[],
+  /** When the snapshot was taken. Only rows created after it are treated as additions. */
+  takenAt: number,
+): Promise<void> {
+  const keep = new Set(snapshot.map((entry) => entry.id))
+
+  for (const entry of snapshot) {
+    const current = await db.logEntries.get(entry.id)
+    await db.logEntries.put({
+      ...entry,
+      ...touch(current?.clientRev ?? entry.clientRev),
+      deletedAt: null,
+    })
+    await enqueue('logEntries', entry.id)
+  }
+
+  // Anything on the day that isn't in the snapshot *and* was created after it was added while the
+  // screen was open. The `createdAt` test matters: a row moved in from another day is also absent
+  // from the snapshot, and tombstoning it would destroy data the user never asked to delete. Its
+  // new time stays put, which is a smaller wrong than losing the row.
+  const days = new Set([day, ...snapshot.map((entry) => entry.day)])
+  for (const each of days) {
+    for (const entry of await entriesForDay(each)) {
+      if (!keep.has(entry.id) && entry.createdAt >= takenAt) {
+        await patch('logEntries', entry.id, { deletedAt: Date.now() })
+      }
+    }
+  }
+}
+
 /** Re-logs a whole day into today, the fastest path for someone who eats on repeat. */
 export async function copyDay(fromDay: string, toDay: string): Promise<number> {
   return relogEntries(await entriesForDay(fromDay), { day: toDay })

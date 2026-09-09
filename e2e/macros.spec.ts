@@ -82,12 +82,28 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await page.getByRole('button', { name: 'Log it' }).click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
 
-  // The timeline summarises the day, and tapping an item opens the correction sheet.
-  await expect(page.getByRole('button', { name: /Today.s food 1 item/ })).toBeVisible()
-  // The venue chosen at log time rides along, on the sitting rather than the row.
+  // Today summarises the day in one line per sitting; the detail is a tap away on its own screen.
+  await expect(page.getByRole('button', { name: /Today.s food/ })).toBeVisible()
+  await page.getByRole('button', { name: /Today.s food/ }).click()
+
+  // The day editor: totals against that day's target, then the meals as cards.
+  await expect(page.getByText(/of \d+ kcal|no target for this day/)).toBeVisible()
+  // The venue chosen at log time rode along, on the sitting rather than the row.
   await expect(page.getByRole('button', { name: /Eaten Out/ })).toBeVisible()
+
+  // Tapping a row opens the amount in place — the common correction, without a sheet.
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await expect(page.getByRole('button', { name: /Remove from today/ })).toBeVisible()
+  const stepper = page.locator('input[aria-label^="Grams of"]').first()
+  await expect(stepper).toBeVisible()
+  const before = await stepper.inputValue()
+  await page.getByRole('button', { name: /^More Chicken breast/ }).click()
+  await expect(stepper).not.toHaveValue(before)
+
+  // Which is a real change, so it can be reverted wholesale.
+  await expect(page.getByRole('button', { name: 'Revert' })).toBeVisible()
+  await page.getByRole('button', { name: 'Revert' }).click()
+  await expect(stepper).toHaveValue(before)
+  await expect(page.getByRole('button', { name: 'Revert' })).toHaveCount(0)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -152,14 +168,21 @@ test('every tab and the coach render without errors', async ({ page }) => {
     'Food & units',
     'Appearance',
     'Badges',
-    'Saved meals',
-    'Recipes',
-    'Your foods',
   ]) {
     await page.getByRole('button', { name: new RegExp(route) }).click()
     await expect(page.getByRole('heading', { name: route, level: 1 })).toBeVisible()
     await page.getByRole('button', { name: 'Back' }).click()
   }
+
+  // Recipes, saved meals and own foods share one screen: three rows called those things told
+  // nobody which was which, and Settings is the last place you'd look for something you cook.
+  await page.getByRole('button', { name: /Your library/ }).click()
+  await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
+  for (const tab of ['Recipes', 'Meals', 'Foods']) {
+    await page.getByRole('button', { name: tab, exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
+  }
+  await page.getByRole('button', { name: 'Back' }).click()
 
   // The offline coach must answer with no key and no session — that's the whole point of it.
   await page.getByRole('button', { name: /^Coach Ask about your own numbers/ }).click()
@@ -180,7 +203,7 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
 
   // Built entirely offline: the model is only needed to convert *written* amounts.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Recipes/ }).click()
+  await page.getByRole('button', { name: /Your library/ }).click()
   await page.getByRole('button', { name: /New recipe/ }).click()
 
   await page.getByPlaceholder('Sunday chilli').fill('Test bowl')
@@ -193,7 +216,7 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
   // The list is sortable and filterable, and the cuisine came through.
-  await expect(page.getByRole('heading', { name: 'Recipes', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Suggested' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Cuisine/ })).toBeVisible()
   await expect(page.getByText('Italian').first()).toBeVisible()
@@ -214,7 +237,10 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByText(/Test bowl/).first()).toBeVisible()
+  // Filed as cooked at home without being asked — the venue chip lives on the day screen.
+  await page.getByRole('button', { name: /Today.s food/ }).click()
   await expect(page.getByRole('button', { name: /Eaten Home/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   // And it shows up as something to cook again, with a stated reason.
   await expect(page.getByText('Cook one of yours')).toBeVisible()
@@ -225,6 +251,46 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await expect(page.getByText('Where you eat')).toBeVisible()
   await expect(page.getByText('What you cook')).toBeVisible()
   await expect(page.getByText('Italian').first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('switching to imperial changes every weight on screen', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByPlaceholder(/Weight \(kg\)/).fill('80')
+  await page.getByRole('button', { name: 'Start logging' }).click()
+
+  // This exists because a unit test cannot catch it: the setting was stored, synced, and shown in
+  // Settings, while every screen printed kg regardless. Nothing was wrong with the value.
+  // Two cards show it — the weigh-in and the projection — and both have to move together.
+  await expect(page.getByText(/kg now/)).toBeVisible()
+  await expect(page.getByText(/80 kg|80\.0 kg/).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Food & units/ }).click()
+  await page.getByRole('button', { name: /lb \/ in/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  // 80 kg is 176.4 lb to the tenth a scale reads.
+  await expect(page.getByText(/176\.4 lb/).first()).toBeVisible()
+  await expect(page.getByText(/lb now/)).toBeVisible()
+  await expect(page.getByText(/kg now/)).toHaveCount(0)
+
+  // Entry follows too, and storage stays metric — so the value survives switching back.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /About you/ }).click()
+  await expect(page.getByText('Height (in)')).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: /Food & units/ }).click()
+  await page.getByRole('button', { name: /kg \/ cm/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  await expect(page.getByText(/kg now/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

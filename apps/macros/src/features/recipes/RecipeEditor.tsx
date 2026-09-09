@@ -192,6 +192,31 @@ export function RecipeEditor({
   }
 
   const isBusy = isReading || isConverting
+  const canSave = items.length > 0 && name.trim().length > 0
+
+  function save() {
+    if (isSaving || !canSave) return
+    setIsSaving(true)
+    return repo
+      .saveRecipe(
+        {
+          name,
+          servings: Number(servings) || 1,
+          ingredients: items,
+          steps: steps.split('\n').map((step) => step.trim()).filter(Boolean),
+          cuisine: cuisine === '' ? null : cuisine,
+          totalMinutes,
+          tags,
+          sourceUrl: source,
+        },
+        recipeId ?? undefined,
+      )
+      .then(() => {
+        toast.show(recipeId ? 'Recipe updated' : 'Recipe saved')
+        onBack()
+      })
+      .finally(() => setIsSaving(false))
+  }
 
   return (
     <Screen
@@ -199,30 +224,8 @@ export function RecipeEditor({
       onBack={onBack}
       action={
         <button
-          disabled={items.length === 0 || name.trim().length === 0 || isSaving}
-          onClick={() => {
-            if (isSaving) return
-            setIsSaving(true)
-            void repo
-              .saveRecipe(
-                {
-                  name,
-                  servings: Number(servings) || 1,
-                  ingredients: items,
-                  steps: steps.split('\n').map((step) => step.trim()).filter(Boolean),
-                  cuisine: cuisine === '' ? null : cuisine,
-                  totalMinutes,
-                  tags,
-                  sourceUrl: source,
-                },
-                recipeId ?? undefined,
-              )
-              .then(() => {
-                toast.show(recipeId ? 'Recipe updated' : 'Recipe saved')
-                onBack()
-              })
-              .finally(() => setIsSaving(false))
-          }}
+          disabled={!canSave || isSaving}
+          onClick={() => void save()}
           className="h-9 shrink-0 rounded-lg px-2.5 text-[14px] font-semibold text-accent disabled:opacity-40 active:bg-sunken"
         >
           {isSaving ? 'Saving…' : 'Save'}
@@ -388,6 +391,8 @@ export function RecipeEditor({
         ) : (
           <ul className="divide-y divide-line px-4">
             {items.map((item, index) => {
+              const setGrams = (grams: number) =>
+                setItems(items.map((draft, i) => (i === index ? { ...draft, grams } : draft)))
               // Deliberately not asserted: the food lookup is a live query, so a row added a
               // moment ago is legitimately absent from the map for one render. Asserting it
               // crashed the editor every time an ingredient was added.
@@ -395,6 +400,27 @@ export function RecipeEditor({
               return (
                 <GramsRow
                   key={index}
+                  after={
+                    // A nineteen-line import always leaves a few lines the database has no row
+                    // for, and those count zero — so the total reads low and there was no way to
+                    // fix it but delete the row and search again from the bottom of the screen.
+                    item.foodId === null ? (
+                      <FoodSearchPicker
+                        placeholder={`Find a match for “${item.label}”`}
+                        branded={false}
+                        limit={5}
+                        onPick={(food) =>
+                          setItems(
+                            items.map((draft, i) =>
+                              i === index
+                                ? { ...draft, foodId: food.id, label: food.description }
+                                : draft,
+                            ),
+                          )
+                        }
+                      />
+                    ) : undefined
+                  }
                   title={food?.description ?? item.label}
                   subtitle={
                     item.foodId === null ? (
@@ -408,11 +434,7 @@ export function RecipeEditor({
                     )
                   }
                   grams={item.grams}
-                  onGrams={(value) =>
-                    setItems(
-                      items.map((draft, i) => (i === index ? { ...draft, grams: value } : draft)),
-                    )
-                  }
+                  onGrams={setGrams}
                   onRemove={() => setItems(items.filter((_, i) => i !== index))}
                 />
               )
@@ -454,8 +476,27 @@ export function RecipeEditor({
         <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
           Per serving: {grams(each.proteinMg)}P {grams(each.carbsMg)}C {grams(each.fatMg)}F
         </p>
+        {unmatched > 0 && (
+          <p className="mt-1.5 text-[12px]" style={{ color: 'var(--status-serious)' }}>
+            {unmatched} ingredient{unmatched === 1 ? '' : 's'} matched nothing and count zero, so
+            this total is low. Search a match on each one above.
+          </p>
+        )}
         {source && (
           <p className="mt-2 truncate text-[12px] text-ink-muted">From {hostOf(source)}</p>
+        )}
+
+        {/* Also in the header, for a long form — but the end of the form is where you finish, and
+            a header-only Save reads as "no way to save this". */}
+        <Button className="mt-3 w-full" disabled={!canSave || isSaving} onClick={() => void save()}>
+          {isSaving ? 'Saving…' : recipeId ? 'Save changes' : 'Save recipe'}
+        </Button>
+        {!canSave && (
+          <p className="mt-1.5 text-center text-[12px] text-ink-muted">
+            {name.trim().length === 0
+              ? 'Give it a name first.'
+              : 'Add at least one ingredient first.'}
+          </p>
         )}
       </Card>
     </Screen>

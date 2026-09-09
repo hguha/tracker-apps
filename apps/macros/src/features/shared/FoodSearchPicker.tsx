@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import { SearchField } from '@tracker-engine/ui'
-import { Plus } from 'lucide-react'
-import * as repo from '@/data/repository'
-import { searchRemote } from '@/data/foodLookup'
+import { Loader2, Plus } from 'lucide-react'
 import { portionLabel } from '@/features/shared/format'
+import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import type { Food } from '@/domain/types'
 
 /**
@@ -37,14 +35,7 @@ export function FoodSearchPicker({
 }) {
   const [query, setQuery] = useState('')
   const trimmed = query.trim()
-
-  const results = useLiveQuery(() => repo.searchFoods(trimmed, limit), [trimmed, limit], [])
-
-  useEffect(() => {
-    if (trimmed.length < 3 || (results?.length ?? 0) >= 3) return
-    const id = window.setTimeout(() => void searchRemote(trimmed, { branded }), 400)
-    return () => clearTimeout(id)
-  }, [trimmed, results?.length, branded])
+  const { results, isSearching, isEmpty } = useFoodSearch(query, { limit, branded })
 
   return (
     <div>
@@ -58,7 +49,7 @@ export function FoodSearchPicker({
       {trimmed.length >= minChars && (
         <>
           <ul className="mt-1.5">
-            {(results ?? []).map((food) => (
+            {results.map((food) => (
               <li key={food.id}>
                 <button
                   onClick={() => {
@@ -78,9 +69,23 @@ export function FoodSearchPicker({
               </li>
             ))}
           </ul>
+          {isSearching && <SearchingRow />}
+          {isEmpty && !isSearching && (
+            <p className="py-1.5 text-[12.5px] text-ink-muted">Nothing matched.</p>
+          )}
           {children?.(trimmed)}
         </>
       )}
     </div>
+  )
+}
+
+/** Said out loud, because "Nothing matched" while still looking is a confident wrong answer. */
+export function SearchingRow() {
+  return (
+    <p className="flex items-center gap-1.5 py-1.5 text-[12.5px] text-ink-muted">
+      <Loader2 size={13} className="shrink-0 animate-spin" />
+      Searching the food databases…
+    </p>
   )
 }

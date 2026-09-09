@@ -158,6 +158,17 @@ function portionLabel(
   return parts.length > 0 ? parts.join(' ') : `${Math.round(gramWeight)} g`
 }
 
+/**
+ * Drops rows with no energy value.
+ *
+ * FDC has real entries with `kcal: 0` — "Refried beans, canned (pinto)" is one — where the energy
+ * nutrient simply wasn't recorded. Offering them is worse than omitting them: a food that adds
+ * nothing to the day silently understates it, and the user has no way to tell it apart from a food
+ * that genuinely has no calories. Water and black coffee are the only real zeroes, and both are in
+ * the local seed.
+ */
+const hasEnergy = (row: ReturnType<typeof mapFood>): boolean => row.per100.kcal > 0
+
 function toClient(row: ReturnType<typeof mapFood>) {
   const { data_type, grams_per_ml, verified_at, ...rest } = row
   return {
@@ -216,7 +227,7 @@ Deno.serve(async (request) => {
 
     if (body.op === 'search' && body.q) {
       const found = await searchGenericFirst(key, body.q, Math.min(50, body.limit ?? 25))
-      const rows = await withPortions(key, found)
+      const rows = (await withPortions(key, found)).filter(hasEnergy)
       if (rows.length > 0) await admin.from('foods').upsert(rows)
       return json({ foods: rows.map(toClient) })
     }

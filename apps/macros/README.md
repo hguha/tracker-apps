@@ -8,7 +8,10 @@ Design and roadmap: `docs/design-macros-app.md` at the repo root.
 
 ## What's built
 
-- **Today** — calorie ring and macro bars against target, meals, weigh-in.
+- **Today** — calorie ring and macro bars against target, weigh-in, a ranked "cook one of yours",
+  and the day summarised one line per sitting.
+- **A day** — its own screen, reached from Today or from History: totals against that day's target,
+  meals as cards, amounts editable in place, and one "Revert" for everything changed while open.
 - **Log** — offline search over seeded foods, portions, servings-or-grams, quick add, barcode,
   photo, described meals, and where it was eaten.
 - **Recipes** — imported from a link, pasted, or described; a detail screen with the method and
@@ -51,6 +54,26 @@ whole thing away when the model came back busy.
 supabase-js discards the body of a non-2xx, so every carefully worded reason otherwise reached the
 user as "non-2xx status code" — which is how "that page has no recipe" became indistinguishable
 from "you're offline". The `coach` function does the same, for the same reason.
+
+## Units
+
+Storage is metric always — kg and cm — and conversion happens only at the edges, in
+`@tracker-engine/core`'s units module, shared with REPutation. MACROcosm originally had a units
+*setting* that changed nothing: it stored, synced and displayed itself correctly while every screen
+printed kg regardless. Nothing was wrong with the value, which is why no unit test caught it — the
+guard is an E2E that switches to imperial and reads the screen.
+
+## The AI's limits
+
+The free Gemini tier allows **20 requests a day** for this model (`GenerateRequestsPerDayPerProject
+PerModel-FreeTier`), and one nineteen-line recipe import spends one of them. That is the real
+explanation for "model timed out" arriving over and over, so the app now says it: the `coach`
+function parses Google's `QuotaFailure` and `RetryInfo` and returns the quota that was hit and how
+long to wait, and the client remembers the cooldown rather than spending another request from a
+different screen to rediscover the same wall.
+
+A quota 429 is **not** retried — Google's own hint is 30 seconds or more, and a retry loop just
+spends a phone's time relearning it. A 503 is, twice.
 
 ## Where you ate
 

@@ -32,6 +32,51 @@ export interface MealEstimate {
 
 export class EstimateUnavailable extends Error {}
 
+/**
+ * When the model will be worth asking again, shared across every path that calls it.
+ *
+ * Module-level rather than per-component because the limit is per *account*, not per screen: the
+ * free tier allows 20 requests a day for this model, so a describe, a photo and a nineteen-line
+ * recipe import are all drawing on the same tiny budget. Without this, each screen would
+ * independently spend a request discovering the same wall.
+ */
+let unavailableUntil = 0
+let lastReason = ''
+
+/** Named so `npm run lint` doesn't read a seconds-to-milliseconds multiply as a mg conversion. */
+const SECOND_MS = 1_000
+
+/** Seconds until the model is worth asking again, or 0. Drives the countdown in the UI. */
+export function modelCooldownSeconds(): number {
+  return Math.max(0, Math.ceil((unavailableUntil - Date.now()) / SECOND_MS))
+}
+
+/**
+ * Turns a quota response into the sentence a person can act on.
+ *
+ * The version this replaces said "the model is busy right now — give it a few seconds and try
+ * again" for everything, including a daily cap. Waiting a few seconds then changes nothing, which
+ * from outside is indistinguishable from the app being broken.
+ */
+function quotaMessage(body: { reason?: string; quota?: string | null; kind?: string }): string {
+  const seconds = modelCooldownSeconds()
+  const wait =
+    seconds > 90
+      ? `Try again in about ${Math.ceil(seconds / 60)} minutes.`
+      : seconds > 0
+        ? `Try again in ${seconds} seconds.`
+        : 'Try again shortly.'
+
+  if (body.kind === 'quota') {
+    const limit = /limit (\d+)/.exec(body.quota ?? '')?.[1]
+    return (
+      `The AI's free daily allowance is used up${limit ? ` — ${limit} requests a day` : ''}. ` +
+      `${wait} Everything else works: search for the foods, or use Quick add.`
+    )
+  }
+  return `The model is overloaded, not confused. ${wait}`
+}
+
 interface RawItem {
   query?: unknown
   grams?: unknown
@@ -77,6 +122,10 @@ async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate>
     )
   }
 
+  // Don't spend a request on a wall we already know about. The allowance is per account, so a
+  // second attempt from a different screen would fail for exactly the same reason.
+  if (Date.now() < unavailableUntil) throw new EstimateUnavailable(lastReason)
+
   // Preferences go along: "a sandwich" means something different to someone who wrote down
   // "vegetarian", and guessing turkey would be worse than asking.
   const { dietNotes } = await repo.getProfile()
@@ -85,14 +134,19 @@ async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate>
     assumptions?: string
     error?: string
     busy?: boolean
+    kind?: 'quota' | 'overloaded'
+    reason?: string
+    quota?: string | null
+    retryAfterSeconds?: number
   }>('coach', { body: { ...body, dietNotes } })
 
-  // A busy model and an unreadable meal are different problems with different answers, and
-  // reporting both as "couldn't work that out" made a queue look like a failure to understand.
+  // A quota wall, an overloaded model and an unreadable meal are three different problems with
+  // three different answers. Reporting them all as "couldn't work that out" made a spent
+  // allowance look like a failure to understand a perfectly clear meal.
   if (data?.busy) {
-    throw new EstimateUnavailable(
-      'The model is busy right now — give it a few seconds and try again.',
-    )
+    unavailableUntil = Date.now() + Math.max(5, data.retryAfterSeconds ?? 30) * SECOND_MS
+    lastReason = quotaMessage(data)
+    throw new EstimateUnavailable(lastReason)
   }
   if (error || !data || data.error || !Array.isArray(data.items)) {
     throw new EstimateUnavailable(

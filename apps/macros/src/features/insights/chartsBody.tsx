@@ -1,6 +1,8 @@
 import type { EChartsOption } from 'echarts'
 import type { TrendPoint } from '@tracker-engine/body'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
+import { convertWeight } from '@tracker-engine/core'
+import { useUnits } from '@/features/shared/useUnits'
 import { shortDay, useChartTokens } from './chartTokens'
 import type { ExpenditureWindow } from '@/lib/expenditure'
 import type { InsightsDay } from './useInsightsData'
@@ -90,6 +92,7 @@ export function BalanceChart({
   energyPerKg: number
 }) {
   const tokens = useChartTokens()
+  const units = useUnits()
   const canDraw = expenditureKcal !== null && days.length > 0 && trend.length > 1
 
   const trendByDay = new Map(trend.map((point) => [point.day, point.trendKg]))
@@ -119,7 +122,11 @@ export function BalanceChart({
     yAxis: {
       type: 'value',
       splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10, formatter: '{value} kg' },
+      axisLabel: {
+        color: tokens.inkMuted,
+        fontSize: 10,
+        formatter: `{value} ${units.weight}`,
+      },
     },
     tooltip: { trigger: 'axis' },
     series: [
@@ -128,7 +135,7 @@ export function BalanceChart({
         type: 'line',
         showSymbol: false,
         lineStyle: { color: tokens.inkMuted, width: 2, type: 'dashed' },
-        data: rows.map((row) => Number(row.impliedKg.toFixed(2))),
+        data: rows.map((row) => round2(convertWeight(row.impliedKg, units.weight))),
       },
       {
         name: 'From the scale',
@@ -136,7 +143,9 @@ export function BalanceChart({
         showSymbol: false,
         connectNulls: true,
         lineStyle: { color: tokens.accent, width: 2.5 },
-        data: rows.map((row) => (row.actualKg === null ? null : Number(row.actualKg.toFixed(2)))),
+        data: rows.map((row) =>
+          row.actualKg === null ? null : round2(convertWeight(row.actualKg, units.weight)),
+        ),
       },
     ],
   }
@@ -148,11 +157,11 @@ export function BalanceChart({
       isEmpty={!canDraw}
       emptyMessage="Needs a measured expenditure and a couple of weeks of weigh-ins."
       table={{
-        columns: ['Day', 'Implied (kg)', 'Trend (kg)'],
+        columns: ['Day', `Implied (${units.weight})`, `Trend (${units.weight})`],
         rows: rows.map((row) => [
           row.day,
-          Number(row.impliedKg.toFixed(2)),
-          row.actualKg === null ? '—' : Number(row.actualKg.toFixed(2)),
+          round2(convertWeight(row.impliedKg, units.weight)),
+          row.actualKg === null ? '—' : round2(convertWeight(row.actualKg, units.weight)),
         ]),
       }}
     >
@@ -160,3 +169,6 @@ export function BalanceChart({
     </ChartCard>
   )
 }
+
+/** A weight *change*, so the unrounded conversion — a delta must not snap to a plate increment. */
+const round2 = (value: number): number => Number(value.toFixed(2))

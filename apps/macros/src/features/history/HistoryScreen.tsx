@@ -10,14 +10,14 @@ import {
   useToast,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { ChevronDown, Copy } from 'lucide-react'
+import { ChevronRight, Copy } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
 import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
 import { VENUE_ICONS, VENUE_LABELS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
 import {
   MEAL_SLOTS,
@@ -53,7 +53,7 @@ const SORTS: SegmentedTab<SortKey>[] = [
  * past week is an immutable record, so changing a goal now must not turn last month into a month
  * of failures.
  */
-export function HistoryScreen() {
+export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void }) {
   const toast = useToast()
   const today = dayKey(Date.now())
   const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
@@ -62,7 +62,6 @@ export function HistoryScreen() {
   const [meals, setMeals] = useState<string[]>([])
   const [venues, setVenues] = useState<string[]>([])
   const [openSheet, setOpenSheet] = useState<'range' | 'meal' | 'venue' | null>(null)
-  const [openDay, setOpenDay] = useState<string | null>(null)
 
   const range = RANGES.find((option) => option.key === rangeKey)!
   const from = dayKeyOffset(Date.now(), range.days)
@@ -176,8 +175,7 @@ export function HistoryScreen() {
             foods={foods ?? new Map()}
             target={targets?.get(day) ?? null}
             isPartial={isFiltered}
-            isOpen={openDay === day}
-            onToggle={() => setOpenDay((current) => (current === day ? null : day))}
+            onOpen={() => onOpenDay(day)}
             onCopy={() => {
               void repo.copyDay(day, today).then((n) => toast.show(`Copied ${n} items`))
             }}
@@ -243,8 +241,7 @@ function DayCard({
   foods,
   target,
   isPartial,
-  isOpen,
-  onToggle,
+  onOpen,
   onCopy,
 }: {
   day: string
@@ -253,20 +250,19 @@ function DayCard({
   target: MacroTargets | null
   /** True when filters are on, so the totals are of the matches rather than the whole day. */
   isPartial: boolean
-  isOpen: boolean
-  onToggle: () => void
+  onOpen: () => void
   onCopy: () => void
 }) {
   const totals = dayTotals(entries)
   const delta = target && !isPartial ? totals.kcal - target.kcal : null
   const timing = dayTiming(entries)
+  const occasions = eatingOccasions(entries)
 
   return (
     <Card className="p-0">
       <div className="flex items-center">
         <button
-          onClick={onToggle}
-          aria-expanded={isOpen}
+          onClick={onOpen}
           className="min-w-0 flex-1 px-4 py-3 text-left active:bg-sunken"
         >
           <div className="flex items-baseline gap-2">
@@ -274,10 +270,7 @@ function DayCard({
               {formatRelativeDay(Date.parse(`${day}T12:00:00`))}
             </h2>
             <span className="tabular text-[14px] font-semibold">{totals.kcal}</span>
-            <ChevronDown
-              size={16}
-              className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
-            />
+            <ChevronRight size={16} className="shrink-0 text-ink-muted" />
           </div>
           <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
             {grams(totals.proteinMg)}P {grams(totals.carbsMg)}C {grams(totals.fatMg)}F
@@ -298,48 +291,48 @@ function DayCard({
         </button>
       </div>
 
-      {isOpen && (
-        <div className="border-t border-line">
-          {target === null && !isPartial && (
-            <p className="px-4 pt-2 text-[12px] text-ink-muted">
-              No target was in force yet on this day.
-            </p>
-          )}
-          {eatingOccasions(entries).map((occasion) => (
-            <div key={occasion.startAt}>
-              <div className="flex items-baseline justify-between px-4 pb-1 pt-2.5">
-                <span className="text-[12.5px] font-semibold">
-                  {formatTimeOfDay(occasion.startAt)}
-                  <span className="font-normal text-ink-muted">
-                    {' '}
-                    · {MEAL_LABELS[occasion.entries[0]!.meal]}
+      {/*
+        One line per sitting instead of every item inline. The expanded version was a run of small
+        grey text several screens long — technically complete and effectively unreadable — and it
+        offered no way to change anything. Tapping through opens the day editor, which does.
+      */}
+      {occasions.length > 0 && (
+        <ul className="divide-y divide-line border-t border-line">
+          {occasions.map((occasion) => (
+            <li key={occasion.startAt}>
+              <button
+                onClick={onOpen}
+                className="w-full px-4 py-2 text-left active:bg-sunken"
+              >
+                <span className="flex items-baseline gap-2">
+                  <span className="tabular shrink-0 text-[12px] text-ink-muted">
+                    {formatTimeOfDay(occasion.startAt)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px]">
+                    {entryName(biggest(occasion.entries), foods)}
+                    {occasion.entries.length > 1 && (
+                      <span className="text-ink-muted"> +{occasion.entries.length - 1}</span>
+                    )}
                   </span>
                   <VenueChip entries={occasion.entries} />
+                  <span className="tabular shrink-0 text-[12.5px]">{occasion.nutrients.kcal}</span>
                 </span>
-                <span className="tabular text-[12.5px] text-ink-muted">
-                  {occasion.nutrients.kcal} kcal
-                </span>
-              </div>
-              <ul className="divide-y divide-line">
-                {occasion.entries.map((entry) => (
-                  <li key={entry.id} className="flex items-center gap-2 px-4 py-1.5">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13.5px]">{entryName(entry, foods)}</span>
-                      <span className="tabular block text-[11.5px] text-ink-muted">
-                        {entry.grams > 0 && `${Math.round(entry.grams)}g · `}
-                        {grams(entry.nutrients.proteinMg)}P {grams(entry.nutrients.carbsMg)}C{' '}
-                        {grams(entry.nutrients.fatMg)}F
-                      </span>
-                    </span>
-                    <span className="tabular text-[13px]">{entry.nutrients.kcal}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                <MacroSplitBar nutrients={occasion.nutrients} className="mt-1.5" />
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
+      )}
+
+      {target === null && !isPartial && (
+        <p className="border-t border-line px-4 py-2 text-[12px] text-ink-muted">
+          No target was in force yet on this day.
+        </p>
       )}
     </Card>
   )
 }
 
+/** The item a person recognises the meal by: the biggest one, not the first one logged. */
+const biggest = (entries: readonly LogEntry[]): LogEntry =>
+  [...entries].sort((a, b) => b.nutrients.kcal - a.nutrients.kcal)[0]!

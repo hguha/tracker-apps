@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Apple, ArrowLeft, Scale, Target, Utensils } from 'lucide-react'
+import { unitsFor, weightToKg } from '@tracker-engine/core'
 import { Button } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
@@ -56,7 +57,8 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         proteinGPerKg: 1.8,
         fatMinPctKcal: 25,
       })
-      if (weight) await repo.recordWeight(Number(weight))
+      // Stored in kg; the box is in whatever the user picked two steps ago.
+      if (weight) await repo.recordWeight(weightToKg(Number(weight), unitsFor(units).weight))
       onDone()
     } finally {
       setIsBusy(false)
@@ -189,7 +191,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
               autoFocus
               value={weight}
               onChange={(event) => setWeight(event.target.value)}
-              placeholder="Weight (kg)"
+              placeholder={`Weight (${unitsFor(units).weight})`}
               className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
             />
             <Button

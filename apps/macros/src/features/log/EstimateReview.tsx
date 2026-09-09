@@ -126,7 +126,7 @@ export function AddToDraft({
   nextIndex: number
   placeholder?: string
 }) {
-  const [isAsking, setIsAsking] = useState(false)
+  const [breakingDown, setBreakingDown] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   function addFood(food: Food) {
@@ -144,9 +144,13 @@ export function AddToDraft({
     ])
   }
 
-  async function ask(query: string) {
-    if (query.length < 3 || isAsking) return
-    setIsAsking(true)
+  /**
+   * For a *dish*, not an ingredient: "chicken tikka masala" is several foods, and asking for it by
+   * name is the only way to get all of them at once.
+   */
+  async function breakDown(query: string) {
+    if (query.length < 3 || breakingDown !== null) return
+    setBreakingDown(query)
     setError(null)
     try {
       const extra = await estimateMeal(query)
@@ -156,7 +160,7 @@ export function AddToDraft({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not work that out.')
     } finally {
-      setIsAsking(false)
+      setBreakingDown(null)
     }
   }
 
@@ -164,14 +168,34 @@ export function AddToDraft({
     <div className="rounded-xl bg-sunken/60 p-2.5">
       <FoodSearchPicker placeholder={placeholder} branded={false} onPick={addFood}>
         {(query) => (
-          <button
-            onClick={() => void ask(query)}
-            disabled={isAsking}
-            className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-semibold text-accent active:opacity-60"
-          >
-            <Sparkles size={14} />
-            {isAsking ? 'Working it out…' : `Ask for “${query}” instead`}
-          </button>
+          <>
+            {/*
+              Offered only for something that reads as a dish rather than an ingredient. The first
+              version offered "Ask for X instead" under every query, so searching for "refried
+              beans" — one food, which the database has — invited the user to have a language model
+              guess at it instead. That isn't an alternative way to find a food; it's a different
+              operation, and labelling it as a fallback made it look like the search had given up.
+            */}
+            {query.split(/\s+/).length >= 2 && (
+              <button
+                onClick={() => void breakDown(query)}
+                disabled={breakingDown !== null}
+                className="mt-1 flex w-full items-center gap-1.5 rounded-lg px-1 py-2 text-left text-[12.5px] text-ink-muted active:opacity-60"
+              >
+                <Sparkles size={13} className="shrink-0 text-accent" />
+                <span className="min-w-0 flex-1">
+                  {breakingDown === query ? (
+                    'Working it out…'
+                  ) : (
+                    <>
+                      Is <span className="font-semibold text-accent">{query}</span> a whole dish?
+                      Break it into its parts
+                    </>
+                  )}
+                </span>
+              </button>
+            )}
+          </>
         )}
       </FoodSearchPicker>
 

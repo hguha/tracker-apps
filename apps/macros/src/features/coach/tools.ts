@@ -1,5 +1,5 @@
 import type { ToolDeclaration } from '@tracker-engine/ai-coach'
-import { DAY_MS, dayKey } from '@tracker-engine/core'
+import { DAY_MS, bodyWeightFromKg, convertWeight, dayKey, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale } from '@/lib/nutrition'
@@ -251,10 +251,15 @@ export async function executeRetrievalTool(
     case 'getWeightTrend': {
       const trend = weightTrend(await repo.weights())
       const latest = trend[trend.length - 1]
+      // In the user's own unit, with the unit named. The coach telling someone who thinks in
+      // pounds that they weigh 80 is worse than useless — it's wrong by a factor of 2.2.
+      const { weight } = unitsFor((await repo.getProfile()).units)
+      const show = (kg: number) => bodyWeightFromKg(kg, weight)
       return {
-        latestKg: latest?.kg ?? null,
-        trendKg: latest ? Number(latest.trendKg.toFixed(2)) : null,
-        kgPerWeek: Number((trendChangePerWeek(trend) ?? 0).toFixed(2)),
+        unit: weight,
+        latest: latest ? show(latest.kg) : null,
+        trend: latest ? show(latest.trendKg) : null,
+        perWeek: Number(convertWeight(trendChangePerWeek(trend) ?? 0, weight).toFixed(2)),
         weighIns: trend.length,
       }
     }

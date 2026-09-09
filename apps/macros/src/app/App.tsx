@@ -23,18 +23,18 @@ import { AboutYouScreen } from '@/features/settings/AboutYouScreen'
 import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
 import { AppearanceScreen } from '@/features/settings/AppearanceScreen'
 import { BadgesScreen } from '@/features/badges/BadgesScreen'
-import { SavedMealsScreen } from '@/features/settings/SavedMealsScreen'
-import { MyFoodsScreen } from '@/features/settings/MyFoodsScreen'
-import { RecipesScreen } from '@/features/recipes/RecipesScreen'
+import { LibraryScreen } from '@/features/library/LibraryScreen'
 import { CheckInScreen } from '@/features/checkin/CheckInScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogScreen } from '@/features/log/LogScreen'
+import { DayScreen } from '@/features/day/DayScreen'
 import { mealForHour } from '@/features/shared/meals'
 import type { MealSlot } from '@/domain/types'
 
 type View =
   | { kind: 'tabs' }
-  | { kind: 'log'; meal: MealSlot }
+  | { kind: 'log'; meal: MealSlot; day?: string; back?: View }
+  | { kind: 'day'; day: string }
   | { kind: 'settings'; route: SettingsRoute }
   | { kind: 'connect' }
 
@@ -113,7 +113,25 @@ function SignedInApp() {
   const toTabs = () => setView({ kind: 'tabs' })
 
   if (view.kind === 'connect') return <SignInScreen onCancel={toTabs} />
-  if (view.kind === 'log') return <LogScreen meal={view.meal} onClose={toTabs} />
+  if (view.kind === 'log') {
+    // Back goes where you came from: adding to Tuesday from the day screen returns to Tuesday,
+    // not to the tab bar, which would lose the place the user was working in.
+    const back = view.back ?? { kind: 'tabs' as const }
+    return (
+      <LogScreen meal={view.meal} day={view.day} onClose={() => setView(back)} />
+    )
+  }
+  if (view.kind === 'day') {
+    return (
+      <DayScreen
+        day={view.day}
+        onClose={toTabs}
+        onAdd={(day, meal) =>
+          setView({ kind: 'log', meal, day, back: { kind: 'day', day } })
+        }
+      />
+    )
+  }
   if (view.kind === 'settings') {
     switch (view.route) {
       case 'targets':
@@ -126,12 +144,12 @@ function SignedInApp() {
         return <AppearanceScreen onBack={toTabs} />
       case 'badges':
         return <BadgesScreen onBack={toTabs} />
+      case 'library':
+        return <LibraryScreen onBack={toTabs} />
       case 'meals':
-        return <SavedMealsScreen onBack={toTabs} />
-      case 'recipes':
-        return <RecipesScreen onBack={toTabs} />
+        return <LibraryScreen initialTab="meals" onBack={toTabs} />
       case 'foods':
-        return <MyFoodsScreen onBack={toTabs} />
+        return <LibraryScreen initialTab="foods" onBack={toTabs} />
       case 'checkin':
         return <CheckInScreen onBack={toTabs} />
       case 'coach':
@@ -151,13 +169,16 @@ function SignedInApp() {
         {tab === 'today' && (
           <TodayScreen
             onLog={(meal) => setView({ kind: 'log', meal })}
+            onOpenDay={(day) => setView({ kind: 'day', day })}
             onOpenCoach={() => setView({ kind: 'settings', route: 'coach' })}
             onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
             onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}
-            onOpenRecipes={() => setView({ kind: 'settings', route: 'recipes' })}
+            onOpenRecipes={() => setView({ kind: 'settings', route: 'library' })}
           />
         )}
-        {tab === 'history' && <HistoryScreen />}
+        {tab === 'history' && (
+          <HistoryScreen onOpenDay={(day) => setView({ kind: 'day', day })} />
+        )}
         {tab === 'insights' && <InsightsScreen />}
         {tab === 'settings' && (
           <SettingsScreen

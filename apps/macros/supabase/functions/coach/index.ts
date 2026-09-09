@@ -162,7 +162,7 @@ Deno.serve(async (request) => {
     return json({ error: 'contents is required' }, 400)
   }
 
-  const response = await callGemini(key, {
+  const { response, raw } = await callGemini(key, {
     contents: body.contents,
     systemInstruction: {
       parts: [
@@ -175,9 +175,12 @@ Deno.serve(async (request) => {
   })
 
   if (!response.ok) {
-    const detail = await response.text()
-    // 429 is the free tier doing its job; the client falls back to its offline coach.
-    return json({ error: `Gemini ${response.status}: ${detail.slice(0, 300)}` }, 502)
+    // Quota and overload reach the client as a 200 body: the app has an offline coach to fall back
+    // to, and it needs to know *why* to say something true about when it'll be back.
+    if (response.status === 503 || response.status === 429) {
+      return json(classify(response.status, raw))
+    }
+    return json({ error: `Gemini ${response.status}: ${raw.slice(0, 300)}` }, 502)
   }
 
   const payload = (await response.json()) as {
@@ -216,7 +219,7 @@ async function estimate(
 do not assume an ingredient they have ruled out.`
     : ''
 
-  const response = await callGemini(key, {
+  const { response, raw } = await callGemini(key, {
     contents: [
       {
         role: 'user',
@@ -245,53 +248,152 @@ do not assume an ingredient they have ruled out.`
   })
 
   if (!response.ok) {
-    const detail = await response.text()
     // A queue is not a server error, and it has to reach the client as a *body*: supabase-js
     // discards the payload of a non-2xx response, so a 502 here would arrive as a bare
     // "FunctionsHttpError" and the app would blame the meal for a busy model.
     if (response.status === 503 || response.status === 429) {
-      return json({ busy: true, error: `Gemini ${response.status}` }, 200)
+      return json(classify(response.status, raw))
     }
-    return json({ error: `Gemini ${response.status}: ${detail.slice(0, 300)}` }, 502)
+    return json({ error: `Gemini ${response.status}: ${raw.slice(0, 300)}` }, 502)
   }
 
   const payload = (await response.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[]
   }
-  const raw = payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  const text_ = payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
   try {
-    const parsed = JSON.parse(raw) as { items?: unknown; assumptions?: unknown }
+    const parsed = JSON.parse(text_) as { items?: unknown; assumptions?: unknown }
     return json({
       items: Array.isArray(parsed.items) ? parsed.items : [],
       assumptions: typeof parsed.assumptions === 'string' ? parsed.assumptions : '',
     })
   } catch {
     // Include what came back: a truncated response and a refusal look identical otherwise.
-    return json({ error: `Could not read the estimate: ${raw.slice(0, 200)}` }, 502)
+    return json({ error: `Could not read the estimate: ${text_.slice(0, 200)}` }, 502)
   }
 }
 
 /**
- * Calls Gemini, retrying a 503.
+ * Why a call couldn't be served, in enough detail to be actionable.
  *
- * 503 means "spikes in demand are usually temporary" — Google's own words — and it is by far the
- * most common failure on the free tier. Without a retry it surfaced as "couldn't work that out",
- * which reads as the model failing to understand a perfectly clear meal.
+ * The first version collapsed every 503 and 429 into `busy: true`, so the app told everyone the
+ * same thing: "the model is busy, try again in a few seconds". That is *wrong advice* for a daily
+ * quota — waiting minutes changes nothing, which is exactly what it looked like from outside. The
+ * distinction has to survive the trip.
  */
-async function callGemini(key: string, body: unknown, attempts = 3): Promise<Response> {
-  let last: Response | null = null
+interface Unavailable {
+  busy: true
+  /** 'quota' means a limit was hit; 'overloaded' means Google was momentarily out of capacity. */
+  kind: 'quota' | 'overloaded'
+  /**
+   * Seconds to wait, from Google's own `RetryInfo`.
+   *
+   * Taken verbatim rather than inferred. The obvious inference — "the quota id says per-day, so
+   * come back tomorrow" — is wrong here: the free tier reports a *daily* request cap and then tells
+   * you to retry in 32 seconds, because the cap refills on a rolling window. Guessing would have
+   * the app confidently give worse advice than the number it was handed.
+   */
+  retryAfterSeconds: number
+  /** The limit that was hit, e.g. "generate_content_free_tier_requests, limit 20". */
+  quota: string | null
+  /** Google's own wording, trimmed. Shown to the user, because a vague error can't be acted on. */
+  reason: string
+}
+
+/**
+ * Reads Google's error body for what actually went wrong.
+ *
+ * The first version collapsed every 503 and 429 into `busy: true`, so the app told everyone the
+ * same thing — "the model is busy, try again in a few seconds" — and threw away the two facts that
+ * would have answered the question: *which* limit, and *how long*. On the free tier the answer
+ * turned out to be 20 requests a day for this model, which no amount of waiting a few seconds
+ * reveals.
+ */
+function classify(status: number, raw: string): Unavailable {
+  let message = ''
+  let quota: string | null = null
+  let retry = 0
+  try {
+    const parsed = JSON.parse(raw) as {
+      error?: { message?: string; details?: Record<string, unknown>[] }
+    }
+    message = parsed.error?.message ?? ''
+    for (const detail of parsed.error?.details ?? []) {
+      const type = String(detail['@type'] ?? '')
+      if (type.includes('QuotaFailure')) {
+        const violations = (detail.violations ?? []) as {
+          quotaId?: string
+          quotaMetric?: string
+          quotaValue?: string
+        }[]
+        quota =
+          violations
+            .map((v) =>
+              [v.quotaId ?? v.quotaMetric, v.quotaValue && `limit ${v.quotaValue}`]
+                .filter(Boolean)
+                .join(', '),
+            )
+            .filter(Boolean)
+            .join('; ') || null
+      }
+      if (type.includes('RetryInfo')) {
+        retry = Math.ceil(Number(String(detail.retryDelay ?? '').replace(/s$/, '')) || 0)
+      }
+    }
+    // The message itself carries "Please retry in 31.9s" even when RetryInfo is absent.
+    if (retry === 0) {
+      retry = Math.ceil(Number(message.match(/retry in ([\d.]+)s/i)?.[1] ?? 0) || 0)
+    }
+  } catch {
+    message = raw.slice(0, 200)
+  }
+
+  const isQuota = status === 429
+  return {
+    busy: true,
+    kind: isQuota ? 'quota' : 'overloaded',
+    // A floor, not a guess: 0 would have the app invite an immediate retry into the same wall.
+    retryAfterSeconds: retry || (isQuota ? 60 : 5),
+    quota,
+    reason:
+      message ||
+      (isQuota ? 'The daily free allowance for the model is used up.' : 'The model is overloaded.'),
+  }
+}
+
+/**
+ * Calls Gemini, retrying only what a retry can fix.
+ *
+ * 503 means "spikes in demand are usually temporary" — Google's own words — and a per-minute 429
+ * clears on its own, so both are worth a second and third go. A **per-day** 429 is not: retrying it
+ * twice just spends two more seconds of the user's time to learn the same thing, so the loop reads
+ * the quota id and stops. Returns the response alongside its body, since a Response can only be
+ * read once and the classifier needs it.
+ */
+async function callGemini(
+  key: string,
+  body: unknown,
+  attempts = 3,
+): Promise<{ response: Response; raw: string }> {
+  let last = { response: new Response(null, { status: 500 }), raw: '' }
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (response.status !== 503 && response.status !== 429) return response
-    last = response
+    if (response.ok) return { response, raw: '' }
+
+    const raw = await response.text()
+    last = { response, raw }
+    if (response.status !== 503 && response.status !== 429) return last
+    // A quota wall does not clear inside a retry loop — Google's own retry hint is 30s or more,
+    // and a phone is waiting. Two more attempts would spend two seconds relearning the same thing.
+    if (response.status === 429) return last
     // Short, because a phone is waiting on this: ~0.6s then ~1.2s.
     if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
   }
-  return last as Response
+  return last
 }
 
 function json(body: unknown, status = 200): Response {

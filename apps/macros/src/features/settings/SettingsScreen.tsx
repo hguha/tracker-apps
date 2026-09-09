@@ -1,9 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow } from '@tracker-engine/ui'
 import {
-  Apple,
   Award,
-  Bookmark,
   ChefHat,
   ChevronRight,
   Database,
@@ -26,8 +24,8 @@ export type SettingsRoute =
   | 'preferences'
   | 'appearance'
   | 'badges'
+  | 'library'
   | 'meals'
-  | 'recipes'
   | 'foods'
   | 'account'
   | 'data'
@@ -85,35 +83,14 @@ export function SettingsScreen({
           hint="Ask about your own numbers"
           onClick={() => onOpen('coach')}
         />
-        <NavRow
-          icon={<Bookmark size={17} />}
-          label="Saved meals"
-          hint={
-            (templates ?? []).length === 0
-              ? 'Save a meal from Today to log it again'
-              : `${templates!.length} saved`
-          }
-          onClick={() => onOpen('meals')}
-        />
+        {/* One row, not three. "Recipes", "Saved meals" and "Your foods" side by side told nobody
+            which was which — they're one idea with three shapes, so they share a screen that says
+            what each shape is for. */}
         <NavRow
           icon={<ChefHat size={17} />}
-          label="Recipes"
-          hint={
-            (recipes ?? []).length === 0
-              ? 'Batch dishes, logged a serving at a time'
-              : `${recipes!.length} saved`
-          }
-          onClick={() => onOpen('recipes')}
-        />
-        <NavRow
-          icon={<Apple size={17} />}
-          label="Your foods"
-          hint={
-            (myFoods ?? []).length === 0
-              ? 'Anything the databases don’t have'
-              : `${myFoods!.length} added`
-          }
-          onClick={() => onOpen('foods')}
+          label="Your library"
+          hint={libraryHint(recipes?.length ?? 0, templates?.length ?? 0, myFoods?.length ?? 0)}
+          onClick={() => onOpen('library')}
         />
         <NavRow
           icon={<Award size={17} />}
@@ -215,6 +192,16 @@ export function missingFacts(profile: Profile | undefined): string[] {
     profile.birthYear === null && 'age',
     profile.sex === null && 'sex',
   ].filter((value): value is string => typeof value === 'string')
+}
+
+/** Counts, so the row says what's in there rather than only what it's called. */
+function libraryHint(recipes: number, meals: number, foods: number): string {
+  const parts = [
+    recipes > 0 && `${recipes} recipe${recipes === 1 ? '' : 's'}`,
+    meals > 0 && `${meals} meal${meals === 1 ? '' : 's'}`,
+    foods > 0 && `${foods} own food${foods === 1 ? '' : 's'}`,
+  ].filter((part): part is string => typeof part === 'string')
+  return parts.length === 0 ? 'Recipes, saved meals and your own foods' : parts.join(' · ')
 }
 
 function goalHint(program: Program | undefined): string {

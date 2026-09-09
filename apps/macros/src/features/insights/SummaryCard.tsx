@@ -1,9 +1,12 @@
 import { Card } from '@tracker-engine/ui'
+import { convertWeight } from '@tracker-engine/core'
 import { grams } from '@/features/shared/format'
+import { useUnits } from '@/features/shared/useUnits'
 import type { InsightsData } from './useInsightsData'
 
 /** The window in five numbers, so the charts below have something to be read against. */
 export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLabel: string }) {
+  const units = useUnits()
   const averageKcal =
     data.days.length === 0
       ? 0
@@ -22,7 +25,7 @@ export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLab
         <Stat label="Weight change">
           {data.weightChangeKg === null
             ? '—'
-            : `${data.weightChangeKg >= 0 ? '+' : ''}${data.weightChangeKg.toFixed(1)} kg`}
+            : `${data.weightChangeKg >= 0 ? '+' : ''}${convertWeight(data.weightChangeKg, units.weight).toFixed(1)} ${units.weight}`}
         </Stat>
         <Stat label="Expenditure">
           {data.expenditureKcal === null

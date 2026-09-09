@@ -43,7 +43,14 @@ type Route = { kind: 'list' } | { kind: 'detail'; id: string } | { kind: 'edit';
  * usually open to answer is "what should I cook", not "where is the chilli" — and a search box
  * answers the second one in fewer taps than scrolling an A–Z list.
  */
-export function RecipesScreen({ onBack }: { onBack: () => void }) {
+export function RecipesScreen({
+  onBack,
+  header,
+}: {
+  onBack: () => void
+  /** Rendered above the list — the library's tab strip, when it's hosting this screen. */
+  header?: React.ReactNode
+}) {
   const [route, setRoute] = useState<Route>({ kind: 'list' })
   const [sort, setSort] = useState<SortKey>('suggested')
   const [query, setQuery] = useState('')
@@ -108,7 +115,7 @@ export function RecipesScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen
-      title="Recipes"
+      title={header ? 'Your library' : 'Recipes'}
       onBack={onBack}
       action={
         // Only once there's a list to sit above. With none, the empty state's own button is the
@@ -125,6 +132,7 @@ export function RecipesScreen({ onBack }: { onBack: () => void }) {
         ) : undefined
       }
     >
+      {header}
       {all.length === 0 ? (
         <>
           <Card className="p-4 text-[13.5px] text-ink-muted">

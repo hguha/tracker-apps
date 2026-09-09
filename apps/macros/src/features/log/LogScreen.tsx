@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, formatRelativeDay } from '@tracker-engine/core'
 import {
@@ -10,7 +10,6 @@ import {
 } from '@tracker-engine/ui'
 import { Camera, ChefHat, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
-import { searchRemote } from '@/data/foodLookup'
 import * as repo from '@/data/repository'
 import { dayTotals, perServing, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
@@ -18,6 +17,8 @@ import { recommendRecipes, type RecipeRecommendation } from '@/lib/recommend'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { portionLabel } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
+import { SearchingRow } from '@/features/shared/FoodSearchPicker'
+import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import type { Food, MealSlot, Venue } from '@/domain/types'
 import { DescribePanel } from './DescribePanel'
 import { MealPreviewSheet, type MealPreview } from './MealPreviewSheet'
@@ -52,13 +53,18 @@ type BrowseTab = 'suggested' | 'again' | 'often' | 'cook' | 'saved'
  */
 export function LogScreen({
   meal: initialMeal,
+  day,
   onClose,
 }: {
   meal: MealSlot
+  /** The day being added to. Absent means today. */
+  day?: string
   onClose: () => void
 }) {
   const [meal, setMeal] = useState<MealSlot>(initialMeal)
-  const [at, setAt] = useState(() => Date.now())
+  // On a past day, keep the current clock time but move the date: a meal added to last Tuesday
+  // still happened at *some* time of day, and stamping it midnight would put it before breakfast.
+  const [at, setAt] = useState(() => atOnDay(day))
   const [venue, setVenue] = useState<Venue | null>(null)
   const [query, setQuery] = useState('')
   const [panel, setPanel] = useState<Panel>({ kind: 'browse' })
@@ -152,11 +158,11 @@ function BrowsePanel({
 }) {
   const { meal, at, venue } = target
   const trimmed = query.trim()
-  const isSearching = trimmed.length >= 2
+  const isTyping = trimmed.length >= 2
   const [tab, setTab] = useState<BrowseTab>('suggested')
   const [preview, setPreview] = useState<MealPreview | null>(null)
 
-  const results = useLiveQuery(() => repo.searchFoods(query), [query], [])
+  const { results, isSearching } = useFoodSearch(query)
   const frequentIds = useLiveQuery(() => repo.frequentFoodIds(40), [], [])
   const frequents = useLiveQuery(
     async () => [...(await repo.foodsByIds(frequentIds ?? [])).values()],
@@ -171,14 +177,6 @@ function BrowsePanel({
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const today = dayKey(Date.now())
   const todayEntries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
-
-  // Local first, always: only reach for the long tail when the cache comes up thin, and never
-  // block on it, so results already on screen can't vanish while a fetch is in flight.
-  useEffect(() => {
-    if (trimmed.length < 3 || (results?.length ?? 0) >= 5) return
-    const id = window.setTimeout(() => void searchRemote(trimmed), 400)
-    return () => clearTimeout(id)
-  }, [trimmed, results?.length])
 
   const left = targets ? remaining(dayTotals(todayEntries ?? []), targets) : null
   const suggestions = useMemo(
@@ -211,10 +209,11 @@ function BrowsePanel({
   // search came up thin: a query with real matches is answered by those matches.
   const looksComposed = trimmed.split(/\s+/).length >= 2
   const describeRow =
-    isSearching && looksComposed ? (
+    isTyping && looksComposed ? (
       <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} />
     ) : null
-  const describeLeads = (results?.length ?? 0) < 3
+  // Only lead with the breakdown once the search has actually finished coming up thin.
+  const describeLeads = !isSearching && results.length < 3
 
   const tabs: SegmentedTab<BrowseTab>[] = [
     { key: 'suggested', label: 'Suggested' },
@@ -271,10 +270,15 @@ function BrowsePanel({
         </button>
       </div>
 
-      {isSearching ? (
+      {isTyping ? (
         <>
           {describeLeads && describeRow}
-          <FoodList foods={results ?? []} onSelect={onSelect} emptyLabel="Nothing matched." />
+          <FoodList
+            foods={results}
+            onSelect={onSelect}
+            emptyLabel="Nothing matched."
+            footer={isSearching ? <SearchingRow /> : null}
+          />
           {!describeLeads && describeRow}
           <button
             onClick={() => onPanel({ kind: 'custom', name: trimmed })}
@@ -541,6 +545,16 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <Card className="p-4 text-center text-[13px] text-ink-muted">{children}</Card>
 }
 
+/** The same time of day, on another date. */
+function atOnDay(day: string | undefined): number {
+  if (!day) return Date.now()
+  const now = new Date()
+  const at = Date.parse(`${day}T00:00:00`)
+  return Number.isFinite(at)
+    ? at + (now.getHours() * 60 + now.getMinutes()) * 60_000
+    : Date.now()
+}
+
 /** The escape hatch from search: let a sentence be broken into foods. */
 function DescribeRow({ text, onOpen }: { text: string; onOpen: () => void }) {
   return (
@@ -565,14 +579,17 @@ function FoodList({
   foods,
   onSelect,
   emptyLabel,
+  footer = null,
 }: {
   foods: readonly Food[]
   onSelect: (food: Food) => void
   emptyLabel: string
+  /** Shown under the rows — a "still searching" line, so results never have to disappear. */
+  footer?: React.ReactNode
 }) {
   return (
     <Card className="p-0">
-      {foods.length === 0 ? (
+      {foods.length === 0 && footer === null ? (
         <p className="px-4 py-6 text-center text-[13.5px] text-ink-muted">{emptyLabel}</p>
       ) : (
         <ul className="divide-y divide-line">
@@ -593,6 +610,7 @@ function FoodList({
           ))}
         </ul>
       )}
+      {footer !== null && <div className="px-4 pb-2.5">{footer}</div>}
     </Card>
   )
 }

@@ -1,4 +1,5 @@
 import { dayKey } from '@tracker-engine/core'
+import { bodyWeightFromKg, convertWeight, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, remaining } from '@/lib/nutrition'
@@ -63,9 +64,13 @@ async function weightAnswer(): Promise<string> {
   if (!latest) return 'No weigh-ins yet. Weigh in most mornings and I can measure what you burn.'
   const rate = trendChangePerWeek(trend)
   const direction = rate === null ? 'holding' : rate > 0.05 ? 'rising' : rate < -0.05 ? 'falling' : 'flat'
-  return `Trend is ${latest.trendKg.toFixed(1)} kg and ${direction}${
-    rate === null ? '' : ` at ${rate >= 0 ? '+' : ''}${rate.toFixed(2)} kg/week`
-  }. Last reading was ${latest.kg.toFixed(1)} kg — the trend is what to judge by; a single morning swings on water alone.`
+  // The offline coach speaks the user's units too, or it contradicts every card on Today.
+  const { weight } = unitsFor((await repo.getProfile()).units)
+  return `Trend is ${bodyWeightFromKg(latest.trendKg, weight)} ${weight} and ${direction}${
+    rate === null
+      ? ''
+      : ` at ${rate >= 0 ? '+' : ''}${convertWeight(rate, weight).toFixed(2)} ${weight}/week`
+  }. Last reading was ${bodyWeightFromKg(latest.kg, weight)} ${weight} — the trend is what to judge by; a single morning swings on water alone.`
 }
 
 async function proteinAnswer(): Promise<string> {

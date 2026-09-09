@@ -66,16 +66,18 @@ export async function searchRemote(
   const q = query.trim()
   if (q.length < 2) return []
 
-  const [usda, off] = await Promise.all([
-    searchBackend(q),
-    branded ? searchOpenFoodFacts(q) : Promise.resolve([]),
+  // Each source is cached the moment *it* answers, rather than after both do. The screen reads
+  // these rows through a live query, so waiting to merge meant USDA's results — the good ones,
+  // with portions and micronutrients — sat invisible for however long Open Food Facts took to
+  // fail. With OFF down that was an extra 2.5s of "Nothing matched." on every single search.
+  const both = await Promise.all([
+    searchBackend(q).then(cacheAll),
+    branded ? searchOpenFoodFacts(q).then(cacheAll) : Promise.resolve([]),
   ])
-  // USDA first: it carries portions and micronutrients, and lib/foodSearch ranks it above
-  // branded rows anyway. Ids de-duplicate the overlap between the two.
-  const merged = new Map<string, Food>()
-  for (const food of [...usda, ...off]) merged.set(food.id, food)
+  return both.flat()
+}
 
-  const foods = [...merged.values()]
+async function cacheAll(foods: Food[]): Promise<Food[]> {
   if (foods.length > 0) await repo.putFoods(foods)
   return foods
 }

@@ -1,11 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card } from '@tracker-engine/ui'
+import { convertWeight } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
+import { useUnits } from '@/features/shared/useUnits'
 
 /** Every past recalculation. The adaptation is the product, so it should be inspectable
  *  rather than magic. Declined weeks are hidden — they didn't change anything. */
 export function CheckInHistory() {
   const history = useLiveQuery(() => repo.checkIns(), [], [])
+  const units = useUnits()
   const weeks = (history ?? [])
     .filter((c) => c.status !== 'declined')
     .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
@@ -23,7 +26,7 @@ export function CheckInHistory() {
               <div className="tabular text-[13.5px]">{week.weekStart}</div>
               <div className="tabular text-[12px] text-ink-muted">
                 {week.daysLogged}/7 days · {week.trendChangeKgPerWeek >= 0 ? '+' : ''}
-                {week.trendChangeKgPerWeek.toFixed(2)} kg/wk
+                {convertWeight(week.trendChangeKgPerWeek, units.weight).toFixed(2)} {units.weight}/wk
               </div>
             </div>
             <div className="shrink-0 text-right">

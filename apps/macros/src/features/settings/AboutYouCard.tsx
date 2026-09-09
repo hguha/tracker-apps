@@ -1,6 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { lengthFromCm, lengthToCm } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
+import { useUnits } from '@/features/shared/useUnits'
 
 /**
  * Height, age and sex exist only to seed the very first target, before any week of data
@@ -9,6 +11,7 @@ import * as repo from '@/data/repository'
  */
 export function AboutYouCard() {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
+  const units = useUnits()
   if (!profile) return null
 
   return (
@@ -21,9 +24,14 @@ export function AboutYouCard() {
 
       <div className="mt-2 grid grid-cols-3 gap-2">
         <Field
-          label="Height (cm)"
-          value={profile.heightCm}
-          onChange={(heightCm) => void repo.saveProfile({ heightCm })}
+          // Stored in cm always; this is the only place inches exist.
+          label={`Height (${units.length})`}
+          value={profile.heightCm === null ? null : lengthFromCm(profile.heightCm, units.length)}
+          onChange={(value) =>
+            void repo.saveProfile({
+              heightCm: value === null ? null : lengthToCm(value, units.length),
+            })
+          }
         />
         <Field
           label="Birth year"
@@ -67,6 +75,9 @@ function Field({
       <input
         type="number"
         inputMode="numeric"
+        // Keyed on the label so switching units re-mounts the field: `defaultValue` is read once,
+        // so without this the box would keep showing centimetres under an "in" label.
+        key={label}
         defaultValue={value ?? ''}
         onBlur={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
         className="mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none"
