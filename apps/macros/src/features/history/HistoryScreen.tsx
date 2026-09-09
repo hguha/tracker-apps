@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, formatRelativeDay, formatTimeOfDay } from '@tracker-engine/core'
+import { dayKey, dayKeyOffset, formatRelativeDay } from '@tracker-engine/core'
 import {
   Card,
   FilterChipButton,
@@ -18,7 +18,7 @@ import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
-import { VENUE_ICONS, VENUE_LABELS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
+import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
 import {
   MEAL_SLOTS,
   VENUES,
@@ -222,19 +222,6 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
   )
 }
 
-/** Read-only here: history is for looking, and correcting a venue belongs on the day you ate it. */
-function VenueChip({ entries }: { entries: readonly LogEntry[] }) {
-  const venue = entries.find((entry) => entry.venue !== null)?.venue ?? null
-  if (venue === null) return null
-  const Icon = VENUE_ICONS[venue]
-  return (
-    <span className="ml-1.5 inline-flex items-baseline gap-0.5 font-normal text-ink-muted">
-      <Icon size={11} className="translate-y-px" />
-      {VENUE_LABELS[venue]}
-    </span>
-  )
-}
-
 function DayCard({
   day,
   entries,
@@ -256,7 +243,6 @@ function DayCard({
   const totals = dayTotals(entries)
   const delta = target && !isPartial ? totals.kcal - target.kcal : null
   const timing = dayTiming(entries)
-  const occasions = eatingOccasions(entries)
 
   return (
     <Card className="p-0">
@@ -292,37 +278,18 @@ function DayCard({
       </div>
 
       {/*
-        One line per sitting instead of every item inline. The expanded version was a run of small
-        grey text several screens long — technically complete and effectively unreadable — and it
-        offered no way to change anything. Tapping through opens the day editor, which does.
+        One bar for the day, not one per sitting.
+        Thirty days of five meals was a hundred and fifty little bars on one scroll — the pattern a
+        chart is supposed to reveal, rendered as noise. The day's own split is the useful shape here;
+        the per-meal breakdown belongs on the day screen, one tap away.
       */}
-      {occasions.length > 0 && (
-        <ul className="divide-y divide-line border-t border-line">
-          {occasions.map((occasion) => (
-            <li key={occasion.startAt}>
-              <button
-                onClick={onOpen}
-                className="w-full px-4 py-2 text-left active:bg-sunken"
-              >
-                <span className="flex items-baseline gap-2">
-                  <span className="tabular shrink-0 text-[12px] text-ink-muted">
-                    {formatTimeOfDay(occasion.startAt)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[13px]">
-                    {entryName(biggest(occasion.entries), foods)}
-                    {occasion.entries.length > 1 && (
-                      <span className="text-ink-muted"> +{occasion.entries.length - 1}</span>
-                    )}
-                  </span>
-                  <VenueChip entries={occasion.entries} />
-                  <span className="tabular shrink-0 text-[12.5px]">{occasion.nutrients.kcal}</span>
-                </span>
-                <MacroSplitBar nutrients={occasion.nutrients} className="mt-1.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="px-4 pb-3">
+        <MacroSplitBar nutrients={totals} />
+        <p className="tabular mt-1.5 flex items-baseline gap-2 text-[11.5px] text-ink-muted">
+          <span className="min-w-0 flex-1 truncate">{summarise(entries, foods)}</span>
+          <VenueSummary entries={entries} />
+        </p>
+      </div>
 
       {target === null && !isPartial && (
         <p className="border-t border-line px-4 py-2 text-[12px] text-ink-muted">
@@ -333,6 +300,52 @@ function DayCard({
   )
 }
 
-/** The item a person recognises the meal by: the biggest one, not the first one logged. */
-const biggest = (entries: readonly LogEntry[]): LogEntry =>
-  [...entries].sort((a, b) => b.nutrients.kcal - a.nutrients.kcal)[0]!
+/**
+ * What the day was, in one line: how many meals, and the biggest thing in it.
+ *
+ * Enough to recognise a day by without listing it. "4 meals · Chicken breast, Guacamole" answers
+ * "which day was that" far faster than fifteen rows of grams do.
+ */
+function summarise(entries: readonly LogEntry[], foods: ReadonlyMap<string, Food>): string {
+  const occasions = eatingOccasions(entries)
+  const top = [...entries]
+    .sort((a, b) => b.nutrients.kcal - a.nutrients.kcal)
+    .slice(0, 2)
+    .map((entry) => entryName(entry, foods))
+  return [
+    `${occasions.length} meal${occasions.length === 1 ? '' : 's'}`,
+    top.join(', '),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/**
+ * Where the day's meals happened, counted.
+ *
+ * With one bar per day the per-sitting venue chips had nowhere to live, and a "Where" filter with
+ * no visible venues is a filter you can't check. "2 home · 1 out" keeps the answer on the row that
+ * matched it.
+ */
+function VenueSummary({ entries }: { entries: readonly LogEntry[] }) {
+  const counts = new Map<Venue, number>()
+  for (const occasion of eatingOccasions(entries)) {
+    const venue = occasion.entries.find((entry) => entry.venue !== null)?.venue
+    if (venue) counts.set(venue, (counts.get(venue) ?? 0) + 1)
+  }
+  if (counts.size === 0) return null
+
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {[...counts].map(([venue, count]) => {
+        const Icon = VENUE_ICONS[venue]
+        return (
+          <span key={venue} className="flex items-center gap-0.5" title={VENUE_LONG[venue]}>
+            <Icon size={10} />
+            {count}
+          </span>
+        )
+      })}
+    </span>
+  )
+}

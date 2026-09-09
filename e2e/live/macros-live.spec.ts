@@ -16,7 +16,12 @@ import { expect, test } from '@playwright/test'
  * else still is.
  */
 const isThirdPartyOutage = (message: string): boolean =>
-  /openfoodfacts\.org/.test(message) || message === 'Failed to load resource: net::ERR_FAILED'
+  /openfoodfacts\.org/.test(message) ||
+  message === 'Failed to load resource: net::ERR_FAILED' ||
+  // A 502 from `coach` means the model wouldn't cooperate — a spent quota, an overloaded model, or
+  // a truncated response. The whole point of parsing ingredient lines locally is that the import
+  // survives that, so it must not fail the run; anything else from our own functions still does.
+  /status of 502/.test(message)
 
 async function setUpDeviceOnly(page: import('@playwright/test').Page) {
   const errors: string[] = []
@@ -125,6 +130,42 @@ test('a page with no readable recipe says so in its own words', async ({ page })
   await expect(page.getByRole('alert')).toContainText(/doesn.t publish its recipe/i, {
     timeout: 30_000,
   })
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a recipe link imports with the model blocked entirely', async ({ page }) => {
+  const errors = await setUpDeviceOnly(page)
+
+  // The model is the point of this test: blocked, so nothing can quietly fall back to it. Parsing
+  // "1/2 pound lean ground beef" is a quantity, a unit and a food — not a language problem — and
+  // making the reliable step depend on the rate-limited one is what made imports feel broken.
+  await page.route('**/functions/v1/coach', (route) => route.abort())
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByRole('button', { name: /New recipe/ }).click()
+  await page
+    .getByPlaceholder('https://…')
+    .fill('https://tastesbetterfromscratch.com/lasagna-soup/')
+  await page.getByRole('button', { name: /Read the ingredients/ }).click()
+
+  // Ingredients, weighed, from the page's own text.
+  const rows = page.locator('input[aria-label^="Grams of"]')
+  await expect(rows.first()).toBeVisible({ timeout: 60_000 })
+  await expect(async () => {
+    expect(await rows.count()).toBeGreaterThanOrEqual(10)
+  }).toPass({ timeout: 30_000 })
+
+  // Half a pound of beef is 227 g at the amount stated, not a guessed serving size.
+  const values = await rows.evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLInputElement).value),
+  )
+  expect(values, values.join(',')).toContain('227')
+  await expect(page.getByPlaceholder('Sunday chilli')).toHaveValue('Lasagna Soup')
+  await expect(page.getByText(/kcal total/)).toBeVisible()
+  // And it says what it assumed, rather than skipping a seasoning silently.
+  await expect(page.getByText(/Skipped|Converted/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Save recipe/ })).toBeEnabled()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

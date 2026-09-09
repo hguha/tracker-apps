@@ -105,7 +105,36 @@ export function matchesQuery(food: Food, terms: readonly string[]): boolean {
 }
 
 export function queryTerms(query: string): string[] {
-  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return normalizeQuery(query).split(/\s+/).filter(Boolean)
+}
+
+/**
+ * How people write food names, turned into how databases store them.
+ *
+ * "80/20 ground beef" returned **nothing at all** — not a bad ranking, zero rows — because the
+ * slash breaks USDA's search, while "ground beef 80" returns exactly the right entry ("Beef,
+ * ground, 80% lean meat / 20% fat, raw"). The same shape covers "93/7", "85/15" and "2% milk".
+ *
+ * Applied in `queryTerms`, so the local match, the ranking and the string forwarded to USDA all see
+ * the same normalisation. A search that silently returns nothing is the worst failure this app can
+ * have: it looks exactly like the food not existing.
+ */
+export function normalizeQuery(query: string): string {
+  return (
+    query
+      .trim()
+      .toLowerCase()
+      // A lean/fat ratio: keep both numbers as words, drop the slash. USDA's own text has the
+      // numbers in it, so "80 20" matches where "80/20" matches nothing.
+      .replace(/\b(\d{2})\s*\/\s*(\d{1,2})\b/g, '$1 $2')
+      // Percent signs are punctuation to USDA's index but meaningful to a person typing "2% milk".
+      .replace(/(\d)\s*%/g, '$1')
+      // Any other slash or hyphen between words is a separator, not a character in a food name:
+      // "half-and-half", "chicken/rice".
+      .replace(/[/\\]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  )
 }
 
 /**

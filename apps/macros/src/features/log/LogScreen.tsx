@@ -8,14 +8,15 @@ import {
   SegmentedTabs,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { Camera, ChefHat, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
+import { Camera, Check, ChefHat, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
+import { cn } from '@/lib/cn'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
 import { dayTotals, perServing, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
 import { recommendRecipes, type RecipeRecommendation } from '@/lib/recommend'
 import { CUISINE_LABELS } from '@/lib/cuisine'
-import { portionLabel } from '@/features/shared/format'
+import { portionWithGrams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
@@ -41,7 +42,7 @@ type Panel =
   | { kind: 'custom'; name: string; barcode?: string }
   | { kind: 'recipe' }
 
-type BrowseTab = 'suggested' | 'again' | 'often' | 'cook' | 'saved'
+type BrowseTab = 'suggested' | 'again' | 'often' | 'recipes' | 'saved'
 
 /**
  * Adding food, as a screen rather than a sheet.
@@ -161,6 +162,21 @@ function BrowsePanel({
   const isTyping = trimmed.length >= 2
   const [tab, setTab] = useState<BrowseTab>('suggested')
   const [preview, setPreview] = useState<MealPreview | null>(null)
+  /**
+   * Foods ticked for logging together.
+   *
+   * The speed difference between this app and MyFitnessPal was never the search — it was that four
+   * foods took four round trips through a portion screen. Ticked foods log at the amount they were
+   * last eaten in, which for anything eaten regularly is the right amount already.
+   */
+  const [picked, setPicked] = useState<Food[]>([])
+  const [isLogging, setIsLogging] = useState(false)
+  const toggle = (food: Food) =>
+    setPicked((current) =>
+      current.some((row) => row.id === food.id)
+        ? current.filter((row) => row.id !== food.id)
+        : [...current, food],
+    )
 
   const { results, isSearching } = useFoodSearch(query)
   const frequentIds = useLiveQuery(() => repo.frequentFoodIds(40), [], [])
@@ -219,7 +235,7 @@ function BrowsePanel({
     { key: 'suggested', label: 'Suggested' },
     { key: 'again', label: 'Eat again', badge: (recents ?? []).length || undefined },
     { key: 'often', label: 'Frequent', badge: (frequents ?? []).length || undefined },
-    { key: 'cook', label: 'Cook', badge: (recipes ?? []).length || undefined },
+    { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
     { key: 'saved', label: 'Saved', badge: (templates ?? []).length || undefined },
   ]
 
@@ -276,6 +292,8 @@ function BrowsePanel({
           <FoodList
             foods={results}
             onSelect={onSelect}
+            picked={picked}
+            onToggle={toggle}
             emptyLabel="Nothing matched."
             footer={isSearching ? <SearchingRow /> : null}
           />
@@ -299,7 +317,7 @@ function BrowsePanel({
               {cookable.length > 0 && (
                 <Card className="p-0">
                   <h2 className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-                    Cook one of yours
+                    Log one of your recipes
                   </h2>
                   <RecipeRows rows={cookable.slice(0, 3)} onPreview={setPreview} onLog={logRecipe} />
                 </Card>
@@ -398,10 +416,16 @@ function BrowsePanel({
             ((frequents ?? []).length === 0 ? (
               <Empty>Foods you log more than once collect here.</Empty>
             ) : (
-              <FoodList foods={frequents ?? []} onSelect={onSelect} emptyLabel="" />
+              <FoodList
+                foods={frequents ?? []}
+                onSelect={onSelect}
+                picked={picked}
+                onToggle={toggle}
+                emptyLabel=""
+              />
             ))}
 
-          {tab === 'cook' &&
+          {tab === 'recipes' &&
             (cookable.length === 0 ? (
               <Empty>
                 No recipes yet. Tap <span className="font-semibold text-accent">New recipe</span> at
@@ -466,6 +490,38 @@ function BrowsePanel({
         </>
       )}
 
+      {picked.length > 0 && (
+        <div className="sticky bottom-0 -mx-3 border-t border-line bg-surface px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPicked([])}
+              className="shrink-0 rounded-lg px-2 py-2 text-[13px] text-ink-muted active:bg-sunken"
+            >
+              Clear
+            </button>
+            <button
+              disabled={isLogging}
+              onClick={() => {
+                if (isLogging) return
+                setIsLogging(true)
+                void repo
+                  .logFoods(picked, { meal, eatenAt: at, venue })
+                  .then(() => onDone())
+                  .finally(() => setIsLogging(false))
+              }}
+              className="min-w-0 flex-1 rounded-xl bg-accent py-2.5 text-[14px] font-semibold text-accent-contrast active:brightness-90"
+            >
+              {isLogging
+                ? 'Logging…'
+                : `Log ${picked.length} item${picked.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
+          <p className="mt-1.5 text-center text-[11.5px] text-ink-muted">
+            At the amount you last had each — tap a name instead to change it.
+          </p>
+        </div>
+      )}
+
       {preview && (
         <MealPreviewSheet
           preview={preview}
@@ -526,13 +582,18 @@ function RecipeRows({
                 )}
               </span>
               <span className="tabular block text-[12px] text-ink-muted">{why}</span>
+              <span className="block text-[11px] text-ink-muted">
+                Tap for the amount, or &ldquo;Ate 1&rdquo; for one serving
+              </span>
             </button>
+            {/* Spelled out. An unlabelled "+" beside a recipe reads as "add a recipe", not "I ate
+                one serving of this" — and the two are opposite operations. */}
             <button
               onClick={() => void onLog(recipe.id, 1)}
               aria-label={`Log one serving of ${recipe.name}`}
-              className="mr-2 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-wash text-accent active:opacity-60"
+              className="mr-2 shrink-0 rounded-lg bg-accent-wash px-2.5 py-2 text-[12px] font-semibold text-accent active:opacity-60"
             >
-              <Plus size={17} />
+              Ate 1
             </button>
           </li>
         )
@@ -578,11 +639,15 @@ function DescribeRow({ text, onOpen }: { text: string; onOpen: () => void }) {
 function FoodList({
   foods,
   onSelect,
+  picked,
+  onToggle,
   emptyLabel,
   footer = null,
 }: {
   foods: readonly Food[]
   onSelect: (food: Food) => void
+  picked: readonly Food[]
+  onToggle: (food: Food) => void
   emptyLabel: string
   /** Shown under the rows — a "still searching" line, so results never have to disappear. */
   footer?: React.ReactNode
@@ -593,21 +658,40 @@ function FoodList({
         <p className="px-4 py-6 text-center text-[13.5px] text-ink-muted">{emptyLabel}</p>
       ) : (
         <ul className="divide-y divide-line">
-          {foods.map((food) => (
-            <li key={food.id}>
-              <button
-                onClick={() => onSelect(food)}
-                className="w-full px-4 py-2.5 text-left active:bg-sunken"
-              >
-                <div className="truncate text-[14px]">{food.description}</div>
-                <div className="tabular truncate text-[12px] text-ink-muted">
-                  {food.brand ? `${food.brand} · ` : ''}
-                  {food.per100.kcal} kcal / 100g
-                  {food.portions.length > 0 && ` · ${portionLabel(food.portions[0]!)}`}
-                </div>
-              </button>
-            </li>
-          ))}
+          {foods.map((food) => {
+            const isPicked = picked.some((row) => row.id === food.id)
+            return (
+              <li key={food.id} className="flex items-center">
+                {/* The name sets the amount; the tick takes the last one. Two targets because the
+                    two jobs are genuinely different, and collapsing them into one costs whichever
+                    is less common a whole extra screen. */}
+                <button
+                  onClick={() => onSelect(food)}
+                  className="min-w-0 flex-1 px-4 py-2.5 text-left active:bg-sunken"
+                >
+                  <div className="truncate text-[14px]">{food.description}</div>
+                  <div className="tabular truncate text-[12px] text-ink-muted">
+                    {food.brand ? `${food.brand} · ` : ''}
+                    {food.per100.kcal} kcal / 100g
+                    {food.portions.length > 0 && ` · ${portionWithGrams(food.portions[0]!)}`}
+                  </div>
+                </button>
+                <button
+                  onClick={() => onToggle(food)}
+                  aria-pressed={isPicked}
+                  aria-label={`${isPicked ? 'Remove' : 'Add'} ${food.description}`}
+                  className={cn(
+                    'mr-2 flex size-9 shrink-0 items-center justify-center rounded-lg border active:opacity-60',
+                    isPicked
+                      ? 'border-accent bg-accent text-accent-contrast'
+                      : 'border-line text-ink-muted',
+                  )}
+                >
+                  {isPicked ? <Check size={16} /> : <Plus size={16} />}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
       {footer !== null && <div className="px-4 pb-2.5">{footer}</div>}

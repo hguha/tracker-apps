@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Card, Screen, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
-import { Trash2 } from 'lucide-react'
+import { Button, Card, Screen, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
+import { Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { grams } from '@/features/shared/format'
+import { CustomFoodPanel } from '@/features/log/CustomFoodPanel'
 import { RecipesScreen } from '@/features/recipes/RecipesScreen'
 
 type Tab = 'recipes' | 'meals' | 'foods'
@@ -24,6 +25,7 @@ export function LibraryScreen({ initialTab = 'recipes', onBack }: {
   onBack: () => void
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [isAddingFood, setIsAddingFood] = useState(false)
 
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
@@ -46,10 +48,19 @@ export function LibraryScreen({ initialTab = 'recipes', onBack }: {
     )
   }
 
+  // Adding a food is a whole form, so it takes the screen rather than squeezing into a tab.
+  if (isAddingFood) {
+    return (
+      <Screen title="Add a food" onBack={() => setIsAddingFood(false)}>
+        <CustomFoodPanel initialName="" initialBarcode={null} onSaved={() => setIsAddingFood(false)} />
+      </Screen>
+    )
+  }
+
   return (
     <Screen title="Your library" onBack={onBack}>
       <SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />
-      {tab === 'meals' ? <MealsTab /> : <FoodsTab />}
+      {tab === 'meals' ? <MealsTab /> : <FoodsTab onAdd={() => setIsAddingFood(true)} />}
     </Screen>
   )
 }
@@ -61,7 +72,9 @@ function MealsTab() {
     <>
       <p className="px-1 text-[12.5px] text-ink-muted">
         A meal is <span className="font-semibold">these exact items again</span> — yesterday&rsquo;s
-        lunch, at half or double. Save one with the bookmark beside any meal on a day.
+        lunch, at half or double. There&rsquo;s nothing to create from scratch here: a saved meal
+        comes from a real one, so tap the bookmark beside any meal on a day and it appears in this
+        list.
       </p>
       <Rows
         rows={(templates ?? []).map((template) => ({
@@ -79,15 +92,21 @@ function MealsTab() {
   )
 }
 
-function FoodsTab() {
+function FoodsTab({ onAdd }: { onAdd: () => void }) {
   const foods = useLiveQuery(() => repo.customFoods(), [], [])
 
   return (
     <>
       <p className="px-1 text-[12.5px] text-ink-muted">
         A food is <span className="font-semibold">one thing off a label</span> that the databases
-        don&rsquo;t have. Added from the Add food screen when a search or a barcode comes up empty.
+        don&rsquo;t have.
       </p>
+      {/* Addable from here, not only from the moment a search fails — which was the only way in
+          and meant you couldn't set one up in advance. */}
+      <Button variant="secondary" className="w-full" onClick={onAdd}>
+        <Plus size={15} />
+        Add a food from its label
+      </Button>
       <Rows
         rows={(foods ?? []).map((food) => ({
           id: food.id,

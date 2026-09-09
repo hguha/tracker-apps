@@ -9,6 +9,7 @@ import { grams } from '@/features/shared/format'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
 import { estimateIngredients, estimateMeal } from '@/features/log/estimate'
+import { resolveLines } from '@/data/ingredientLines'
 import { importRecipeFromUrl, type ImportedRecipe } from '@/data/recipeImport'
 import { CUISINES, type CuisineKey, type Food } from '@/domain/types'
 
@@ -69,6 +70,8 @@ export function RecipeEditor({
   const [totalMinutes, setTotalMinutes] = useState<number | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [source, setSource] = useState<string | null>(null)
+  /** What the parse assumed or skipped — shown, because a silent skip is a silent undercount. */
+  const [notes, setNotes] = useState('')
 
   const [mode, setMode] = useState<StartMode>('link')
   const [input, setInput] = useState('')
@@ -141,20 +144,60 @@ export function RecipeEditor({
     setSource(imported.sourceUrl)
   }
 
-  /** Stage two: the amounts each line states, at the amounts it states them. */
+  /**
+   * Stage two: the amounts each line states, at the amounts it states them.
+   *
+   * Read locally first (`resolveLines`), because "1/2 pound lean ground beef" is a quantity, a unit
+   * and a food — not a language problem. That takes a second, can't be rate limited, and is the same
+   * answer every time. The model is asked only for the lines the parser genuinely couldn't weigh,
+   * and if it isn't available those lines simply stay visible and uncounted.
+   */
   async function convert(lines: readonly string[]) {
     if (lines.length === 0 || isConverting) return
     setIsConverting(true)
     setError(null)
     try {
-      const estimate = await estimateIngredients(lines)
-      setItems((current) => [...current, ...estimate.items.map(toDraft)])
+      const local = await resolveLines(lines)
+      const resolved = local.lines.filter((line) => line.grams !== null && line.grams > 0)
+      const unreadable = local.lines.filter((line) => line.grams === null && !line.parsed.isToTaste)
+
+      setItems((current) => [
+        ...current,
+        ...resolved.map((line) => ({
+          foodId: line.food?.id ?? null,
+          label: line.food?.description ?? line.parsed.name,
+          grams: line.grams!,
+        })),
+      ])
+      setNotes(local.assumptions)
       setPending(null)
+
+      // Only the leftovers go to the model, so a nineteen-line import spends a request on the two
+      // lines that needed one — or none at all.
+      if (unreadable.length > 0) {
+        try {
+          const estimate = await estimateIngredients(unreadable.map((line) => line.parsed.raw))
+          setItems((current) => [...current, ...estimate.items.map(toDraft)])
+        } catch (cause) {
+          setItems((current) => [
+            ...current,
+            ...unreadable.map((line) => ({
+              foodId: line.food?.id ?? null,
+              label: line.parsed.name,
+              grams: 0,
+            })),
+          ])
+          setError(
+            `${cause instanceof Error ? cause.message : 'Could not weigh every line.'} ` +
+              `${unreadable.length} line${unreadable.length === 1 ? '' : 's'} came in at 0 g — set those amounts by hand.`,
+          )
+        }
+      }
     } catch (cause) {
       setError(
         cause instanceof Error
-          ? `${cause.message} The ingredient list is still here — try converting it again.`
-          : 'Could not convert those amounts.',
+          ? `${cause.message} The ingredient list is still here — try again.`
+          : 'Could not read those lines.',
       )
     } finally {
       setIsConverting(false)
@@ -476,6 +519,7 @@ export function RecipeEditor({
         <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
           Per serving: {grams(each.proteinMg)}P {grams(each.carbsMg)}C {grams(each.fatMg)}F
         </p>
+        {notes && <p className="mt-1.5 text-[12px] text-ink-muted">{notes}</p>}
         {unmatched > 0 && (
           <p className="mt-1.5 text-[12px]" style={{ color: 'var(--status-serious)' }}>
             {unmatched} ingredient{unmatched === 1 ? '' : 's'} matched nothing and count zero, so

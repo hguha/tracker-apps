@@ -82,9 +82,10 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await page.getByRole('button', { name: 'Log it' }).click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
 
-  // Today summarises the day in one line per sitting; the detail is a tap away on its own screen.
-  await expect(page.getByRole('button', { name: /Today.s food/ })).toBeVisible()
-  await page.getByRole('button', { name: /Today.s food/ }).click()
+  // The budget card is the way into the day. It used to sit above a second card listing the same
+  // day's food, which was the same information twice.
+  await expect(page.getByText(/items? today|Nothing logged yet/)).toBeVisible()
+  await page.getByText(/items? today/).click()
 
   // The day editor: totals against that day's target, then the meals as cards.
   await expect(page.getByText(/of \d+ kcal|no target for this day/)).toBeVisible()
@@ -238,12 +239,13 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await page.getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByText(/Test bowl/).first()).toBeVisible()
   // Filed as cooked at home without being asked — the venue chip lives on the day screen.
-  await page.getByRole('button', { name: /Today.s food/ }).click()
+  await page.getByText(/items? today|item today/).click()
   await expect(page.getByRole('button', { name: /Eaten Home/ })).toBeVisible()
   await page.getByRole('button', { name: 'Back' }).click()
 
-  // And it shows up as something to cook again, with a stated reason.
-  await expect(page.getByText('Cook one of yours')).toBeVisible()
+  // And it shows up in the library card, with a stated reason to cook it again.
+  await expect(page.getByText('Your library')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Log one serving of Test bowl/ })).toBeVisible()
 
   // With a day logged, the two patterns cards render — and the cuisine came from the recipe.
   await page.getByRole('button', { name: 'Insights', exact: true }).click()
@@ -291,6 +293,86 @@ test('switching to imperial changes every weight on screen', async ({ page }) =>
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByText(/kg now/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('several foods log at once, at the amount each was last eaten in', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByRole('button', { name: 'Skip for now' }).click()
+
+  // Log one food the ordinary way, at an amount nothing would have guessed.
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.locator('input[type=number]').nth(1).fill('183')
+  await page.getByRole('button', { name: 'Log it' }).click()
+
+  // Now the tick path: two foods, one write, and no portion screen for either.
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /^Add Chicken breast/ }).first().click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('egg')
+  await page.getByRole('button', { name: /^Add Egg/ }).first().click()
+  await expect(page.getByRole('button', { name: 'Log 2 items' })).toBeVisible()
+  await page.getByRole('button', { name: 'Log 2 items' })
+.click()
+
+  // Three items on the day, and the chicken came back at 183 g rather than a database default —
+  // which is the whole reason logging in MyFitnessPal feels quick.
+  await page.getByText(/items? today/).click()
+  await expect(page.getByText('183g')).toHaveCount(2)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a goal weight gives the goal a bar and a date', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  await page.getByRole('button', { name: /Lose fat/ }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByPlaceholder(/Weight \(kg\)/).fill('85')
+  await page.getByRole('button', { name: 'Start logging' }).click()
+
+  // A rate alone had no end: nothing ever satisfied "lose 0.5% a week".
+  await expect(page.getByRole('button', { name: /Set a goal weight/ })).toBeVisible()
+  await page.getByRole('button', { name: /Set a goal weight/ }).click()
+  await expect(page.getByRole('heading', { name: 'Targets & goal', level: 1 })).toBeVisible()
+  await page.getByPlaceholder('kg').fill('78')
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  await expect(page.getByRole('button', { name: /78 kg goal/ })).toBeVisible()
+  await expect(page.getByText(/7\.0 to go/)).toBeVisible()
+  // No measured rate yet, so it says what the plan implies rather than inventing a measurement.
+  await expect(page.getByText(/The plan puts it at/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('an eating window shows itself on the day it applies to', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByRole('button', { name: 'Skip for now' }).click()
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Food & units/ }).click()
+  await page.getByRole('button', { name: /16:8/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+
+  // The window was implemented and invisible: it appended half a line to the budget text, so
+  // someone who turned it on reasonably concluded it did nothing.
+  await expect(page.getByText('12:00–20:00')).toBeVisible()
+  await expect(page.getByText(/Opens in|left$|Closed for today/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

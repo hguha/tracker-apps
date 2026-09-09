@@ -286,6 +286,81 @@ export async function recentRecipeCuisines(limit = 10): Promise<(CuisineKey | nu
   return entries.map((entry) => byId.get(entry.recipeId!)?.cuisine ?? null)
 }
 
+/**
+ * How much of this food you had last time.
+ *
+ * The single biggest reason logging in MyFitnessPal feels fast: the amount is already right. Someone
+ * who eats 180 g of chicken every day should not be typing 180 every day, and a database default of
+ * "100 g" or "1 serving" is wrong for almost everybody on almost every food.
+ *
+ * Returns the portion the last entry used when it used one, so "2 slices" stays "2 slices" rather
+ * than collapsing into the grams it happened to come to.
+ */
+export interface LastAmount {
+  grams: number
+  portionId: string | null
+  portionCount: number | null
+}
+
+export async function lastAmountFor(foodId: string): Promise<LastAmount | null> {
+  const rows = await db.logEntries.where('foodId').equals(foodId).filter(alive).toArray()
+  const latest = rows.sort((a, b) => b.eatenAt - a.eatenAt)[0]
+  if (!latest || latest.grams <= 0) return null
+  return {
+    grams: latest.grams,
+    portionId: latest.portionId,
+    portionCount: latest.portionCount,
+  }
+}
+
+/** The same, for a whole list — one pass instead of a query per food. */
+export async function lastAmountsFor(
+  foodIds: readonly string[],
+): Promise<Map<string, LastAmount>> {
+  const wanted = new Set(foodIds)
+  const best = new Map<string, LogEntry>()
+  await db.logEntries.filter(alive).each((entry) => {
+    if (!entry.foodId || !wanted.has(entry.foodId) || entry.grams <= 0) return
+    const current = best.get(entry.foodId)
+    if (!current || entry.eatenAt > current.eatenAt) best.set(entry.foodId, entry)
+  })
+  return new Map(
+    [...best].map(([id, entry]) => [
+      id,
+      { grams: entry.grams, portionId: entry.portionId, portionCount: entry.portionCount },
+    ]),
+  )
+}
+
+/**
+ * Logs several foods at once, each at the amount it was last eaten in.
+ *
+ * The multi-select path. Ticking four things off a frequents list and tapping once is how a daily
+ * log gets kept; four separate search → portion → log round trips is how one gets abandoned.
+ */
+export async function logFoods(
+  foods: readonly Food[],
+  target: { meal: MealSlot; eatenAt: number; venue: Venue | null },
+): Promise<number> {
+  const amounts = await lastAmountsFor(foods.map((food) => food.id))
+  for (const food of foods) {
+    const last = amounts.get(food.id)
+    await logFood({
+      food,
+      meal: target.meal,
+      eatenAt: target.eatenAt,
+      venue: target.venue,
+      source: 'search',
+      ...(last
+        ? last.portionId !== null
+          ? { portionId: last.portionId, portionCount: last.portionCount ?? 1 }
+          : { grams: last.grams }
+        : {}),
+    })
+  }
+  return foods.length
+}
+
 export interface LogFoodInput {
   food: Food
   grams?: number
@@ -859,19 +934,26 @@ export async function programHistory(): Promise<Program[]> {
 
 export async function startProgram(
   input: Pick<Program, 'goal' | 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal'> &
-    Partial<Pick<Program, 'coachingMode' | 'cycling'>>,
+    Partial<Pick<Program, 'coachingMode' | 'cycling' | 'targetKg'>>,
 ): Promise<string> {
   const current = await activeProgram()
   if (current) await patch('programs', current.id, { endedAt: Date.now() })
+
+  // The trend now, so progress toward a target has a denominator. Captured at the start because it
+  // is a fact about when the goal was set, and re-deriving it later would move the goalposts.
+  const trend = weightTrend(await weights())
 
   const program: Program = {
     id: newId(),
     userId: activeUserId,
     startedAt: Date.now(),
     endedAt: null,
+    ...input,
     coachingMode: input.coachingMode ?? 'coached',
     cycling: input.cycling ?? null,
-    ...input,
+    targetKg: input.targetKg ?? null,
+    startKg: trend[trend.length - 1]?.trendKg ?? null,
+    reachedAt: null,
     ...syncStamp(),
   }
   await db.programs.put(program)
@@ -888,10 +970,33 @@ export function setCoachingMode(programId: string, coachingMode: CoachingMode): 
 export function setProgramFields(
   programId: string,
   changes: Partial<
-    Pick<Program, 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal' | 'cycling'>
+    Pick<
+      Program,
+      'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal' | 'cycling' | 'targetKg' | 'reachedAt'
+    >
   >,
 ): Promise<void> {
   return patch('programs', programId, changes)
+}
+
+/**
+ * Sets the weight this program is aiming at, and re-baselines progress on today's trend.
+ *
+ * Re-baselining is the point: moving the target should restart the bar, not leave it showing
+ * progress toward a number that is no longer the goal.
+ */
+export async function setGoalWeight(programId: string, targetKg: number | null): Promise<void> {
+  const trend = weightTrend(await weights())
+  await patch('programs', programId, {
+    targetKg,
+    startKg: trend[trend.length - 1]?.trendKg ?? null,
+    reachedAt: null,
+  })
+}
+
+/** Records that the target was met, so it can be marked once and then moved on from. */
+export function markGoalReached(programId: string, at = Date.now()): Promise<void> {
+  return patch('programs', programId, { reachedAt: at })
 }
 
 export function checkIns(): Promise<CheckIn[]> {

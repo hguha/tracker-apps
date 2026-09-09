@@ -1,4 +1,8 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { bodyWeightFromKg, weightToKg } from '@tracker-engine/core'
+import { useUnits } from '@/features/shared/useUnits'
+import type { Program } from '@/domain/types'
 import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { mgToGrams } from '@/lib/nutrition'
@@ -64,10 +68,15 @@ export function TargetsCard() {
                 proteinGPerKg: program.proteinGPerKg,
                 fatMinPctKcal: program.fatMinPctKcal,
                 coachingMode: program.coachingMode,
+                // A goal weight survives a change of direction — someone switching from lose to
+                // maintain still knows what number they were after.
+                targetKg: goal === 'maintain' ? null : program.targetKg,
               })
             }}
           />
         </Field>
+
+        {program.goal !== 'maintain' && <GoalWeightField program={program} />}
 
         {rates.length > 1 && (
           <Field label="Pace" hint={`${program.ratePctPerWeek}% of bodyweight per week`}>
@@ -161,5 +170,57 @@ function Field({
       {hint && <p className="tabular text-[12px] text-ink-muted">{hint}</p>}
       <div className="mt-1.5">{children}</div>
     </div>
+  )
+}
+
+/**
+ * The weight this program is aiming at.
+ *
+ * A number, not a pill list, because it's personal and nobody's goal lands on a preset. Committed on
+ * blur rather than per keystroke: each save re-baselines progress, and doing that mid-typing would
+ * reset the bar four times on the way to "82".
+ */
+function GoalWeightField({ program }: { program: Program }) {
+  const units = useUnits()
+  const stored = program.targetKg === null ? '' : String(bodyWeightFromKg(program.targetKg, units.weight))
+  const [value, setValue] = useState(stored)
+
+  const commit = () => {
+    const entered = Number(value)
+    if (value.trim() === '') {
+      void repo.setGoalWeight(program.id, null)
+      return
+    }
+    if (!Number.isFinite(entered) || entered <= 0) {
+      setValue(stored)
+      return
+    }
+    void repo.setGoalWeight(program.id, weightToKg(entered, units.weight))
+  }
+
+  return (
+    <Field
+      label="Goal weight"
+      hint={
+        program.targetKg === null
+          ? 'Optional — but it is what gives the goal an end, and a date'
+          : program.startKg === null
+            ? `Aiming for ${bodyWeightFromKg(program.targetKg, units.weight)} ${units.weight}`
+            : `From ${bodyWeightFromKg(program.startKg, units.weight)} to ${bodyWeightFromKg(program.targetKg, units.weight)} ${units.weight}`
+      }
+    >
+      <input
+        type="number"
+        inputMode="decimal"
+        step="0.1"
+        // Keyed on the unit so switching kg/lb re-reads the stored value into the box.
+        key={units.weight}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={commit}
+        placeholder={units.weight}
+        className="tabular w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+      />
+    </Field>
   )
 }

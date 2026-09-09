@@ -264,6 +264,19 @@ export interface Program extends SyncColumns {
   proteinGPerKg: number
   fatMinPctKcal: number
   cycling: CyclingConfig | null
+  /**
+   * The weight this program is aiming at, in kg. Null when there isn't one.
+   *
+   * The rate alone is the right input for a calorie target and a useless thing to aim at: nothing
+   * ever satisfies "lose 0.5% a week", so there was no point at which anything was achieved. This
+   * is what gives the goal an end — and an ETA, computed from the measured trend rather than the
+   * intended rate (see lib/goal.ts).
+   */
+  targetKg: number | null
+  /** The weight trend when the target was set, so progress has a denominator. */
+  startKg: number | null
+  /** When the target was met, so it can be celebrated once and then moved on from. */
+  reachedAt: number | null
 }
 
 export interface MacroTargets {

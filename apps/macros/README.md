@@ -63,17 +63,64 @@ Storage is metric always — kg and cm — and conversion happens only at the ed
 printed kg regardless. Nothing was wrong with the value, which is why no unit test caught it — the
 guard is an E2E that switches to imperial and reads the screen.
 
-## The AI's limits
+## The AI's limits, and why they matter less now
 
-The free Gemini tier allows **20 requests a day** for this model (`GenerateRequestsPerDayPerProject
-PerModel-FreeTier`), and one nineteen-line recipe import spends one of them. That is the real
-explanation for "model timed out" arriving over and over, so the app now says it: the `coach`
-function parses Google's `QuotaFailure` and `RetryInfo` and returns the quota that was hit and how
-long to wait, and the client remembers the cooldown rather than spending another request from a
-different screen to rediscover the same wall.
+The free Gemini tier allows **20 requests a day per model** (`GenerateRequestsPerDayPerProject
+PerModel-FreeTier=20`, measured). Two things follow.
 
-A quota 429 is **not** retried — Google's own hint is 30 seconds or more, and a retry loop just
-spends a phone's time relearning it. A 503 is, twice.
+**The cap is per model, so `coach` tries a chain of them** — 3.8-flash, 3.7, 3.6, 3.5, then the
+lites — best first, moving on when one is quota-blocked. Six separate allowances instead of one.
+Blocked models are remembered in module scope so a warm instance doesn't pay a round trip per
+exhausted model before reaching a working one. No Gemma (no `responseSchema`) and no aliases (they
+may resolve to a model already in the list and burn a bucket twice while looking fresh).
+
+**And the paths that don't need a model no longer use one.** `lib/parseIngredient.ts` reads
+"1/2 pound lean ground beef" locally — a quantity, a unit and a food, not a language problem — and
+`lib/resolveAmount.ts` turns volumes and counts into grams against the matched food's *own* USDA
+portions, because a cup of flour is 120 g and a cup of oil is 218 g. A nineteen-line import now
+resolves in about a second with no request at all; the model is asked only for the lines the parser
+genuinely can't weigh, and if it's unavailable those lines stay visible and uncounted.
+
+Quota errors still report themselves properly: `classify()` reads Google's `QuotaFailure` and
+`RetryInfo` and returns which limit was hit and how long to wait, and the client remembers the
+cooldown. A quota 429 is **not** retried on the same model — Google's own hint is 30s+ — but the
+next model is tried immediately. A 503 gets one retry before moving on.
+
+## Searching for food
+
+`normalizeQuery` in `lib/foodSearch.ts` is applied before both the local match and the string sent
+to USDA. It exists because **"80/20 ground beef" returned nothing at all** — not a bad ranking, zero
+rows — while "ground beef 80" returns the exact entry. A search that silently returns nothing is the
+worst failure this app can have: it is indistinguishable from the food not existing.
+
+The local seed is only 46 foods, so nearly everything real arrives from USDA three to six seconds
+later. `useFoodSearch` therefore exposes `isSearching`, and every screen says so rather than
+printing "Nothing matched" while still looking.
+
+## Logging quickly
+
+The speed difference against MyFitnessPal was never the search — it was that four foods cost four
+round trips through a portion screen. Two things fix that:
+
+- **Tick several, log once.** `repo.logFoods` writes them together.
+- **The amount is already right.** `repo.lastAmountFor` defaults a portion to what you last had of
+  that food, keeping the portion (`2 slices`) rather than the grams it came to. A database default
+  of "1 serving" is wrong for almost everybody on almost every food, and re-typing 180 g of chicken
+  daily is the friction that ends a food diary.
+
+Portion labels always carry their weight — "4 oz · 113 g", "1 RACC · 112 g" — because USDA's own
+labels are a mix of units with no common scale and "1 RACC" means nothing to anybody.
+
+## Goals
+
+`Program.targetKg` is what gives a goal an end. A rate is the right *input* for a calorie target and
+a useless thing to aim at: nothing ever satisfies "lose 0.5% a week", so reaching a weight you cared
+about did nothing at all.
+
+`lib/goal.ts` dates it from the **measured** trend, never the intended rate — an ETA off the plan
+says what would happen if the plan were working. Both are returned, because where they disagree that
+disagreement is the useful part. `startKg` is captured when the target is set rather than derived
+later, so progress has a fixed denominator and the goalposts don't move.
 
 ## Where you ate
 

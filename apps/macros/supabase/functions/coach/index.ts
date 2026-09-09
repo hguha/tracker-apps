@@ -6,8 +6,41 @@
 // Env: GEMINI_API_KEY. Requires a JWT (verify_jwt defaults on), so a device-only user falls
 // back to the offline coach rather than reaching this.
 
-const MODEL = 'gemini-3.6-flash'
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
+/**
+ * Models to try, best first.
+ *
+ * The free tier's request-per-day cap is **per model**, so a chain multiplies the daily budget
+ * rather than sharing it: one model returning `GenerateRequestsPerDayPerProjectPerModel-FreeTier=20`
+ * says nothing about the next one. Measured against this key, 3.6-flash was exhausted while
+ * 3.8, 3.7 and the lites were all answering — which is the whole reason a single-model setup felt
+ * like the AI was broken for the day.
+ *
+ * Ordered by capability, degrading. The `-lite` models are worse at portion estimation and last for
+ * that reason, but a weaker breakdown the user can correct beats no breakdown at all.
+ *
+ * Deliberately no Gemma models and no aliases. Gemma doesn't support `responseSchema`, which every
+ * estimate path depends on; an alias like `gemini-flash-latest` may resolve to a model already in
+ * this list and would then burn a bucket twice while looking like a fresh one.
+ */
+const MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+]
+
+const endpointFor = (model: string): string =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+
+/**
+ * Models known to be quota-blocked, and until when.
+ *
+ * Module scope, so it survives between invocations of a warm instance. Without it every call pays a
+ * round trip per exhausted model before reaching a working one — six wasted requests to make one.
+ */
+const blockedUntil = new Map<string, number>()
 
 const SYSTEM = `You are the coach inside MACROcosm, a calorie and macro tracker.
 
@@ -162,7 +195,7 @@ Deno.serve(async (request) => {
     return json({ error: 'contents is required' }, 400)
   }
 
-  const { response, raw } = await callGemini(key, {
+  const { response, raw, model } = await callGemini(key, {
     contents: body.contents,
     systemInstruction: {
       parts: [
@@ -178,7 +211,7 @@ Deno.serve(async (request) => {
     // Quota and overload reach the client as a 200 body: the app has an offline coach to fall back
     // to, and it needs to know *why* to say something true about when it'll be back.
     if (response.status === 503 || response.status === 429) {
-      return json(classify(response.status, raw))
+      return json({ ...classify(response.status, raw), model })
     }
     return json({ error: `Gemini ${response.status}: ${raw.slice(0, 300)}` }, 502)
   }
@@ -219,7 +252,7 @@ async function estimate(
 do not assume an ingredient they have ruled out.`
     : ''
 
-  const { response, raw } = await callGemini(key, {
+  const { response, raw, model } = await callGemini(key, {
     contents: [
       {
         role: 'user',
@@ -252,7 +285,7 @@ do not assume an ingredient they have ruled out.`
     // discards the payload of a non-2xx response, so a 502 here would arrive as a bare
     // "FunctionsHttpError" and the app would blame the meal for a busy model.
     if (response.status === 503 || response.status === 429) {
-      return json(classify(response.status, raw))
+      return json({ ...classify(response.status, raw), model })
     }
     return json({ error: `Gemini ${response.status}: ${raw.slice(0, 300)}` }, 502)
   }
@@ -373,25 +406,40 @@ function classify(status: number, raw: string): Unavailable {
 async function callGemini(
   key: string,
   body: unknown,
-  attempts = 3,
-): Promise<{ response: Response; raw: string }> {
-  let last = { response: new Response(null, { status: 500 }), raw: '' }
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (response.ok) return { response, raw: '' }
+): Promise<{ response: Response; raw: string; model: string }> {
+  const now = Date.now()
+  const usable = MODELS.filter((model) => (blockedUntil.get(model) ?? 0) <= now)
+  // Everything is blocked: report the nearest one's wall rather than pretending to try.
+  const queue = usable.length > 0 ? usable : MODELS.slice(0, 1)
 
-    const raw = await response.text()
-    last = { response, raw }
-    if (response.status !== 503 && response.status !== 429) return last
-    // A quota wall does not clear inside a retry loop — Google's own retry hint is 30s or more,
-    // and a phone is waiting. Two more attempts would spend two seconds relearning the same thing.
-    if (response.status === 429) return last
-    // Short, because a phone is waiting on this: ~0.6s then ~1.2s.
-    if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+  let last = { response: new Response(null, { status: 500 }), raw: '', model: queue[0]! }
+  for (const model of queue) {
+    // One retry for an overloaded model before moving on: a 503 is transient by Google's own
+    // description, and switching model on the first blip would silently downgrade quality.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch(`${endpointFor(model)}?key=${encodeURIComponent(key)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (response.ok) return { response, raw: '', model }
+
+      const raw = await response.text()
+      last = { response, raw, model }
+
+      // Anything that isn't capacity is this request's fault, and the next model would say the
+      // same: a malformed body or an unreadable image doesn't improve on a second opinion.
+      if (response.status !== 503 && response.status !== 429) return last
+
+      if (response.status === 429) {
+        // A quota wall does not clear inside a retry loop, so don't retry it — but do remember it,
+        // and do move to the next model, whose allowance is entirely separate.
+        const { retryAfterSeconds } = classify(429, raw)
+        blockedUntil.set(model, Date.now() + retryAfterSeconds * 1000)
+        break
+      }
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
+    }
   }
   return last
 }

@@ -1,38 +1,34 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset, dayStreaks, formatDayHeading } from '@tracker-engine/core'
-import { Card } from '@tracker-engine/ui'
 import { Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
-import { mealForHour } from '@/features/shared/meals'
-import { foodIdsOf } from '@/features/shared/entryName'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
-import type { BodyWeightRow, MealSlot, Profile } from '@/domain/types'
+import type { BodyWeightRow, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
-import { CookCard } from './CookCard'
+import { LibraryCard } from './LibraryCard'
 import { GoalCard } from './GoalCard'
 import { NutritionCard } from './NutritionCard'
-import { Timeline } from './Timeline'
 import { WeighInCard } from './WeighInCard'
 
 /** The micronutrient window: a week, because one day of fibre means nothing. */
 const NUTRITION_DAYS = 7
 
 export function TodayScreen({
-  onLog,
   onOpenCoach,
   onOpenAbout,
   onOpenBadges,
   onOpenRecipes,
   onOpenDay,
+  onOpenTargets,
 }: {
-  onLog: (meal: MealSlot) => void
   onOpenCoach: () => void
   onOpenAbout: () => void
   onOpenBadges: () => void
   onOpenRecipes: () => void
   onOpenDay: (day: string) => void
+  onOpenTargets: () => void
 }) {
   const today = dayKey(Date.now())
 
@@ -41,13 +37,6 @@ export function TodayScreen({
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], [])
-
-  // One lookup for the whole day rather than a live query per row.
-  const foods = useLiveQuery(
-    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
-    [entries],
-    new Map(),
-  )
 
   const week = useLiveQuery(
     () => repo.entriesBetween(dayKeyOffset(Date.now(), NUTRITION_DAYS - 1), today),
@@ -83,11 +72,12 @@ export function TodayScreen({
         entries={entries ?? []}
         missing={missingForTarget(profile, program != null, weights ?? [])}
         onFix={onOpenAbout}
+        onOpenDay={() => onOpenDay(today)}
       />
 
       <WeighInCard />
 
-      <GoalCard />
+      <GoalCard onOpenTargets={onOpenTargets} />
 
       <CheckInCard />
 
@@ -101,14 +91,7 @@ export function TodayScreen({
 
       <BadgeStrip onOpen={onOpenBadges} />
 
-      <CookCard onOpenRecipes={onOpenRecipes} />
-
-      <Timeline
-        entries={entries ?? []}
-        foods={foods ?? new Map()}
-        onAdd={() => onLog(mealForHour(new Date().getHours()))}
-        onOpen={() => onOpenDay(today)}
-      />
+      <LibraryCard onOpenRecipes={onOpenRecipes} />
 
       <button
         onClick={onOpenCoach}
@@ -119,22 +102,7 @@ export function TodayScreen({
         <span className="text-[12.5px] text-ink-muted">about your numbers</span>
       </button>
 
-      {profile?.eatingWindow === null && (entries ?? []).length > 0 && <FastingHint />}
-
     </div>
-  )
-}
-
-/** Only for people who haven't set a window: one line, once they have data to apply it to. */
-function FastingHint() {
-  return (
-    <Card className="p-3.5">
-      <p className="text-[12.5px] text-ink-muted">
-        Eat in a set window? Turning one on in Preferences adds a fasting timer and lets the app
-        tell you whether you&rsquo;re ahead or behind for the time of day — which it can&rsquo;t
-        honestly guess otherwise.
-      </p>
-    </Card>
   )
 }
 

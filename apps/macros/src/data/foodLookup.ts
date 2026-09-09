@@ -7,6 +7,7 @@ import {
   type OffProduct,
 } from '@/lib/openFoodFacts'
 import * as repo from '@/data/repository'
+import { normalizeQuery } from '@/lib/foodSearch'
 import type { Food } from '@/domain/types'
 
 /**
@@ -63,7 +64,9 @@ export async function searchRemote(
   query: string,
   { branded = true }: SearchOptions = {},
 ): Promise<Food[]> {
-  const q = query.trim()
+  // Normalised here so USDA sees what the local index sees: "80/20 ground beef" matches nothing
+  // upstream, and "80 20 ground beef" matches the right row.
+  const q = normalizeQuery(query)
   if (q.length < 2) return []
 
   // Each source is cached the moment *it* answers, rather than after both do. The screen reads

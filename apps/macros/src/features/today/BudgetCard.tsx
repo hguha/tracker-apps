@@ -1,7 +1,8 @@
 import { Card, ProgressRing } from '@tracker-engine/ui'
+import { Moon, Utensils } from 'lucide-react'
 import { MACRO_META, grams } from '@/features/shared/format'
 import { macroSharePct } from '@/lib/nutrition'
-import { formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
+import { formatClock, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import type { EatingWindow, LogEntry, MacroTargets, Nutrients } from '@/domain/types'
 import { MacroBar } from './MacroBar'
 
@@ -12,6 +13,10 @@ import { MacroBar } from './MacroBar'
  * Pacing is deliberately withheld otherwise. Without knowing when someone eats, "you're behind
  * on calories" at 3pm is a guess dressed as advice, and the app has no business nagging someone
  * who simply eats late.
+ *
+ * The whole card opens the day. It used to sit above a second card listing the same day's food, which
+ * was the same information twice — and the ring, being the thing everyone looks at first, is the
+ * obvious place to tap to see what's behind it.
  */
 export function BudgetCard({
   totals,
@@ -21,6 +26,7 @@ export function BudgetCard({
   entries,
   missing,
   onFix,
+  onOpenDay,
 }: {
   totals: Nutrients
   targets: MacroTargets | null
@@ -30,11 +36,16 @@ export function BudgetCard({
   /** What the app still needs before it can set a first target. */
   missing: string[]
   onFix: () => void
+  onOpenDay: () => void
 }) {
   const shares = macroSharePct(totals)
 
   return (
-    <Card className="p-4">
+    <Card className="p-0">
+      <button
+        onClick={onOpenDay}
+        className="w-full rounded-2xl p-4 text-left active:bg-sunken"
+      >
       <div className="flex items-center gap-4">
         <ProgressRing value={totals.kcal} max={targets?.kcal ?? 0} size={92}>
           <div className="text-center">
@@ -64,7 +75,7 @@ export function BudgetCard({
           {left.kcal >= 0
             ? `${left.kcal} kcal and ${grams(Math.max(0, left.proteinMg))} protein left.`
             : `${Math.abs(left.kcal)} kcal over target.`}
-          {window && <Pacing window={window} targets={targets} totals={totals} entries={entries} />}
+          <DayHint entries={entries} />
         </p>
       ) : (
         <div className="mt-3">
@@ -73,60 +84,115 @@ export function BudgetCard({
               ? `No target yet — the first one needs your ${joinWords(missing)}.`
               : 'No target yet — pick a goal to get one.'}
           </p>
-          <button
-            onClick={onFix}
-            className="mt-2 w-full rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
+          <span
+            role="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onFix()
+            }}
+            className="mt-2 block w-full rounded-xl bg-sunken py-2.5 text-center text-[13.5px] font-semibold text-accent active:opacity-60"
           >
             {missing.length > 0 ? 'Fill that in' : 'Choose a goal'}
-          </button>
+          </span>
+          {/* Also here. Without a target this branch used to end at the button, so the only route
+              into the day disappeared for exactly the people who have not set one up yet. */}
+          <p className="mt-2 text-[13px]">
+            <DayHint entries={entries} />
+          </p>
         </div>
+      )}
+      </button>
+
+      {window && (
+        <WindowStrip window={window} targets={targets} totals={totals} entries={entries} />
       )}
     </Card>
   )
 }
 
-function Pacing({
+/** The invitation into the day screen, in whichever branch the card is showing. */
+function DayHint({ entries }: { entries: readonly LogEntry[] }) {
+  return (
+    <span className="text-ink-muted">
+      {entries.length === 0
+        ? 'Nothing logged yet — tap to add.'
+        : `${entries.length} item${entries.length === 1 ? '' : 's'} today — tap to see them.`}
+    </span>
+  )
+}
+
+/**
+ * The eating window, as a thing on the screen rather than a clause at the end of a sentence.
+ *
+ * The window was implemented and invisible: it appended half a line to the budget text, so someone
+ * who turned it on reasonably concluded it did nothing. A bar showing where you are in the window,
+ * with the fast or the time remaining named, is the entire point of having set one.
+ */
+function WindowStrip({
   window,
   targets,
   totals,
   entries,
 }: {
   window: EatingWindow
-  targets: MacroTargets
+  targets: MacroTargets | null
   totals: Nutrients
   entries: readonly LogEntry[]
 }) {
   const state = windowState(window, entries)
-
-  if (state.phase === 'before') {
-    return (
-      <span className="text-ink-muted">
-        {' '}
-        Window opens in {formatDuration(state.opensInMinutes ?? 0)}
-        {state.fastedMinutes !== null && ` · fasted ${formatDuration(state.fastedMinutes)}`}.
-      </span>
-    )
-  }
-
-  if (state.phase === 'after') {
-    return <span className="text-ink-muted"> Window closed for today.</span>
-  }
-
-  const expected = Math.round(targets.kcal * windowProgress(window))
-  const drift = totals.kcal - expected
-  const label =
-    Math.abs(drift) < 150
-      ? 'On pace for this time of day'
-      : drift < 0
-        ? `${Math.abs(drift)} kcal behind pace`
-        : `${drift} kcal ahead of pace`
+  const progress = windowProgress(window)
+  const isOpen = state.phase === 'open'
 
   return (
-    <span className="text-ink-muted">
-      {' '}
-      {label} · {formatDuration(state.closesInMinutes ?? 0)} of your window left.
-    </span>
+    <div className="border-t border-line px-4 py-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[12.5px] font-medium">
+          {isOpen ? (
+            <Utensils size={13} className="text-accent" />
+          ) : (
+            <Moon size={13} className="text-ink-muted" />
+          )}
+          {formatClock(window.startMinute)}–{formatClock(window.endMinute)}
+        </span>
+        <span className="tabular text-[12px] text-ink-muted">
+          {state.phase === 'before'
+            ? `Opens in ${formatDuration(state.opensInMinutes ?? 0)}`
+            : state.phase === 'after'
+              ? 'Closed for today'
+              : `${formatDuration(state.closesInMinutes ?? 0)} left`}
+        </span>
+      </div>
+
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-sunken">
+        <div
+          className="h-full rounded-full transition-[width]"
+          style={{
+            width: `${Math.round(progress * 100)}%`,
+            background: isOpen ? 'var(--accent)' : 'var(--text-muted)',
+          }}
+        />
+      </div>
+
+      <p className="tabular mt-1.5 text-[12px] text-ink-muted">
+        {state.fastedMinutes !== null && `Fasted ${formatDuration(state.fastedMinutes)}`}
+        {state.fastedMinutes !== null && targets && isOpen && ' · '}
+        {targets && isOpen && pacing(window, targets, totals)}
+      </p>
+    </div>
   )
+}
+
+/**
+ * Whether the day is ahead or behind for the time of day.
+ *
+ * Only inside the window, and only with a target — pacing someone against a figure the app guessed
+ * would be nagging them with arithmetic it doesn't believe.
+ */
+function pacing(window: EatingWindow, targets: MacroTargets, totals: Nutrients): string {
+  const expected = Math.round(targets.kcal * windowProgress(window))
+  const drift = totals.kcal - expected
+  if (Math.abs(drift) < 150) return 'on pace for the time of day'
+  return drift < 0 ? `${Math.abs(drift)} kcal behind pace` : `${drift} kcal ahead of pace`
 }
 
 function joinWords(words: string[]): string {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { SearchField } from '@tracker-engine/ui'
 import { Loader2, Plus } from 'lucide-react'
-import { portionLabel } from '@/features/shared/format'
+import { portionWithGrams } from '@/features/shared/format'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import type { Food } from '@/domain/types'
 
@@ -62,7 +62,7 @@ export function FoodSearchPicker({
                   <span className="min-w-0 flex-1 truncate text-[13.5px]">
                     {food.description}
                     {food.portions.length > 0 && (
-                      <span className="text-ink-muted"> · {portionLabel(food.portions[0]!)}</span>
+                      <span className="text-ink-muted"> · {portionWithGrams(food.portions[0]!)}</span>
                     )}
                   </span>
                 </button>

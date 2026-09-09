@@ -168,8 +168,8 @@ function SignedInApp() {
       <main className="flex-1 overflow-y-auto pb-6 pt-safe">
         {tab === 'today' && (
           <TodayScreen
-            onLog={(meal) => setView({ kind: 'log', meal })}
             onOpenDay={(day) => setView({ kind: 'day', day })}
+            onOpenTargets={() => setView({ kind: 'settings', route: 'targets' })}
             onOpenCoach={() => setView({ kind: 'settings', route: 'coach' })}
             onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
             onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}

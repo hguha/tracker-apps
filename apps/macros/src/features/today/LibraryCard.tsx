@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
 import { Card, useToast } from '@tracker-engine/ui'
-import { ChefHat, ChevronRight, Plus } from 'lucide-react'
+import { ChefHat, ChevronRight } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dayTotals, perServing, remaining } from '@/lib/nutrition'
 import { recommendRecipes } from '@/lib/recommend'
@@ -10,17 +10,14 @@ import { CUISINE_LABELS } from '@/lib/cuisine'
 import { mealForHour } from '@/features/shared/meals'
 
 /**
- * What to cook, on the screen people actually open.
+ * The library, and the top of what to cook from it.
  *
- * Recipes were previously reachable only from Settings, which is where features go to be forgotten:
- * nobody browses Settings at 6pm wondering what's for dinner. Three suggestions here, ranked by
- * what fits tonight's remaining calories, what the user actually cooks, and what they haven't had
- * lately — with logging a serving as one tap.
- *
- * Hidden entirely when there are no recipes. An empty card advertising a feature is worse than no
- * card; the Log screen's "New recipe" is where that invitation belongs.
+ * Recipes and saved meals were reachable only from Settings, which is where features go to be
+ * forgotten: nobody browses Settings at 6pm wondering what's for dinner. So the route lives here,
+ * with the three best suggestions already on it — ranked by what fits tonight's remaining calories,
+ * what the user actually cooks, and what they haven't had lately.
  */
-export function CookCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
+export function LibraryCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
   const toast = useToast()
   const [logging, setLogging] = useState<string | null>(null)
 
@@ -31,10 +28,12 @@ export function CookCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
   const today = dayKey(Date.now())
   const entries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
 
-  if ((recipes ?? []).length === 0) return null
+  // Shown even with no recipes, because this is the only route to the library from home — but as a
+  // one-line invitation rather than an empty list pretending to be a feature.
+  const isEmpty = (recipes ?? []).length === 0
 
   const left = targets ? remaining(dayTotals(entries ?? []), targets) : null
-  const rows = recommendRecipes(
+  const rows = isEmpty ? [] : recommendRecipes(
     {
       remainingKcal: left?.kcal ?? null,
       remainingProteinMg: left?.proteinMg ?? 0,
@@ -45,7 +44,6 @@ export function CookCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
     },
     3,
   )
-  if (rows.length === 0) return null
 
   return (
     <Card className="p-0">
@@ -55,11 +53,15 @@ export function CookCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
       >
         <ChefHat size={16} className="shrink-0 text-accent" />
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold tracking-tight">Cook one of yours</span>
+          <span className="block text-[15px] font-semibold tracking-tight">Your library</span>
           <span className="block text-[12px] text-ink-muted">
-            {left === null
-              ? `${(recipes ?? []).length} recipes saved`
-              : `Ranked against the ${left.kcal} kcal you have left`}
+            {isEmpty
+              ? 'Recipes, saved meals and your own foods'
+              : rows.length === 0
+                ? `${(recipes ?? []).length} recipes · saved meals · your own foods`
+                : left === null
+                  ? `${(recipes ?? []).length} recipes to cook, plus saved meals and foods`
+                  : `Ranked against the ${left.kcal} kcal you have left`}
           </span>
         </span>
         <ChevronRight size={17} className="shrink-0 text-ink-muted" />
@@ -93,9 +95,9 @@ export function CookCard({ onOpenRecipes }: { onOpenRecipes: () => void }) {
                   .finally(() => setLogging(null))
               }}
               aria-label={`Log one serving of ${recipe.name}`}
-              className="mr-2 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-wash text-accent active:opacity-60"
+              className="mr-2 shrink-0 rounded-lg bg-accent-wash px-2.5 py-1.5 text-[12px] font-semibold text-accent active:opacity-60"
             >
-              <Plus size={16} />
+              Ate 1
             </button>
           </li>
         ))}

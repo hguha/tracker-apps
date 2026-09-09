@@ -1,9 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { bodyWeightFromKg, convertWeight } from '@tracker-engine/core'
+import { DAY_MS, bodyWeightFromKg, convertWeight, formatRelativeDay } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
+import { PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { bmi, goalWeightKg } from '@/lib/micronutrients'
+import { bmi } from '@/lib/micronutrients'
+import { goalProgress } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
 
 const GOAL_VERB: Record<string, string> = {
@@ -13,13 +15,17 @@ const GOAL_VERB: Record<string, string> = {
 }
 
 /**
- * Where the weight is going, on the screen the user opens most.
+ * Where the weight is going, and when it gets there.
  *
- * Shows the projection alongside the measured rate, so the goal is checkable rather than
- * aspirational: if the trend says +0.1 kg/week on a losing program, that contradiction should be
- * visible here and not buried in Insights.
+ * The version this replaces showed the rate and a twelve-week projection, which is checkable but has
+ * no end: nothing ever satisfied "losing 0.5% a week", so logging the weight you were aiming for did
+ * nothing at all. With a target it has a bar, a date, and a state for having arrived.
+ *
+ * The date comes from the **measured** rate, never the intended one. An ETA off the plan says what
+ * would happen if the plan were working; an ETA off the trend says what is happening. Where they
+ * disagree, that disagreement is the useful part, so both appear.
  */
-export function GoalCard() {
+export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], [])
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
@@ -30,45 +36,119 @@ export function GoalCard() {
   if (!program || !latest) return null
 
   const rate = trendChangePerWeek(trend)
-  const projected = goalWeightKg(latest.trendKg, program.ratePctPerWeek)
   const height = profile?.heightCm ?? null
   const targetPerWeek = (program.ratePctPerWeek / 100) * latest.trendKg
+  const show = (kg: number) => bodyWeightFromKg(kg, units.weight)
 
-  // On track when moving the right way at a plausible fraction of the intended rate.
-  const onTrack =
-    rate === null || program.goal === 'maintain'
-      ? null
-      : Math.sign(rate) === Math.sign(targetPerWeek) && Math.abs(rate) >= Math.abs(targetPerWeek) * 0.4
+  // No target set: offer to set one, because that's the missing half of the feature.
+  if (program.targetKg === null) {
+    return (
+      <Card className="p-4">
+        <Header goal={program.goal} />
+        <p className="tabular mt-1 text-[22px] font-bold leading-tight">
+          {show(latest.trendKg)}
+          <span className="text-[13px] font-medium text-ink-muted"> {units.weight} now</span>
+        </p>
+        <p className="tabular mt-1 text-[12.5px] text-ink-muted">
+          {rate === null
+            ? 'Weigh in a few more times to measure your rate.'
+            : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week measured`}
+          {height !== null && ` · BMI ${bmi(latest.trendKg, height).toFixed(1)}`}
+        </p>
+        {program.goal !== 'maintain' && (
+          <button
+            onClick={onOpenTargets}
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
+          >
+            <Target size={15} />
+            Set a goal weight
+          </button>
+        )}
+      </Card>
+    )
+  }
+
+  const progress = goalProgress({
+    goal: program.goal,
+    targetKg: program.targetKg,
+    startKg: program.startKg,
+    trendKg: latest.trendKg,
+    ratePerWeek: rate,
+    ratePctPerWeek: program.ratePctPerWeek,
+  })
+
+  // Reached, and not yet acknowledged: the one moment this whole feature exists for.
+  if (progress.isReached && program.reachedAt === null) {
+    return (
+      <Card className="p-4">
+        <div className="flex items-center gap-2">
+          <PartyPopper size={18} className="shrink-0 text-accent" />
+          <h2 className="text-[15px] font-semibold tracking-tight">
+            You hit {show(program.targetKg)} {units.weight}
+          </h2>
+        </div>
+        <p className="mt-1 text-[12.5px] text-ink-muted">
+          Your trend is {show(latest.trendKg)} {units.weight}
+          {program.startKg !== null &&
+            `, from ${show(program.startKg)} when you set it — ${Math.abs(
+              Math.round(convertWeight(program.startKg - latest.trendKg, units.weight) * 10) / 10,
+            )} ${units.weight}`}
+          .
+        </p>
+        <p className="mt-2 text-[12.5px] text-ink-secondary">
+          Holding here means eating at your measured expenditure rather than under it. The check-in
+          will find that number for you — switching to maintain is the whole change.
+        </p>
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={onOpenTargets}
+            className="min-w-0 flex-1 rounded-xl bg-accent py-2.5 text-[13.5px] font-semibold text-accent-contrast active:brightness-90"
+          >
+            Choose what&rsquo;s next
+          </button>
+          <button
+            onClick={() => void repo.markGoalReached(program.id)}
+            className="shrink-0 rounded-xl border border-line px-3 py-2.5 text-[13.5px] font-semibold text-ink-secondary active:bg-sunken"
+          >
+            Later
+          </button>
+        </div>
+      </Card>
+    )
+  }
+
+  const remaining = Math.abs(convertWeight(progress.remainingKg, units.weight))
 
   return (
     <Card className="p-4">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[15px] font-semibold tracking-tight">
-          {GOAL_VERB[program.goal] ?? 'Goal'}
-        </h2>
-        {onTrack !== null && (
-          <span
-            className="text-[12px] font-semibold"
-            style={{ color: onTrack ? 'var(--target-on)' : 'var(--confidence-medium)' }}
-          >
-            {onTrack ? 'on track' : 'off pace'}
-          </span>
-        )}
+        <Header goal={program.goal} />
+        <button
+          onClick={onOpenTargets}
+          className="shrink-0 text-[12px] font-semibold text-accent active:opacity-60"
+        >
+          {show(program.targetKg)} {units.weight} goal
+        </button>
       </div>
 
       <p className="tabular mt-1 text-[22px] font-bold leading-tight">
-        {bodyWeightFromKg(latest.trendKg, units.weight)}
-        <span className="text-[13px] font-medium text-ink-muted"> {units.weight} now</span>
-        {projected !== null && (
-          <>
-            <span className="text-[13px] font-medium text-ink-muted"> → </span>
-            {bodyWeightFromKg(projected, units.weight)}
-            <span className="text-[13px] font-medium text-ink-muted"> in 12 weeks</span>
-          </>
-        )}
+        {show(latest.trendKg)}
+        <span className="text-[13px] font-medium text-ink-muted">
+          {' '}
+          {units.weight} · {remaining.toFixed(1)} to go
+        </span>
       </p>
 
-      <p className="tabular mt-1 text-[12.5px] text-ink-muted">
+      {progress.fraction !== null && (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sunken">
+          <div
+            className="h-full rounded-full bg-accent transition-[width]"
+            style={{ width: `${Math.round(progress.fraction * 100)}%` }}
+          />
+        </div>
+      )}
+
+      <p className="tabular mt-2 text-[12.5px] text-ink-muted">
         {rate === null
           ? 'Weigh in a few more times to measure your rate.'
           : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week measured` +
@@ -77,7 +157,35 @@ export function GoalCard() {
               : ` · aiming for ${signed(convertWeight(targetPerWeek, units.weight))}`)}
         {height !== null && ` · BMI ${bmi(latest.trendKg, height).toFixed(1)}`}
       </p>
+
+      <p className="mt-1 text-[12.5px]">
+        {progress.isWrongWay ? (
+          <span style={{ color: 'var(--confidence-medium)' }}>
+            The trend is moving away from your goal. Worth a look at the target rather than the week.
+          </span>
+        ) : progress.etaAt !== null ? (
+          <span className="text-ink-secondary">
+            At this rate: {formatRelativeDay(progress.etaAt)}
+            {progress.plannedEtaAt !== null &&
+              // Only when they meaningfully disagree; a fortnight is inside the noise of either.
+              Math.abs(progress.plannedEtaAt - progress.etaAt) > 14 * DAY_MS &&
+              ` — the plan said ${formatRelativeDay(progress.plannedEtaAt)}`}
+          </span>
+        ) : (
+          <span className="text-ink-muted">
+            {progress.plannedEtaAt === null
+              ? 'No date yet — the trend needs to move first.'
+              : `Flat so far. The plan puts it at ${formatRelativeDay(progress.plannedEtaAt)}.`}
+          </span>
+        )}
+      </p>
     </Card>
+  )
+}
+
+function Header({ goal }: { goal: string }) {
+  return (
+    <h2 className="text-[15px] font-semibold tracking-tight">{GOAL_VERB[goal] ?? 'Goal'}</h2>
   )
 }
 
