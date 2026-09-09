@@ -12,7 +12,14 @@ type State =
 
 /** Camera scan, then lookup. Typing the digits stays available throughout, because a scan can
  *  fail for reasons the user can't fix (a scuffed label, low light, no camera permission). */
-export function ScanPanel({ onFound }: { onFound: (food: Food) => void }) {
+export function ScanPanel({
+  onFound,
+  onCreate,
+}: {
+  onFound: (food: Food) => void
+  /** A barcode neither database has: the label in the user's hand is the only source left. */
+  onCreate: (barcode: string) => void
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const handleRef = useRef<ScanHandle | null>(null)
   const [state, setState] = useState<State>({ kind: 'scanning' })
@@ -85,10 +92,17 @@ export function ScanPanel({ onFound }: { onFound: (food: Food) => void }) {
         )}
 
         {state.kind === 'not-found' && (
-          <p className="mt-2 rounded-xl bg-sunken px-3.5 py-2.5 text-[13px] text-ink-secondary">
-            Nothing found for {state.barcode}. It may not be in USDA or Open Food Facts yet —
-            search by name, or quick-add the macros from the label.
-          </p>
+          <div className="mt-2 rounded-xl bg-sunken px-3.5 py-2.5">
+            <p className="text-[13px] text-ink-secondary">
+              Nothing found for {state.barcode}. It may not be in USDA or Open Food Facts yet.
+            </p>
+            <button
+              onClick={() => onCreate(state.barcode)}
+              className="mt-2 text-[13.5px] font-semibold text-accent active:opacity-60"
+            >
+              Add it from the label →
+            </button>
+          </div>
         )}
 
         <div className="mt-3 flex items-center gap-2">

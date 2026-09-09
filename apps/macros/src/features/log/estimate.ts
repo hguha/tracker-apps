@@ -73,8 +73,16 @@ async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate>
     items?: RawItem[]
     assumptions?: string
     error?: string
+    busy?: boolean
   }>('coach', { body: { ...body, dietNotes } })
 
+  // A busy model and an unreadable meal are different problems with different answers, and
+  // reporting both as "couldn't work that out" made a queue look like a failure to understand.
+  if (data?.busy) {
+    throw new EstimateUnavailable(
+      'The model is busy right now — give it a few seconds and try again.',
+    )
+  }
   if (error || !data || data.error || !Array.isArray(data.items)) {
     throw new EstimateUnavailable(
       "Couldn't work that out just now. Try describing it in words, or search for the foods.",

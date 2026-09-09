@@ -4,6 +4,7 @@ import { createOwnerGuard } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import type {
   BodyWeightRow,
+  CustomFood,
   DeviceSettings,
   CheckIn,
   Food,
@@ -20,6 +21,7 @@ const OWNER_KEY = 'macros.owner'
 
 export class MacrosDatabase extends Dexie {
   foods!: EntityTable<Food, 'id'>
+  customFoods!: EntityTable<CustomFood, 'id'>
   logEntries!: EntityTable<LogEntry, 'id'>
   bodyWeights!: EntityTable<BodyWeightRow, 'id'>
   recipes!: EntityTable<Recipe, 'id'>
@@ -48,6 +50,12 @@ export class MacrosDatabase extends Dexie {
       deadLetter: '++seq, table, rowId',
       syncState: 'table',
     })
+
+    // v2 adds the user's own foods. A separate store from `foods` because it's owned data:
+    // the owner guard wipes it on a foreign sign-in, and reference data must survive that.
+    this.version(2).stores({
+      customFoods: 'id, description, barcode, updatedAt, userId',
+    })
   }
 }
 
@@ -56,6 +64,7 @@ export const db = new MacrosDatabase()
 /** Everything a foreign account's sign-in must clear. `foods` is excluded on purpose:
  *  shared reference data, owned by nobody, and expensive to re-seed. */
 const OWNED_TABLES = [
+  db.customFoods,
   db.logEntries,
   db.bodyWeights,
   db.recipes,

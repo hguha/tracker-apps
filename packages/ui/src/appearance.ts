@@ -36,6 +36,33 @@ const DEFAULT_SURFACES = {
   dark: { r: 26, g: 26, b: 25 },
 }
 
+/**
+ * Points `<meta name="theme-color">` at the page surface the app is actually showing.
+ *
+ * Static metas can't do this: the tags are declared per `prefers-color-scheme`, so an installed
+ * iOS app whose user picked Light while the phone is in Dark paints the strip above the web view
+ * from the *dark* tag — a black bar over a light app. Reading the computed variable also keeps it
+ * right for a theme whose page colour isn't the default one, and for a custom accent.
+ */
+export function syncThemeColor(): void {
+  if (typeof document === 'undefined') return
+  const surface = getComputedStyle(document.documentElement)
+    .getPropertyValue('--surface-page')
+    .trim()
+  if (!surface) return
+
+  // The media-scoped tags would still win, so they go: one tag, driven by the app's own state.
+  for (const tag of document.querySelectorAll('meta[name="theme-color"][media]')) tag.remove()
+
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    document.head.appendChild(meta)
+  }
+  meta.content = surface
+}
+
 export function resolveScheme(preference: ColorSchemePreference): ColorScheme {
   if (preference !== 'system') return preference
   if (typeof window === 'undefined') return 'light'
@@ -71,6 +98,8 @@ export function createAppearance(config: AppearanceConfig) {
       root.style.removeProperty('--accent-wash')
       root.style.removeProperty('--accent-contrast')
     }
+
+    syncThemeColor()
     return scheme
   }
 

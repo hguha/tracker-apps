@@ -3,7 +3,7 @@ import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
 import { dayKey } from '@tracker-engine/core'
-import { dayTotals } from '@/lib/nutrition'
+import { dayTotals, nutrientsFor } from '@/lib/nutrition'
 import { lastCompleteWeekKey } from '@/lib/checkin'
 import { multipliersForHighDays } from '@/lib/cycling'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
@@ -402,5 +402,71 @@ describe('cycling applies to the day, not the week', () => {
     expect(cycled.get('2026-09-09')!.kcal).toBeLessThan(2000)
     // Protein is a floor from bodyweight, not a share of the day.
     expect(cycled.get('2026-09-09')!.proteinMg).toBe(150_000)
+  })
+})
+
+describe('your own foods', () => {
+  it('is searchable and loggable like any other food', async () => {
+    const id = await repo.saveCustomFood({
+      description: 'Corner shop chicken wrap',
+      per100: { ...EMPTY_NUTRIENTS, kcal: 200, proteinMg: 14_000, carbsMg: 20_000, fatMg: 7_000 },
+      servingGrams: 250,
+      servingLabel: '1 wrap',
+    })
+
+    const found = await repo.searchFoods('chicken wrap')
+    expect(found.map((f) => f.id)).toContain(id)
+
+    const food = await repo.getFood(id)
+    await repo.logFood({ food: food!, meal: 'lunch', portionId: 'custom-serving' })
+    const entries = await repo.entriesForDay(dayKey(Date.now()))
+    // 250 g of a 200 kcal/100 g food.
+    expect(entries[0]!.nutrients.kcal).toBe(500)
+  })
+
+  it('stops appearing in search once deleted, without touching what was logged', async () => {
+    const id = await repo.saveCustomFood({
+      description: 'Weird protein bar',
+      per100: { ...EMPTY_NUTRIENTS, kcal: 400, proteinMg: 30_000, carbsMg: 30_000, fatMg: 12_000 },
+    })
+    const food = await repo.getFood(id)
+    await repo.logFood({ food: food!, grams: 100, meal: 'snack' })
+
+    await repo.deleteCustomFood(id)
+    expect(await repo.searchFoods('weird protein')).toEqual([])
+    expect((await repo.entriesForDay(dayKey(Date.now())))[0]!.nutrients.kcal).toBe(400)
+  })
+})
+
+describe('recipes', () => {
+  it('divides the total by servings and logs one serving at a time', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Chicken tray',
+      servings: 4,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 800 }],
+    })
+    const recipe = (await repo.recipes()).find((r) => r.id === id)!
+    const wholeTray = recipe.nutrients.kcal
+
+    await repo.logRecipeServing(recipe, 1, 'dinner')
+    const [entry] = await repo.entriesForDay(dayKey(Date.now()))
+    expect(entry!.recipeId).toBe(id)
+    expect(entry!.nutrients.kcal).toBe(Math.round(wholeTray / 4))
+    expect(entry!.source).toBe('recipe')
+  })
+
+  it('ignores an ingredient nothing matched rather than guessing at it', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Half-known dish',
+      servings: 1,
+      ingredients: [
+        { foodId: food.id, label: food.description, grams: 100 },
+        { foodId: null, label: 'unknown sauce', grams: 100 },
+      ],
+    })
+    const recipe = (await repo.recipes()).find((r) => r.id === id)!
+    expect(recipe.nutrients.kcal).toBe(nutrientsFor(food, 100).kcal)
   })
 })

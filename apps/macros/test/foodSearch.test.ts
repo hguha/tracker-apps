@@ -108,3 +108,85 @@ describe('matching', () => {
     expect(matchesQuery(food({ description: 'Corn Flakes', brand: 'Kellogg' }), queryTerms('kellogg'))).toBe(true)
   })
 })
+
+describe('meaning-changing qualifiers', () => {
+  it('ranks beef meatballs above the meatless row for a bare "meatballs"', () => {
+    // A photo of beef meatballs matched "Meatball, meatless" and silently used its macros.
+    const ranked = rankFoods(
+      [
+        food({ description: 'Meatball, meatless', dataType: 'Survey (FNDDS)' }),
+        food({ description: 'Meatballs, beef, cooked', dataType: 'SR Legacy' }),
+      ],
+      'meatballs',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Meatballs, beef, cooked')
+  })
+
+  it('still returns the meatless row when that is what was asked for', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'Meatballs, beef, cooked', dataType: 'SR Legacy' }),
+        food({ description: 'Meatball, meatless', dataType: 'Survey (FNDDS)' }),
+      ],
+      'meatless meatball',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Meatball, meatless')
+  })
+
+  it('does not prefer a baby-food row for an ordinary query', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'Baby food, carrots, strained', dataType: 'SR Legacy' }),
+        food({ description: 'Carrots, raw', dataType: 'Foundation' }),
+      ],
+      'carrots',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Carrots, raw')
+  })
+})
+
+describe('head-noun matching (USDA names foods "head, qualifier")', () => {
+  it('prefers plain spaghetti over spaghetti squash', () => {
+    // The squash row is shorter, so the length penalty alone ranked it first — and a photo of
+    // spaghetti was then logged as 49 kcal/100g of squash.
+    const ranked = rankFoods(
+      [
+        food({ description: 'Spaghetti squash, cooked', dataType: 'Survey (FNDDS)' }),
+        food({
+          description: 'Spaghetti, cooked, enriched, without added salt',
+          dataType: 'SR Legacy',
+        }),
+      ],
+      'cooked spaghetti',
+      2,
+    )
+    expect(ranked[0]!.description).toMatch(/^Spaghetti, cooked/)
+  })
+
+  it('prefers a sauce row over a restaurant dish that mentions the sauce', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'OLIVE GARDEN, cheese ravioli with marinara sauce', dataType: 'SR Legacy' }),
+        food({ description: 'Sauce, pasta, spaghetti/marinara, ready-to-serve', dataType: 'SR Legacy' }),
+      ],
+      'marinara sauce',
+      2,
+    )
+    expect(ranked[0]!.description).toMatch(/^Sauce, pasta/)
+  })
+
+  it('treats a plural head as the same food', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'Soup, meatball, canned', dataType: 'SR Legacy' }),
+        food({ description: 'Meatballs, beef, cooked', dataType: 'SR Legacy' }),
+      ],
+      'beef meatball',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Meatballs, beef, cooked')
+  })
+})

@@ -205,3 +205,60 @@ export function WeekdayChart({ days }: { days: InsightsDay[] }) {
     </ChartCard>
   )
 }
+
+/**
+ * Where the calories actually came from, by food.
+ *
+ * The most actionable chart in the app for most people: a diet is usually four or five foods
+ * carrying half the week, and nobody knows which until they see it.
+ */
+export function TopFoodsChart({
+  topFoods,
+}: {
+  topFoods: { name: string; kcal: number; entries: number }[]
+}) {
+  const tokens = useChartTokens()
+  const total = topFoods.reduce((sum, food) => sum + food.kcal, 0)
+
+  const option: EChartsOption = {
+    animation: false,
+    grid: { left: 120, right: 30, top: 8, bottom: 24 },
+    xAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: tokens.gridline } },
+      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
+    },
+    yAxis: {
+      type: 'category',
+      data: topFoods.map((food) => truncate(food.name)).reverse(),
+      axisLine: { lineStyle: { color: tokens.axis } },
+      axisLabel: { color: tokens.inkMuted, fontSize: 9.5 },
+    },
+    tooltip: { trigger: 'axis' },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 14,
+        itemStyle: { color: tokens.accent },
+        data: topFoods.map((food) => food.kcal).reverse(),
+      },
+    ],
+  }
+
+  return (
+    <ChartCard
+      title="Your biggest sources"
+      subtitle={total === 0 ? undefined : `Top ${topFoods.length} foods by calories`}
+      isEmpty={topFoods.length === 0}
+      emptyMessage="Log a few days to see this."
+      table={{
+        columns: ['Food', 'kcal', 'Times'],
+        rows: topFoods.map((food) => [food.name, food.kcal, food.entries]),
+      }}
+    >
+      <Chart option={option} ariaLabel="Foods contributing the most calories" />
+    </ChartCard>
+  )
+}
+
+const truncate = (text: string): string => (text.length > 22 ? `${text.slice(0, 21)}…` : text)

@@ -26,7 +26,9 @@ export function PortionPanel({
   const defaultPortion = portionFor(food, null)
   const [portionId, setPortionId] = useState<string | null>(defaultPortion?.id ?? null)
   const [count, setCount] = useState('1')
-  const [gramsInput, setGramsInput] = useState('')
+  // A food with no portions (most branded rows, and any own food without a stated serving) would
+  // otherwise open with an empty grams box and a disabled button — a dead end on the last step.
+  const [gramsInput, setGramsInput] = useState(defaultPortion ? '' : '100')
   const [isSaving, setIsSaving] = useState(false)
 
   const portion = portionFor(food, portionId)

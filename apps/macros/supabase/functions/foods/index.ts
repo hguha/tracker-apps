@@ -215,7 +215,7 @@ Deno.serve(async (request) => {
     }
 
     if (body.op === 'search' && body.q) {
-      const found = await search(key, body.q, Math.min(50, body.limit ?? 25))
+      const found = await searchGenericFirst(key, body.q, Math.min(50, body.limit ?? 25))
       const rows = await withPortions(key, found)
       if (rows.length > 0) await admin.from('foods').upsert(rows)
       return json({ foods: rows.map(toClient) })
@@ -235,6 +235,34 @@ Deno.serve(async (request) => {
     return json({ error: error instanceof Error ? error.message : 'Lookup failed' }, 502)
   }
 })
+
+/**
+ * Generic and composite foods first, branded second — as two queries, not one.
+ *
+ * FDC's relevance ranking is dominated by branded products: one call for all four dataTypes
+ * returned nothing but ALL-CAPS packaged rows for "spaghetti with meatballs" and "meatballs", so
+ * the FNDDS composite dish — the row that actually describes a plate of food, with real portions
+ * and micronutrients — never reached the client at all. That made every photo and described-meal
+ * estimate match against a random canned product.
+ *
+ * Costs one extra request per search, against a 1,000/hour key.
+ */
+async function searchGenericFirst(key: string, query: string, pageSize: number) {
+  const brandedQuota = Math.min(10, Math.max(5, Math.floor(pageSize / 3)))
+  const [generic, branded] = await Promise.all([
+    search(key, query, pageSize, ['Foundation', 'SR Legacy', 'Survey (FNDDS)']),
+    search(key, query, brandedQuota, ['Branded']).catch(() => []),
+  ])
+
+  const seen = new Set<number>()
+  const merged: FdcFood[] = []
+  for (const food of [...generic, ...branded]) {
+    if (seen.has(food.fdcId)) continue
+    seen.add(food.fdcId)
+    merged.push(food)
+  }
+  return merged.slice(0, pageSize + brandedQuota)
+}
 
 /**
  * Search returns no `foodPortions`, so a hit would have no "1 breast" or "1 slice" to log by —

@@ -1,6 +1,7 @@
-import { DAY_MS, dayKey } from '@tracker-engine/core'
+import { DAY_MS, dayKey, dayKeyOffset } from '@tracker-engine/core'
 import { syncStamp, touch } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
+import { weightTrend, type TrendPoint } from '@tracker-engine/body'
 import { db, owner } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
 import {
@@ -8,7 +9,9 @@ import {
   type BodyWeightRow,
   type CheckIn,
   type CoachingMode,
+  type CustomFood,
   type Food,
+  type FoodPortion,
   type LogEntry,
   type MacroTargets,
   type MealSlot,
@@ -18,11 +21,15 @@ import {
   type DeviceSettings,
   type Profile,
   type Program,
+  type Recipe,
+  type RecipeIngredient,
 } from '@/domain/types'
 import {
   cycleDayTargets,
   nutrientsFor,
+  perServing,
   portionFor,
+  recipeNutrients,
   scale as scaleNutrients,
   sum as sumNutrients,
 } from '@/lib/nutrition'
@@ -30,7 +37,7 @@ import { multiplierForDay } from '@/lib/cycling'
 import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
 import {
   buildCheckIn,
-  initialTargets,
+  initialTargetsFromTrend,
   lastCompleteWeekKey,
   weekKeyForDay,
   type CheckInOutcome,
@@ -105,17 +112,32 @@ export async function saveDeviceSettings(changes: Partial<DeviceSettings>): Prom
 
 // --- Foods (server-authored reference data) ---------------------------------------
 
-export function getFood(id: string): Promise<Food | undefined> {
-  return db.foods.get(id)
+/**
+ * A food by id, from either source.
+ *
+ * Every read merges reference data with the user's own foods, so nothing downstream — the log,
+ * the timeline, recipes, the coach — needs to know which table a `foodId` came from.
+ */
+export async function getFood(id: string): Promise<Food | undefined> {
+  return (await db.foods.get(id)) ?? (await db.customFoods.get(id))
 }
 
 export async function foodsByIds(ids: readonly string[]): Promise<Map<string, Food>> {
-  const rows = await db.foods.bulkGet([...new Set(ids)])
-  return new Map(rows.filter((f): f is Food => f !== undefined).map((f) => [f.id, f]))
+  const unique = [...new Set(ids)]
+  const [reference, custom] = await Promise.all([
+    db.foods.bulkGet(unique),
+    db.customFoods.bulkGet(unique),
+  ])
+  const found = [...reference, ...custom].filter((f): f is Food => f !== undefined)
+  return new Map(found.map((f) => [f.id, f]))
 }
 
-export function findByBarcode(barcode: string): Promise<Food | undefined> {
-  return db.foods.where('barcode').equals(barcode).first()
+export async function findByBarcode(barcode: string): Promise<Food | undefined> {
+  // Own foods first: someone who entered a label the databases got wrong meant to override it.
+  return (
+    (await db.customFoods.where('barcode').equals(barcode).filter(alive).first()) ??
+    (await db.foods.where('barcode').equals(barcode).first())
+  )
 }
 
 /** Substring search over everything cached locally, ranked by lib/foodSearch. */
@@ -127,7 +149,76 @@ export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
   await db.foods.each((food) => {
     if (matchesQuery(food, terms)) matches.push(food)
   })
+  await db.customFoods.each((food) => {
+    if (alive(food) && matchesQuery(food, terms)) matches.push(food)
+  })
   return rankFoods(matches, query, limit)
+}
+
+// --- The user's own foods ----------------------------------------------------------
+
+export interface CustomFoodInput {
+  description: string
+  brand?: string | null
+  barcode?: string | null
+  per100: Nutrients
+  /** A serving size in grams, if the label states one. */
+  servingGrams?: number | null
+  servingLabel?: string | null
+}
+
+export function customFoods(): Promise<CustomFood[]> {
+  return db.customFoods.filter(alive).toArray()
+}
+
+/**
+ * Creates or updates one of the user's own foods.
+ *
+ * Ids are `custom:<uuid>` so they can never collide with a `usda:`/`off:` row, and existing log
+ * entries keep pointing at the same food when it's edited — the entries themselves keep the
+ * nutrients they were logged with, so correcting a food never rewrites history.
+ */
+export async function saveCustomFood(
+  input: CustomFoodInput,
+  id = `custom:${newId()}`,
+): Promise<string> {
+  const existing = await db.customFoods.get(id)
+  const portions: FoodPortion[] =
+    input.servingGrams && input.servingGrams > 0
+      ? [
+          {
+            id: 'custom-serving',
+            label: input.servingLabel?.trim() || '1 serving',
+            grams: input.servingGrams,
+            isDefault: true,
+          },
+        ]
+      : []
+
+  const row: CustomFood = {
+    id,
+    userId: activeUserId,
+    source: 'custom',
+    description: input.description.trim(),
+    brand: input.brand?.trim() || null,
+    barcode: input.barcode?.trim() || null,
+    category: null,
+    dataType: 'custom',
+    per100: input.per100,
+    gramsPerMl: null,
+    portions,
+    verifiedAt: null,
+    ...syncStamp(),
+    ...(existing ? { ...touch(existing.clientRev), createdAt: existing.createdAt } : {}),
+  }
+
+  await db.customFoods.put(row)
+  await enqueue('customFoods', row.id)
+  return row.id
+}
+
+export function deleteCustomFood(id: string): Promise<void> {
+  return patch('customFoods', id, { deletedAt: Date.now() })
 }
 
 export async function putFoods(foods: readonly Food[]): Promise<void> {
@@ -159,12 +250,23 @@ export async function loggedDays(): Promise<string[]> {
 /** What "your data comes with you" actually refers to. */
 export const countLoggedDays = async (): Promise<number> => (await loggedDays()).length
 
-/** Distinct foods logged most often, for the Log screen's frequents. */
-export async function frequentFoodIds(limit = 20): Promise<string[]> {
+/**
+ * Distinct foods logged most often, for the Log screen's frequents.
+ *
+ * Windowed rather than lifetime: this runs every time the Add food screen opens, and a food last
+ * eaten eight months ago is not what "frequent" means to anyone. The `day` index makes it a range
+ * scan instead of a walk over the whole history.
+ */
+export async function frequentFoodIds(limit = 20, days = 90): Promise<string[]> {
   const counts = new Map<string, number>()
-  await db.logEntries.filter(alive).each((entry) => {
-    if (entry.foodId) counts.set(entry.foodId, (counts.get(entry.foodId) ?? 0) + 1)
-  })
+  const from = dayKeyOffset(Date.now(), days)
+  await db.logEntries
+    .where('day')
+    .aboveOrEqual(from)
+    .filter(alive)
+    .each((entry) => {
+      if (entry.foodId) counts.set(entry.foodId, (counts.get(entry.foodId) ?? 0) + 1)
+    })
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
@@ -325,6 +427,101 @@ const minutesIntoDay = (at: number): number => {
   const date = new Date(at)
   return date.getHours() * 60 + date.getMinutes()
 }
+
+// --- Recipes ----------------------------------------------------------------------
+
+export function recipes(): Promise<Recipe[]> {
+  return db.recipes.filter(alive).toArray()
+}
+
+export function getRecipe(id: string): Promise<Recipe | undefined> {
+  return db.recipes.get(id)
+}
+
+export interface RecipeInput {
+  name: string
+  servings: number
+  ingredients: { foodId: string | null; label: string; grams: number; optional?: boolean }[]
+  steps?: string[]
+  yieldGrams?: number | null
+}
+
+/**
+ * Creates or updates a recipe, with its total computed from the ingredients here.
+ *
+ * The total is stored rather than derived on read for the same reason a log entry stores its
+ * nutrients: a reference-data correction must not silently change what last week's dinner
+ * contained. Editing the recipe recomputes it; logging a serving copies it.
+ */
+export async function saveRecipe(input: RecipeInput, id = newId()): Promise<string> {
+  const ingredients: RecipeIngredient[] = input.ingredients.map((ingredient) => ({
+    id: newId(),
+    foodId: ingredient.foodId,
+    label: ingredient.label.trim(),
+    grams: ingredient.grams,
+    optional: ingredient.optional ?? false,
+  }))
+  const foods = await foodsByIds(ingredients.map((i) => i.foodId).filter(isPresent))
+  const existing = await db.recipes.get(id)
+
+  const recipe: Recipe = {
+    id,
+    userId: activeUserId,
+    name: input.name.trim() || 'Recipe',
+    servings: Math.max(1, Math.round(input.servings)),
+    yieldGrams: input.yieldGrams ?? null,
+    ingredients,
+    steps: input.steps ?? [],
+    tags: [],
+    sourceUrl: null,
+    authoredBy: 'user',
+    nutrients: recipeNutrients({ ingredients }, foods),
+    ...syncStamp(),
+    ...(existing ? { ...touch(existing.clientRev), createdAt: existing.createdAt } : {}),
+  }
+
+  await db.recipes.put(recipe)
+  await enqueue('recipes', recipe.id)
+  return recipe.id
+}
+
+export function deleteRecipe(id: string): Promise<void> {
+  return patch('recipes', id, { deletedAt: Date.now() })
+}
+
+/** Logs `servings` of a recipe as one entry, so the day reads "Chilli · 1.5 servings". */
+export async function logRecipeServing(
+  recipe: Recipe,
+  servings: number,
+  meal: MealSlot,
+  at = Date.now(),
+): Promise<string> {
+  const nutrients = scaleNutrients(perServing(recipe), servings)
+  const entry: LogEntry = {
+    id: newId(),
+    userId: activeUserId,
+    day: dayKey(at),
+    eatenAt: at,
+    meal,
+    sortIndex: at,
+    foodId: null,
+    recipeId: recipe.id,
+    quickAdd: null,
+    grams: recipe.yieldGrams ? (recipe.yieldGrams / Math.max(1, recipe.servings)) * servings : 0,
+    portionId: null,
+    portionCount: servings,
+    nutrients,
+    source: 'recipe',
+    estimate: null,
+    note: `${recipe.name}${servings === 1 ? '' : ` × ${servings}`}`,
+    ...syncStamp(),
+  }
+  await db.logEntries.put(entry)
+  await enqueue('logEntries', entry.id)
+  return entry.id
+}
+
+const isPresent = (value: string | null): value is string => value !== null
 
 // --- Saved meals ------------------------------------------------------------------
 
@@ -492,6 +689,12 @@ export async function activeProgram(): Promise<Program | undefined> {
   return all.sort((a, b) => b.startedAt - a.startedAt)[0]
 }
 
+/** Past and present programs, newest first — what a diet break needs to know what to resume. */
+export async function programHistory(): Promise<Program[]> {
+  const all = await db.programs.filter(alive).toArray()
+  return all.sort((a, b) => b.startedAt - a.startedAt)
+}
+
 export async function startProgram(
   input: Pick<Program, 'goal' | 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal'> &
     Partial<Pick<Program, 'coachingMode' | 'cycling'>>,
@@ -590,7 +793,9 @@ export async function targetsByDay(
     .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
   const program = await activeProgram()
   const profile = await getProfile()
-  const allWeights = await weights()
+  // Smoothed once. Inside the loop this was O(days × weigh-ins) for every day before the first
+  // check-in, and every pass produced the same trend.
+  const trend = weightTrend(await weights())
 
   const out = new Map<string, MacroTargets | null>()
   // Cycling redistributes a week's calories without changing its total, so it's applied on top of
@@ -609,22 +814,28 @@ export async function targetsByDay(
     }
     // Before the first check-in, the cold-start estimate — from the weight known *then*, so a
     // day early in a cut isn't judged against the target its final weight would imply.
+    const trendKg = trendOn(trend, day)
     out.set(
       day,
       cycled(
         day,
-        program
-          ? initialTargets(
-              program,
-              profile,
-              allWeights.filter((row) => row.day <= day),
-              Date.parse(`${day}T12:00:00`),
-            )
+        program && trendKg !== null
+          ? initialTargetsFromTrend(program, profile, trendKg, Date.parse(`${day}T12:00:00`))
           : null,
       ),
     )
   }
   return out
+}
+
+/** The trend as of a day: the last smoothed point at or before it. */
+function trendOn(trend: readonly TrendPoint[], day: string): number | null {
+  let latest: number | null = null
+  for (const point of trend) {
+    if (point.day > day) break
+    latest = point.trendKg
+  }
+  return latest
 }
 
 export async function targetsForDay(day: string): Promise<MacroTargets | null> {
@@ -758,6 +969,7 @@ export function declineCheckIn(id: string): Promise<void> {
 export async function claimLocalData(userId: string): Promise<number> {
   const tables = [
     ['profiles', db.profiles],
+    ['customFoods', db.customFoods],
     ['logEntries', db.logEntries],
     ['bodyWeights', db.bodyWeights],
     ['recipes', db.recipes],
@@ -801,6 +1013,7 @@ export const clearDbOwner = (): void => owner.clearOwner()
 export async function clearLocalData(): Promise<void> {
   await Promise.all([
     db.profiles.clear(),
+    db.customFoods.clear(),
     db.logEntries.clear(),
     db.bodyWeights.clear(),
     db.recipes.clear(),

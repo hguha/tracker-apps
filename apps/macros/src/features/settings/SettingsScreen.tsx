@@ -1,8 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow } from '@tracker-engine/ui'
 import {
+  Apple,
   Award,
   Bookmark,
+  ChefHat,
   ChevronRight,
   Database,
   Link2,
@@ -26,6 +28,8 @@ export type SettingsRoute =
   | 'appearance'
   | 'badges'
   | 'meals'
+  | 'recipes'
+  | 'foods'
   | 'account'
   | 'data'
   | 'coach'
@@ -47,6 +51,8 @@ export function SettingsScreen({
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
+  const recipes = useLiveQuery(() => repo.recipes(), [], [])
+  const myFoods = useLiveQuery(() => repo.customFoods(), [], [])
   const lastCheckIn = useLiveQuery(() => repo.latestCheckIn(), [], undefined)
 
   const missing = missingFacts(profile)
@@ -89,6 +95,26 @@ export function SettingsScreen({
               : `${templates!.length} saved`
           }
           onClick={() => onOpen('meals')}
+        />
+        <NavRow
+          icon={<ChefHat size={17} />}
+          label="Recipes"
+          hint={
+            (recipes ?? []).length === 0
+              ? 'Batch dishes, logged a serving at a time'
+              : `${recipes!.length} saved`
+          }
+          onClick={() => onOpen('recipes')}
+        />
+        <NavRow
+          icon={<Apple size={17} />}
+          label="Your foods"
+          hint={
+            (myFoods ?? []).length === 0
+              ? 'Anything the databases don’t have'
+              : `${myFoods!.length} added`
+          }
+          onClick={() => onOpen('foods')}
         />
         <NavRow
           icon={<Award size={17} />}

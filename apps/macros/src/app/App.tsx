@@ -23,6 +23,8 @@ import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
 import { AppearanceScreen } from '@/features/settings/AppearanceScreen'
 import { BadgesScreen } from '@/features/badges/BadgesScreen'
 import { SavedMealsScreen } from '@/features/settings/SavedMealsScreen'
+import { MyFoodsScreen } from '@/features/settings/MyFoodsScreen'
+import { RecipesScreen } from '@/features/recipes/RecipesScreen'
 import { CheckInScreen } from '@/features/checkin/CheckInScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogScreen } from '@/features/log/LogScreen'
@@ -123,6 +125,10 @@ function SignedInApp() {
         return <BadgesScreen onBack={toTabs} />
       case 'meals':
         return <SavedMealsScreen onBack={toTabs} />
+      case 'recipes':
+        return <RecipesScreen onBack={toTabs} />
+      case 'foods':
+        return <MyFoodsScreen onBack={toTabs} />
       case 'checkin':
         return <CheckInScreen onBack={toTabs} />
       case 'coach':

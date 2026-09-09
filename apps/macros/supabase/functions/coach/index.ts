@@ -135,22 +135,16 @@ Deno.serve(async (request) => {
     return json({ error: 'contents is required' }, 400)
   }
 
-  const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: body.contents,
-      systemInstruction: {
-        parts: [
-          { text: SYSTEM },
-          { text: `Opening context (JSON): ${JSON.stringify(body.context ?? {})}` },
-        ],
-      },
-      ...(body.tools?.length
-        ? { tools: [{ functionDeclarations: body.tools }] }
-        : {}),
-      generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
-    }),
+  const response = await callGemini(key, {
+    contents: body.contents,
+    systemInstruction: {
+      parts: [
+        { text: SYSTEM },
+        { text: `Opening context (JSON): ${JSON.stringify(body.context ?? {})}` },
+      ],
+    },
+    ...(body.tools?.length ? { tools: [{ functionDeclarations: body.tools }] } : {}),
+    generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
   })
 
   if (!response.ok) {
@@ -193,40 +187,40 @@ async function estimate(
 do not assume an ingredient they have ruled out.`
     : ''
 
-  const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            // Image first: Gemini attends to it more reliably when it precedes the instruction,
-            // and the text is often empty on this path.
-            ...(image?.data
-              ? [{ inlineData: { mimeType: image.mimeType, data: image.data } }]
-              : []),
-            { text: text || 'Identify every food in this photo and estimate the weight of each.' },
-          ],
-        },
-      ],
-      systemInstruction: {
-        parts: [{ text: ESTIMATE_SYSTEM + (image ? PHOTO_SYSTEM : '') + preferences }],
+  const response = await callGemini(key, {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          // Image first: Gemini attends to it more reliably when it precedes the instruction,
+          // and the text is often empty on this path.
+          ...(image?.data ? [{ inlineData: { mimeType: image.mimeType, data: image.data } }] : []),
+          { text: text || 'Identify every food in this photo and estimate the weight of each.' },
+        ],
       },
-      generationConfig: {
-        temperature: 0.2,
-        // Generous: a thinking model spends this budget on reasoning as well as output, and at
-        // 800 the JSON was being truncated intermittently — which surfaced as a parse failure
-        // on roughly every other "turkey sandwich".
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-        responseSchema: ESTIMATE_SCHEMA,
-      },
-    }),
+    ],
+    systemInstruction: {
+      parts: [{ text: ESTIMATE_SYSTEM + (image ? PHOTO_SYSTEM : '') + preferences }],
+    },
+    generationConfig: {
+      temperature: 0.2,
+      // Generous: a thinking model spends this budget on reasoning as well as output, and at
+      // 800 the JSON was being truncated intermittently — which surfaced as a parse failure
+      // on roughly every other "turkey sandwich".
+      maxOutputTokens: 2048,
+      responseMimeType: 'application/json',
+      responseSchema: ESTIMATE_SCHEMA,
+    },
   })
 
   if (!response.ok) {
     const detail = await response.text()
+    // A queue is not a server error, and it has to reach the client as a *body*: supabase-js
+    // discards the payload of a non-2xx response, so a 502 here would arrive as a bare
+    // "FunctionsHttpError" and the app would blame the meal for a busy model.
+    if (response.status === 503 || response.status === 429) {
+      return json({ busy: true, error: `Gemini ${response.status}` }, 200)
+    }
     return json({ error: `Gemini ${response.status}: ${detail.slice(0, 300)}` }, 502)
   }
 
@@ -244,6 +238,29 @@ do not assume an ingredient they have ruled out.`
     // Include what came back: a truncated response and a refusal look identical otherwise.
     return json({ error: `Could not read the estimate: ${raw.slice(0, 200)}` }, 502)
   }
+}
+
+/**
+ * Calls Gemini, retrying a 503.
+ *
+ * 503 means "spikes in demand are usually temporary" — Google's own words — and it is by far the
+ * most common failure on the free tier. Without a retry it surfaced as "couldn't work that out",
+ * which reads as the model failing to understand a perfectly clear meal.
+ */
+async function callGemini(key: string, body: unknown, attempts = 3): Promise<Response> {
+  let last: Response | null = null
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (response.status !== 503 && response.status !== 429) return response
+    last = response
+    // Short, because a phone is waiting on this: ~0.6s then ~1.2s.
+    if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+  }
+  return last as Response
 }
 
 function json(body: unknown, status = 200): Response {

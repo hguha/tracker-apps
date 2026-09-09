@@ -183,9 +183,23 @@ export function initialTargets(
   const trend = weightTrend(weights)
   const trendKg = trend[trend.length - 1]?.trendKg
   if (trendKg === undefined) return null
+  return initialTargetsFromTrend(program, profile, trendKg, now)
+}
 
-  const prior = coldStart({ now, program, profile, weights, intake: [], prior: null }, trendKg)
+/**
+ * The same cold start, from a trend figure already computed.
+ *
+ * Exists for callers that need it per day: smoothing the whole weight history inside a loop over
+ * days is O(days × weigh-ins), which on a year of data is tens of thousands of pointless passes —
+ * and every one of them would produce the same trend.
+ */
+export function initialTargetsFromTrend(
+  program: Program,
+  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex'>,
+  trendKg: number,
+  now = Date.now(),
+): MacroTargets | null {
+  const prior = coldStart({ now, program, profile, weights: [], intake: [], prior: null }, trendKg)
   if (!prior) return null
-
   return split(targetKcal(prior, program, trendKg), trendKg, program)
 }

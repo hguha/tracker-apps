@@ -88,6 +88,16 @@ export interface Food extends SyncColumns {
   verifiedAt: number | null
 }
 
+/**
+ * A food the user entered themselves, from a label the databases don't have.
+ *
+ * A separate table from `foods` rather than a row in it, for one reason: `foods` is shared
+ * reference data that survives an account switch, and this is the user's own data that must not.
+ */
+export interface CustomFood extends Food {
+  userId: string
+}
+
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
 export const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const

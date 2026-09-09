@@ -17,6 +17,7 @@ import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
+import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import { MEAL_SLOTS, type Food, type LogEntry, type MacroTargets, type MealSlot } from '@/domain/types'
 
 const RANGES = [
@@ -58,7 +59,7 @@ export function HistoryScreen() {
 
   const entries = useLiveQuery(() => repo.entriesBetween(from, today), [from, today], [])
   const foods = useLiveQuery(
-    async () => repo.foodsByIds((entries ?? []).map((e) => e.foodId).filter(isString)),
+    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
     [entries],
     new Map<string, Food>(),
   )
@@ -70,8 +71,7 @@ export function HistoryScreen() {
     return (entries ?? []).filter((entry) => {
       if (meals.length > 0 && !meals.includes(entry.meal)) return false
       if (!needle) return true
-      const name = (entry.foodId ? foods?.get(entry.foodId)?.description : null) ?? entry.note
-      return (name ?? '').toLowerCase().includes(needle)
+      return entryName(entry, foods ?? new Map()).toLowerCase().includes(needle)
     })
   }, [entries, foods, meals, query])
 
@@ -274,7 +274,7 @@ function DayCard({
                 {occasion.entries.map((entry) => (
                   <li key={entry.id} className="flex items-center gap-2 px-4 py-1.5">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13.5px]">{nameOf(entry, foods)}</span>
+                      <span className="block truncate text-[13.5px]">{entryName(entry, foods)}</span>
                       <span className="tabular block text-[11.5px] text-ink-muted">
                         {entry.grams > 0 && `${Math.round(entry.grams)}g · `}
                         {grams(entry.nutrients.proteinMg)}P {grams(entry.nutrients.carbsMg)}C{' '}
@@ -293,9 +293,3 @@ function DayCard({
   )
 }
 
-function nameOf(entry: LogEntry, foods: ReadonlyMap<string, Food>): string {
-  if (entry.foodId) return foods.get(entry.foodId)?.description ?? (entry.note || 'Food')
-  return entry.note || 'Quick add'
-}
-
-const isString = (value: string | null): value is string => value !== null

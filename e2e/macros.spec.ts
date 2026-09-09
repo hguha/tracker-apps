@@ -67,6 +67,34 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
+test('a food the databases do not have can be entered and logged offline', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByRole('button', { name: 'Skip for now' }).click()
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('corner shop wrap')
+  await page.getByRole('button', { name: /Add .corner shop wrap. from its label/ }).click()
+
+  await page.getByPlaceholder('Corner shop chicken wrap').fill('Corner shop wrap')
+  // Per 100 g, from the label; the serving size is a portion, not the basis.
+  await page.locator('input[type=number]').nth(0).fill('200')
+  await page.locator('input[type=number]').nth(1).fill('14')
+  await page.locator('input[type=number]').nth(2).fill('20')
+  await page.locator('input[type=number]').nth(3).fill('7')
+  await page.getByRole('button', { name: 'Save and log it' }).click()
+
+  // Straight to the portion step for the food just created, then onto the day.
+  await expect(page.getByRole('heading', { name: 'Corner shop wrap' })).toBeVisible()
+  await page.getByRole('button', { name: 'Log it' }).click()
+  await expect(page.getByText(/Corner shop wrap/).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
 test('every tab and the coach render without errors', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await page.getByRole('button', { name: /Use this device only/ }).click()
@@ -95,6 +123,8 @@ test('every tab and the coach render without errors', async ({ page }) => {
     'Appearance',
     'Badges',
     'Saved meals',
+    'Recipes',
+    'Your foods',
   ]) {
     await page.getByRole('button', { name: new RegExp(route) }).click()
     await expect(page.getByRole('heading', { name: route, level: 1 })).toBeVisible()

@@ -8,11 +8,11 @@ import {
   SegmentedTabs,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { Camera, Plus, ScanLine, Sparkles } from 'lucide-react'
+import { Camera, Plus, PlusCircle, ScanLine, Sparkles } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import { searchRemote } from '@/data/foodLookup'
 import * as repo from '@/data/repository'
-import { dayTotals, remaining } from '@/lib/nutrition'
+import { dayTotals, perServing, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
 import { portionLabel } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
@@ -20,6 +20,7 @@ import type { Food, MealSlot } from '@/domain/types'
 import { DescribePanel } from './DescribePanel'
 import { MealPreviewSheet, type MealPreview } from './MealPreviewSheet'
 import { MealTimePicker } from './MealTimePicker'
+import { CustomFoodPanel } from './CustomFoodPanel'
 import { PhotoPanel } from './PhotoPanel'
 import { PortionPanel } from './PortionPanel'
 import { QuickAddPanel } from './QuickAddPanel'
@@ -32,6 +33,7 @@ type Panel =
   | { kind: 'scan' }
   | { kind: 'photo' }
   | { kind: 'quick' }
+  | { kind: 'custom'; name: string; barcode?: string }
 
 type BrowseTab = 'suggested' | 'again' | 'often' | 'saved'
 
@@ -84,8 +86,18 @@ export function LogScreen({
         )}
         {panel.kind === 'quick' && <QuickAddPanel meal={meal} at={at} onDone={onClose} />}
         {panel.kind === 'photo' && <PhotoPanel meal={meal} at={at} onDone={onClose} />}
+        {panel.kind === 'custom' && (
+          <CustomFoodPanel
+            initialName={panel.name}
+            initialBarcode={panel.barcode ?? null}
+            onSaved={(food) => setPanel({ kind: 'portion', food })}
+          />
+        )}
         {panel.kind === 'scan' && (
-          <ScanPanel onFound={(food) => setPanel({ kind: 'portion', food })} />
+          <ScanPanel
+            onFound={(food) => setPanel({ kind: 'portion', food })}
+            onCreate={(barcode) => setPanel({ kind: 'custom', name: '', barcode })}
+          />
         )}
       </div>
     </div>
@@ -126,6 +138,7 @@ function BrowsePanel({
     [],
   )
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
+  const recipes = useLiveQuery(() => repo.recipes(), [], [])
   const recents = useLiveQuery(() => repo.recentMeals(), [], [])
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const todayEntries = useLiveQuery(() => repo.entriesForDay(dayKey(Date.now())), [], [])
@@ -158,7 +171,11 @@ function BrowsePanel({
     { key: 'suggested', label: 'Suggested' },
     { key: 'again', label: 'Eat again', badge: (recents ?? []).length || undefined },
     { key: 'often', label: 'Frequent', badge: (frequents ?? []).length || undefined },
-    { key: 'saved', label: 'Saved', badge: (templates ?? []).length || undefined },
+    {
+      key: 'saved',
+      label: 'Saved',
+      badge: (templates ?? []).length + (recipes ?? []).length || undefined,
+    },
   ]
 
   return (
@@ -206,6 +223,13 @@ function BrowsePanel({
           {describeLeads && describeRow}
           <FoodList foods={results ?? []} onSelect={onSelect} emptyLabel="Nothing matched." />
           {!describeLeads && describeRow}
+          <button
+            onClick={() => onPanel({ kind: 'custom', name: trimmed })}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
+          >
+            <PlusCircle size={15} />
+            Add “{trimmed}” from its label
+          </button>
         </>
       ) : (
         <>
@@ -290,12 +314,61 @@ function BrowsePanel({
               <FoodList foods={frequents ?? []} onSelect={onSelect} emptyLabel="" />
             ))}
 
+          {tab === 'saved' && (recipes ?? []).length > 0 && (
+            <Card className="p-0">
+              <h2 className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+                Recipes
+              </h2>
+              <ul className="divide-y divide-line">
+                {(recipes ?? []).map((recipe) => {
+                  const each = perServing(recipe)
+                  return (
+                    <li key={recipe.id}>
+                      <button
+                        onClick={() =>
+                          setPreview({
+                            title: recipe.name,
+                            subtitle: `${recipe.servings} servings · ${each.kcal} kcal each`,
+                            items: [
+                              {
+                                foodId: null,
+                                label: `${recipe.name}, one serving`,
+                                grams: 0,
+                                nutrients: each,
+                              },
+                            ],
+                            nutrients: each,
+                            // The multiplier is servings here, which is exactly what it means
+                            // for a batch dish: half a portion, or two.
+                            log: (multiple) =>
+                              repo
+                                .logRecipeServing(recipe, multiple, meal, at)
+                                .then(() => 1),
+                          })
+                        }
+                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
+                      >
+                        <div className="truncate text-[14px]">{recipe.name}</div>
+                        <div className="tabular text-[12px] text-ink-muted">
+                          {each.kcal} kcal per serving · makes {recipe.servings}
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </Card>
+          )}
+
           {tab === 'saved' &&
             ((templates ?? []).length === 0 ? (
-              <Empty>
-                Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap
-                here, at any multiple.
-              </Empty>
+              (recipes ?? []).length === 0 && (
+                <Empty>
+                  Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap
+                  here, at any multiple. Recipes (Settings → Recipes) are for dishes you cook in
+                  batches.
+                </Empty>
+              )
             ) : (
               <Card className="p-0">
                 <ul className="divide-y divide-line">

@@ -12,7 +12,7 @@ import { WeightChart } from './WeightChart'
 import { MacroSplitChart } from './MacroSplitChart'
 import { CheckInHistory } from './CheckInHistory'
 import { SummaryCard } from './SummaryCard'
-import { AdherenceChart, ProteinChart, WeekdayChart } from './chartsIntake'
+import { AdherenceChart, ProteinChart, TopFoodsChart, WeekdayChart } from './chartsIntake'
 import { BalanceChart, ExpenditureChart } from './chartsBody'
 import { ConsistencyChart, MealTimingChart, SourceMixChart } from './chartsHabits'
 import { AdequacyChart, FiberChart } from './chartsNutrients'
@@ -96,6 +96,7 @@ export function InsightsScreen() {
                 <ProteinChart days={data.days} />
                 <MacroSplitChart days={data.days} />
                 <AdherenceChart days={data.days} />
+                <TopFoodsChart topFoods={data.topFoods} />
                 <WeekdayChart days={data.days} />
               </>
             )}

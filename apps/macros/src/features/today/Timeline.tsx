@@ -5,6 +5,7 @@ import { Bookmark, ChevronDown, Plus } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { MEAL_LABELS } from '@/features/shared/meals'
+import { entryName } from '@/features/shared/entryName'
 import type { Food, LogEntry } from '@/domain/types'
 
 /** Past this many items the card starts collapsed: a long log otherwise pushes every other
@@ -99,7 +100,7 @@ export function Timeline({
                       className="flex w-full items-baseline gap-2 px-4 py-1.5 text-left active:bg-sunken"
                     >
                       <span className="min-w-0 flex-1 truncate text-[13.5px]">
-                        {nameOf(entry, foods)}
+                        {entryName(entry, foods)}
                         {entry.grams > 0 && (
                           <span className="tabular text-ink-muted">
                             {' '}
@@ -133,7 +134,3 @@ export function Timeline({
   )
 }
 
-function nameOf(entry: LogEntry, foods: ReadonlyMap<string, Food>): string {
-  if (entry.foodId) return foods.get(entry.foodId)?.description ?? (entry.note || 'Food')
-  return entry.note || 'Quick add'
-}

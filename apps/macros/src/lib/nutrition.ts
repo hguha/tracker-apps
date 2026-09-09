@@ -7,6 +7,7 @@ import {
   type LogEntry,
   type MacroTargets,
   type Nutrients,
+  type Recipe,
 } from '@/domain/types'
 
 /**
@@ -63,6 +64,31 @@ export function sum(items: readonly Nutrients[]): Nutrients {
 
 export function dayTotals(entries: readonly Pick<LogEntry, 'nutrients'>[]): Nutrients {
   return sum(entries.map((e) => e.nutrients))
+}
+
+/**
+ * A recipe's total from its ingredients.
+ *
+ * An unmatched ingredient contributes nothing rather than a guess — the UI flags it — and an
+ * optional one is excluded, so "with a splash of cream" doesn't inflate the base dish.
+ */
+export function recipeNutrients(
+  recipe: Pick<Recipe, 'ingredients'>,
+  foods: ReadonlyMap<string, Food>,
+): Nutrients {
+  const parts: Nutrients[] = []
+  for (const ingredient of recipe.ingredients) {
+    if (ingredient.optional) continue
+    const food = ingredient.foodId ? foods.get(ingredient.foodId) : undefined
+    if (food) parts.push(nutrientsFor(food, ingredient.grams))
+  }
+  return sum(parts)
+}
+
+/** One serving of a recipe. Servings below 1 are treated as 1: a divide by zero here would put
+ *  Infinity into a log entry, which no later correction can explain. */
+export function perServing(recipe: Pick<Recipe, 'nutrients' | 'servings'>): Nutrients {
+  return scale(recipe.nutrients, 1 / Math.max(1, recipe.servings))
 }
 
 /**

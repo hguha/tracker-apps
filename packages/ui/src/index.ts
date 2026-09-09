@@ -21,6 +21,7 @@ export { TabBar, type TabDefinition } from './TabBar'
 export {
   createAppearance,
   resolveScheme,
+  syncThemeColor,
   type AppearanceSettings,
   type ColorScheme,
   type ColorSchemePreference,

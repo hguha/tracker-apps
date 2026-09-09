@@ -6,6 +6,7 @@ import { Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
 import { MEAL_LABELS, mealForHour } from '@/features/shared/meals'
+import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
 import type { BodyWeightRow, LogEntry, MealSlot, Profile } from '@/domain/types'
@@ -43,7 +44,7 @@ export function TodayScreen({
 
   // One lookup for the whole day rather than a live query per row.
   const foods = useLiveQuery(
-    async () => repo.foodsByIds((entries ?? []).map((e) => e.foodId).filter(isString)),
+    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
     [entries],
     new Map(),
   )
@@ -118,11 +119,7 @@ export function TodayScreen({
       {editing && (
         <EntrySheet
           entry={editing}
-          name={
-            (editing.foodId ? foods?.get(editing.foodId)?.description : null) ??
-            editing.note ??
-            'Entry'
-          }
+          name={entryName(editing, foods ?? new Map())}
           onDismiss={() => setEditing(null)}
         />
       )}
@@ -168,5 +165,3 @@ function missingForTarget(
   if (profile.sex === null) missing.push('sex')
   return missing
 }
-
-const isString = (value: string | null): value is string => value !== null

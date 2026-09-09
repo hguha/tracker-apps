@@ -6,6 +6,7 @@ import { dailyAverage, dayTotals, mgToGrams } from '@/lib/nutrition'
 import { groupByWeek } from '@/lib/checkin'
 import { filterExpenditure, kcalPerKg, windowEstimate, type ExpenditureWindow } from '@/lib/expenditure'
 import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
+import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import type { CheckIn, LogEntry, MacroTargets, Nutrients, Profile, Program } from '@/domain/types'
 
 /**
@@ -55,6 +56,8 @@ export interface InsightsData {
   weightChangeKg: number | null
   /** Share of days with a target that landed within 10% of it. Null when no day had one. */
   adherencePct: number | null
+  /** The foods contributing the most calories over the window. */
+  topFoods: { name: string; kcal: number; entries: number }[]
 }
 
 export function useInsightsData(windowDays: number): InsightsData {
@@ -123,6 +126,22 @@ export function useInsightsData(windowDays: number): InsightsData {
     kcalByHour[hour] = (kcalByHour[hour] ?? 0) + entry.nutrients.kcal
   }
 
+  const foods = useLiveQuery(
+    () => repo.foodsByIds(foodIdsOf(entries ?? [])),
+    [entries],
+    undefined,
+  )
+
+  const contribution = new Map<string, { kcal: number; entries: number }>()
+  for (const entry of entries ?? []) {
+    const name = entryName(entry, foods ?? new Map())
+    const current = contribution.get(name) ?? { kcal: 0, entries: 0 }
+    contribution.set(name, {
+      kcal: current.kcal + entry.nutrients.kcal,
+      entries: current.entries + 1,
+    })
+  }
+
   const sourceTally = new Map<string, number>()
   for (const entry of entries ?? []) {
     sourceTally.set(entry.source, (sourceTally.get(entry.source) ?? 0) + 1)
@@ -151,6 +170,10 @@ export function useInsightsData(windowDays: number): InsightsData {
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count),
     weightChangeKg: first && last && trend.length > 1 ? last.trendKg - first.trendKg : null,
+    topFoods: [...contribution.entries()]
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => b.kcal - a.kcal)
+      .slice(0, 12),
     adherencePct:
       scored.length === 0
         ? null

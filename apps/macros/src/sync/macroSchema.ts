@@ -10,6 +10,7 @@ const STORES = {
   logEntries: db.logEntries,
   checkIns: db.checkIns,
   foods: db.foods,
+  customFoods: db.customFoods,
 } as const
 
 export const macroSyncSchema: SyncSchema = {
@@ -27,7 +28,9 @@ export const macroSyncSchema: SyncSchema = {
       return { ...row, ingredients: row.ingredients ?? [], steps: row.steps ?? [], tags: row.tags ?? [] }
     }
     if (table === 'mealTemplates') return { ...row, items: row.items ?? [] }
-    if (table === 'foods') return { ...row, portions: row.portions ?? [] }
+    if (table === 'foods' || table === 'customFoods') {
+      return { ...row, portions: row.portions ?? [] }
+    }
     return row
   },
 
@@ -41,6 +44,7 @@ export const macroSyncSchema: SyncSchema = {
   // owns, so an account erase must not delete it.
   eraseOrder: [
     'logEntries',
+    'customFoods',
     'checkIns',
     'bodyWeights',
     'mealTemplates',
