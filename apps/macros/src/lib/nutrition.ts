@@ -103,6 +103,37 @@ export function proteinPer100Kcal(n: Nutrients): number {
   return (mgToGrams(n.proteinMg) / n.kcal) * 100
 }
 
+/**
+ * One day's share of a cycled target.
+ *
+ * Protein is held constant: it's a floor set from bodyweight, not a share of the day's calories,
+ * so a low day must not quietly cut it. The difference is taken from carbs and fat in whatever
+ * ratio they already have, and fat is never pushed below half its usual figure — a very low day
+ * would otherwise strip out fat entirely to protect carbohydrate.
+ */
+export function cycleDayTargets(targets: MacroTargets, multiplier: number): MacroTargets {
+  if (multiplier === 1) return targets
+  const kcal = Math.round(targets.kcal * multiplier)
+
+  const proteinKcal = mgToGrams(targets.proteinMg) * 4
+  const carbsKcal = mgToGrams(targets.carbsMg) * 4
+  const fatKcal = mgToGrams(targets.fatMg) * 9
+  const flexible = carbsKcal + fatKcal
+  if (flexible <= 0) return { ...targets, kcal }
+
+  const share = Math.max(0, kcal - proteinKcal) / flexible
+  const fatFloorKcal = fatKcal * 0.5
+  const nextFatKcal = Math.max(fatFloorKcal, fatKcal * share)
+  const nextCarbsKcal = Math.max(0, kcal - proteinKcal - nextFatKcal)
+
+  return {
+    kcal,
+    proteinMg: targets.proteinMg,
+    carbsMg: gramsToMg(nextCarbsKcal / 4),
+    fatMg: gramsToMg(nextFatKcal / 9),
+  }
+}
+
 /** What's left of a target. Can go negative — that's information, not an error. */
 export function remaining(totals: Nutrients, targets: MacroTargets): MacroTargets {
   return {

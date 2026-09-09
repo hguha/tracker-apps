@@ -32,7 +32,7 @@ Rules you must follow:
   floors; if asked to, say why you won't and suggest a slower rate instead.`
 
 interface Body {
-  mode?: 'chat' | 'estimate'
+  mode?: 'chat' | 'estimate' | 'photo'
   contents?: unknown[]
   context?: unknown
   tools?: { name: string; description: string; parameters: unknown }[]
@@ -40,6 +40,9 @@ interface Body {
   description?: string
   /** Diets, allergies and dislikes. Changes what a vague description should be read as. */
   dietNotes?: string
+  /** For `photo`: base64 image bytes (no data: prefix) and its mime type. */
+  image?: string
+  mimeType?: string
 }
 
 /**
@@ -89,6 +92,17 @@ Rules:
 - If the description is already one recognisable dish, you may return it as a single item with
   its typical total weight.`
 
+const PHOTO_SYSTEM = `
+
+You are looking at a photo. Additional rules for that:
+- Name only what you can actually see. Do not add the side dish you would expect to be there.
+- Judge portions against the plate, cutlery or hand in frame; say in your assumptions what you
+  used for scale, and mark confidence low when there is nothing to scale against.
+- A photo cannot show oil, butter, sugar or sauce worked into a dish. Say so in the assumptions
+  rather than inventing a quantity — a cooked-in fat you can't see is the single biggest source of
+  error in a photo estimate.
+- If the photo does not show food, return an empty item list.`
+
 // A browser preflights every cross-origin POST, so without these the function is unreachable
 // from the app entirely — which unit tests and an empty-env E2E run can never surface.
 const CORS = {
@@ -108,6 +122,13 @@ Deno.serve(async (request) => {
 
   if (body.mode === 'estimate') {
     return estimate(key, body.description ?? '', body.dietNotes ?? '')
+  }
+
+  if (body.mode === 'photo') {
+    return estimate(key, body.description ?? '', body.dietNotes ?? '', {
+      data: body.image ?? '',
+      mimeType: body.mimeType ?? 'image/jpeg',
+    })
   }
 
   if (!Array.isArray(body.contents) || body.contents.length === 0) {
@@ -162,9 +183,10 @@ async function estimate(
   key: string,
   description: string,
   dietNotes: string,
+  image?: { data: string; mimeType: string },
 ): Promise<Response> {
   const text = description.trim()
-  if (!text) return json({ error: 'description is required' }, 400)
+  if (!text && !image?.data) return json({ error: 'description or image is required' }, 400)
 
   const preferences = dietNotes.trim()
     ? `\n\nThe user has stated: ${dietNotes.trim()}. Read any vague description in that light —
@@ -175,8 +197,22 @@ do not assume an ingredient they have ruled out.`
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text }] }],
-      systemInstruction: { parts: [{ text: ESTIMATE_SYSTEM + preferences }] },
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            // Image first: Gemini attends to it more reliably when it precedes the instruction,
+            // and the text is often empty on this path.
+            ...(image?.data
+              ? [{ inlineData: { mimeType: image.mimeType, data: image.data } }]
+              : []),
+            { text: text || 'Identify every food in this photo and estimate the weight of each.' },
+          ],
+        },
+      ],
+      systemInstruction: {
+        parts: [{ text: ESTIMATE_SYSTEM + (image ? PHOTO_SYSTEM : '') + preferences }],
+      },
       generationConfig: {
         temperature: 0.2,
         // Generous: a thinking model spends this budget on reasoning as well as output, and at

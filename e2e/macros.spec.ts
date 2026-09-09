@@ -50,6 +50,9 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await page.getByRole('button', { name: 'Log food' }).click()
   // The meal and the time are always on screen — the slot is data, not an assumption.
   await expect(page.getByRole('button', { name: 'Breakfast' })).toBeVisible()
+  // Every logging path is reachable from here, including the ones that need a network.
+  await expect(page.getByRole('button', { name: 'Log from a photo' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Quick add macros' })).toBeVisible()
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: 'Log it' })).toBeEnabled()

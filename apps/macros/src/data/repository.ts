@@ -20,11 +20,13 @@ import {
   type Program,
 } from '@/domain/types'
 import {
+  cycleDayTargets,
   nutrientsFor,
   portionFor,
   scale as scaleNutrients,
   sum as sumNutrients,
 } from '@/lib/nutrition'
+import { multiplierForDay } from '@/lib/cycling'
 import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
 import {
   buildCheckIn,
@@ -520,7 +522,9 @@ export function setCoachingMode(programId: string, coachingMode: CoachingMode): 
  *  check-in history stays attributable to the program it was measured under. */
 export function setProgramFields(
   programId: string,
-  changes: Partial<Pick<Program, 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal'>>,
+  changes: Partial<
+    Pick<Program, 'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal' | 'cycling'>
+  >,
 ): Promise<void> {
   return patch('programs', programId, changes)
 }
@@ -589,25 +593,35 @@ export async function targetsByDay(
   const allWeights = await weights()
 
   const out = new Map<string, MacroTargets | null>()
+  // Cycling redistributes a week's calories without changing its total, so it's applied on top of
+  // whatever the check-in set rather than being part of it.
+  const cycled = (day: string, targets: MacroTargets | null) =>
+    targets === null
+      ? null
+      : cycleDayTargets(targets, multiplierForDay(program?.cycling ?? null, day))
+
   for (const day of days) {
     const week = weekKeyForDay(day)
     const inForce = applied.find((c) => c.weekStart < week)
     if (inForce) {
-      out.set(day, inForce.targets)
+      out.set(day, cycled(day, inForce.targets))
       continue
     }
     // Before the first check-in, the cold-start estimate — from the weight known *then*, so a
     // day early in a cut isn't judged against the target its final weight would imply.
     out.set(
       day,
-      program
-        ? initialTargets(
-            program,
-            profile,
-            allWeights.filter((row) => row.day <= day),
-            Date.parse(`${day}T12:00:00`),
-          )
-        : null,
+      cycled(
+        day,
+        program
+          ? initialTargets(
+              program,
+              profile,
+              allWeights.filter((row) => row.day <= day),
+              Date.parse(`${day}T12:00:00`),
+            )
+          : null,
+      ),
     )
   }
   return out

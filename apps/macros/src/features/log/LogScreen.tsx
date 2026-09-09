@@ -8,7 +8,7 @@ import {
   SegmentedTabs,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { Plus, ScanLine, Sparkles } from 'lucide-react'
+import { Camera, Plus, ScanLine, Sparkles } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import { searchRemote } from '@/data/foodLookup'
 import * as repo from '@/data/repository'
@@ -20,6 +20,7 @@ import type { Food, MealSlot } from '@/domain/types'
 import { DescribePanel } from './DescribePanel'
 import { MealPreviewSheet, type MealPreview } from './MealPreviewSheet'
 import { MealTimePicker } from './MealTimePicker'
+import { PhotoPanel } from './PhotoPanel'
 import { PortionPanel } from './PortionPanel'
 import { QuickAddPanel } from './QuickAddPanel'
 import { ScanPanel } from './ScanPanel'
@@ -29,6 +30,7 @@ type Panel =
   | { kind: 'portion'; food: Food }
   | { kind: 'describe' }
   | { kind: 'scan' }
+  | { kind: 'photo' }
   | { kind: 'quick' }
 
 type BrowseTab = 'suggested' | 'again' | 'often' | 'saved'
@@ -81,6 +83,7 @@ export function LogScreen({
           <DescribePanel meal={meal} at={at} initialText={query} onDone={onClose} />
         )}
         {panel.kind === 'quick' && <QuickAddPanel meal={meal} at={at} onDone={onClose} />}
+        {panel.kind === 'photo' && <PhotoPanel meal={meal} at={at} onDone={onClose} />}
         {panel.kind === 'scan' && (
           <ScanPanel onFound={(food) => setPanel({ kind: 'portion', food })} />
         )}
@@ -182,6 +185,13 @@ function BrowsePanel({
             <ScanLine size={20} />
           </button>
         )}
+        <button
+          onClick={() => onPanel({ kind: 'photo' })}
+          aria-label="Log from a photo"
+          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-secondary active:opacity-60"
+        >
+          <Camera size={20} />
+        </button>
         <button
           onClick={() => onPanel({ kind: 'quick' })}
           aria-label="Quick add macros"

@@ -39,10 +39,30 @@ interface RawItem {
 }
 
 export async function estimateMeal(description: string): Promise<MealEstimate> {
+  return runEstimate({ mode: 'estimate', description })
+}
+
+/**
+ * The same breakdown, from a photo.
+ *
+ * Identical contract on purpose: the model names foods and weights, the client matches and does
+ * every calculation. A photo is a *weaker* signal than a sentence — it cannot show the oil a dish
+ * was cooked in — so the result arrives as an editable draft with its assumptions stated, exactly
+ * like a described meal, and never as a number to accept.
+ */
+export async function estimatePhoto(
+  base64: string,
+  mimeType: string,
+  note = '',
+): Promise<MealEstimate> {
+  return runEstimate({ mode: 'photo', image: base64, mimeType, description: note })
+}
+
+async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate> {
   const client = getSupabase()
   if (!client) {
     throw new EstimateUnavailable(
-      'Describing a meal needs a connection. Search for the foods instead — USDA has a lot of whole dishes.',
+      'This needs a connection. Search for the foods instead — USDA has a lot of whole dishes.',
     )
   }
 
@@ -53,11 +73,11 @@ export async function estimateMeal(description: string): Promise<MealEstimate> {
     items?: RawItem[]
     assumptions?: string
     error?: string
-  }>('coach', { body: { mode: 'estimate', description, dietNotes } })
+  }>('coach', { body: { ...body, dietNotes } })
 
   if (error || !data || data.error || !Array.isArray(data.items)) {
     throw new EstimateUnavailable(
-      "Couldn't work that out just now. Try describing it more plainly, or search for the foods.",
+      "Couldn't work that out just now. Try describing it in words, or search for the foods.",
     )
   }
 

@@ -5,6 +5,7 @@ import { seedFoods } from '@/db/seed'
 import { dayKey } from '@tracker-engine/core'
 import { dayTotals } from '@/lib/nutrition'
 import { lastCompleteWeekKey } from '@/lib/checkin'
+import { multipliersForHighDays } from '@/lib/cycling'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
 
 async function reset() {
@@ -364,5 +365,42 @@ describe('forced check-ins', () => {
     // Without data it still can't invent one — but it must not append a second row either.
     await repo.runCheckIn(Date.now(), { force: true })
     expect((await repo.checkIns()).filter((c) => c.weekStart === week)).toHaveLength(1)
+  })
+})
+
+describe('cycling applies to the day, not the week', () => {
+  it('gives a high day more and a low day less, from the same check-in', async () => {
+    const programId = await repo.startProgram({
+      goal: 'lose',
+      ratePctPerWeek: -0.5,
+      proteinGPerKg: 1.8,
+      fatMinPctKcal: 25,
+    })
+    await repo.saveCheckIn({
+      weekStart: '2026-08-31',
+      expenditureKcal: 2500,
+      expenditureSe: 100,
+      trendKg: 80,
+      trendChangeKgPerWeek: -0.4,
+      meanIntakeKcal: 2100,
+      daysLogged: 7,
+      kcalPerKg: 7700,
+      targets: { kcal: 2000, proteinMg: 150_000, carbsMg: 200_000, fatMg: 60_000 },
+      status: 'applied',
+      note: '',
+    })
+
+    const flat = await repo.targetsByDay(['2026-09-12', '2026-09-09'])
+    expect(flat.get('2026-09-12')!.kcal).toBe(flat.get('2026-09-09')!.kcal)
+
+    // Saturday high.
+    await repo.setProgramFields(programId, {
+      cycling: { multipliers: multipliersForHighDays([6])! },
+    })
+    const cycled = await repo.targetsByDay(['2026-09-12', '2026-09-09'])
+    expect(cycled.get('2026-09-12')!.kcal).toBeGreaterThan(2000)
+    expect(cycled.get('2026-09-09')!.kcal).toBeLessThan(2000)
+    // Protein is a floor from bodyweight, not a share of the day.
+    expect(cycled.get('2026-09-09')!.proteinMg).toBe(150_000)
   })
 })
