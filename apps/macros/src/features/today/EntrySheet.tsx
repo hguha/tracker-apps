@@ -4,31 +4,36 @@ import { Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { grams } from '@/features/shared/format'
 import { MealTimePicker } from '@/features/log/MealTimePicker'
-import type { LogEntry, MealSlot } from '@/domain/types'
+import type { LogEntry, MealSlot, Venue } from '@/domain/types'
 
 /**
- * Correcting something already logged: amount, meal and time.
+ * Correcting something already logged: amount, meal, time and where it was eaten.
  *
- * All three matter after the fact — the amount because portions are guesses, the time because a
+ * All four matter after the fact — the amount because portions are guesses, the time because a
  * batch logged at 9pm would otherwise claim breakfast happened then, which is the fastest way to
  * make every timing figure on the app wrong.
  */
 export function EntrySheet({
   entry,
   name,
+  siblings,
   onDismiss,
 }: {
   entry: LogEntry
   name: string
+  /** Every entry in the same sitting, so a venue correction covers the meal and not one dish. */
+  siblings: readonly LogEntry[]
   onDismiss: () => void
 }) {
   const [gramsInput, setGramsInput] = useState(String(Math.round(entry.grams)))
   const [meal, setMeal] = useState<MealSlot>(entry.meal)
   const [at, setAt] = useState(entry.eatenAt)
+  const [venue, setVenue] = useState<Venue | null>(entry.venue)
   const [isSaving, setIsSaving] = useState(false)
 
   const canEditAmount = entry.foodId !== null
   const nextGrams = Number(gramsInput)
+  const others = siblings.filter((row) => row.id !== entry.id).length
 
   async function save() {
     if (isSaving) return
@@ -39,6 +44,12 @@ export function EntrySheet({
       }
       if (meal !== entry.meal) await repo.moveEntry(entry.id, meal)
       if (at !== entry.eatenAt) await repo.retimeEntry(entry.id, at)
+      if (venue !== entry.venue) {
+        await repo.setVenue(
+          siblings.length > 0 ? siblings.map((row) => row.id) : [entry.id],
+          venue,
+        )
+      }
       onDismiss()
     } finally {
       setIsSaving(false)
@@ -72,7 +83,20 @@ export function EntrySheet({
           </p>
         )}
 
-        <MealTimePicker meal={meal} at={at} onMeal={setMeal} onAt={setAt} />
+        <MealTimePicker
+          meal={meal}
+          at={at}
+          venue={venue}
+          onMeal={setMeal}
+          onAt={setAt}
+          onVenue={setVenue}
+        />
+
+        {venue !== entry.venue && others > 0 && (
+          <p className="text-[12px] text-ink-muted">
+            Applies to all {others + 1} items eaten at this sitting.
+          </p>
+        )}
 
         <Button className="w-full" disabled={isSaving} onClick={() => void save()}>
           {isSaving ? 'Saving…' : 'Save'}

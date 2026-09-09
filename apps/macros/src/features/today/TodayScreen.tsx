@@ -11,6 +11,7 @@ import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
 import type { BodyWeightRow, LogEntry, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
+import { CookCard } from './CookCard'
 import { EntrySheet } from './EntrySheet'
 import { GoalCard } from './GoalCard'
 import { NutritionCard } from './NutritionCard'
@@ -26,14 +27,16 @@ export function TodayScreen({
   onOpenCoach,
   onOpenAbout,
   onOpenBadges,
+  onOpenRecipes,
 }: {
   onLog: (meal: MealSlot) => void
   onOpenCoach: () => void
   onOpenAbout: () => void
   onOpenBadges: () => void
+  onOpenRecipes: () => void
 }) {
   const today = dayKey(Date.now())
-  const [editing, setEditing] = useState<LogEntry | null>(null)
+  const [editing, setEditing] = useState<{ entry: LogEntry; siblings: LogEntry[] } | null>(null)
   const [savingMeal, setSavingMeal] = useState<LogEntry[] | null>(null)
 
   const entries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
@@ -101,11 +104,13 @@ export function TodayScreen({
 
       <BadgeStrip onOpen={onOpenBadges} />
 
+      <CookCard onOpenRecipes={onOpenRecipes} />
+
       <Timeline
         entries={entries ?? []}
         foods={foods ?? new Map()}
         onAdd={() => onLog(mealForHour(new Date().getHours()))}
-        onEdit={setEditing}
+        onEdit={(entry, siblings) => setEditing({ entry, siblings })}
         onSaveMeal={setSavingMeal}
       />
 
@@ -122,8 +127,9 @@ export function TodayScreen({
 
       {editing && (
         <EntrySheet
-          entry={editing}
-          name={entryName(editing, foods ?? new Map())}
+          entry={editing.entry}
+          name={entryName(editing.entry, foods ?? new Map())}
+          siblings={editing.siblings}
           onDismiss={() => setEditing(null)}
         />
       )}

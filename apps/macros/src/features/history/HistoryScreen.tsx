@@ -18,7 +18,16 @@ import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
-import { MEAL_SLOTS, type Food, type LogEntry, type MacroTargets, type MealSlot } from '@/domain/types'
+import { VENUE_ICONS, VENUE_LABELS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
+import {
+  MEAL_SLOTS,
+  VENUES,
+  type Food,
+  type LogEntry,
+  type MacroTargets,
+  type MealSlot,
+  type Venue,
+} from '@/domain/types'
 
 const RANGES = [
   { key: '30d', label: '30 days', days: 30 },
@@ -51,7 +60,8 @@ export function HistoryScreen() {
   const [sort, setSort] = useState<SortKey>('newest')
   const [query, setQuery] = useState('')
   const [meals, setMeals] = useState<string[]>([])
-  const [openSheet, setOpenSheet] = useState<'range' | 'meal' | null>(null)
+  const [venues, setVenues] = useState<string[]>([])
+  const [openSheet, setOpenSheet] = useState<'range' | 'meal' | 'venue' | null>(null)
   const [openDay, setOpenDay] = useState<string | null>(null)
 
   const range = RANGES.find((option) => option.key === rangeKey)!
@@ -70,10 +80,11 @@ export function HistoryScreen() {
     const needle = query.trim().toLowerCase()
     return (entries ?? []).filter((entry) => {
       if (meals.length > 0 && !meals.includes(entry.meal)) return false
+      if (venues.length > 0 && !venues.includes(entry.venue ?? 'none')) return false
       if (!needle) return true
       return entryName(entry, foods ?? new Map()).toLowerCase().includes(needle)
     })
-  }, [entries, foods, meals, query])
+  }, [entries, foods, meals, venues, query])
 
   const byDay = new Map<string, LogEntry[]>()
   for (const entry of matching) {
@@ -90,7 +101,7 @@ export function HistoryScreen() {
 
   const targets = useLiveQuery(() => repo.targetsByDay(days), [days.join(',')], new Map())
   const averages = dailyAverage(matching)
-  const isFiltered = query.trim() !== '' || meals.length > 0
+  const isFiltered = query.trim() !== '' || meals.length > 0 || venues.length > 0
 
   return (
     <div className="flex h-full flex-col">
@@ -109,11 +120,23 @@ export function HistoryScreen() {
             isActive={meals.length > 0}
             onClick={() => setOpenSheet('meal')}
           />
+          <FilterChipButton
+            label={
+              venues.length === 0
+                ? 'Where'
+                : venues.length === 1
+                  ? venueLabel(venues[0] === 'none' ? null : (venues[0] as Venue))
+                  : `${venues.length} places`
+            }
+            isActive={venues.length > 0}
+            onClick={() => setOpenSheet('venue')}
+          />
           {isFiltered && (
             <button
               onClick={() => {
                 setQuery('')
                 setMeals([])
+                setVenues([])
               }}
               className="shrink-0 px-2 text-[13px] font-semibold text-accent"
             >
@@ -184,7 +207,33 @@ export function HistoryScreen() {
           onDismiss={() => setOpenSheet(null)}
         />
       )}
+
+      {openSheet === 'venue' && (
+        <FilterSheet
+          title="Where you ate"
+          options={[
+            ...VENUES.map((venue) => ({ value: venue, label: VENUE_LONG[venue] })),
+            { value: 'none', label: 'Not recorded' },
+          ]}
+          selected={venues}
+          onChange={setVenues}
+          onDismiss={() => setOpenSheet(null)}
+        />
+      )}
     </div>
+  )
+}
+
+/** Read-only here: history is for looking, and correcting a venue belongs on the day you ate it. */
+function VenueChip({ entries }: { entries: readonly LogEntry[] }) {
+  const venue = entries.find((entry) => entry.venue !== null)?.venue ?? null
+  if (venue === null) return null
+  const Icon = VENUE_ICONS[venue]
+  return (
+    <span className="ml-1.5 inline-flex items-baseline gap-0.5 font-normal text-ink-muted">
+      <Icon size={11} className="translate-y-px" />
+      {VENUE_LABELS[venue]}
+    </span>
   )
 }
 
@@ -265,6 +314,7 @@ function DayCard({
                     {' '}
                     · {MEAL_LABELS[occasion.entries[0]!.meal]}
                   </span>
+                  <VenueChip entries={occasion.entries} />
                 </span>
                 <span className="tabular text-[12.5px] text-ink-muted">
                   {occasion.nutrients.kcal} kcal

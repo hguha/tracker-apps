@@ -3,10 +3,12 @@ import { formatTimeOfDay } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import { Bookmark, ChevronDown, Plus } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import * as repo from '@/data/repository'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { MEAL_LABELS } from '@/features/shared/meals'
 import { entryName } from '@/features/shared/entryName'
-import type { Food, LogEntry } from '@/domain/types'
+import { VENUE_ICONS, VENUE_LABELS, VENUE_LONG } from '@/features/shared/venue'
+import { VENUES, type Food, type LogEntry } from '@/domain/types'
 
 /** Past this many items the card starts collapsed: a long log otherwise pushes every other
  *  card off the screen, and the totals above it are what most opens are actually for. */
@@ -32,7 +34,8 @@ export function Timeline({
   entries: readonly LogEntry[]
   foods: ReadonlyMap<string, Food>
   onAdd: () => void
-  onEdit: (entry: LogEntry) => void
+  /** The sitting comes along, because meal, time and venue all belong to it rather than the row. */
+  onEdit: (entry: LogEntry, siblings: LogEntry[]) => void
   onSaveMeal: (entries: LogEntry[]) => void
 }) {
   const occasions = eatingOccasions(entries)
@@ -84,6 +87,7 @@ export function Timeline({
                     · {MEAL_LABELS[occasion.entries[0]!.meal]} · {occasion.nutrients.kcal} kcal
                   </span>
                 </span>
+                <VenueTag entries={occasion.entries} />
                 <button
                   onClick={() => onSaveMeal(occasion.entries)}
                   aria-label="Save as a meal"
@@ -96,7 +100,7 @@ export function Timeline({
                 {occasion.entries.map((entry) => (
                   <li key={entry.id}>
                     <button
-                      onClick={() => onEdit(entry)}
+                      onClick={() => onEdit(entry, occasion.entries)}
                       className="flex w-full items-baseline gap-2 px-4 py-1.5 text-left active:bg-sunken"
                     >
                       <span className="min-w-0 flex-1 truncate text-[13.5px]">
@@ -131,6 +135,51 @@ export function Timeline({
         </>
       )}
     </Card>
+  )
+}
+
+/**
+ * Where a sitting was eaten — shown when it's known, asked once when it isn't.
+ *
+ * Asked here rather than only at logging time because a chart of "eating out" is worthless until
+ * most meals have an answer, and the moment you'll actually give one is while looking at the meal.
+ * Three icons is one tap; a sheet would be three and get skipped.
+ */
+function VenueTag({ entries }: { entries: readonly LogEntry[] }) {
+  const current = entries[0]?.venue ?? null
+  const ids = entries.map((entry) => entry.id)
+
+  if (current !== null) {
+    const Icon = VENUE_ICONS[current]
+    return (
+      <button
+        onClick={() => void repo.setVenue(ids, null)}
+        aria-label={`Eaten ${VENUE_LABELS[current]} — tap to clear`}
+        className="flex shrink-0 items-center gap-1 rounded-full bg-sunken px-2 py-0.5 text-[11px] text-ink-secondary active:opacity-60"
+      >
+        <Icon size={11} />
+        {VENUE_LABELS[current]}
+      </button>
+    )
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      {VENUES.map((venue) => {
+        const Icon = VENUE_ICONS[venue]
+        return (
+          <button
+            key={venue}
+            onClick={() => void repo.setVenue(ids, venue)}
+            aria-label={`Eaten ${VENUE_LABELS[venue].toLowerCase()}`}
+            title={VENUE_LONG[venue]}
+            className="flex size-6 items-center justify-center rounded-md text-ink-muted active:bg-sunken"
+          >
+            <Icon size={12} />
+          </button>
+        )
+      })}
+    </span>
   )
 }
 

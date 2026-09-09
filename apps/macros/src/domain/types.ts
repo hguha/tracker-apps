@@ -121,6 +121,19 @@ export interface EstimateMeta {
   matchedBy: 'exact' | 'fuzzy' | 'unmatched'
 }
 
+/**
+ * Where a meal was eaten.
+ *
+ * Three values rather than in/out, because takeaway behaves like neither: portions and oil are a
+ * restaurant's, but the setting is home, and someone whose pattern is "cooks all week, orders in on
+ * Friday" learns nothing from a chart that files that under "out".
+ *
+ * `null` means nobody said, and is never treated as `home` — an unrecorded venue is not a fact.
+ */
+export type Venue = 'home' | 'restaurant' | 'takeaway'
+
+export const VENUES = ['home', 'restaurant', 'takeaway'] as const
+
 /** One food, recipe, or quick-add eaten at a time. The app's central row. */
 export interface LogEntry extends SyncColumns {
   id: string
@@ -145,6 +158,8 @@ export interface LogEntry extends SyncColumns {
   nutrients: Nutrients
   source: EntrySource
   estimate: EstimateMeta | null
+  /** Where it was eaten. Null on every row logged before the field existed. */
+  venue: Venue | null
   note: string
 }
 
@@ -167,10 +182,49 @@ export interface Recipe extends SyncColumns {
   ingredients: RecipeIngredient[]
   steps: string[]
   tags: string[]
+  /** A `CUISINES` key, or null when it isn't a cuisine anyone would name. */
+  cuisine: CuisineKey | null
+  /** Hands-on plus cooking, in minutes, when the source stated it. */
+  totalMinutes: number | null
   sourceUrl: string | null
   authoredBy: 'user' | 'ai'
   /** Total for the whole recipe; per-serving is derived. */
   nutrients: Nutrients
+}
+
+/**
+ * A closed list, so a filter has something to filter on.
+ *
+ * Free text would let "Asian", "asian food" and "Pan-Asian" all exist side by side and make the
+ * filter useless — which is the whole reason it's here. Imports map onto it (see lib/cuisine);
+ * anything that doesn't map keeps its own words in `tags` and files as null rather than being
+ * forced into a bucket it doesn't belong in.
+ */
+export const CUISINES = [
+  'american',
+  'italian',
+  'mexican',
+  'chinese',
+  'japanese',
+  'korean',
+  'thai',
+  'vietnamese',
+  'indian',
+  'middle-eastern',
+  'mediterranean',
+  'french',
+  'british',
+  'caribbean',
+  'african',
+] as const
+
+export type CuisineKey = (typeof CUISINES)[number]
+
+/** How often a recipe has actually been cooked, derived from the log. */
+export interface RecipeUsage {
+  timesCooked: number
+  /** `yyyy-MM-dd` of the most recent serving, or null if it has never been logged. */
+  lastCookedDay: string | null
 }
 
 export interface MealTemplateItem {

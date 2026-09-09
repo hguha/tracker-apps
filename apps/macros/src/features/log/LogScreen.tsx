@@ -14,9 +14,11 @@ import { searchRemote } from '@/data/foodLookup'
 import * as repo from '@/data/repository'
 import { dayTotals, perServing, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
+import { recommendRecipes, type RecipeRecommendation } from '@/lib/recommend'
+import { CUISINE_LABELS } from '@/lib/cuisine'
 import { portionLabel } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/features/shared/meals'
-import type { Food, MealSlot } from '@/domain/types'
+import type { Food, MealSlot, Venue } from '@/domain/types'
 import { DescribePanel } from './DescribePanel'
 import { MealPreviewSheet, type MealPreview } from './MealPreviewSheet'
 import { MealTimePicker } from './MealTimePicker'
@@ -26,6 +28,7 @@ import { PortionPanel } from './PortionPanel'
 import { QuickAddPanel } from './QuickAddPanel'
 import { ScanPanel } from './ScanPanel'
 import { RecipeEditor } from '@/features/recipes/RecipeEditor'
+import type { LogTarget } from './target'
 
 type Panel =
   | { kind: 'browse' }
@@ -37,7 +40,7 @@ type Panel =
   | { kind: 'custom'; name: string; barcode?: string }
   | { kind: 'recipe' }
 
-type BrowseTab = 'suggested' | 'again' | 'often' | 'saved'
+type BrowseTab = 'suggested' | 'again' | 'often' | 'cook' | 'saved'
 
 /**
  * Adding food, as a screen rather than a sheet.
@@ -56,8 +59,11 @@ export function LogScreen({
 }) {
   const [meal, setMeal] = useState<MealSlot>(initialMeal)
   const [at, setAt] = useState(() => Date.now())
+  const [venue, setVenue] = useState<Venue | null>(null)
   const [query, setQuery] = useState('')
   const [panel, setPanel] = useState<Panel>({ kind: 'browse' })
+
+  const target: LogTarget = { meal, at, venue }
 
   // The recipe editor owns the whole screen: it has its own header, and a recipe is a different
   // job from logging today's food even though both start at the same "+".
@@ -86,25 +92,25 @@ export function LogScreen({
       <div className="flex-1 overflow-y-auto pb-8">
         {panel.kind === 'browse' && (
           <BrowsePanel
-            meal={meal}
-            at={at}
+            target={target}
             query={query}
             onQuery={setQuery}
             onMeal={setMeal}
             onAt={setAt}
+            onVenue={setVenue}
             onSelect={(food) => setPanel({ kind: 'portion', food })}
             onPanel={setPanel}
             onDone={onClose}
           />
         )}
         {panel.kind === 'portion' && (
-          <PortionPanel food={panel.food} meal={meal} at={at} onDone={onClose} />
+          <PortionPanel food={panel.food} target={target} onDone={onClose} />
         )}
         {panel.kind === 'describe' && (
-          <DescribePanel meal={meal} at={at} initialText={query} onDone={onClose} />
+          <DescribePanel target={target} initialText={query} onDone={onClose} />
         )}
-        {panel.kind === 'quick' && <QuickAddPanel meal={meal} at={at} onDone={onClose} />}
-        {panel.kind === 'photo' && <PhotoPanel meal={meal} at={at} onDone={onClose} />}
+        {panel.kind === 'quick' && <QuickAddPanel target={target} onDone={onClose} />}
+        {panel.kind === 'photo' && <PhotoPanel target={target} onDone={onClose} />}
         {panel.kind === 'custom' && (
           <CustomFoodPanel
             initialName={panel.name}
@@ -124,26 +130,27 @@ export function LogScreen({
 }
 
 function BrowsePanel({
-  meal,
-  at,
+  target,
   query,
   onQuery,
   onMeal,
   onAt,
+  onVenue,
   onSelect,
   onPanel,
   onDone,
 }: {
-  meal: MealSlot
-  at: number
+  target: LogTarget
   query: string
   onQuery: (query: string) => void
   onMeal: (meal: MealSlot) => void
   onAt: (at: number) => void
+  onVenue: (venue: Venue | null) => void
   onSelect: (food: Food) => void
   onPanel: (panel: Panel) => void
   onDone: () => void
 }) {
+  const { meal, at, venue } = target
   const trimmed = query.trim()
   const isSearching = trimmed.length >= 2
   const [tab, setTab] = useState<BrowseTab>('suggested')
@@ -158,9 +165,12 @@ function BrowsePanel({
   )
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
+  const usage = useLiveQuery(() => repo.recipeUsage(), [], new Map())
+  const recentCuisines = useLiveQuery(() => repo.recentRecipeCuisines(), [], [])
   const recents = useLiveQuery(() => repo.recentMeals(), [], [])
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
-  const todayEntries = useLiveQuery(() => repo.entriesForDay(dayKey(Date.now())), [], [])
+  const today = dayKey(Date.now())
+  const todayEntries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
 
   // Local first, always: only reach for the long tail when the cache comes up thin, and never
   // block on it, so results already on screen can't vanish while a fetch is in flight.
@@ -175,6 +185,26 @@ function BrowsePanel({
     () => (left ? suggestFoods(left, frequents ?? []) : []),
     [left, frequents],
   )
+  const cookable = useMemo(
+    () =>
+      recommendRecipes({
+        remainingKcal: left?.kcal ?? null,
+        remainingProteinMg: left?.proteinMg ?? 0,
+        recipes: recipes ?? [],
+        usage: usage ?? new Map(),
+        recentCuisines: recentCuisines ?? [],
+        today,
+      }),
+    [left?.kcal, left?.proteinMg, recipes, usage, recentCuisines, today],
+  )
+
+  const logRecipe = (recipeId: string, servings: number) => {
+    const recipe = (recipes ?? []).find((row) => row.id === recipeId)
+    if (!recipe) return Promise.resolve(0)
+    // A cooked recipe is eaten at home whatever the picker says, which is why this ignores
+    // `venue` — see logRecipeServing.
+    return repo.logRecipeServing(recipe, servings, meal, at).then(() => 1)
+  }
 
   const canScan = isBarcodeScanningAvailable()
   // Worth offering a breakdown when the text names more than one thing. It leads only when the
@@ -190,17 +220,21 @@ function BrowsePanel({
     { key: 'suggested', label: 'Suggested' },
     { key: 'again', label: 'Eat again', badge: (recents ?? []).length || undefined },
     { key: 'often', label: 'Frequent', badge: (frequents ?? []).length || undefined },
-    {
-      key: 'saved',
-      label: 'Saved',
-      badge: (templates ?? []).length + (recipes ?? []).length || undefined,
-    },
+    { key: 'cook', label: 'Cook', badge: (recipes ?? []).length || undefined },
+    { key: 'saved', label: 'Saved', badge: (templates ?? []).length || undefined },
   ]
 
   return (
     <div className="space-y-3 px-3 py-3">
       <Card className="p-3">
-        <MealTimePicker meal={meal} at={at} onMeal={onMeal} onAt={onAt} />
+        <MealTimePicker
+          meal={meal}
+          at={at}
+          venue={venue}
+          onMeal={onMeal}
+          onAt={onAt}
+          onVenue={onVenue}
+        />
       </Card>
 
       <div className="flex items-center gap-2">
@@ -254,30 +288,53 @@ function BrowsePanel({
         <>
           <SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />
 
-          {tab === 'suggested' &&
-            (suggestions.length === 0 ? (
-              <Empty>
-                {left === null
-                  ? 'Suggestions need a calorie target — add your height, age and sex in Settings.'
-                  : `Only ${left.kcal} kcal left, which isn't enough to build a suggestion around.`}
-              </Empty>
-            ) : (
-              <Card className="p-0">
-                <ul className="divide-y divide-line">
-                  {suggestions.map((suggestion) => (
-                    <li key={suggestion.food.id}>
-                      <button
-                        onClick={() => onSelect(suggestion.food)}
-                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                      >
-                        <div className="truncate text-[14px]">{suggestion.food.description}</div>
-                        <div className="tabular text-[12px] text-ink-muted">{suggestion.why}</div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            ))}
+          {tab === 'suggested' && (
+            <>
+              {/* What to cook leads, because it's the harder question and the one a list of
+                  single foods can't answer. */}
+              {cookable.length > 0 && (
+                <Card className="p-0">
+                  <h2 className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+                    Cook one of yours
+                  </h2>
+                  <RecipeRows rows={cookable.slice(0, 3)} onPreview={setPreview} onLog={logRecipe} />
+                </Card>
+              )}
+
+              {suggestions.length === 0 && cookable.length === 0 ? (
+                <Empty>
+                  {left === null
+                    ? 'Suggestions need a calorie target — add your height, age and sex in Settings.'
+                    : `Only ${left.kcal} kcal left, which isn't enough to build a suggestion around.`}
+                </Empty>
+              ) : (
+                suggestions.length > 0 && (
+                  <Card className="p-0">
+                    <h2 className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+                      Or a single food
+                    </h2>
+                    <ul className="divide-y divide-line">
+                      {suggestions.map((suggestion) => (
+                        <li key={suggestion.food.id}>
+                          <button
+                            onClick={() => onSelect(suggestion.food)}
+                            className="w-full px-4 py-2.5 text-left active:bg-sunken"
+                          >
+                            <div className="truncate text-[14px]">
+                              {suggestion.food.description}
+                            </div>
+                            <div className="tabular text-[12px] text-ink-muted">
+                              {suggestion.why}
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                )
+              )}
+            </>
+          )}
 
           {tab === 'again' &&
             ((recents ?? []).length === 0 ? (
@@ -304,7 +361,14 @@ function BrowsePanel({
                             })),
                             nutrients: recent.nutrients,
                             log: (multiple) =>
-                              repo.relogEntries(recent.entries, { meal, at, multiple }),
+                              repo.relogEntries(recent.entries, {
+                                meal,
+                                at,
+                                multiple,
+                                // Only override what the original said if the user has answered
+                                // for this sitting; otherwise the old venue is the better guess.
+                                ...(venue === null ? {} : { venue }),
+                              }),
                           })
                         }
                         className="w-full px-4 py-2.5 text-left active:bg-sunken"
@@ -333,61 +397,24 @@ function BrowsePanel({
               <FoodList foods={frequents ?? []} onSelect={onSelect} emptyLabel="" />
             ))}
 
-          {tab === 'saved' && (recipes ?? []).length > 0 && (
-            <Card className="p-0">
-              <h2 className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-                Recipes
-              </h2>
-              <ul className="divide-y divide-line">
-                {(recipes ?? []).map((recipe) => {
-                  const each = perServing(recipe)
-                  return (
-                    <li key={recipe.id}>
-                      <button
-                        onClick={() =>
-                          setPreview({
-                            title: recipe.name,
-                            subtitle: `${recipe.servings} servings · ${each.kcal} kcal each`,
-                            items: [
-                              {
-                                foodId: null,
-                                label: `${recipe.name}, one serving`,
-                                grams: 0,
-                                nutrients: each,
-                              },
-                            ],
-                            nutrients: each,
-                            // The multiplier is servings here, which is exactly what it means
-                            // for a batch dish: half a portion, or two.
-                            log: (multiple) =>
-                              repo
-                                .logRecipeServing(recipe, multiple, meal, at)
-                                .then(() => 1),
-                          })
-                        }
-                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                      >
-                        <div className="truncate text-[14px]">{recipe.name}</div>
-                        <div className="tabular text-[12px] text-ink-muted">
-                          {each.kcal} kcal per serving · makes {recipe.servings}
-                        </div>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </Card>
-          )}
+          {tab === 'cook' &&
+            (cookable.length === 0 ? (
+              <Empty>
+                No recipes yet. Tap <span className="font-semibold text-accent">New recipe</span> at
+                the top — paste a link and the whole ingredient list comes across.
+              </Empty>
+            ) : (
+              <Card className="p-0">
+                <RecipeRows rows={cookable} onPreview={setPreview} onLog={logRecipe} />
+              </Card>
+            ))}
 
           {tab === 'saved' &&
             ((templates ?? []).length === 0 ? (
-              (recipes ?? []).length === 0 && (
-                <Empty>
-                  Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap
-                  here, at any multiple. For a dish you cook in batches, use{' '}
-                  <span className="font-semibold text-accent">New recipe</span> at the top.
-                </Empty>
-              )
+              <Empty>
+                Tap the bookmark next to a meal on Today to save it — then it&rsquo;s one tap here,
+                at any multiple. For a dish you cook in batches, make it a recipe instead.
+              </Empty>
             ) : (
               <Card className="p-0">
                 <ul className="divide-y divide-line">
@@ -407,7 +434,8 @@ function BrowsePanel({
                               nutrients: item.nutrients,
                             })),
                             nutrients: template.nutrients,
-                            log: (multiple) => repo.logMealTemplate(template, meal, at, multiple),
+                            log: (multiple) =>
+                              repo.logMealTemplate(template, meal, at, multiple, venue),
                           })
                         }
                         className="w-full px-4 py-2.5 text-left active:bg-sunken"
@@ -443,6 +471,69 @@ function BrowsePanel({
         />
       )}
     </div>
+  )
+}
+
+/**
+ * A recommended recipe: the reason it's here, and both ways to act on it.
+ *
+ * Two targets in one row on purpose. Logging exactly one serving is the overwhelmingly common
+ * case and deserves to be a single tap; anything else — half a bowl, two bowls, or just checking
+ * what's in it — opens the sheet. Making everyone pass through the sheet to log the ordinary
+ * amount is the kind of tax that stops a feature being used.
+ */
+function RecipeRows({
+  rows,
+  onPreview,
+  onLog,
+}: {
+  rows: readonly RecipeRecommendation[]
+  onPreview: (preview: MealPreview) => void
+  onLog: (recipeId: string, servings: number) => Promise<number>
+}) {
+  return (
+    <ul className="divide-y divide-line">
+      {rows.map(({ recipe, why }) => {
+        const each = perServing(recipe)
+        return (
+          <li key={recipe.id} className="flex items-center">
+            <button
+              onClick={() =>
+                onPreview({
+                  title: recipe.name,
+                  subtitle: `${recipe.servings} servings · ${each.kcal} kcal each`,
+                  items: [
+                    { foodId: null, label: `${recipe.name}, one serving`, grams: 0, nutrients: each },
+                  ],
+                  nutrients: each,
+                  // The multiplier is servings here, which is exactly what it means for a batch
+                  // dish: half a portion, or two.
+                  log: (multiple) => onLog(recipe.id, multiple),
+                })
+              }
+              className="min-w-0 flex-1 px-4 py-2.5 text-left active:bg-sunken"
+            >
+              <span className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate text-[14px]">{recipe.name}</span>
+                {recipe.cuisine && (
+                  <span className="shrink-0 text-[11px] text-ink-muted">
+                    {CUISINE_LABELS[recipe.cuisine]}
+                  </span>
+                )}
+              </span>
+              <span className="tabular block text-[12px] text-ink-muted">{why}</span>
+            </button>
+            <button
+              onClick={() => void onLog(recipe.id, 1)}
+              aria-label={`Log one serving of ${recipe.name}`}
+              className="mr-2 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-wash text-accent active:opacity-60"
+            >
+              <Plus size={17} />
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

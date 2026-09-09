@@ -154,6 +154,7 @@ function SignedInApp() {
             onOpenCoach={() => setView({ kind: 'settings', route: 'coach' })}
             onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
             onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}
+            onOpenRecipes={() => setView({ kind: 'settings', route: 'recipes' })}
           />
         )}
         {tab === 'history' && <HistoryScreen />}

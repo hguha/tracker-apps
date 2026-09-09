@@ -19,6 +19,15 @@ export type CoachAction =
       nutrients: Nutrients
     }
   | {
+      kind: 'log-recipe'
+      /** Resolved against the user's own recipes; the macros come off the stored total. */
+      recipeId: string
+      name: string
+      servings: number
+      meal: MealSlot
+      nutrients: Nutrients
+    }
+  | {
       kind: 'suggest-meal'
       title: string
       /** Each item already matched to a food row, so the totals are computed not claimed. */

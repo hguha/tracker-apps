@@ -105,6 +105,21 @@ export interface LogEntry extends SyncColumns {
   recipeId: string | null
   quickAdd: Nutrients | null
 
+  /**
+   * Where it was eaten: 'home' | 'restaurant' | 'takeaway', or null for "nobody said".
+   *
+   * Null is never read as home. A default would be correct most of the time and would therefore be
+   * indistinguishable, in the data, from an answer — and the chart built on it would be reporting
+   * the default back as a habit. Three values rather than in/out because takeaway behaves like
+   * neither: a restaurant's portions in a home setting.
+   *
+   * The property belongs to the *sitting*, not the row. `repo.setVenue` writes every entry in the
+   * occasion together, and `lib/patterns.ts` aggregates by occasion — otherwise a restaurant meal
+   * logged as six items outvotes a home dinner logged as one, and the chart measures how someone
+   * logs rather than where they ate.
+   */
+  venue: Venue | null
+
   /** How much: grams is canonical; portion is what the user picked, kept for display. */
   grams: number
   portionId: string | null
@@ -142,7 +157,21 @@ export interface Recipe extends SyncColumns {
   yieldGrams: number | null
   ingredients: RecipeIngredient[]   // embedded
   steps: string[]
+  /** Whatever the source called it, when that didn't map onto a cuisine. */
   tags: string[]
+  /**
+   * A key from the closed `CUISINES` list, or null.
+   *
+   * Closed so a filter has something to filter on: free text lets "Asian", "asian food" and
+   * "Pan-Asian" coexist and makes the filter useless, which is the only reason the field exists.
+   * Imports map onto it (`lib/cuisine.ts`); anything that doesn't map files as null and keeps its
+   * own words in `tags`, because a wrong bucket is worse than no bucket. "Asian" and "European"
+   * deliberately have no alias — each covers four entries, so mapping either anywhere is a coin
+   * flip dressed up as data.
+   */
+  cuisine: CuisineKey | null
+  /** Hands-on plus cooking, in minutes, when the source stated it. */
+  totalMinutes: number | null
   sourceUrl: string | null
   authoredBy: 'user' | 'ai'
   /** Denormalized total for the whole recipe; per-serving is derived. */
@@ -311,7 +340,13 @@ consent.
 
 ### Migrations
 
-`0001_schema.sql`, `0002_rls.sql`, `0003_link.sql`, `0004_foods.sql`.
+`0001_schema.sql`, `0002_rls.sql`, `0003_diet_notes.sql`, `0004_eating_window.sql`,
+`0005_custom_foods.sql`, `0006_cuisine_and_venue.sql`.
+
+`0006` adds `recipes.cuisine`, `recipes.total_minutes` and `log_entries.venue`, all nullable with
+**no default** — for the reason above. Cuisine is `text` rather than an enum: the app owns the
+closed list (`domain/types.ts` `CUISINES`), and an enum here would mean a migration every time that
+list grows, to enforce something the only write path already enforces.
 
 Conventions inherited exactly from COINcidence: `user_id uuid not null default auth.uid()
 references auth.users(id) on delete cascade` so the client never sends an owner;
@@ -464,13 +499,25 @@ abstraction already exists.
 | `foods` | `{op:'search', q, limit}` → `{foods: Food[]}`; `{op:'barcode', code}` → `{food: Food \| null}`; `{op:'get', id}` | Keeps the USDA key server-side. USDA first, Open Food Facts fallback, upserts into `foods` so the second lookup is local |
 | `vision` | `{imageBase64, hint?}` → `{items: {label, grams, confidence}[]}` | Gemini multimodal. **Returns items and quantities only — never nutrient numbers** |
 | `coach` | `{messages, context}` → streamed text + tool calls | `runToolLoop` from `@tracker-engine/ai-coach`; echo `thoughtSignature` verbatim |
-| `recipe` | `{prompt, constraints:{kcal, proteinMg, …}, pantry?}` → `{recipe: Recipe}` | Ingredients + steps only; macros computed client-side from matched foods |
+| `recipe-import` | `{url}` → `{name, servings, ingredients[], steps[], cuisine, category, totalMinutes, sourceUrl}` | Reads schema.org `Recipe` JSON-LD. Server-side because recipe sites send no CORS headers; SSRF-guarded to public http(s). **Text only — no nutrient numbers** |
 | `checkin` | cron, weekly | Runs the algorithm server-side for users with push enabled; the client recomputes identically and offline |
 | `delete-account` | — | Lift REPutation's verbatim |
 | `keepalive` | cron | Supabase free tier pauses after 7 days idle |
 
 **Deploy every function to the project before debugging client code.** `delete-account` was
 missing from REPutation's project for months and 404'd silently.
+
+**Every function answers HTTP 200, with failures in an `error` field.** supabase-js discards the
+body of a non-2xx response, so a carefully worded 422 reaches the client as "Edge Function returned
+a non-2xx status code" and the app has to invent an explanation — which is how "that page has no
+recipe" became indistinguishable from "you're offline". The status code is the wrong channel here
+because the only consumer throws it away.
+
+**A slow call and a fragile call must not share a spinner.** Importing a recipe is two calls: the
+page read (~1s, reliable) and the amount conversion (~45s, and 503s under load). The first version
+bundled them, so a busy model discarded the name, the servings and all nineteen ingredient lines
+that had already been read successfully. The lines are now held in their own state and stay on
+screen with a retry.
 
 ### Food data pipeline
 

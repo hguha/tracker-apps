@@ -28,6 +28,7 @@ function entry(hour: number, minute: number, kcal: number): LogEntry {
     nutrients: { ...EMPTY_NUTRIENTS, kcal },
     source: 'quick',
     estimate: null,
+    venue: null,
     note: '',
     createdAt: eatenAt,
     updatedAt: eatenAt,

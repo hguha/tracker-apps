@@ -6,8 +6,17 @@ import { dailyAverage, dayTotals, mgToGrams } from '@/lib/nutrition'
 import { groupByWeek } from '@/lib/checkin'
 import { filterExpenditure, kcalPerKg, windowEstimate, type ExpenditureWindow } from '@/lib/expenditure'
 import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
+import { cuisineMix, venueSummary, type CuisineShare, type VenueSummary } from '@/lib/patterns'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
-import type { CheckIn, LogEntry, MacroTargets, Nutrients, Profile, Program } from '@/domain/types'
+import type {
+  CheckIn,
+  CuisineKey,
+  LogEntry,
+  MacroTargets,
+  Nutrients,
+  Profile,
+  Program,
+} from '@/domain/types'
 
 /**
  * Everything the Insights charts read, computed once.
@@ -58,6 +67,10 @@ export interface InsightsData {
   adherencePct: number | null
   /** The foods contributing the most calories over the window. */
   topFoods: { name: string; kcal: number; entries: number }[]
+  /** Home vs out, by occasion, and what each side costs against target. */
+  venues: VenueSummary
+  /** The cuisines of the recipes logged — what you cook, not everything you eat. */
+  cuisines: CuisineShare[]
 }
 
 export function useInsightsData(windowDays: number): InsightsData {
@@ -147,6 +160,11 @@ export function useInsightsData(windowDays: number): InsightsData {
     sourceTally.set(entry.source, (sourceTally.get(entry.source) ?? 0) + 1)
   }
 
+  const recipes = useLiveQuery(() => repo.recipes(), [], undefined)
+  const cuisineOf = new Map<string, CuisineKey | null>(
+    (recipes ?? []).map((recipe) => [recipe.id, recipe.cuisine]),
+  )
+
   const scored = days.filter((day) => day.targetKcal !== null)
   const first = trend[0]
   const last = trend[trend.length - 1]
@@ -174,6 +192,8 @@ export function useInsightsData(windowDays: number): InsightsData {
       .map(([name, value]) => ({ name, ...value }))
       .sort((a, b) => b.kcal - a.kcal)
       .slice(0, 12),
+    venues: venueSummary(entries ?? [], targetsByDay ?? new Map()),
+    cuisines: cuisineMix(entries ?? [], cuisineOf),
     adherencePct:
       scored.length === 0
         ? null

@@ -53,6 +53,15 @@ export class MacrosDatabase extends Dexie {
     this.version(2).stores({
       customFoods: 'id, description, barcode, updatedAt, userId',
     })
+
+    // v3 indexes recipes by cuisine and entries by venue, both of which are filtered on. No
+    // upgrade function: the new fields are nullable, and Dexie leaves a missing key out of its
+    // index rather than storing null, so an old row is simply absent from a filtered result —
+    // which is what "not recorded" should mean anyway.
+    this.version(3).stores({
+      recipes: 'id, name, cuisine, *tags, updatedAt, userId',
+      logEntries: 'id, day, [day+meal], eatenAt, foodId, recipeId, venue, updatedAt, userId',
+    })
   }
 }
 

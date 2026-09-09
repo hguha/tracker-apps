@@ -2,8 +2,9 @@ import type { ToolDeclaration } from '@tracker-engine/ai-coach'
 import { DAY_MS, dayKey } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
-import { dayTotals, mgToGrams, nutrientsFor, remaining } from '@/lib/nutrition'
+import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatClock, minutesIntoDay, windowState } from '@/lib/mealTiming'
+import { cuisineMix, venueSummary, type DaySide } from '@/lib/patterns'
 import type { CoachAction } from './types'
 import { MEAL_SLOTS, type MealSlot } from '@/domain/types'
 
@@ -15,7 +16,7 @@ import { MEAL_SLOTS, type MealSlot } from '@/domain/types'
  * Action tools are terminal: they end the turn with a card the user confirms.
  */
 
-const ACTION_TOOLS = new Set(['logFood', 'suggestMeal'])
+const ACTION_TOOLS = new Set(['logFood', 'suggestMeal', 'logRecipe'])
 
 export const isActionTool = (name: string): boolean => ACTION_TOOLS.has(name)
 
@@ -47,6 +48,36 @@ export const TOOL_DECLARATIONS: ToolDeclaration[] = [
     description:
       'The current goal, target rate, protein floor, measured expenditure and its error bar.',
     parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'getEatingPatterns',
+    description:
+      'Where the user eats — cooked at home, at a restaurant, or takeaway — counted by sitting rather than by item, with the mean calories of each and how days containing a meal out compare against target. Also the cuisines of the recipes they cook. Use for any question about habits, eating out, or why some weeks run over. Says how much of the data is actually recorded; do not draw conclusions when that share is low.',
+    parameters: {
+      type: 'object',
+      properties: { days: { type: 'integer', description: 'How many days back, 7-180.' } },
+      required: ['days'],
+    },
+  },
+  {
+    name: 'getRecipes',
+    description:
+      "The user's own saved recipes: per-serving macros, cuisine, how many servings each makes, how often it has been cooked and when it last was. Use before suggesting something to cook — a recipe they already have beats a recipe they would have to shop for.",
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'logRecipe',
+    description:
+      'Propose logging servings of one of the user\'s own recipes. Call getRecipes first to get a recipeId. Prefer this over logFood when they ate something they cooked.',
+    parameters: {
+      type: 'object',
+      properties: {
+        recipeId: { type: 'string' },
+        servings: { type: 'number', description: 'Servings eaten; halves are fine.' },
+        meal: { type: 'string', enum: [...MEAL_SLOTS] },
+      },
+      required: ['recipeId', 'servings', 'meal'],
+    },
   },
   {
     name: 'searchFoods',
@@ -105,6 +136,10 @@ export function toolLabel(name: string, args: Record<string, unknown>): string {
       return 'Reading your weight trend'
     case 'getProgram':
       return 'Checking your targets'
+    case 'getEatingPatterns':
+      return 'Looking at where you eat'
+    case 'getRecipes':
+      return 'Reading your recipes'
     case 'searchFoods':
       return `Looking up "${String(args.query ?? '')}"`
     default:
@@ -167,8 +202,50 @@ export async function executeRetrievalTool(
             occasions: timing.occasions,
             firstAt: timing.firstAt === null ? null : formatClock(minutesIntoDay(timing.firstAt)),
             lastAt: timing.lastAt === null ? null : formatClock(minutesIntoDay(timing.lastAt)),
+            // Only the sittings that say; an unanswered venue is absent rather than "home".
+            venues: [
+              ...new Set(rows.map((row) => row.venue).filter((venue) => venue !== null)),
+            ],
           }
         })
+    }
+
+    case 'getEatingPatterns': {
+      const days = Math.min(180, Math.max(7, Number(args.days) || 28))
+      const from = dayKey(Date.now() - days * DAY_MS)
+      const entries = await repo.entriesBetween(from, dayKey(Date.now()))
+      const dayKeys = [...new Set(entries.map((entry) => entry.day))]
+      const targets = await repo.targetsByDay(dayKeys)
+      const recipes = await repo.recipes()
+
+      const venues = venueSummary(entries, targets)
+      return {
+        days,
+        recordedPct: Math.round(venues.recordedPct),
+        byVenue: venues.breakdown
+          .filter((row) => row.venue !== null)
+          .map((row) => ({ where: row.venue, sittings: row.occasions, meanKcal: row.meanKcal })),
+        daysWithAMealOut: side(venues.outDays),
+        daysAllAtHome: side(venues.homeDays),
+        cuisinesCooked: cuisineMix(
+          entries,
+          new Map(recipes.map((recipe) => [recipe.id, recipe.cuisine])),
+        ).map((row) => ({ cuisine: row.cuisine, servings: row.occasions })),
+      }
+    }
+
+    case 'getRecipes': {
+      const [recipes, usage] = await Promise.all([repo.recipes(), repo.recipeUsage()])
+      return recipes.map((recipe) => ({
+        recipeId: recipe.id,
+        name: recipe.name,
+        cuisine: recipe.cuisine,
+        servings: recipe.servings,
+        totalMinutes: recipe.totalMinutes,
+        perServing: describe(perServing(recipe)),
+        timesCooked: usage.get(recipe.id)?.timesCooked ?? 0,
+        lastCookedDay: usage.get(recipe.id)?.lastCookedDay ?? null,
+      }))
     }
 
     case 'getWeightTrend': {
@@ -236,6 +313,21 @@ export async function toolToAction(
     }
   }
 
+  if (name === 'logRecipe') {
+    const recipe = await repo.getRecipe(String(args.recipeId ?? ''))
+    const servings = Number(args.servings)
+    if (!recipe || !Number.isFinite(servings) || servings <= 0) return null
+    const meal = MEAL_SLOTS.includes(args.meal as MealSlot) ? (args.meal as MealSlot) : 'snack'
+    return {
+      kind: 'log-recipe',
+      recipeId: recipe.id,
+      name: recipe.name,
+      servings,
+      meal,
+      nutrients: scale(perServing(recipe), servings),
+    }
+  }
+
   if (name === 'suggestMeal') {
     const raw = Array.isArray(args.items) ? args.items : []
     const items: { foodId: string; description: string; grams: number }[] = []
@@ -260,6 +352,13 @@ export async function toolToAction(
 
   return null
 }
+
+/** One side of the home/out comparison, named so the model can't mistake which is which. */
+const side = (row: DaySide) => ({
+  days: row.days,
+  meanKcal: row.meanKcal,
+  meanKcalVsTarget: row.meanOverTarget,
+})
 
 /** Grams, not milligrams, for the model: mg reads as a suspiciously large number to an LLM. */
 function describe(n: {

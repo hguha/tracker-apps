@@ -238,6 +238,33 @@ function ActionCard({
     )
   }
 
+  if (action.kind === 'log-recipe') {
+    return (
+      <Card className="p-4">
+        <h3 className="text-[14.5px] font-semibold tracking-tight">{action.name}</h3>
+        <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
+          {action.servings === 1 ? 'One serving' : `${action.servings} servings`} ·{' '}
+          {action.nutrients.kcal} kcal · {grams(action.nutrients.proteinMg)}P{' '}
+          {grams(action.nutrients.carbsMg)}C {grams(action.nutrients.fatMg)}F
+        </p>
+        <Button
+          className="mt-3 w-full"
+          disabled={isDone}
+          onClick={() => {
+            void repo.getRecipe(action.recipeId).then(async (recipe) => {
+              if (!recipe) return
+              await repo.logRecipeServing(recipe, action.servings, action.meal)
+              setIsDone(true)
+              onLogged(`Logged ${action.name}`)
+            })
+          }}
+        >
+          {isDone ? 'Logged' : `Log to ${action.meal}`}
+        </Button>
+      </Card>
+    )
+  }
+
   return (
     <Card className="p-4">
       <h3 className="text-[14.5px] font-semibold tracking-tight">{action.title}</h3>

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { Camera, RotateCcw } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
-import type { MealSlot } from '@/domain/types'
 import { EstimateReview } from './EstimateReview'
+import type { LogTarget } from './target'
 import { estimatePhoto, type MealEstimate } from './estimate'
 
 /** Below this the model can't resolve a plate; above it the upload is slow on a phone. */
@@ -21,12 +21,10 @@ const JPEG_QUALITY = 0.8
  * fails long before the model would have struggled with it.
  */
 export function PhotoPanel({
-  meal,
-  at,
+  target,
   onDone,
 }: {
-  meal: MealSlot
-  at: number
+  target: LogTarget
   onDone: () => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -103,8 +101,7 @@ export function PhotoPanel({
       {estimate && (
         <EstimateReview
           estimate={estimate}
-          meal={meal}
-          at={at}
+          target={target}
           source="photo"
           onChange={setEstimate}
           onDone={onDone}

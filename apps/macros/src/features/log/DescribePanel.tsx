@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
-import type { MealSlot } from '@/domain/types'
 import { EstimateReview } from './EstimateReview'
+import type { LogTarget } from './target'
 import { estimateMeal, type MealEstimate } from './estimate'
 
 /**
@@ -12,13 +12,11 @@ import { estimateMeal, type MealEstimate } from './estimate'
  * breakdown was, and the grams are editable before anything is written.
  */
 export function DescribePanel({
-  meal,
-  at,
+  target,
   initialText = '',
   onDone,
 }: {
-  meal: MealSlot
-  at: number
+  target: LogTarget
   /** Carried over from the search box, so describing a meal never means retyping it. */
   initialText?: string
   onDone: () => void
@@ -84,8 +82,7 @@ export function DescribePanel({
         {estimate && (
           <EstimateReview
             estimate={estimate}
-            meal={meal}
-            at={at}
+            target={target}
             source="describe"
             onChange={setEstimate}
             onDone={onDone}

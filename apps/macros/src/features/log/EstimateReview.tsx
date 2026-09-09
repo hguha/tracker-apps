@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Sparkles, Trash2 } from 'lucide-react'
-import { Button, SearchField, useToast } from '@tracker-engine/ui'
+import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
+import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { searchRemote } from '@/data/foodLookup'
 import { portionFor } from '@/lib/nutrition'
-import { grams as fmtGrams, portionLabel } from '@/features/shared/format'
-import type { EntrySource, Food, MealSlot } from '@/domain/types'
+import { grams as fmtGrams } from '@/features/shared/format'
+import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
+import { GramsRow } from '@/features/shared/GramsRow'
+import type { EntrySource, Food } from '@/domain/types'
 import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
+import type { LogTarget } from './target'
 
 /**
  * A draft estimate, editable, with the totals it currently implies.
@@ -18,15 +19,13 @@ import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './
  */
 export function EstimateReview({
   estimate,
-  meal,
-  at,
+  target,
   source,
   onChange,
   onDone,
 }: {
   estimate: MealEstimate
-  meal: MealSlot
-  at: number
+  target: LogTarget
   source: EntrySource
   onChange: (estimate: MealEstimate) => void
   onDone: () => void
@@ -42,9 +41,11 @@ export function EstimateReview({
     <>
       <ul className="divide-y divide-line">
         {estimate.items.map((item) => (
-          <ItemRow
+          <GramsRow
             key={item.id}
-            item={item}
+            title={item.food?.description ?? item.query}
+            subtitle={<ItemNote item={item} />}
+            grams={item.grams}
             onGrams={(value) =>
               update(estimate.items.map((i) => (i.id === item.id ? { ...i, grams: value } : i)))
             }
@@ -83,8 +84,9 @@ export function EstimateReview({
               await repo.logFood({
                 food: item.food!,
                 grams: item.grams,
-                meal,
-                eatenAt: at,
+                meal: target.meal,
+                eatenAt: target.at,
+                venue: target.venue,
                 source,
                 note: item.query,
                 estimate: {
@@ -115,24 +117,17 @@ export function EstimateReview({
  * One box, two ways out of the same problem: pick a food, or ask for the thing by name and let it
  * be broken down too, exactly as on the main log screen.
  */
-function AddToDraft({
+export function AddToDraft({
   onAdd,
   nextIndex,
+  placeholder = 'Something missing? Add it here',
 }: {
   onAdd: (items: EstimatedItem[]) => void
   nextIndex: number
+  placeholder?: string
 }) {
-  const [query, setQuery] = useState('')
   const [isAsking, setIsAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const trimmed = query.trim()
-
-  const results = useLiveQuery(() => repo.searchFoods(trimmed, 6), [trimmed], [])
-  useEffect(() => {
-    if (trimmed.length < 3 || (results?.length ?? 0) >= 3) return
-    const id = window.setTimeout(() => void searchRemote(trimmed, { branded: false }), 400)
-    return () => clearTimeout(id)
-  }, [trimmed, results?.length])
 
   function addFood(food: Food) {
     const portion = portionFor(food, null)
@@ -147,19 +142,17 @@ function AddToDraft({
         matchedBy: 'exact',
       },
     ])
-    setQuery('')
   }
 
-  async function ask() {
-    if (trimmed.length < 3 || isAsking) return
+  async function ask(query: string) {
+    if (query.length < 3 || isAsking) return
     setIsAsking(true)
     setError(null)
     try {
-      const extra = await estimateMeal(trimmed)
+      const extra = await estimateMeal(query)
       onAdd(
         extra.items.map((item, index) => ({ ...item, id: `est-asked-${nextIndex}-${index}` })),
       )
-      setQuery('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not work that out.')
     } finally {
@@ -169,43 +162,18 @@ function AddToDraft({
 
   return (
     <div className="rounded-xl bg-sunken/60 p-2.5">
-      <SearchField
-        value={query}
-        onChange={setQuery}
-        placeholder="Something missing? Add it here"
-      />
-
-      {trimmed.length >= 2 && (
-        <>
-          <ul className="mt-1.5">
-            {(results ?? []).map((food) => (
-              <li key={food.id}>
-                <button
-                  onClick={() => addFood(food)}
-                  className="flex w-full items-center gap-2 py-1.5 text-left active:opacity-60"
-                >
-                  <Plus size={14} className="shrink-0 text-accent" />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px]">
-                    {food.description}
-                    {food.portions.length > 0 && (
-                      <span className="text-ink-muted"> · {portionLabel(food.portions[0]!)}</span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-
+      <FoodSearchPicker placeholder={placeholder} branded={false} onPick={addFood}>
+        {(query) => (
           <button
-            onClick={() => void ask()}
+            onClick={() => void ask(query)}
             disabled={isAsking}
             className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-semibold text-accent active:opacity-60"
           >
             <Sparkles size={14} />
-            {isAsking ? 'Working it out…' : `Ask for “${trimmed}” instead`}
+            {isAsking ? 'Working it out…' : `Ask for “${query}” instead`}
           </button>
-        </>
-      )}
+        )}
+      </FoodSearchPicker>
 
       {error && (
         <p role="alert" className="mt-1 text-[12.5px]" style={{ color: 'var(--status-critical)' }}>
@@ -222,49 +190,19 @@ const CONFIDENCE_STYLE: Record<EstimatedItem['confidence'], string> = {
   low: 'text-confidence-low',
 }
 
-function ItemRow({
-  item,
-  onGrams,
-  onRemove,
-}: {
-  item: EstimatedItem
-  onGrams: (grams: number) => void
-  onRemove: () => void
-}) {
+/** How well a row matched, or — said plainly — that it didn't and therefore counted nothing. */
+function ItemNote({ item }: { item: EstimatedItem }) {
+  if (item.food === null) {
+    return (
+      <span style={{ color: 'var(--status-serious)' }}>
+        no match for “{item.query}” — not counted
+      </span>
+    )
+  }
   return (
-    <li className="flex items-center gap-2 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px]">{item.food?.description ?? item.query}</div>
-        <div className="text-[12px] text-ink-muted">
-          {item.food === null ? (
-            // Said plainly: a row that matched nothing must not look like it counted.
-            <span style={{ color: 'var(--status-serious)' }}>
-              no match for “{item.query}” — not counted
-            </span>
-          ) : (
-            <>
-              <span className={CONFIDENCE_STYLE[item.confidence]}>{item.confidence}</span>
-              {item.matchedBy === 'fuzzy' && <span> · loose match</span>}
-            </>
-          )}
-        </div>
-      </div>
-      <input
-        type="number"
-        inputMode="numeric"
-        value={item.grams}
-        onChange={(event) => onGrams(Math.max(0, Number(event.target.value) || 0))}
-        aria-label={`Grams of ${item.query}`}
-        className="tabular w-16 shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-right text-[13.5px] outline-none"
-      />
-      <span className="text-[12px] text-ink-muted">g</span>
-      <button
-        onClick={onRemove}
-        aria-label={`Remove ${item.query}`}
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-      >
-        <Trash2 size={15} />
-      </button>
-    </li>
+    <span className="text-ink-muted">
+      <span className={CONFIDENCE_STYLE[item.confidence]}>{item.confidence}</span>
+      {item.matchedBy === 'fuzzy' && <span> · loose match</span>}
+    </span>
   )
 }

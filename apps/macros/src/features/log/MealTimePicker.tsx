@@ -3,11 +3,12 @@ import {
   fromDateTimeInputValue,
   toDateTimeInputValue,
 } from '@tracker-engine/core'
+import { VenuePicker } from '@/features/shared/VenuePicker'
 import { MealPicker } from './MealPicker'
-import type { MealSlot } from '@/domain/types'
+import type { MealSlot, Venue } from '@/domain/types'
 
 /**
- * Which meal, and when.
+ * Which meal, when, and where.
  *
  * The time is a first-class control rather than a hidden `Date.now()`, because "when" is data
  * here: an eating window, a fasting streak and the coach's read on meal timing are all wrong if
@@ -19,17 +20,22 @@ import type { MealSlot } from '@/domain/types'
 export function MealTimePicker({
   meal,
   at,
+  venue,
   onMeal,
   onAt,
+  onVenue,
 }: {
   meal: MealSlot
   at: number
+  venue: Venue | null
   onMeal: (meal: MealSlot) => void
   onAt: (at: number) => void
+  onVenue: (venue: Venue | null) => void
 }) {
   return (
     <div className="space-y-2">
       <MealPicker value={meal} onChange={onMeal} />
+      <VenuePicker value={venue} onChange={onVenue} />
 
       <label className="block">
         <span className="text-[11px] text-ink-muted">

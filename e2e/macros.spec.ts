@@ -55,12 +55,27 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await newRecipe.click()
   await expect(page.getByRole('heading', { name: 'New recipe', level: 1 })).toBeVisible()
   await expect(page.getByPlaceholder('Sunday chilli')).toBeVisible()
+  // Three ways in, all landing in the same ingredient list.
+  for (const mode of ['From a link', 'Paste it', 'Describe it']) {
+    await expect(page.getByRole('button', { name: mode })).toBeVisible()
+  }
   await page.getByRole('button', { name: 'Back' }).click()
   // The meal and the time are always on screen — the slot is data, not an assumption.
   await expect(page.getByRole('button', { name: 'Breakfast' })).toBeVisible()
   // Every logging path is reachable from here, including the ones that need a network.
   await expect(page.getByRole('button', { name: 'Log from a photo' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Quick add macros' })).toBeVisible()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  // Where it was eaten is asked in the logging flow, not buried in an edit sheet — and nothing
+  // is preselected, because a default would be indistinguishable from an answer.
+  for (const venue of ['Home', 'Out', 'Takeaway']) {
+    await expect(page.getByRole('button', { name: venue, exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  }
+  await page.getByRole('button', { name: 'Out', exact: true }).click()
+
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: 'Log it' })).toBeEnabled()
@@ -69,6 +84,8 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   // The timeline summarises the day, and tapping an item opens the correction sheet.
   await expect(page.getByRole('button', { name: /Today.s food 1 item/ })).toBeVisible()
+  // The venue chosen at log time rides along, on the sitting rather than the row.
+  await expect(page.getByRole('button', { name: /Eaten Out/ })).toBeVisible()
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: /Remove from today/ })).toBeVisible()
 
@@ -115,9 +132,14 @@ test('every tab and the coach render without errors', async ({ page }) => {
   // than a title, the way REPutation's do.
   await page.getByRole('button', { name: 'History', exact: true }).click()
   await expect(page.getByPlaceholder('Search what you ate')).toBeVisible()
+  // Filter by where it was eaten, alongside the range and meal filters.
+  await page.getByRole('button', { name: /Where/ }).click()
+  await expect(page.getByText('Cooked at home')).toBeVisible()
+  await page.getByRole('button', { name: 'Done' }).click()
 
   await page.getByRole('button', { name: 'Insights', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Habits' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await expect(page.getByRole('button', { name: /Data & sync/ })).toBeVisible()
@@ -144,6 +166,65 @@ test('every tab and the coach render without errors', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Ask about your own numbers/ })).toBeVisible()
   await page.getByRole('button', { name: /What's left for today\?/ }).click()
   await expect(page.getByText(/target|protein|kcal/i).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a recipe can be built, browsed, and logged a serving at a time', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: 'Get started' }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: /Skip — no calorie target/ }).click()
+  await page.getByRole('button', { name: 'Skip for now' }).click()
+
+  // Built entirely offline: the model is only needed to convert *written* amounts.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Recipes/ }).click()
+  await page.getByRole('button', { name: /New recipe/ }).click()
+
+  await page.getByPlaceholder('Sunday chilli').fill('Test bowl')
+  await page.locator('select').first().selectOption('italian')
+  await page.getByPlaceholder('Add an ingredient').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  // Grams is the only editable number, because grams is what gets stored.
+  await expect(page.locator('input[aria-label^="Grams of"]').first()).toBeVisible()
+  await page.getByPlaceholder(/One step per line/).fill('Cook it.\nEat it.')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  // The list is sortable and filterable, and the cuisine came through.
+  await expect(page.getByRole('heading', { name: 'Recipes', level: 1 })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Suggested' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Cuisine/ })).toBeVisible()
+  await expect(page.getByText('Italian').first()).toBeVisible()
+
+  // Tapping a recipe opens what it is and how to cook it — not the editor. This is the whole
+  // reason the feature was unused: the imported method had nowhere to be shown.
+  await page.getByRole('button', { name: /Test bowl/ }).first().click()
+  await expect(page.getByRole('heading', { name: 'Test bowl', level: 1 })).toBeVisible()
+  await expect(page.getByText('Cook it.')).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Log \d+ kcal$/ })).toBeVisible()
+
+  // Halves, because that is how a batch dish is eaten.
+  await page.getByRole('button', { name: /More Servings/ }).click()
+  await expect(page.getByLabel('Servings of this recipe', { exact: true })).toHaveText('1.5')
+  await page.getByRole('button', { name: /^Log \d+ kcal$/ }).click()
+
+  // Back on Today: logged, and filed as cooked at home without being asked.
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  await expect(page.getByText(/Test bowl/).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: /Eaten Home/ })).toBeVisible()
+
+  // And it shows up as something to cook again, with a stated reason.
+  await expect(page.getByText('Cook one of yours')).toBeVisible()
+
+  // With a day logged, the two patterns cards render — and the cuisine came from the recipe.
+  await page.getByRole('button', { name: 'Insights', exact: true }).click()
+  await page.getByRole('button', { name: 'Habits' }).click()
+  await expect(page.getByText('Where you eat')).toBeVisible()
+  await expect(page.getByText('What you cook')).toBeVisible()
+  await expect(page.getByText('Italian').first()).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

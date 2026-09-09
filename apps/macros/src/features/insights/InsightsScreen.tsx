@@ -16,6 +16,7 @@ import { AdherenceChart, ProteinChart, TopFoodsChart, WeekdayChart } from './cha
 import { BalanceChart, ExpenditureChart } from './chartsBody'
 import { ConsistencyChart, MealTimingChart, SourceMixChart } from './chartsHabits'
 import { AdequacyChart, FiberChart } from './chartsNutrients'
+import { CuisineMixCard, VenueSplitChart } from './chartsVenue'
 import { useInsightsData } from './useInsightsData'
 
 const RANGES = [
@@ -122,6 +123,8 @@ export function InsightsScreen() {
                   window={data.profile?.eatingWindow ?? null}
                 />
                 <ConsistencyChart days={data.days} />
+                <VenueSplitChart venues={data.venues} />
+                <CuisineMixCard cuisines={data.cuisines} />
                 <SourceMixChart sourceCounts={data.sourceCounts} />
               </>
             )}

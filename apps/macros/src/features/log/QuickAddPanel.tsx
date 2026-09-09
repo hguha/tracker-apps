@@ -2,17 +2,16 @@ import { useState } from 'react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { gramsToMg } from '@/lib/nutrition'
-import { EMPTY_NUTRIENTS, type MealSlot } from '@/domain/types'
+import { EMPTY_NUTRIENTS } from '@/domain/types'
+import type { LogTarget } from './target'
 
 /** For a label in your hand and no database row — the escape hatch that stops someone
  *  abandoning the log entirely. */
 export function QuickAddPanel({
-  meal,
-  at,
+  target,
   onDone,
 }: {
-  meal: MealSlot
-  at: number
+  target: LogTarget
   onDone: () => void
 }) {
   const toast = useToast()
@@ -31,7 +30,13 @@ export function QuickAddPanel({
     if (isSaving || numbers.kcal <= 0) return
     setIsSaving(true)
     try {
-      await repo.logQuickAdd({ ...EMPTY_NUTRIENTS, ...numbers }, meal, label.trim() || 'Quick add', at)
+      await repo.logQuickAdd(
+        { ...EMPTY_NUTRIENTS, ...numbers },
+        target.meal,
+        label.trim() || 'Quick add',
+        target.at,
+        target.venue,
+      )
       toast.show('Logged')
       onDone()
     } finally {

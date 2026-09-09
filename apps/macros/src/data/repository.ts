@@ -7,6 +7,7 @@ import { enqueue, newId, patch } from '@/data/outbox'
 import {
   EMPTY_NUTRIENTS,
   type BodyWeightRow,
+  type CuisineKey,
   type CheckIn,
   type CoachingMode,
   type CustomFood,
@@ -22,6 +23,8 @@ import {
   type Program,
   type Recipe,
   type RecipeIngredient,
+  type RecipeUsage,
+  type Venue,
 } from '@/domain/types'
 import {
   cycleDayTargets,
@@ -262,6 +265,27 @@ export async function frequentFoodIds(limit = 20, days = 90): Promise<string[]> 
     .map(([id]) => id)
 }
 
+/**
+ * The cuisines of the last few recipe servings, newest first — the variety signal.
+ *
+ * Only entries that came from a recipe: a food row has no cuisine, and inferring one from
+ * "chicken breast, raw" would be guessing about the very thing the recommendation is trying to
+ * avoid getting wrong. Someone who cooks nothing gets an empty list, and variety then weighs
+ * nothing rather than weighing noise.
+ */
+export async function recentRecipeCuisines(limit = 10): Promise<(CuisineKey | null)[]> {
+  const entries = await db.logEntries
+    .orderBy('eatenAt')
+    .reverse()
+    .filter((entry) => alive(entry) && entry.recipeId !== null)
+    .limit(limit)
+    .toArray()
+  const byId = new Map((await db.recipes.bulkGet(entries.map((e) => e.recipeId!))).flatMap((row) =>
+    row ? [[row.id, row] as const] : [],
+  ))
+  return entries.map((entry) => byId.get(entry.recipeId!)?.cuisine ?? null)
+}
+
 export interface LogFoodInput {
   food: Food
   grams?: number
@@ -273,6 +297,7 @@ export interface LogFoodInput {
   note?: string
   source?: LogEntry['source']
   estimate?: LogEntry['estimate']
+  venue?: Venue | null
 }
 
 /**
@@ -303,6 +328,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     nutrients: nutrientsFor(input.food, grams),
     source: input.source ?? 'search',
     estimate: input.estimate ?? null,
+    venue: input.venue ?? null,
     note: input.note ?? '',
     ...syncStamp(),
   }
@@ -317,6 +343,7 @@ export async function logQuickAdd(
   meal: MealSlot,
   label = 'Quick add',
   eatenAt = Date.now(),
+  venue: Venue | null = null,
 ): Promise<string> {
   const entry: LogEntry = {
     id: newId(),
@@ -334,6 +361,7 @@ export async function logQuickAdd(
     nutrients: { ...EMPTY_NUTRIENTS, ...nutrients },
     source: 'quick',
     estimate: null,
+    venue,
     note: label,
     ...syncStamp(),
   }
@@ -357,6 +385,17 @@ export async function updateEntryAmount(id: string, grams: number): Promise<void
 
 export function moveEntry(id: string, meal: MealSlot): Promise<void> {
   return patch('logEntries', id, { meal })
+}
+
+/**
+ * Corrects where a sitting was eaten — every row in it, not just the one tapped.
+ *
+ * Venue belongs to the occasion, not the food: you did not eat the chips out and the burger at
+ * home. Fixing one item and leaving its five siblings behind is how a "where you eat" chart ends up
+ * reporting a single meal as three-fifths home.
+ */
+export async function setVenue(ids: readonly string[], venue: Venue | null): Promise<void> {
+  for (const id of ids) await patch('logEntries', id, { venue })
 }
 
 /**
@@ -386,7 +425,7 @@ export async function copyDay(fromDay: string, toDay: string): Promise<number> {
  */
 export async function relogEntries(
   entries: readonly LogEntry[],
-  into: { day?: string; meal?: MealSlot; at?: number; multiple?: number } = {},
+  into: { day?: string; meal?: MealSlot; at?: number; multiple?: number; venue?: Venue | null } = {},
 ): Promise<number> {
   const multiple = into.multiple ?? 1
   const day = into.at !== undefined ? dayKey(into.at) : (into.day ?? dayKey(Date.now()))
@@ -404,6 +443,9 @@ export async function relogEntries(
       nutrients: scaleNutrients(entry.nutrients, multiple),
       quickAdd: entry.quickAdd === null ? null : scaleNutrients(entry.quickAdd, multiple),
       source: 'copy',
+      // The old venue carries over unless told otherwise: repeating Friday's takeaway is still
+      // takeaway, and that is the more often correct guess than blanking it.
+      venue: into.venue === undefined ? entry.venue : into.venue,
       ...syncStamp(),
     }
     await db.logEntries.put(copy)
@@ -433,6 +475,10 @@ export interface RecipeInput {
   ingredients: { foodId: string | null; label: string; grams: number; optional?: boolean }[]
   steps?: string[]
   yieldGrams?: number | null
+  cuisine?: CuisineKey | null
+  totalMinutes?: number | null
+  /** Whatever the source called it, when that didn't map onto a cuisine. */
+  tags?: string[]
   /** Where it was imported from, kept so the original is one tap away. */
   sourceUrl?: string | null
 }
@@ -463,7 +509,9 @@ export async function saveRecipe(input: RecipeInput, id = newId()): Promise<stri
     yieldGrams: input.yieldGrams ?? null,
     ingredients,
     steps: input.steps ?? [],
-    tags: [],
+    tags: input.tags ?? [],
+    cuisine: input.cuisine ?? null,
+    totalMinutes: input.totalMinutes ?? null,
     sourceUrl: input.sourceUrl ?? null,
     authoredBy: 'user',
     nutrients: recipeNutrients({ ingredients }, foods),
@@ -480,12 +528,44 @@ export function deleteRecipe(id: string): Promise<void> {
   return patch('recipes', id, { deletedAt: Date.now() })
 }
 
+/**
+ * How often each recipe actually gets cooked, from the log rather than a counter.
+ *
+ * Derived, not stored: a stored `timesCooked` would drift the moment an entry is deleted or
+ * retimed, and "how many times have I eaten this" is exactly a question the log already answers.
+ * One pass over the window, keyed by recipe, so ranking every recipe costs one scan and not one
+ * query each.
+ */
+export async function recipeUsage(days = 365): Promise<Map<string, RecipeUsage>> {
+  const usage = new Map<string, RecipeUsage>()
+  const from = dayKeyOffset(Date.now(), days)
+  await db.logEntries
+    .where('day')
+    .aboveOrEqual(from)
+    .filter(alive)
+    .each((entry) => {
+      if (!entry.recipeId) return
+      const current = usage.get(entry.recipeId) ?? { timesCooked: 0, lastCookedDay: null }
+      usage.set(entry.recipeId, {
+        timesCooked: current.timesCooked + 1,
+        lastCookedDay:
+          current.lastCookedDay === null || entry.day > current.lastCookedDay
+            ? entry.day
+            : current.lastCookedDay,
+      })
+    })
+  return usage
+}
+
 /** Logs `servings` of a recipe as one entry, so the day reads "Chilli · 1.5 servings". */
 export async function logRecipeServing(
   recipe: Recipe,
   servings: number,
   meal: MealSlot,
   at = Date.now(),
+  // A recipe is something you cooked, so home is the default here rather than a guess — the one
+  // place in the app where the venue is genuinely implied by the action.
+  venue: Venue | null = 'home',
 ): Promise<string> {
   const nutrients = scaleNutrients(perServing(recipe), servings)
   const entry: LogEntry = {
@@ -504,6 +584,7 @@ export async function logRecipeServing(
     nutrients,
     source: 'recipe',
     estimate: null,
+    venue,
     note: `${recipe.name}${servings === 1 ? '' : ` × ${servings}`}`,
     ...syncStamp(),
   }
@@ -567,6 +648,7 @@ export async function logMealTemplate(
   meal: MealSlot,
   at = Date.now(),
   multiple = 1,
+  venue: Venue | null = null,
 ): Promise<number> {
   for (const item of template.items) {
     const entry: LogEntry = {
@@ -588,6 +670,7 @@ export async function logMealTemplate(
       nutrients: scaleNutrients(item.nutrients, multiple),
       source: 'template',
       estimate: null,
+      venue,
       note: template.name,
       ...syncStamp(),
     }

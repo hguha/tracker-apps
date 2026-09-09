@@ -3,7 +3,8 @@ import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { nutrientsFor, portionFor } from '@/lib/nutrition'
 import { grams, portionLabel } from '@/features/shared/format'
-import type { Food, MealSlot } from '@/domain/types'
+import type { Food } from '@/domain/types'
+import type { LogTarget } from './target'
 
 /**
  * How much of it, then log.
@@ -13,13 +14,11 @@ import type { Food, MealSlot } from '@/domain/types'
  */
 export function PortionPanel({
   food,
-  meal,
-  at,
+  target,
   onDone,
 }: {
   food: Food
-  meal: MealSlot
-  at: number
+  target: LogTarget
   onDone: () => void
 }) {
   const toast = useToast()
@@ -45,8 +44,9 @@ export function PortionPanel({
     try {
       await repo.logFood({
         food,
-        meal,
-        eatenAt: at,
+        meal: target.meal,
+        eatenAt: target.at,
+        venue: target.venue,
         source: food.barcode ? 'barcode' : 'search',
         ...(gramsInput
           ? { grams: Number(gramsInput) }

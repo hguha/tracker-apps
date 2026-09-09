@@ -26,16 +26,22 @@ interface RecipeNode {
   recipeYield?: unknown
   recipeIngredient?: unknown
   recipeInstructions?: unknown
+  recipeCuisine?: unknown
+  recipeCategory?: unknown
+  keywords?: unknown
+  totalTime?: unknown
+  cookTime?: unknown
+  prepTime?: unknown
   image?: unknown
 }
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (request.method !== 'POST') return json({ error: 'POST only' }, 405)
+  if (request.method !== 'POST') return json({ error: 'POST only' })
 
   const { url } = (await request.json().catch(() => ({}))) as { url?: string }
   const target = safeUrl(url ?? '')
-  if (!target) return json({ error: 'That does not look like a recipe link.' }, 400)
+  if (!target) return json({ error: 'That does not look like a recipe link.' })
 
   let html: string
   try {
@@ -49,21 +55,20 @@ Deno.serve(async (request) => {
       redirect: 'follow',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
-    if (!response.ok) return json({ error: `The page returned ${response.status}.` }, 502)
+    if (!response.ok) {
+      return json({ error: `That page returned ${response.status} and wouldn't open.` })
+    }
     html = (await response.text()).slice(0, MAX_BYTES)
   } catch {
-    return json({ error: "Couldn't open that page." }, 502)
+    return json({ error: "Couldn't open that page — check the link, or paste the ingredients in." })
   }
 
   const recipe = findRecipe(html)
   if (!recipe) {
-    return json(
-      {
-        error:
-          "That page doesn't publish its recipe in a readable format. Paste the ingredients into the box instead.",
-      },
-      422,
-    )
+    return json({
+      error:
+        "That page doesn't publish its recipe in a readable form. Copy the ingredient list and paste it in instead.",
+    })
   }
 
   return json({
@@ -71,6 +76,10 @@ Deno.serve(async (request) => {
     servings: servingsOf(recipe.recipeYield),
     ingredients: lines(recipe.recipeIngredient),
     steps: instructions(recipe.recipeInstructions),
+    // Free text — the client maps it onto its own closed list, or files it as a tag.
+    cuisine: text(first(recipe.recipeCuisine)),
+    category: text(first(recipe.recipeCategory)),
+    totalMinutes: minutesOf(recipe.totalTime) ?? sumMinutes(recipe.prepTime, recipe.cookTime),
     sourceUrl: target.toString(),
   })
 })
@@ -139,9 +148,29 @@ function search(value: unknown, depth = 0): RecipeNode | null {
   return search(node['@graph'], depth + 1)
 }
 
+const first = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value)
+
+/**
+ * ISO 8601 durations, which is what schema.org uses: `PT1H15M`.
+ *
+ * Days are deliberately ignored. A `P1D` on a recipe means an overnight prove or a marinade, and
+ * reporting "1445 minutes" next to a weeknight dinner is worse than saying nothing.
+ */
+function minutesOf(value: unknown): number | null {
+  const match = String(first(value) ?? '').match(/^PT(?:(\d+)H)?(?:(\d+)M)?/)
+  if (!match || (!match[1] && !match[2])) return null
+  const minutes = Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0)
+  return minutes > 0 && minutes < 24 * 60 ? minutes : null
+}
+
+/** Prep plus cook, for the many sites that publish those but not a total. */
+function sumMinutes(prep: unknown, cook: unknown): number | null {
+  const total = (minutesOf(prep) ?? 0) + (minutesOf(cook) ?? 0)
+  return total > 0 ? total : null
+}
+
 function servingsOf(value: unknown): number | null {
-  const raw = Array.isArray(value) ? value[0] : value
-  const digits = String(raw ?? '').match(/\d+/)
+  const digits = String(first(value) ?? '').match(/\d+/)
   const parsed = digits ? Number(digits[0]) : Number.NaN
   return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : null
 }
@@ -177,9 +206,16 @@ function text(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-function json(body: unknown, status = 200): Response {
+/**
+ * Always HTTP 200, even for a failure.
+ *
+ * supabase-js discards the body of a non-2xx response, so every carefully worded reason above
+ * would reach the user as a generic "Edge Function returned a non-2xx status code" and the app
+ * would have to invent its own explanation — which is how "that page has no recipe" became
+ * indistinguishable from "you're offline". The `error` field carries the status instead.
+ */
+function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
-    status,
     headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 }
