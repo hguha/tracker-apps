@@ -561,7 +561,9 @@ test('water counts on the home screen, in the units you picked', async ({ page }
   await page.getByRole('button', { name: /lb \/ in/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
-  await expect(page.getByText('8 fl oz')).toBeVisible()
+  // Exact, because "68 fl oz" — the converted target on the same card — contains "8 fl oz".
+  await expect(page.getByText('8 fl oz', { exact: true })).toBeVisible()
+  await expect(page.getByText('of 68 fl oz')).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

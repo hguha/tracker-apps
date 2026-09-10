@@ -63,13 +63,25 @@ export function DayScreen({
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const today = dayKey(Date.now())
-  const entries = useLiveQuery(() => repo.entriesForDay(day), [day], undefined)
-  const target = useLiveQuery(async () => (await repo.targetsByDay([day])).get(day) ?? null, [day], null)
-  const foods = useLiveQuery(
-    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
-    [entries],
-    new Map<string, Food>(),
+  /**
+   * The rows and their foods in one query, not two.
+   *
+   * As two, the names arrived a render later than the rows — so every row briefly read "Food", which
+   * is `entryName`'s fallback for a food that genuinely isn't cached. A flicker showing the *wrong*
+   * word is worse than a slower first paint, and the second query only started once the first had
+   * resolved anyway, so nothing is lost by asking for both together.
+   */
+  const loaded = useLiveQuery(
+    async () => {
+      const rows = await repo.entriesForDay(day)
+      return { entries: rows, foods: await repo.foodsByIds(foodIdsOf(rows)) }
+    },
+    [day],
+    undefined,
   )
+  const entries = loaded?.entries
+  const foods = loaded?.foods ?? new Map<string, Food>()
+  const target = useLiveQuery(async () => (await repo.targetsByDay([day])).get(day) ?? null, [day], null)
 
   // The snapshot is taken per day and only once, so switching days with the arrows re-arms Revert
   // for the new day rather than carrying the old one's state across.
@@ -151,7 +163,7 @@ export function DayScreen({
           <MealCard
             key={group.meal}
             group={group}
-            foods={foods ?? new Map()}
+            foods={foods}
             expanded={expanded}
             onExpand={(key) => setExpanded((current) => (current === key ? null : key))}
             onAdd={() => onAdd(day, group.meal)}
@@ -207,7 +219,7 @@ export function DayScreen({
       {editing && (
         <EntrySheet
           entry={editing.entry}
-          name={entryName(editing.entry, foods ?? new Map())}
+          name={entryName(editing.entry, foods)}
           siblings={editing.siblings}
           onDismiss={() => setEditing(null)}
         />

@@ -39,7 +39,16 @@ export function TodayScreen({
 }) {
   const today = dayKey(Date.now())
 
-  const entries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
+  // Rows and their names together — see DayScreen for why they can't be two queries.
+  const loaded = useLiveQuery(
+    async () => {
+      const rows = await repo.entriesForDay(today)
+      return { entries: rows, foods: await repo.foodsByIds(foodIdsOf(rows)) }
+    },
+    [today],
+    undefined,
+  )
+  const entries = loaded?.entries ?? []
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
@@ -51,13 +60,8 @@ export function TodayScreen({
     [],
   )
   const loggedDays = useLiveQuery(() => repo.loggedDays(), [], [])
-  const foods = useLiveQuery(
-    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
-    [entries],
-    new Map<string, Food>(),
-  )
 
-  const totals = dayTotals(entries ?? [])
+  const totals = dayTotals(entries)
   const left = targets ? remaining(totals, targets) : null
   const streak = dayStreaks(loggedDays ?? [])
   const weekDayCount = new Set((week ?? []).map((entry) => entry.day)).size
@@ -81,15 +85,15 @@ export function TodayScreen({
         targets={targets}
         left={left}
         window={profile?.eatingWindow ?? null}
-        entries={entries ?? []}
+        entries={entries}
         missing={missingForTarget(profile, program != null, weights ?? [])}
         onFix={onOpenAbout}
         onOpenDay={() => onOpenDay(today)}
       />
 
       <TodayMeals
-        entries={entries ?? []}
-        foods={foods ?? new Map()}
+        entries={entries}
+        foods={loaded?.foods ?? new Map<string, Food>()}
         onOpenDay={() => onOpenDay(today)}
         onAdd={(meal) => onAdd(today, meal)}
       />

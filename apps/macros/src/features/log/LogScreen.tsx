@@ -220,7 +220,7 @@ function BrowsePanel({
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const favouriteIds = profile?.favouriteFoodIds ?? []
   const frequents = useLiveQuery(
-    async () => {
+    async (): Promise<Food[]> => {
       // Starred first, in the order they were starred, then the rest by how often they're logged.
       // Frequency alone takes a fortnight to admit a new staple and never forgets an old one.
       const ids = [...favouriteIds, ...(frequentIds ?? []).filter((id) => !favouriteIds.includes(id))]
@@ -231,13 +231,19 @@ function BrowsePanel({
       })
     },
     [frequentIds, favouriteIds.join(',')],
-    [],
   )
-  const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
-  const recipes = useLiveQuery(() => repo.recipes(), [], [])
+  /**
+   * `undefined` until loaded, not `[]`.
+   *
+   * A live query given `[]` as its initial value is indistinguishable from one that found nothing, so
+   * every list flashed its empty state on open — and on the default tab that meant the first thing
+   * anybody saw was "everything you log turns up here", which reads as "you have nothing logged".
+   */
+  const templates = useLiveQuery(() => repo.mealTemplates(), [], undefined)
+  const recipes = useLiveQuery(() => repo.recipes(), [], undefined)
   const usage = useLiveQuery(() => repo.recipeUsage(), [], new Map())
   const recentCuisines = useLiveQuery(() => repo.recentRecipeCuisines(), [], [])
-  const recents = useLiveQuery(() => repo.recentItems(), [], [])
+  const recents = useLiveQuery(() => repo.recentItems(), [], undefined)
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const today = dayKey(Date.now())
   const todayEntries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
@@ -248,6 +254,7 @@ function BrowsePanel({
     [picked.map((food) => food.id).join(',')],
     new Map<string, LastAmount>(),
   )
+
 
   const left = targets ? remaining(dayTotals(todayEntries ?? []), targets) : null
   const suggestions = useMemo(
@@ -407,14 +414,14 @@ function BrowsePanel({
           <SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />
 
           {tab === 'recent' &&
-            ((recents ?? []).length === 0 ? (
+            (recents === undefined ? null : recents.length === 0 ? (
               <Empty>
                 Everything you log turns up here, newest first — so the second time you eat something
                 it&rsquo;s one tap.
               </Empty>
             ) : (
               <RecentList
-                items={recents ?? []}
+                items={recents}
                 onSelect={onSelect}
                 onLogDish={(item) =>
                   repo.logDishAgain(item.dishId, { meal, at }).then((count) => onDone(count))
@@ -423,14 +430,14 @@ function BrowsePanel({
             ))}
 
           {tab === 'often' &&
-            ((frequents ?? []).length === 0 ? (
+            (frequents === undefined ? null : frequents.length === 0 ? (
               <Empty>
                 Foods you log more than once collect here. Tap the star on any food to pin it to the
                 top of this list.
               </Empty>
             ) : (
               <FoodList
-                foods={frequents ?? []}
+                foods={frequents}
                 onSelect={onSelect}
                 picked={picked}
                 onToggle={toggle}
@@ -449,7 +456,7 @@ function BrowsePanel({
                 <ChefHat size={15} />
                 New recipe
               </button>
-              {cookable.length === 0 ? (
+              {recipes === undefined ? null : cookable.length === 0 ? (
                 <Empty>
                   No recipes yet. Paste a link into a new recipe and the whole ingredient list comes
                   across.
@@ -487,7 +494,7 @@ function BrowsePanel({
           )}
 
           {tab === 'saved' &&
-            ((templates ?? []).length === 0 ? (
+            (templates === undefined ? null : templates.length === 0 ? (
               <Empty>
                 Tap the bookmark on a meal in your day to save it — then it&rsquo;s one tap here, at
                 any multiple. For a dish you cook in batches, make it a recipe instead.
