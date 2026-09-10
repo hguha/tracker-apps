@@ -4,35 +4,42 @@ import { dayKey, dayKeyOffset, formatDayHeading, formatTimeOfDay } from '@tracke
 import { Card, ScreenHeader, useToast } from '@tracker-engine/ui'
 import {
   Bookmark,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
-  Minus,
   Plus,
   RotateCcw,
   Trash2,
+  Utensils,
 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { dayTotals } from '@/lib/nutrition'
-import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
-import { grams as fmtGrams } from '@/features/shared/format'
-import { MEAL_LABELS, mealForHour } from '@/features/shared/meals'
+import { mealGroups, type DishGroup, type MealGroup } from '@/lib/dayGroups'
+import { dayTiming, formatDuration } from '@/lib/mealTiming'
+import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
-import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
-import { VENUE_ICONS, VENUE_LABELS, VENUE_LONG } from '@/features/shared/venue'
+import { MacroNumbers } from '@/features/shared/MacroNumbers'
+import { VenueChoice } from '@/features/shared/VenueChoice'
 import { SaveMealSheet } from '@/features/today/SaveMealSheet'
 import { EntrySheet } from '@/features/today/EntrySheet'
-import { VENUES, type Food, type LogEntry, type MealSlot } from '@/domain/types'
+import { AmountStepper } from './AmountStepper'
+import {
+  MEAL_SLOTS,
+  type Food,
+  type LogEntry,
+  type MealSlot,
+} from '@/domain/types'
 import { DayTotals } from './DayTotals'
 
 /**
  * One day of food, editable.
  *
- * Modelled on REPutation's session screen: the thing you are working on gets its own screen, with
- * its totals at the top and its contents as cards you can act on directly. The History tab used to
- * expand a day into an unbroken run of small grey text, which is legible in the sense that the
- * characters are all present.
+ * **Grouped by meal, then by dish.** It used to group by a 45-minute gap in the clock and label each
+ * group with the first row's meal slot, which is two models fighting: logging four things over a long
+ * afternoon gave four cards all headed "Lunch", and a snack twenty minutes after lunch vanished into
+ * it. See `lib/dayGroups` for why the slot wins.
  *
  * **Every change is written immediately, and "Revert" undoes the lot.** A draft that only commits on
  * Save reads well in a spec and loses work in practice — one back-swipe and twenty corrections are
@@ -75,10 +82,11 @@ export function DayScreen({
   }, [day, entries])
 
   const rows = entries ?? []
-  const occasions = eatingOccasions(rows)
+  const meals = mealGroups(rows)
   const timing = dayTiming(rows)
   const totals = dayTotals(rows)
   const isToday = day === today
+  const emptySlots = MEAL_SLOTS.filter((slot) => !meals.some((group) => group.meal === slot))
   // A snapshot with the same contents as the day means nothing has changed yet.
   const isDirty =
     snapshot.current?.day === day &&
@@ -137,76 +145,51 @@ export function DayScreen({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 pb-8">
-        <DayTotals totals={totals} target={target} occasions={occasions.length} />
+        <DayTotals totals={totals} target={target} meals={meals.length} />
 
-        {occasions.length === 0 ? (
-          <Card className="p-6 text-center">
+        {meals.map((group) => (
+          <MealCard
+            key={group.meal}
+            group={group}
+            foods={foods ?? new Map()}
+            expanded={expanded}
+            onExpand={(key) => setExpanded((current) => (current === key ? null : key))}
+            onAdd={() => onAdd(day, group.meal)}
+            onSave={() => setSavingMeal(group.entries)}
+            onDetails={(entry) => setEditing({ entry, siblings: group.entries })}
+            onLogAgain={(dishId, name) => {
+              void repo.logDishAgain(dishId).then((n) => {
+                if (n > 0) toast.show(`${name} logged again`)
+              })
+            }}
+          />
+        ))}
+
+        {/*
+          The meals with nothing in them, as one row of buttons rather than four empty cards. Every
+          slot stays reachable — adding to breakfast on a past day used to depend on guessing which
+          meal an unlabelled "Add food" button would pick.
+        */}
+        <div className="flex gap-1.5">
+          {emptySlots.map((slot) => (
+            <button
+              key={slot}
+              onClick={() => onAdd(day, slot)}
+              className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-dashed border-line-strong py-2.5 text-[12.5px] font-medium text-ink-secondary active:bg-sunken"
+            >
+              <Plus size={13} className="shrink-0" />
+              <span className="truncate">{MEAL_LABELS[slot]}</span>
+            </button>
+          ))}
+        </div>
+
+        {meals.length === 0 && (
+          <Card className="p-5 text-center">
             <p className="text-[13.5px] text-ink-muted">
-              Nothing logged {isToday ? 'yet today' : 'on this day'}.
+              Nothing logged {isToday ? 'yet today' : 'on this day'} — pick a meal above to start.
             </p>
           </Card>
-        ) : (
-          occasions.map((occasion) => (
-            <Card key={occasion.startAt} className="p-0">
-              <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
-                <span className="min-w-0 flex-1">
-                  <span className="tabular block text-[13.5px] font-semibold">
-                    {formatTimeOfDay(occasion.startAt)}
-                    <span className="font-normal text-ink-muted">
-                      {' '}
-                      · {MEAL_LABELS[occasion.entries[0]!.meal]}
-                    </span>
-                  </span>
-                  <span className="tabular block text-[11.5px] text-ink-muted">
-                    {occasion.nutrients.kcal} kcal · {fmtGrams(occasion.nutrients.proteinMg)}P{' '}
-                    {fmtGrams(occasion.nutrients.carbsMg)}C {fmtGrams(occasion.nutrients.fatMg)}F
-                  </span>
-                </span>
-                <VenuePills entries={occasion.entries} />
-                <button
-                  onClick={() => setSavingMeal(occasion.entries)}
-                  aria-label="Save this meal to log again"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-                >
-                  <Bookmark size={15} />
-                </button>
-              </div>
-
-              <ul className="divide-y divide-line">
-                {occasion.entries.map((entry) => (
-                  <EntryRow
-                    key={entry.id}
-                    entry={entry}
-                    name={entryName(entry, foods ?? new Map())}
-                    isOpen={expanded === entry.id}
-                    onToggle={() =>
-                      setExpanded((current) => (current === entry.id ? null : entry.id))
-                    }
-                    onDetails={() => setEditing({ entry, siblings: occasion.entries })}
-                  />
-                ))}
-              </ul>
-
-              <button
-                onClick={() => onAdd(day, occasion.entries[0]!.meal)}
-                className="flex w-full items-center justify-center gap-1.5 border-t border-line py-2 text-[12.5px] font-semibold text-accent active:bg-sunken"
-              >
-                <Plus size={14} />
-                Add to {MEAL_LABELS[occasion.entries[0]!.meal].toLowerCase()}
-              </button>
-            </Card>
-          ))
         )}
-
-        <button
-          onClick={() =>
-            onAdd(day, isToday ? mealForHour(new Date().getHours()) : nextMeal(occasions.length))
-          }
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-[14px] font-semibold text-accent-contrast active:brightness-90"
-        >
-          <Plus size={16} />
-          Add food
-        </button>
 
         {!isToday && rows.length > 0 && (
           <button
@@ -241,12 +224,184 @@ export function DayScreen({
   )
 }
 
+/** One meal: its total, where it was eaten, its dishes, and a way to add to it. */
+function MealCard({
+  group,
+  foods,
+  expanded,
+  onExpand,
+  onAdd,
+  onSave,
+  onDetails,
+  onLogAgain,
+}: {
+  group: MealGroup
+  foods: ReadonlyMap<string, Food>
+  expanded: string | null
+  onExpand: (key: string) => void
+  onAdd: () => void
+  onSave: () => void
+  onDetails: (entry: LogEntry) => void
+  onLogAgain: (dishId: string, name: string) => void
+}) {
+  return (
+    <Card className="p-0">
+      <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold">{MEAL_LABELS[group.meal]}</span>
+          <span className="tabular block text-[11.5px] text-ink-muted">
+            {formatTimeOfDay(group.firstAt)} · {group.nutrients.kcal} kcal
+          </span>
+        </span>
+        <button
+          onClick={onSave}
+          aria-label="Save this meal to log again"
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+        >
+          <Bookmark size={15} />
+        </button>
+      </div>
+
+      {/*
+        The venue question lives here, not in the log flow. This is the moment the answer is known —
+        the meal is finished and sitting in front of you — and one tap covers every row in it.
+      */}
+      <div className="border-b border-line px-3.5 py-2">
+        <VenueChoice entries={group.entries} />
+      </div>
+
+      <ul className="divide-y divide-line">
+        {group.dishes.map((dish) =>
+          dish.dishId === null ? (
+            <EntryRow
+              key={dish.entries[0]!.id}
+              entry={dish.entries[0]!}
+              name={entryName(dish.entries[0]!, foods)}
+              isOpen={expanded === dish.entries[0]!.id}
+              onToggle={() => onExpand(dish.entries[0]!.id)}
+              onDetails={() => onDetails(dish.entries[0]!)}
+            />
+          ) : (
+            <DishRow
+              key={dish.dishId}
+              dish={dish}
+              foods={foods}
+              isOpen={expanded === dish.dishId}
+              onToggle={() => onExpand(dish.dishId!)}
+              expandedEntry={expanded}
+              onExpandEntry={onExpand}
+              onDetails={onDetails}
+              onLogAgain={() => onLogAgain(dish.dishId!, dish.name ?? 'Dish')}
+            />
+          ),
+        )}
+      </ul>
+
+      <button
+        onClick={onAdd}
+        className="flex w-full items-center justify-center gap-1.5 border-t border-line py-2.5 text-[13px] font-semibold text-accent active:bg-sunken"
+      >
+        <Plus size={14} />
+        Add to {MEAL_LABELS[group.meal].toLowerCase()}
+      </button>
+    </Card>
+  )
+}
+
+/**
+ * A dish: one line with the name the user gave it, opening onto the foods it resolved to.
+ *
+ * This is the fix for the single worst thing the app did. "3 steak tacos" resolved to six USDA rows
+ * — *Tortillas, corn* · *Beef, round, top round steak* · *Cheddar cheese* · … — and the diary then
+ * contained nothing the person recognised as their lunch, and nothing to tap to have another one.
+ * The ingredients are still all there, one tap down, because they are what makes the macros and the
+ * micronutrients right.
+ */
+function DishRow({
+  dish,
+  foods,
+  isOpen,
+  onToggle,
+  expandedEntry,
+  onExpandEntry,
+  onDetails,
+  onLogAgain,
+}: {
+  dish: DishGroup
+  foods: ReadonlyMap<string, Food>
+  isOpen: boolean
+  onToggle: () => void
+  expandedEntry: string | null
+  onExpandEntry: (key: string) => void
+  onDetails: (entry: LogEntry) => void
+  onLogAgain: () => void
+}) {
+  return (
+    <li>
+      <button
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className={cn('w-full px-3.5 py-2.5 text-left active:bg-sunken', isOpen && 'bg-sunken/60')}
+      >
+        <span className="flex items-baseline gap-2">
+          <Utensils size={13} className="shrink-0 translate-y-px text-ink-muted" />
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
+            {dish.name ?? 'Dish'}
+          </span>
+          <span className="tabular shrink-0 text-[13px] font-semibold">
+            {dish.nutrients.kcal}
+          </span>
+          <ChevronDown
+            size={15}
+            className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
+          />
+        </span>
+        <span className="mt-0.5 flex items-baseline gap-2 pl-[21px]">
+          <MacroNumbers nutrients={dish.nutrients} className="shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-muted">
+            {dish.entries.length} item{dish.entries.length === 1 ? '' : 's'}
+          </span>
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-line bg-sunken/30">
+          <ul className="divide-y divide-line">
+            {dish.entries.map((entry) => (
+              <EntryRow
+                key={entry.id}
+                entry={entry}
+                name={entryName(entry, foods)}
+                isOpen={expandedEntry === entry.id}
+                onToggle={() => onExpandEntry(entry.id)}
+                onDetails={() => onDetails(entry)}
+                inset
+              />
+            ))}
+          </ul>
+          <button
+            onClick={onLogAgain}
+            className="flex w-full items-center justify-center gap-1.5 border-t border-line py-2 text-[12.5px] font-semibold text-accent active:bg-sunken"
+          >
+            <Plus size={13} />
+            Have this again
+          </button>
+        </div>
+      )}
+    </li>
+  )
+}
+
 /**
  * One food, with its amount editable in place.
  *
  * Tapping expands rather than opening a sheet, because changing a portion is the overwhelmingly
  * common correction and a sheet costs two extra taps to do it. Everything rarer — the meal, the
- * time, the venue, deleting — is behind "More".
+ * time, deleting — is behind "More".
+ *
+ * The macros are on the row as numbers. They used to be a colour bar and a gram figure, which
+ * answers "roughly what shape is this" but not "how much protein was the chicken" — and the second
+ * question is the one somebody opens a day to ask.
  */
 function EntryRow({
   entry,
@@ -254,23 +409,23 @@ function EntryRow({
   isOpen,
   onToggle,
   onDetails,
+  inset = false,
 }: {
   entry: LogEntry
   name: string
   isOpen: boolean
   onToggle: () => void
   onDetails: () => void
+  inset?: boolean
 }) {
-  const canResize = entry.foodId !== null
-  const step = entry.grams >= 200 ? 25 : entry.grams >= 50 ? 10 : 5
-
   return (
     <li>
       <button
         onClick={onToggle}
         aria-expanded={isOpen}
         className={cn(
-          'w-full px-3.5 py-2 text-left active:bg-sunken',
+          'w-full py-2 pr-3.5 text-left active:bg-sunken',
+          inset ? 'pl-[34px]' : 'pl-3.5',
           isOpen && 'bg-sunken/60',
         )}
       >
@@ -285,28 +440,17 @@ function EntryRow({
             {entry.nutrients.kcal}
           </span>
         </span>
-        <MacroSplitBar nutrients={entry.nutrients} className="mt-1.5" />
+        <MacroNumbers nutrients={entry.nutrients} className="mt-0.5" />
       </button>
 
       {isOpen && (
-        <div className="flex items-center gap-2 border-t border-line px-3.5 py-2">
-          {canResize ? (
-            <>
-              <Stepper
-                label={name}
-                grams={entry.grams}
-                step={step}
-                onChange={(grams) => void repo.updateEntryAmount(entry.id, grams)}
-              />
-              <span className="tabular min-w-0 flex-1 text-[11.5px] text-ink-muted">
-                {entry.estimate ? 'estimated — check the amount' : `steps of ${step} g`}
-              </span>
-            </>
-          ) : (
-            <span className="min-w-0 flex-1 text-[11.5px] text-ink-muted">
-              A quick add has no food behind it, so its amount can&rsquo;t be rescaled.
-            </span>
+        <div
+          className={cn(
+            'flex items-center gap-2 border-t border-line py-2 pr-3.5',
+            inset ? 'pl-[34px]' : 'pl-3.5',
           )}
+        >
+          <AmountStepper entry={entry} label={name} />
           <button
             onClick={onDetails}
             className="shrink-0 rounded-lg px-2 py-1.5 text-[12.5px] font-semibold text-accent active:bg-page"
@@ -327,96 +471,11 @@ function EntryRow({
   )
 }
 
-function Stepper({
-  label,
-  grams,
-  step,
-  onChange,
-}: {
-  label: string
-  grams: number
-  step: number
-  onChange: (grams: number) => void
-}) {
-  return (
-    <span className="flex shrink-0 items-center gap-1 rounded-lg bg-page p-0.5">
-      <button
-        onClick={() => onChange(Math.max(1, Math.round(grams) - step))}
-        aria-label={`Less ${label}`}
-        className="flex size-7 items-center justify-center rounded-md text-ink-secondary active:bg-sunken"
-      >
-        <Minus size={14} />
-      </button>
-      <input
-        type="number"
-        inputMode="numeric"
-        value={Math.round(grams)}
-        onChange={(event) => {
-          const next = Number(event.target.value)
-          if (Number.isFinite(next) && next > 0) onChange(next)
-        }}
-        aria-label={`Grams of ${label}`}
-        className="tabular w-12 bg-transparent text-center text-[13px] outline-none"
-      />
-      <button
-        onClick={() => onChange(Math.round(grams) + step)}
-        aria-label={`More ${label}`}
-        className="flex size-7 items-center justify-center rounded-md text-ink-secondary active:bg-sunken"
-      >
-        <Plus size={14} />
-      </button>
-    </span>
-  )
-}
-
-/** Where this sitting happened — shown when known, asked in one tap when not. */
-function VenuePills({ entries }: { entries: readonly LogEntry[] }) {
-  const current = entries.find((entry) => entry.venue !== null)?.venue ?? null
-  const ids = entries.map((entry) => entry.id)
-
-  if (current !== null) {
-    const Icon = VENUE_ICONS[current]
-    return (
-      <button
-        onClick={() => void repo.setVenue(ids, null)}
-        aria-label={`Eaten ${VENUE_LABELS[current]} — tap to clear`}
-        className="flex shrink-0 items-center gap-1 rounded-full bg-sunken px-2 py-1 text-[11px] text-ink-secondary active:opacity-60"
-      >
-        <Icon size={11} />
-        {VENUE_LABELS[current]}
-      </button>
-    )
-  }
-
-  return (
-    <span className="flex shrink-0 items-center gap-0.5">
-      {VENUES.map((venue) => {
-        const Icon = VENUE_ICONS[venue]
-        return (
-          <button
-            key={venue}
-            onClick={() => void repo.setVenue(ids, venue)}
-            aria-label={`Eaten ${VENUE_LABELS[venue].toLowerCase()}`}
-            title={VENUE_LONG[venue]}
-            className="flex size-7 items-center justify-center rounded-md text-ink-muted active:bg-sunken"
-          >
-            <Icon size={13} />
-          </button>
-        )
-      })}
-    </span>
-  )
-}
-
-/** Adding to a past day with no meals yet: breakfast, then lunch, then dinner. */
-const nextMeal = (existing: number): MealSlot =>
-  existing === 0 ? 'breakfast' : existing === 1 ? 'lunch' : 'dinner'
-
 /** Whether the day still matches its snapshot, on the fields the screen can change. */
 function sameEntries(a: readonly LogEntry[], b: readonly LogEntry[]): boolean {
   if (a.length !== b.length) return false
   const key = (entry: LogEntry) =>
-    `${entry.id}|${entry.grams}|${entry.meal}|${entry.eatenAt}|${entry.venue}`
+    `${entry.id}|${entry.grams}|${entry.meal}|${entry.eatenAt}|${entry.venue}|${entry.nutrients.kcal}`
   const left = a.map(key).sort()
   const right = b.map(key).sort()
   return left.every((value, index) => value === right[index])

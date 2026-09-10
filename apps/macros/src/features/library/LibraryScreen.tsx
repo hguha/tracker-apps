@@ -22,8 +22,14 @@ type Tab = 'recipes' | 'meals' | 'foods'
  * Recipes lead because they're the only one you go looking for deliberately; the other two are
  * mostly byproducts of logging and are visited to prune.
  */
-export function LibraryScreen({ initialTab = 'recipes', onBack }: {
+export function LibraryScreen({
+  initialTab = 'recipes',
+  initialRecipeId = null,
+  onBack,
+}: {
   initialTab?: Tab
+  /** Opens straight onto one recipe, for a link from Today that names it. */
+  initialRecipeId?: string | null
   onBack: () => void
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
@@ -35,8 +41,10 @@ export function LibraryScreen({ initialTab = 'recipes', onBack }: {
 
   const tabs: SegmentedTab<Tab>[] = [
     { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
-    { key: 'meals', label: 'Meals', badge: (templates ?? []).length || undefined },
-    { key: 'foods', label: 'Foods', badge: (foods ?? []).length || undefined },
+    // The same word the log screen uses for the same list. "Saved" there and "Meals" here described
+    // one thing, which is most of why it was unclear where anything would show up.
+    { key: 'meals', label: 'Saved', badge: (templates ?? []).length || undefined },
+    { key: 'foods', label: 'My foods', badge: (foods ?? []).length || undefined },
   ]
 
   // Recipes own a whole screen of their own — a list, filters, a sort, a detail view and an editor
@@ -45,6 +53,7 @@ export function LibraryScreen({ initialTab = 'recipes', onBack }: {
     return (
       <RecipesScreen
         onBack={onBack}
+        initialRecipeId={initialRecipeId}
         header={<SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />}
       />
     )
@@ -74,9 +83,9 @@ function MealsTab() {
   return (
     <>
       <p className="px-1 text-[12.5px] text-ink-muted">
-        A meal is <span className="font-semibold">these exact items again</span> — yesterday&rsquo;s
-        lunch, at half or double. There&rsquo;s nothing to create from scratch here: a saved meal
-        comes from a real one, so tap the bookmark beside any meal on a day and it lands in this list.
+        A saved meal is <span className="font-semibold">these exact items again</span> —
+        yesterday&rsquo;s lunch, at half or double. Nothing is created from scratch here: it comes from
+        a real meal, so tap the bookmark beside any meal in your day and it lands in this list.
       </p>
       {(templates ?? []).length === 0 ? (
         <Card className="p-4 text-center text-[13.5px] text-ink-muted">Nothing saved yet.</Card>

@@ -1,6 +1,6 @@
 import { MEAL_SLOTS, type MealSlot } from '@/domain/types'
 import { cn } from '@/lib/cn'
-import { MEAL_LABELS } from '@/features/shared/meals'
+import { MEAL_LABELS } from '@/lib/meals'
 
 /** Which meal this is going to. Always shown, never assumed silently — the slot is what lets
  *  the coach reason about timing, so a wrong default is a wrong answer later. */

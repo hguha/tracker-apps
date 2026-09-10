@@ -253,7 +253,8 @@ function ActionCard({
           onClick={() => {
             void repo.getRecipe(action.recipeId).then(async (recipe) => {
               if (!recipe) return
-              await repo.logRecipeServing(recipe, action.servings, action.meal)
+              // The same shape as every other path — one dish line over its ingredients.
+              await repo.logRecipeIngredients(recipe, action.servings, action.meal)
               setIsDone(true)
               onLogged(`Logged ${action.name}`)
             })

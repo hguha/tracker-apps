@@ -4,12 +4,15 @@ import { Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
+import { foodIdsOf } from '@/features/shared/entryName'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
-import type { BodyWeightRow, Profile } from '@/domain/types'
+import type { BodyWeightRow, Food, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
 import { LibraryCard } from './LibraryCard'
 import { GoalCard } from './GoalCard'
 import { NutritionCard } from './NutritionCard'
+import { TodayMeals } from './TodayMeals'
+import { WaterCard } from './WaterCard'
 import { WeighInCard } from './WeighInCard'
 
 /** The micronutrient window: a week, because one day of fibre means nothing. */
@@ -20,15 +23,19 @@ export function TodayScreen({
   onOpenAbout,
   onOpenBadges,
   onOpenRecipes,
+  onOpenRecipe,
   onOpenDay,
   onOpenTargets,
+  onAdd,
 }: {
   onOpenCoach: () => void
   onOpenAbout: () => void
   onOpenBadges: () => void
   onOpenRecipes: () => void
+  onOpenRecipe: (recipeId: string) => void
   onOpenDay: (day: string) => void
   onOpenTargets: () => void
+  onAdd: (day: string, meal: MealSlot) => void
 }) {
   const today = dayKey(Date.now())
 
@@ -44,6 +51,11 @@ export function TodayScreen({
     [],
   )
   const loggedDays = useLiveQuery(() => repo.loggedDays(), [], [])
+  const foods = useLiveQuery(
+    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
+    [entries],
+    new Map<string, Food>(),
+  )
 
   const totals = dayTotals(entries ?? [])
   const left = targets ? remaining(totals, targets) : null
@@ -75,6 +87,15 @@ export function TodayScreen({
         onOpenDay={() => onOpenDay(today)}
       />
 
+      <TodayMeals
+        entries={entries ?? []}
+        foods={foods ?? new Map()}
+        onOpenDay={() => onOpenDay(today)}
+        onAdd={(meal) => onAdd(today, meal)}
+      />
+
+      <WaterCard />
+
       <WeighInCard />
 
       <GoalCard onOpenTargets={onOpenTargets} />
@@ -91,7 +112,7 @@ export function TodayScreen({
 
       <BadgeStrip onOpen={onOpenBadges} />
 
-      <LibraryCard onOpenRecipes={onOpenRecipes} />
+      <LibraryCard onOpenRecipes={onOpenRecipes} onOpenRecipe={onOpenRecipe} />
 
       <button
         onClick={onOpenCoach}

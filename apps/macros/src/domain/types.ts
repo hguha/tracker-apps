@@ -159,6 +159,20 @@ export interface LogEntry extends SyncColumns {
    */
   fromRecipeId: string | null
 
+  /**
+   * The dish these rows were entered as, and what the user called it.
+   *
+   * "3 steak tacos" is six foods, and all six are needed for the numbers to be right — but the diary
+   * then holds no line anybody recognises, and nothing to tap to have another one. Rows written
+   * together share a `dishId`, so the day collapses to one line that still opens onto its parts.
+   *
+   * `dishName` is copied onto every row rather than looked up, for the same reason `nutrients` is:
+   * it's what the user said at the time, and re-deriving it would let a later rename rewrite what
+   * they ate. Both null on a single food logged on its own — most rows.
+   */
+  dishId: string | null
+  dishName: string | null
+
   /** Grams is canonical; the portion is what the user picked, kept for display. */
   grams: number
   portionId: string | null
@@ -323,6 +337,24 @@ export interface BodyWeightRow extends SyncColumns {
   source: string
 }
 
+/**
+ * A day's water, as one running total.
+ *
+ * Not a log entry: water has no food, no macros and no portion, so every aggregate over the diary
+ * would need to learn to skip it. Millilitres regardless of what the user is shown, because the
+ * display unit is a preference and storing a preference in the data is how two devices come to
+ * disagree.
+ */
+export interface WaterRow extends SyncColumns {
+  id: string
+  userId: string
+  day: string
+  ml: number
+}
+
+/** One glass, in each unit system. The step the "+" button adds. */
+export const GLASS_ML = { metric: 250, imperial: 240 } as const
+
 export type UnitSystem = 'metric' | 'imperial'
 export type ThemePreset =
   | 'default'
@@ -370,6 +402,34 @@ export interface Profile extends SyncColumns {
    * follow the account onto a second device the same way appearance does.
    */
   favouriteFoodIds: string[]
+  /** Millilitres a day. Null until the user sets one; the card still counts without a target. */
+  waterTargetMl: number | null
+  /** When to be nudged about logging. Null means never, which is the default. */
+  reminders: RemindersConfig | null
+}
+
+/**
+ * When to nudge, and only when there is something to nudge about.
+ *
+ * Every reminder is **conditional on the meal still being unlogged when it fires**, checked at fire
+ * time rather than at schedule time. A tracker that says "you haven't logged lunch" to somebody who
+ * logged it two hours ago is a tracker whose notifications get switched off — and with them the ones
+ * that would have worked. That check is the whole feature; the times are just times.
+ */
+export interface RemindersConfig {
+  /** Minutes from local midnight, per meal. */
+  meals: { meal: MealSlot; minute: number; enabled: boolean }[]
+  /** A single evening nudge, only if the day is completely empty. */
+  endOfDay: { minute: number; enabled: boolean }
+}
+
+export const DEFAULT_REMINDERS: RemindersConfig = {
+  meals: [
+    { meal: 'breakfast', minute: 9 * 60 + 30, enabled: true },
+    { meal: 'lunch', minute: 13 * 60 + 30, enabled: true },
+    { meal: 'dinner', minute: 20 * 60, enabled: true },
+  ],
+  endOfDay: { minute: 21 * 60 + 30, enabled: true },
 }
 
 /**

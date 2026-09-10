@@ -7,17 +7,18 @@ import {
   FilterSheet,
   SearchField,
   SegmentedTabs,
-  useToast,
   type SegmentedTab,
 } from '@tracker-engine/ui'
-import { ChevronRight, Copy } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
-import { MEAL_LABELS } from '@/features/shared/meals'
+import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
+import { mealGroups } from '@/lib/dayGroups'
 import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
 import {
   MEAL_SLOTS,
@@ -37,13 +38,18 @@ const RANGES = [
 ] as const
 
 type RangeKey = (typeof RANGES)[number]['key']
-type SortKey = 'newest' | 'oldest' | 'most' | 'least'
+/**
+ * Two orders, not four.
+ *
+ * "Most kcal" and "Least" were dropped: a diary sorted by calorie descending answers no question
+ * anybody asks of their own history, and the thing they were standing in for — which days ran over —
+ * is what the Insights charts are for.
+ */
+type SortKey = 'newest' | 'oldest'
 
 const SORTS: SegmentedTab<SortKey>[] = [
   { key: 'newest', label: 'Newest' },
   { key: 'oldest', label: 'Oldest' },
-  { key: 'most', label: 'Most kcal' },
-  { key: 'least', label: 'Least' },
 ]
 
 /**
@@ -54,7 +60,6 @@ const SORTS: SegmentedTab<SortKey>[] = [
  * of failures.
  */
 export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void }) {
-  const toast = useToast()
   const today = dayKey(Date.now())
   const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
   const [sort, setSort] = useState<SortKey>('newest')
@@ -176,9 +181,6 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
             target={targets?.get(day) ?? null}
             isPartial={isFiltered}
             onOpen={() => onOpenDay(day)}
-            onCopy={() => {
-              void repo.copyDay(day, today).then((n) => toast.show(`Copied ${n} items`))
-            }}
           />
         ))}
       </div>
@@ -229,7 +231,6 @@ function DayCard({
   target,
   isPartial,
   onOpen,
-  onCopy,
 }: {
   day: string
   entries: LogEntry[]
@@ -238,7 +239,6 @@ function DayCard({
   /** True when filters are on, so the totals are of the matches rather than the whole day. */
   isPartial: boolean
   onOpen: () => void
-  onCopy: () => void
 }) {
   const totals = dayTotals(entries)
   const delta = target && !isPartial ? totals.kcal - target.kcal : null
@@ -258,22 +258,17 @@ function DayCard({
             <span className="tabular text-[14px] font-semibold">{totals.kcal}</span>
             <ChevronRight size={16} className="shrink-0 text-ink-muted" />
           </div>
-          <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-            {grams(totals.proteinMg)}P {grams(totals.carbsMg)}C {grams(totals.fatMg)}F
+          <p className="tabular mt-0.5 flex items-baseline gap-2 text-[12.5px] text-ink-muted">
+            <MacroNumbers nutrients={totals} />
+            <span>
             {delta !== null &&
               ` · ${delta === 0 ? 'on target' : `${Math.abs(delta)} kcal ${delta > 0 ? 'over' : 'under'}`}`}
             {isPartial && ` · ${entries.length} match${entries.length === 1 ? '' : 'es'}`}
             {!isPartial &&
               timing.spanMinutes !== null &&
-              ` · ${timing.occasions} meals over ${formatDuration(timing.spanMinutes)}`}
+              ` · ${mealGroups(entries).length} meals over ${formatDuration(timing.spanMinutes)}`}
+            </span>
           </p>
-        </button>
-        <button
-          onClick={onCopy}
-          aria-label={`Copy ${day} to today`}
-          className="mr-2 flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-        >
-          <Copy size={16} />
         </button>
       </div>
 

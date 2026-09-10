@@ -11,7 +11,7 @@ import * as repo from '@/data/repository'
 import { perServing, scale } from '@/lib/nutrition'
 import { cuisineLabel } from '@/lib/cuisine'
 import { grams } from '@/features/shared/format'
-import { MEAL_LABELS, mealForHour } from '@/features/shared/meals'
+import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { MealPicker } from '@/features/log/MealPicker'
 import type { Food, MealSlot } from '@/domain/types'
 
@@ -58,22 +58,29 @@ export function RecipeDetail({
   const portion = scale(each, servings)
   const cooked = usage?.get(recipe.id)
 
-  // An arrow after the guard, not a hoisted `function`: a hoisted declaration is not covered by the
-  // `if (!recipe) return` above it, so `recipe` would still be possibly-undefined inside.
-  const log = (how: 'ingredients' | 'one') => {
+  /**
+   * One way to log a recipe, everywhere.
+   *
+   * There used to be two — as ingredients, or as a single opaque row — offered side by side with a
+   * paragraph explaining the trade-off, and the *other* screens picked differently, so logging the
+   * same chilli from Today and from here produced two completely different diaries. Ingredients win
+   * because they carry strictly more (micronutrients, per-food correction, "the ricotta was a third of
+   * the calories") and the reason anyone wanted the single row — a diary you can read — is now handled
+   * by the shared `dishId` that collapses them to one line.
+   *
+   * An arrow after the guard, not a hoisted `function`: a hoisted declaration is not covered by the
+   * `if (!recipe) return` above it, so `recipe` would still be possibly-undefined inside.
+   */
+  const log = () => {
     if (isSaving) return
     setIsSaving(true)
-    const write =
-      how === 'ingredients'
-        ? repo.logRecipeIngredients(recipe, servings, meal, at)
-        : repo.logRecipeServing(recipe, servings, meal, at)
-    return write
-      .then((result) => {
-        const rows = typeof result === 'number' ? result : 1
+    return repo
+      .logRecipeIngredients(recipe, servings, meal, at)
+      .then(() => {
         toast.show(
-          `Logged ${servings === 1 ? 'a serving' : `${servings} servings`}` +
-            (how === 'ingredients' ? ` · ${rows} item${rows === 1 ? '' : 's'}` : '') +
-            ` · ${MEAL_LABELS[meal].toLowerCase()}`,
+          `${recipe.name} · ${servings === 1 ? 'a serving' : `${servings} servings`} · ${MEAL_LABELS[
+            meal
+          ].toLowerCase()}`,
         )
         onBack()
       })
@@ -150,32 +157,14 @@ export function RecipeDetail({
           />
         </label>
 
-        {/*
-          Two ways to write it, and the difference is real rather than cosmetic.
-          As ingredients you get micronutrients, per-food editing, and the fact that the ricotta was
-          a third of the calories. As one item the day is tidier. Ingredients lead because they carry
-          strictly more information — a single row has no food behind it at all.
-
-          Venue is not asked either way: logging a recipe means you cooked it, which is the one
-          action in the app where "home" is a fact rather than a guess.
-        */}
-        <Button
-          className="w-full"
-          disabled={isSaving}
-          onClick={() => void log('ingredients')}
-        >
-          {isSaving ? 'Logging…' : `Log ${portion.kcal} kcal as ingredients`}
+        {/* Venue is not asked: logging a recipe means you cooked it, which is the one action in the
+            app where "home" is a fact rather than a guess. */}
+        <Button className="w-full" disabled={isSaving} onClick={() => void log()}>
+          {isSaving ? 'Logging…' : `Log ${portion.kcal} kcal`}
         </Button>
-        <button
-          disabled={isSaving}
-          onClick={() => void log('one')}
-          className="w-full py-1.5 text-[12.5px] font-semibold text-ink-muted active:opacity-60"
-        >
-          Or log it as a single item
-        </button>
         <p className="text-[12px] text-ink-muted">
-          As ingredients, each food lands on its own line — so the micronutrients count, and you can
-          correct one of them without redoing the meal.
+          Lands as one line called {recipe.name}, with each ingredient underneath it — so the
+          micronutrients count and you can correct one without redoing the meal.
         </p>
       </Card>
 

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { dayKey } from '@tracker-engine/core'
 import { ToastProvider, useColorScheme } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@tracker-engine/platform'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
+import { syncReminders } from '@/data/reminders'
 import { syncHealthWeightsIfEnabled } from '@/data/health'
 import { applyAppearance } from '@/lib/theme'
 import { useSync } from '@/sync/useSync'
@@ -28,14 +30,14 @@ import { CheckInScreen } from '@/features/checkin/CheckInScreen'
 import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogScreen } from '@/features/log/LogScreen'
 import { DayScreen } from '@/features/day/DayScreen'
-import { mealForHour } from '@/features/shared/meals'
+import { mealForHour } from '@/lib/meals'
 import type { MealSlot } from '@/domain/types'
 
 type View =
   | { kind: 'tabs' }
   | { kind: 'log'; meal: MealSlot; day?: string; back?: View }
   | { kind: 'day'; day: string }
-  | { kind: 'settings'; route: SettingsRoute }
+  | { kind: 'settings'; route: SettingsRoute; recipeId?: string }
   | { kind: 'connect' }
 
 export function App() {
@@ -81,6 +83,24 @@ function SignedInApp() {
       .then(() => setIsReady(true))
       .catch(() => setIsReady(true))
   }, [])
+
+  /**
+   * Reminders are recomputed rather than repeated.
+   *
+   * A daily repeat rule would nag someone who logged lunch two hours ago, so what's scheduled is
+   * derived from what today still lacks — which means it has to be re-derived whenever that changes.
+   * Keyed on the day's entries, so every log, edit and delete re-runs it, and on `isReady` so the
+   * first run happens after the profile exists. See `data/reminders`.
+   */
+  const todaysEntryCount = useLiveQuery(
+    async () => (isReady ? (await repo.entriesForDay(dayKey(Date.now()))).length : 0),
+    [isReady],
+    0,
+  )
+  useEffect(() => {
+    if (!isReady) return
+    void syncReminders()
+  }, [isReady, todaysEntryCount])
 
   // Appearance lives on the profile, so it follows the same live-query path as everything else
   // and applies the moment it changes — including on another device. `onboardingVersion` rides
@@ -145,7 +165,7 @@ function SignedInApp() {
       case 'badges':
         return <BadgesScreen onBack={toTabs} />
       case 'library':
-        return <LibraryScreen onBack={toTabs} />
+        return <LibraryScreen initialRecipeId={view.recipeId ?? null} onBack={toTabs} />
       case 'meals':
         return <LibraryScreen initialTab="meals" onBack={toTabs} />
       case 'foods':
@@ -174,6 +194,12 @@ function SignedInApp() {
             onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
             onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}
             onOpenRecipes={() => setView({ kind: 'settings', route: 'library' })}
+            onOpenRecipe={(recipeId) =>
+              setView({ kind: 'settings', route: 'library', recipeId })
+            }
+            onAdd={(day, meal) =>
+              setView({ kind: 'log', meal, day, back: { kind: 'tabs' } })
+            }
           />
         )}
         {tab === 'history' && (

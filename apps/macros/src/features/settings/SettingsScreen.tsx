@@ -15,6 +15,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import * as repo from '@/data/repository'
 import { formatClock } from '@/lib/mealTiming'
+import { describeReminders } from '@/data/reminders'
 import type { Profile, Program } from '@/domain/types'
 
 export type SettingsRoute =
@@ -130,7 +131,7 @@ export function SettingsScreen({
         />
         <NavRow
           icon={<Utensils size={17} />}
-          label="Food & units"
+          label="Food, water & reminders"
           hint={preferencesHint(profile)}
           onClick={() => onOpen('preferences')}
         />
@@ -213,9 +214,14 @@ function goalHint(program: Program | undefined): string {
 
 function preferencesHint(profile: Profile | undefined): string {
   if (!profile) return ''
-  const units = profile.units === 'metric' ? 'kg / cm' : 'lb / in'
-  if (!profile.eatingWindow) return units
-  return `${units} · ${formatClock(profile.eatingWindow.startMinute)}–${formatClock(profile.eatingWindow.endMinute)}`
+  const parts = [profile.units === 'metric' ? 'kg / cm' : 'lb / in']
+  if (profile.reminders) parts.push(`reminders ${describeReminders(profile.reminders).toLowerCase()}`)
+  if (profile.eatingWindow) {
+    parts.push(
+      `${formatClock(profile.eatingWindow.startMinute)}–${formatClock(profile.eatingWindow.endMinute)}`,
+    )
+  }
+  return parts.join(' · ')
 }
 
 function dataHint(sync: { deadLettered: number; pending: number; enabled: boolean }): string {

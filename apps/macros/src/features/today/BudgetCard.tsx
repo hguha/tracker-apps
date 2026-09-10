@@ -1,10 +1,10 @@
 import { Card, ProgressRing } from '@tracker-engine/ui'
 import { Moon, Utensils } from 'lucide-react'
-import { MACRO_META, grams } from '@/features/shared/format'
+import { grams } from '@/features/shared/format'
 import { macroSharePct } from '@/lib/nutrition'
 import { formatClock, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import type { EatingWindow, LogEntry, MacroTargets, Nutrients } from '@/domain/types'
-import { MacroBar } from './MacroBar'
+import { MACRO_BARS, MacroBar } from '@/features/shared/MacroBar'
 
 /**
  * The day's budget: what's gone, what's left, and — only for people who keep an eating window —
@@ -14,9 +14,9 @@ import { MacroBar } from './MacroBar'
  * on calories" at 3pm is a guess dressed as advice, and the app has no business nagging someone
  * who simply eats late.
  *
- * The whole card opens the day. It used to sit above a second card listing the same day's food, which
- * was the same information twice — and the ring, being the thing everyone looks at first, is the
- * obvious place to tap to see what's behind it.
+ * The whole card opens the day. It carries no "4 items today — tap to see them" hint any more: that
+ * sentence existed to compensate for the food not being on the home screen at all, and the meal list
+ * directly below it is the affordance the hint was standing in for.
  */
 export function BudgetCard({
   totals,
@@ -56,15 +56,15 @@ export function BudgetCard({
           </div>
         </ProgressRing>
 
-        <div className="flex-1 space-y-2.5">
-          {MACRO_META.map((macro) => (
+        <div className="flex-1 space-y-1.5">
+          {MACRO_BARS.map((macro) => (
             <MacroBar
               key={macro.key}
               label={macro.label}
               eatenMg={totals[macro.key]}
               targetMg={targets?.[macro.key] ?? 0}
               sharePct={shares[macro.key]}
-              barClassName={macro.bar}
+              color={macro.color}
             />
           ))}
         </div>
@@ -75,7 +75,6 @@ export function BudgetCard({
           {left.kcal >= 0
             ? `${left.kcal} kcal and ${grams(Math.max(0, left.proteinMg))} protein left.`
             : `${Math.abs(left.kcal)} kcal over target.`}
-          <DayHint entries={entries} />
         </p>
       ) : (
         <div className="mt-3">
@@ -94,11 +93,6 @@ export function BudgetCard({
           >
             {missing.length > 0 ? 'Fill that in' : 'Choose a goal'}
           </span>
-          {/* Also here. Without a target this branch used to end at the button, so the only route
-              into the day disappeared for exactly the people who have not set one up yet. */}
-          <p className="mt-2 text-[13px]">
-            <DayHint entries={entries} />
-          </p>
         </div>
       )}
       </button>
@@ -107,17 +101,6 @@ export function BudgetCard({
         <WindowStrip window={window} targets={targets} totals={totals} entries={entries} />
       )}
     </Card>
-  )
-}
-
-/** The invitation into the day screen, in whichever branch the card is showing. */
-function DayHint({ entries }: { entries: readonly LogEntry[] }) {
-  return (
-    <span className="text-ink-muted">
-      {entries.length === 0
-        ? 'Nothing logged yet — tap to add.'
-        : `${entries.length} item${entries.length === 1 ? '' : 's'} today — tap to see them.`}
-    </span>
   )
 }
 

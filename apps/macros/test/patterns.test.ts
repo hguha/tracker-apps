@@ -9,6 +9,7 @@ function entry(options: {
   venue?: Venue | null
   recipeId?: string | null
   /** Set instead of `recipeId` when the recipe was logged as its ingredients. */
+  dishId?: string | null
   fromRecipeId?: string | null
 }): LogEntry {
   const eatenAt = Date.parse(`${options.day}T${String(options.hour).padStart(2, '0')}:00:00`)
@@ -23,6 +24,8 @@ function entry(options: {
     recipeId: options.recipeId ?? null,
     quickAdd: null,
     fromRecipeId: options.fromRecipeId ?? null,
+    dishId: options.dishId ?? null,
+    dishName: null,
     grams: 100,
     portionId: null,
     portionCount: null,

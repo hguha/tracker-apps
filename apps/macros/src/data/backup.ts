@@ -9,6 +9,7 @@ import type {
   Profile,
   Program,
   Recipe,
+  WaterRow,
 } from '@/domain/types'
 
 /**
@@ -23,6 +24,8 @@ export interface Backup {
   profiles: Profile[]
   logEntries: LogEntry[]
   bodyWeights: BodyWeightRow[]
+  /** Absent in a v1 file written before water existed, which is what `?? []` on read is for. */
+  waterLogs: WaterRow[]
   recipes: Recipe[]
   mealTemplates: MealTemplate[]
   programs: Program[]
@@ -97,6 +100,7 @@ export async function exportToJson(): Promise<string> {
     profiles: await db.profiles.toArray(),
     logEntries: await db.logEntries.toArray(),
     bodyWeights: await db.bodyWeights.toArray(),
+    waterLogs: await db.waterLogs.toArray(),
     recipes: await db.recipes.toArray(),
     mealTemplates: await db.mealTemplates.toArray(),
     programs: await db.programs.toArray(),
@@ -122,6 +126,7 @@ export function parseBackup(text: string): Backup {
     profiles: backup.profiles ?? [],
     logEntries: backup.logEntries ?? [],
     bodyWeights: backup.bodyWeights ?? [],
+    waterLogs: backup.waterLogs ?? [],
     recipes: backup.recipes ?? [],
     mealTemplates: backup.mealTemplates ?? [],
     programs: backup.programs ?? [],
@@ -147,6 +152,7 @@ export async function importBackup(backup: Backup): Promise<void> {
   const tables = [
     ['logEntries', db.logEntries, backup.logEntries],
     ['bodyWeights', db.bodyWeights, backup.bodyWeights],
+    ['waterLogs', db.waterLogs, backup.waterLogs],
     ['recipes', db.recipes, backup.recipes],
     ['mealTemplates', db.mealTemplates, backup.mealTemplates],
     ['programs', db.programs, backup.programs],

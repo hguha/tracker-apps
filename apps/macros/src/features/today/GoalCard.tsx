@@ -5,7 +5,6 @@ import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
 import { ChevronDown, PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { bmi } from '@/lib/micronutrients'
 import { cn } from '@/lib/cn'
 import { goalProgress } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
@@ -30,7 +29,6 @@ const GOAL_VERB: Record<string, string> = {
 export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], [])
-  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const units = useUnits()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -39,7 +37,6 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   if (!program || !latest) return null
 
   const rate = trendChangePerWeek(trend)
-  const height = profile?.heightCm ?? null
   const targetPerWeek = (program.ratePctPerWeek / 100) * latest.trendKg
   const show = (kg: number) => bodyWeightFromKg(kg, units.weight)
 
@@ -56,7 +53,6 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
           {rate === null
             ? 'Weigh in a few more times to measure your rate.'
             : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week measured`}
-          {height !== null && ` · BMI ${bmi(latest.trendKg, height).toFixed(1)}`}
         </p>
         {program.goal !== 'maintain' && (
           <>
@@ -160,24 +156,17 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
         </div>
       )}
 
-      <p className="tabular mt-2 text-[12.5px] text-ink-muted">
-        {rate === null
-          ? 'Weigh in a few more times to measure your rate.'
-          : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week measured` +
-            (program.goal === 'maintain'
-              ? ''
-              : ` · aiming for ${signed(convertWeight(targetPerWeek, units.weight))}`)}
-        {height !== null && ` · BMI ${bmi(latest.trendKg, height).toFixed(1)}`}
-      </p>
-
-      {/* Tapping opens the detail rather than doing nothing: the card carries two dates and a rate,
-          and the reason they differ is worth a sentence that doesn't fit on the card. */}
+      {/*
+        One line, not three. The card used to print the measured rate, the intended rate, the ETA, the
+        plan's ETA and a BMI — five figures for a question with one answer, "am I on track and when do
+        I arrive". The rest is a tap away, which is where the comparisons belong.
+      */}
       <button
         onClick={() => setIsOpen((current) => !current)}
         aria-expanded={isOpen}
-        className="mt-1 flex w-full items-baseline gap-1.5 text-left active:opacity-60"
+        className="mt-2 flex w-full items-baseline gap-1.5 text-left active:opacity-60"
       >
-        <span className="min-w-0 flex-1 text-[12.5px]">
+        <span className="min-w-0 flex-1 text-[13px]">
         {progress.isWrongWay ? (
           <span style={{ color: 'var(--confidence-medium)' }}>
             The trend is moving away from your goal. Worth a look at the target rather than the week.

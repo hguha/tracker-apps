@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { portionFor } from '@/lib/nutrition'
-import { grams as fmtGrams } from '@/features/shared/format'
+import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
 import type { EntrySource, Food } from '@/domain/types'
@@ -16,6 +16,15 @@ import type { LogTarget } from './target'
  * Shared by the described-meal and photo paths because they must behave identically: both are
  * guesses about *ingredients*, and both have to be correctable before anything is written. A row
  * that matched nothing counts zero and says so, rather than quietly rounding the total down.
+ *
+ * **It logs as one named dish.** Every row shares a `dishId` and the name the user typed, so the day
+ * shows "3 steak tacos" and opens onto the tortilla and the steak — rather than six USDA rows the
+ * person never asked for and can't recognise a week later.
+ *
+ * **Unmatched rows are sorted to the top.** They used to be labelled instead — each row carried
+ * "high", "medium", "loose match" — which is the matcher's diagnostics printed at somebody who only
+ * wants to know whether the row is right. Ordering acts on the same information without asking the
+ * reader to interpret it.
  */
 export function EstimateReview({
   estimate,
@@ -32,15 +41,39 @@ export function EstimateReview({
 }) {
   const toast = useToast()
   const [isSaving, setIsSaving] = useState(false)
+  const [name, setName] = useState(estimate.label)
 
   const update = (items: EstimatedItem[]) =>
     onChange({ ...estimate, items, nutrients: totalOf(items) })
   const loggable = estimate.items.filter((item) => item.food !== null && item.grams > 0)
+  const unmatched = estimate.items.filter((item) => item.food === null)
+  const ordered = [...unmatched, ...estimate.items.filter((item) => item.food !== null)]
 
   return (
     <>
+      {/*
+        The name is a field, not a caption: the model's parse of "chocolate zucchini muffins" can be
+        two odd-sounding foods, and the one thing the user is certain about is what they ate.
+      */}
+      <label className="block">
+        <span className="text-[11px] text-ink-muted">Call this</span>
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="What you ate"
+          className="mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] font-medium outline-none"
+        />
+      </label>
+
+      {unmatched.length > 0 && (
+        <p className="text-[12.5px]" style={{ color: 'var(--status-serious)' }}>
+          {unmatched.length} of these didn&rsquo;t match a food, so {unmatched.length === 1 ? 'it counts' : 'they count'} nothing.
+          Pick a match below, or remove {unmatched.length === 1 ? 'it' : 'them'}.
+        </p>
+      )}
+
       <ul className="divide-y divide-line">
-        {estimate.items.map((item) => (
+        {ordered.map((item) => (
           <GramsRow
             key={item.id}
             title={item.food?.description ?? item.query}
@@ -65,19 +98,12 @@ export function EstimateReview({
         nextIndex={estimate.items.length}
       />
 
-      <p className="tabular text-[13.5px] font-semibold">
-        {estimate.nutrients.kcal} kcal · {fmtGrams(estimate.nutrients.proteinMg)}P{' '}
-        {fmtGrams(estimate.nutrients.carbsMg)}C {fmtGrams(estimate.nutrients.fatMg)}F
-      </p>
-      {/*
-        The totals are for everything listed above, which is the answer to "did it handle the 3 in
-        '3 steak tacos'". It does — but a reader can't tell whether 75 g of tortilla is one taco or
-        three, so the rule is stated rather than left to be inferred from a number.
-      */}
-      <p className="text-[12px] text-ink-muted">
-        That&rsquo;s the total for all {estimate.items.length} item
-        {estimate.items.length === 1 ? '' : 's'} at the amounts shown — any quantity you gave is
-        already in them. Check the grams and correct anything that looks off.
+      <p className="tabular flex items-baseline gap-2 text-[13.5px]">
+        <span className="font-semibold">{estimate.nutrients.kcal} kcal</span>
+        <MacroNumbers nutrients={estimate.nutrients} />
+        <span className="text-[12px] text-ink-muted">
+          all {estimate.items.length} item{estimate.items.length === 1 ? '' : 's'}
+        </span>
       </p>
       {estimate.assumptions && (
         <p className="text-[12.5px] text-ink-secondary">{estimate.assumptions}</p>
@@ -90,6 +116,10 @@ export function EstimateReview({
           if (isSaving) return
           setIsSaving(true)
           void (async () => {
+            const label = name.trim()
+            // One dish per write, but only when there is more than one row to hold together: a
+            // single food is a single food, and wrapping it in a dish would add a layer to open.
+            const dishId = loggable.length > 1 ? repo.newDishId() : null
             for (const item of loggable) {
               await repo.logFood({
                 food: item.food!,
@@ -99,6 +129,8 @@ export function EstimateReview({
                 venue: target.venue,
                 source,
                 note: item.query,
+                dishId,
+                dishName: dishId === null ? null : label || 'Meal',
                 estimate: {
                   confidence: item.confidence,
                   rawLabel: item.query,
@@ -106,14 +138,12 @@ export function EstimateReview({
                 },
               })
             }
-            toast.show(`Logged ${loggable.length} item${loggable.length === 1 ? '' : 's'}`)
+            toast.show(dishId === null ? 'Logged' : `${label || 'Meal'} logged`)
             onDone()
           })().finally(() => setIsSaving(false))
         }}
       >
-        {isSaving
-          ? 'Logging…'
-          : `Log ${loggable.length} item${loggable.length === 1 ? '' : 's'}`}
+        {isSaving ? 'Logging…' : `Log ${name.trim() || 'this'}`}
       </Button>
     </>
   )
@@ -218,25 +248,27 @@ export function AddToDraft({
   )
 }
 
-const CONFIDENCE_STYLE: Record<EstimatedItem['confidence'], string> = {
-  high: 'text-confidence-high',
-  medium: 'text-confidence-medium',
-  low: 'text-confidence-low',
-}
-
-/** How well a row matched, or — said plainly — that it didn't and therefore counted nothing. */
+/**
+ * What a row contributes, or that it contributes nothing.
+ *
+ * The macros, not the match quality. This used to print `confidence` and `matchedBy: 'fuzzy'` — the
+ * matcher's own vocabulary — under every row, which answers a question the user never asked while
+ * leaving the one they did ask ("how much protein was in that?") unanswered.
+ */
 function ItemNote({ item }: { item: EstimatedItem }) {
   if (item.food === null) {
     return (
       <span style={{ color: 'var(--status-serious)' }}>
-        no match for “{item.query}” — not counted
+        no match for “{item.query}” — pick one below
       </span>
     )
   }
   return (
-    <span className="text-ink-muted">
-      <span className={CONFIDENCE_STYLE[item.confidence]}>{item.confidence}</span>
-      {item.matchedBy === 'fuzzy' && <span> · loose match</span>}
+    <span className="tabular flex items-baseline gap-2">
+      <span className="text-ink-secondary">{nutrientsOf(item).kcal} kcal</span>
+      <MacroNumbers nutrients={nutrientsOf(item)} />
     </span>
   )
 }
+
+const nutrientsOf = (item: EstimatedItem) => totalOf([item])

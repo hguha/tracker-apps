@@ -7,6 +7,7 @@ const STORES = {
   recipes: db.recipes,
   mealTemplates: db.mealTemplates,
   bodyWeights: db.bodyWeights,
+  waterLogs: db.waterLogs,
   logEntries: db.logEntries,
   checkIns: db.checkIns,
   foods: db.foods,
@@ -38,8 +39,17 @@ export const macroSyncSchema: SyncSchema = {
         reachedAt: row.reachedAt ?? null,
       }
     }
-    if (table === 'logEntries') return { ...row, venue: row.venue ?? null }
-    if (table === 'profiles') return { ...row, favouriteFoodIds: row.favouriteFoodIds ?? [] }
+    if (table === 'logEntries') {
+      return { ...row, venue: row.venue ?? null, dishId: row.dishId ?? null, dishName: row.dishName ?? null }
+    }
+    if (table === 'profiles') {
+      return {
+        ...row,
+        favouriteFoodIds: row.favouriteFoodIds ?? [],
+        waterTargetMl: row.waterTargetMl ?? null,
+        reminders: row.reminders ?? null,
+      }
+    }
     if (table === 'foods' || table === 'customFoods') {
       return { ...row, portions: row.portions ?? [] }
     }
@@ -59,6 +69,7 @@ export const macroSyncSchema: SyncSchema = {
     'customFoods',
     'checkIns',
     'bodyWeights',
+    'waterLogs',
     'mealTemplates',
     'recipes',
     'programs',

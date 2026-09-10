@@ -46,12 +46,17 @@ type Route = { kind: 'list' } | { kind: 'detail'; id: string } | { kind: 'edit';
 export function RecipesScreen({
   onBack,
   header,
+  initialRecipeId = null,
 }: {
   onBack: () => void
   /** Rendered above the list — the library's tab strip, when it's hosting this screen. */
   header?: React.ReactNode
+  /** Opens straight onto one recipe, for a link that names it. */
+  initialRecipeId?: string | null
 }) {
-  const [route, setRoute] = useState<Route>({ kind: 'list' })
+  const [route, setRoute] = useState<Route>(
+    initialRecipeId === null ? { kind: 'list' } : { kind: 'detail', id: initialRecipeId },
+  )
   const [sort, setSort] = useState<SortKey>('suggested')
   const [query, setQuery] = useState('')
   const [cuisines, setCuisines] = useState<string[]>([])

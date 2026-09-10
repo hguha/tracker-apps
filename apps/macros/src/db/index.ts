@@ -12,6 +12,7 @@ import type {
   Profile,
   Program,
   Recipe,
+  WaterRow,
 } from '@/domain/types'
 
 // Load-bearing identifiers — keep stable across releases.
@@ -23,6 +24,7 @@ export class MacrosDatabase extends Dexie {
   customFoods!: EntityTable<CustomFood, 'id'>
   logEntries!: EntityTable<LogEntry, 'id'>
   bodyWeights!: EntityTable<BodyWeightRow, 'id'>
+  waterLogs!: EntityTable<WaterRow, 'id'>
   recipes!: EntityTable<Recipe, 'id'>
   mealTemplates!: EntityTable<MealTemplate, 'id'>
   programs!: EntityTable<Program, 'id'>
@@ -85,6 +87,37 @@ export class MacrosDatabase extends Dexie {
           program.reachedAt ??= null
         }),
     )
+
+    /**
+     * v5 adds water and dish grouping.
+     *
+     * `logEntries` gains a `dishId` index so a dish's rows are one lookup. The upgrade backfills
+     * both dish columns and the two new profile fields for the same reason v4 existed: code that
+     * distinguishes "no dish" from "not yet a concept" would have to check both `null` and
+     * `undefined`, and something would eventually check only one.
+     */
+    this.version(5)
+      .stores({
+        logEntries:
+          'id, day, [day+meal], eatenAt, foodId, recipeId, dishId, venue, updatedAt, userId',
+        waterLogs: 'id, day, updatedAt, userId',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('logEntries')
+          .toCollection()
+          .modify((entry: Record<string, unknown>) => {
+            entry.dishId ??= null
+            entry.dishName ??= null
+          })
+        await tx
+          .table('profiles')
+          .toCollection()
+          .modify((profile: Record<string, unknown>) => {
+            profile.waterTargetMl ??= null
+            profile.reminders ??= null
+          })
+      })
   }
 }
 
@@ -96,6 +129,7 @@ const OWNED_TABLES = [
   db.customFoods,
   db.logEntries,
   db.bodyWeights,
+  db.waterLogs,
   db.recipes,
   db.mealTemplates,
   db.programs,

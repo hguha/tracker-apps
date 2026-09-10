@@ -28,6 +28,14 @@ export interface MealEstimate {
   items: EstimatedItem[]
   assumptions: string
   nutrients: Nutrients
+  /**
+   * What the user called the whole thing — "3 steak tacos".
+   *
+   * Carried through so the log can keep one line under that name with the matched foods beneath it.
+   * Without it the diary held six USDA rows and nothing the person recognised as their lunch, and
+   * "I had another one" had nothing to tap. See `LogEntry.dishId`.
+   */
+  label: string
 }
 
 export class EstimateUnavailable extends Error {}
@@ -84,7 +92,7 @@ interface RawItem {
 }
 
 export async function estimateMeal(description: string): Promise<MealEstimate> {
-  return runEstimate({ mode: 'estimate', description })
+  return runEstimate({ mode: 'estimate', description }, description.trim())
 }
 
 /**
@@ -100,7 +108,7 @@ export async function estimatePhoto(
   mimeType: string,
   note = '',
 ): Promise<MealEstimate> {
-  return runEstimate({ mode: 'photo', image: base64, mimeType, description: note })
+  return runEstimate({ mode: 'photo', image: base64, mimeType, description: note }, note.trim())
 }
 
 /**
@@ -111,10 +119,10 @@ export async function estimatePhoto(
  * size instead would quietly divide the dish.
  */
 export async function estimateIngredients(lines: readonly string[]): Promise<MealEstimate> {
-  return runEstimate({ mode: 'ingredients', lines })
+  return runEstimate({ mode: 'ingredients', lines }, '')
 }
 
-async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate> {
+async function runEstimate(body: Record<string, unknown>, label: string): Promise<MealEstimate> {
   const client = getSupabase()
   if (!client) {
     throw new EstimateUnavailable(
@@ -155,7 +163,7 @@ async function runEstimate(body: Record<string, unknown>): Promise<MealEstimate>
   }
 
   const items = await Promise.all(data.items.map(toItem))
-  return { items, assumptions: data.assumptions ?? '', nutrients: totalOf(items) }
+  return { items, assumptions: data.assumptions ?? '', nutrients: totalOf(items), label }
 }
 
 async function toItem(raw: RawItem, index: number): Promise<EstimatedItem> {

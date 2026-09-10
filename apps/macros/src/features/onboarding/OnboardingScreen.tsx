@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Apple, ArrowLeft, Ruler, Scale, Target, Utensils } from 'lucide-react'
-import { lengthToCm, unitsFor, weightToKg } from '@tracker-engine/core'
+import { lengthFromCm, lengthToCm, unitsFor, weightToKg } from '@tracker-engine/core'
 import { Button } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
@@ -30,14 +30,40 @@ type Step = 'welcome' | 'goal' | 'units' | 'about' | 'weight' | 'done'
  */
 const ORDER: Step[] = ['welcome', 'goal', 'units', 'about', 'weight', 'done']
 
-/** Sensible ranges, as pickers: nobody should type their height into a free-text box on a phone. */
-const CM_RANGE = range(140, 210)
-const FEET_RANGE = range(4, 7)
-const INCH_RANGE = range(0, 11)
-const YEAR_RANGE = range(new Date().getFullYear() - 90, new Date().getFullYear() - 13).reverse()
+/**
+ * Bounded values, as pickers — and pre-set to the middle of the range rather than to "—".
+ *
+ * Opening a 71-entry list at a blank and scrolling to your height is the clunky part; opening it at
+ * 175 cm means most people move it a few notches or leave it. Pre-setting is honest here in a way it
+ * would not be for a weigh-in, because these three numbers only seed the *first* target and the app
+ * replaces them with measured expenditure inside a week — which is what the step already says. It
+ * also removes the reason for a "skip" button that left the user in a state the home screen then
+ * nagged about.
+ *
+ * Both units are shown on every option ("175 cm · 5′9″", "1994 · 31"), so nobody has to convert or
+ * subtract in their head to check they picked the right one.
+ */
+const CM_RANGE = range(130, 215)
+const INCH_RANGE = range(48, 84)
+const THIS_YEAR = new Date().getFullYear()
+const YEAR_RANGE = range(THIS_YEAR - 90, THIS_YEAR - 13).reverse()
+
+const DEFAULT_CM = 175
+const DEFAULT_INCHES = 69
+const DEFAULT_YEAR = THIS_YEAR - 30
 
 function range(from: number, to: number): number[] {
   return Array.from({ length: to - from + 1 }, (_, index) => from + index)
+}
+
+/** "175 cm · 5′9″" — the same height in both, so the choice needs no arithmetic to verify. */
+function heightLabel(cm: number): string {
+  const totalInches = Math.round(lengthFromCm(cm, 'in'))
+  return `${Math.round(cm)} cm · ${Math.floor(totalInches / 12)}′${totalInches % 12}″`
+}
+
+function inchesLabel(totalInches: number): string {
+  return `${Math.floor(totalInches / 12)}′${totalInches % 12}″ · ${Math.round(lengthToCm(totalInches, 'in'))} cm`
 }
 
 /**
@@ -48,10 +74,9 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>('welcome')
   const [goal, setGoal] = useState<Goal>('lose')
   const [units, setUnits] = useState<UnitSystem>('metric')
-  const [cm, setCm] = useState('')
-  const [feet, setFeet] = useState('')
-  const [inches, setInches] = useState('0')
-  const [birthYear, setBirthYear] = useState('')
+  const [cm, setCm] = useState(String(DEFAULT_CM))
+  const [totalInches, setTotalInches] = useState(String(DEFAULT_INCHES))
+  const [birthYear, setBirthYear] = useState(String(DEFAULT_YEAR))
   const [sex, setSex] = useState<'male' | 'female' | ''>('')
   const [weight, setWeight] = useState('')
   const [goalWeight, setGoalWeight] = useState('')
@@ -60,14 +85,9 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const unit = unitsFor(units)
   // One canonical height in cm, whichever way it was entered. Storage is metric always.
   const heightCm =
-    units === 'imperial'
-      ? feet
-        ? lengthToCm(Number(feet) * 12 + Number(inches || 0), 'in')
-        : null
-      : cm
-        ? Number(cm)
-        : null
-  const hasFacts = heightCm !== null && birthYear !== '' && sex !== ''
+    units === 'imperial' ? lengthToCm(Number(totalInches), 'in') : Number(cm)
+  // Sex is the only one with no defensible default, so it's the only one that gates Continue.
+  const hasFacts = sex !== ''
 
   const index = ORDER.indexOf(step)
   /**
@@ -206,64 +226,72 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           >
             <div className="space-y-2.5">
               {units === 'imperial' ? (
-                <div className="flex gap-2">
-                  <Picker
-                    label="Height"
-                    value={feet}
-                    onChange={setFeet}
-                    options={FEET_RANGE.map((n) => ({ value: String(n), label: `${n} ft` }))}
-                  />
-                  <Picker
-                    label="Inches"
-                    isLabelHidden
-                    value={inches}
-                    onChange={setInches}
-                    options={INCH_RANGE.map((n) => ({ value: String(n), label: `${n} in` }))}
-                  />
-                </div>
+                <Picker
+                  label="Height"
+                  value={totalInches}
+                  onChange={setTotalInches}
+                  options={INCH_RANGE.map((n) => ({ value: String(n), label: inchesLabel(n) }))}
+                />
               ) : (
                 <Picker
                   label="Height"
                   value={cm}
                   onChange={setCm}
-                  options={CM_RANGE.map((n) => ({ value: String(n), label: `${n} cm` }))}
+                  options={CM_RANGE.map((n) => ({ value: String(n), label: heightLabel(n) }))}
                 />
               )}
 
-              <div className="flex gap-2">
-                <Picker
-                  label="Born"
-                  value={birthYear}
-                  onChange={setBirthYear}
-                  options={YEAR_RANGE.map((n) => ({ value: String(n), label: String(n) }))}
-                />
-                <Picker
-                  label="Sex"
-                  value={sex}
-                  onChange={(value) => setSex(value as typeof sex)}
-                  options={[
-                    { value: 'male', label: 'Male' },
-                    { value: 'female', label: 'Female' },
-                  ]}
-                />
+              <Picker
+                label="Born"
+                value={birthYear}
+                onChange={setBirthYear}
+                options={YEAR_RANGE.map((n) => ({
+                  value: String(n),
+                  // The age too, so nobody has to subtract to check they scrolled to the right year.
+                  label: `${n} · ${THIS_YEAR - n}`,
+                }))}
+              />
+
+              {/* Two options is a pair of buttons, not a dropdown you have to open to see. */}
+              <div>
+                <span className="block text-[11px] text-ink-muted">Sex</span>
+                <div className="mt-0.5 flex gap-2">
+                  {(['female', 'male'] as const).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setSex(option)}
+                      aria-pressed={sex === option}
+                      className={cn(
+                        'h-11 flex-1 rounded-xl text-[14px] capitalize',
+                        sex === option
+                          ? 'bg-accent font-semibold text-accent-contrast'
+                          : 'bg-sunken text-ink-secondary',
+                      )}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11.5px] text-ink-muted">
+                  Only used for the first estimate, and for the iron and fibre references.
+                </p>
               </div>
             </div>
 
-            <Button
-              size="lg"
-              className="mt-4 w-full"
-              disabled={!hasFacts}
-              onClick={next}
-            >
+            <Button size="lg" className="mt-4 w-full" disabled={!hasFacts} onClick={next}>
               Continue
             </Button>
-            {/* Skipping is allowed, but named honestly: without these three there is no formula
-                to seed the first target from, so the app can show totals and nothing to aim at. */}
+            {/*
+              An out, worded as a choice rather than as a punishment. It used to read "Skip — no
+              calorie target until I add them", which names the consequence and leaves the user in a
+              state the home screen then nags about; and this is a question some people would rather
+              not answer, which is its own reason to offer the door.
+            */}
             <button
               onClick={next}
               className="mt-2 w-full py-2 text-[13.5px] font-semibold text-ink-muted active:opacity-60"
             >
-              Skip — no calorie target until I add them
+              I&rsquo;d rather not say
             </button>
           </Panel>
         )}
@@ -376,29 +404,21 @@ function Picker({
   value,
   onChange,
   options,
-  isLabelHidden = false,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   options: { value: string; label: string }[]
-  /** Hides the label visually but keeps it for a screen reader — the "in" half of a ft/in pair. */
-  isLabelHidden?: boolean
 }) {
   return (
-    <label className="min-w-0 flex-1">
-      <span
-        className={cn('block text-[11px] text-ink-muted', isLabelHidden && 'sr-only')}
-        aria-hidden={isLabelHidden}
-      >
-        {label}
-      </span>
+    <label className="block min-w-0">
+      <span className="block text-[11px] text-ink-muted">{label}</span>
+      {/* No blank option: every picker opens on a real value, so there is nothing to represent. */}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-0.5 h-11 w-full rounded-xl bg-sunken px-2 text-[14px] outline-none"
+        className="mt-0.5 h-11 w-full rounded-xl bg-sunken px-2 text-[15px] outline-none"
       >
-        <option value="">—</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

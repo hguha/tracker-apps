@@ -8,6 +8,7 @@ const WRITE_STORES: Record<string, WritableRowStore> = {
   logEntries: db.logEntries as unknown as WritableRowStore,
   customFoods: db.customFoods as unknown as WritableRowStore,
   bodyWeights: db.bodyWeights as unknown as WritableRowStore,
+  waterLogs: db.waterLogs as unknown as WritableRowStore,
   recipes: db.recipes as unknown as WritableRowStore,
   mealTemplates: db.mealTemplates as unknown as WritableRowStore,
   programs: db.programs as unknown as WritableRowStore,

@@ -1,25 +1,27 @@
 import { Card } from '@tracker-engine/ui'
-import { mgToGrams } from '@/lib/nutrition'
+import { macroSharePct } from '@/lib/nutrition'
+import { MACRO_BARS, MacroBar } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 
 /**
- * A day in four numbers and four bars.
+ * A day in four numbers and three bars.
  *
  * Compact on purpose: this sits above the food it describes, so it has to be readable at a glance
  * and must not push the meals off the screen. Calories lead because they're the number that decides
- * anything; the macro bars are secondary and get one line each.
+ * anything.
  */
 export function DayTotals({
   totals,
   target,
-  occasions,
+  meals,
 }: {
   totals: Nutrients
   /** Null when no check-in governed this day — said out loud rather than shown as 0%. */
   target: MacroTargets | null
-  occasions: number
+  meals: number
 }) {
   const delta = target ? totals.kcal - target.kcal : null
+  const shares = macroSharePct(totals)
 
   return (
     <Card className="p-4">
@@ -33,61 +35,22 @@ export function DayTotals({
           </p>
         </div>
         <p className="tabular text-right text-[12px] text-ink-muted">
-          {occasions} meal{occasions === 1 ? '' : 's'}
+          {meals} meal{meals === 1 ? '' : 's'}
         </p>
       </div>
 
       <div className="mt-3 space-y-1.5">
-        <MacroLine
-          label="Protein"
-          mg={totals.proteinMg}
-          targetMg={target?.proteinMg ?? null}
-          color="var(--macro-protein)"
-        />
-        <MacroLine
-          label="Carbs"
-          mg={totals.carbsMg}
-          targetMg={target?.carbsMg ?? null}
-          color="var(--macro-carbs)"
-        />
-        <MacroLine
-          label="Fat"
-          mg={totals.fatMg}
-          targetMg={target?.fatMg ?? null}
-          color="var(--macro-fat)"
-        />
+        {MACRO_BARS.map((macro) => (
+          <MacroBar
+            key={macro.key}
+            label={macro.label}
+            eatenMg={totals[macro.key]}
+            targetMg={target?.[macro.key] ?? 0}
+            sharePct={shares[macro.key]}
+            color={macro.color}
+          />
+        ))}
       </div>
     </Card>
-  )
-}
-
-function MacroLine({
-  label,
-  mg,
-  targetMg,
-  color,
-}: {
-  label: string
-  mg: number
-  targetMg: number | null
-  color: string
-}) {
-  const grams = Math.round(mgToGrams(mg))
-  const goal = targetMg === null ? null : Math.round(mgToGrams(targetMg))
-  // Without a target there's nothing to be a share *of*, so the bar is left empty rather than
-  // filled against an invented denominator.
-  const filled = goal === null || goal <= 0 ? 0 : Math.min(100, (grams / goal) * 100)
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-14 shrink-0 text-[11.5px] text-ink-muted">{label}</span>
-      <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-sunken">
-        <span className="block h-full rounded-full" style={{ width: `${filled}%`, background: color }} />
-      </span>
-      <span className="tabular w-16 shrink-0 text-right text-[11.5px] text-ink-secondary">
-        {grams}
-        {goal === null ? ' g' : ` / ${goal}`}
-      </span>
-    </div>
   )
 }

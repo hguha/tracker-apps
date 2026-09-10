@@ -24,12 +24,13 @@ import {
   type Recipe,
   type RecipeIngredient,
   type RecipeUsage,
+  type RemindersConfig,
   type Venue,
+  type WaterRow,
 } from '@/domain/types'
 import {
   cycleDayTargets,
   nutrientsFor,
-  perServing,
   portionFor,
   recipeNutrients,
   scale as scaleNutrients,
@@ -75,6 +76,8 @@ function defaultProfile(userId: string): Profile {
     dietNotes: '',
     eatingWindow: null,
     favouriteFoodIds: [],
+    waterTargetMl: null,
+    reminders: null,
     ...syncStamp(),
   }
 }
@@ -87,8 +90,14 @@ function defaultProfile(userId: string): Profile {
 export async function getProfile(): Promise<Profile> {
   const row = await db.profiles.get(activeUserId)
   if (!row) return defaultProfile(activeUserId)
-  // A field added after launch is absent on older rows, and `.map` on undefined throws.
-  return { ...row, favouriteFoodIds: row.favouriteFoodIds ?? [] }
+  // Fields added after launch are absent on older rows: `.map` on undefined throws, and every
+  // `=== null` check reads `undefined` as "set" — the bug that produced `NaN lb goal`.
+  return {
+    ...row,
+    favouriteFoodIds: row.favouriteFoodIds ?? [],
+    waterTargetMl: row.waterTargetMl ?? null,
+    reminders: row.reminders ?? null,
+  }
 }
 
 /**
@@ -362,10 +371,24 @@ export interface LastAmount {
   portionCount: number | null
 }
 
+/**
+ * Oldest first. A total order, which is the point.
+ *
+ * Ids are random UUIDs and a multi-select writes several rows inside one millisecond, so `eatenAt`
+ * alone leaves "last time" up to whatever order IndexedDB returned — and `lastAmountFor` is the thing
+ * that makes logging fast, so it has to give the same answer twice. When two rows tie on time they are
+ * equally recent; all that matters is that the tie is broken the same way every run.
+ */
+const byRecency = (a: LogEntry, b: LogEntry): number =>
+  a.eatenAt - b.eatenAt || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+
+const isLater = (a: LogEntry, b: LogEntry): boolean => byRecency(a, b) > 0
+
 export async function lastAmountFor(foodId: string): Promise<LastAmount | null> {
   const rows = await db.logEntries.where('foodId').equals(foodId).filter(alive).toArray()
-  const latest = rows.sort((a, b) => b.eatenAt - a.eatenAt)[0]
-  if (!latest || latest.grams <= 0) return null
+  const usable = rows.filter((row) => row.grams > 0).sort(byRecency)
+  const latest = usable[usable.length - 1]
+  if (!latest) return null
   return {
     grams: latest.grams,
     portionId: latest.portionId,
@@ -382,7 +405,7 @@ export async function lastAmountsFor(
   await db.logEntries.filter(alive).each((entry) => {
     if (!entry.foodId || !wanted.has(entry.foodId) || entry.grams <= 0) return
     const current = best.get(entry.foodId)
-    if (!current || entry.eatenAt > current.eatenAt) best.set(entry.foodId, entry)
+    if (!current || isLater(entry, current)) best.set(entry.foodId, entry)
   })
   return new Map(
     [...best].map(([id, entry]) => [
@@ -435,6 +458,9 @@ export interface LogFoodInput {
   venue?: Venue | null
   /** Set when this food came out of a recipe logged as ingredients. */
   fromRecipeId?: string | null
+  /** Set when this row is one part of a dish — see `LogEntry.dishId`. */
+  dishId?: string | null
+  dishName?: string | null
 }
 
 /**
@@ -460,6 +486,8 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     recipeId: null,
     quickAdd: null,
     fromRecipeId: input.fromRecipeId ?? null,
+    dishId: input.dishId ?? null,
+    dishName: input.dishName ?? null,
     grams,
     portionId: input.grams !== undefined ? null : (portion?.id ?? null),
     portionCount: input.grams !== undefined ? null : count,
@@ -494,6 +522,8 @@ export async function logQuickAdd(
     recipeId: null,
     quickAdd: { ...EMPTY_NUTRIENTS, ...nutrients },
     fromRecipeId: null,
+    dishId: null,
+    dishName: null,
     grams: 0,
     portionId: null,
     portionCount: null,
@@ -509,16 +539,50 @@ export async function logQuickAdd(
   return entry.id
 }
 
-/** Re-resolves nutrients when the amount changes, so the row stays self-consistent. */
+/**
+ * Re-resolves nutrients when the amount changes, keeping the portion the user thinks in.
+ *
+ * It used to clear `portionId`/`portionCount` unconditionally, so nudging "2 slices · 56 g" up to
+ * three slices turned the row into a bare "84g" — and `lastAmountFor`, which is the thing that makes
+ * logging fast, then offered 84 g of bread forever after instead of 3 slices. Correcting an amount is
+ * the most common edit in the app, so it must not degrade the row it corrects.
+ */
 export async function updateEntryAmount(id: string, grams: number): Promise<void> {
   const entry = await db.logEntries.get(id)
   if (!entry) return
-  const food = entry.foodId ? await db.foods.get(entry.foodId) : undefined
+  const food = entry.foodId ? await getFood(entry.foodId) : undefined
+  const portion = food && entry.portionId ? portionFor(food, entry.portionId) : null
   await patch('logEntries', id, {
     grams,
-    portionId: null,
-    portionCount: null,
+    // Kept only when the new amount is a whole-ish number of the portion the row already used;
+    // otherwise the label would claim a count the grams don't match.
+    ...(portion && portion.grams > 0 && Math.abs((grams / portion.grams) % 1) < 0.02
+      ? { portionId: portion.id, portionCount: Math.round(grams / portion.grams) }
+      : { portionId: null, portionCount: null }),
     nutrients: food ? nutrientsFor(food, grams) : entry.nutrients,
+  })
+}
+
+/**
+ * Corrects the macros on a row with no food behind it.
+ *
+ * Every screen that showed a quick add used to apologise for it — "a quick add has no food behind
+ * it, so its amount can't be rescaled" — which is a sentence about `quickAdd` being non-null, not
+ * about the user's dinner. A quick add *is* four numbers, so the four numbers are editable, and the
+ * apology is gone from all three places it appeared.
+ */
+export async function updateQuickAdd(
+  id: string,
+  nutrients: Partial<Nutrients>,
+  label?: string,
+): Promise<void> {
+  const entry = await db.logEntries.get(id)
+  if (!entry || entry.quickAdd === null) return
+  const next = { ...entry.quickAdd, ...nutrients }
+  await patch('logEntries', id, {
+    quickAdd: next,
+    nutrients: next,
+    ...(label === undefined ? {} : { note: label.trim() || 'Quick add' }),
   })
 }
 
@@ -613,6 +677,9 @@ export async function relogEntries(
 ): Promise<number> {
   const multiple = into.multiple ?? 1
   const day = into.at !== undefined ? dayKey(into.at) : (into.day ?? dayKey(Date.now()))
+  // Dishes keep their name and get a fresh id. Reusing the old one would make yesterday's tacos and
+  // today's the same dish, so "log this dish again" would then re-log both sittings.
+  const dishIds = new Map<string, string>()
   for (const entry of entries) {
     const eatenAt = into.at ?? Date.parse(`${day}T00:00:00`) + minutesIntoDay(entry.eatenAt) * 60_000
     const copy: LogEntry = {
@@ -626,6 +693,7 @@ export async function relogEntries(
       grams: entry.grams * multiple,
       nutrients: scaleNutrients(entry.nutrients, multiple),
       quickAdd: entry.quickAdd === null ? null : scaleNutrients(entry.quickAdd, multiple),
+      dishId: dishIdFor(entry, dishIds),
       source: 'copy',
       // The old venue carries over unless told otherwise: repeating Friday's takeaway is still
       // takeaway, and that is the more often correct guess than blanking it.
@@ -641,6 +709,85 @@ export async function relogEntries(
 const minutesIntoDay = (at: number): number => {
   const date = new Date(at)
   return date.getHours() * 60 + date.getMinutes()
+}
+
+/**
+ * A new dish id, for a caller assembling one from several writes.
+ *
+ * Exported so `EstimateReview` can stamp its rows without knowing how ids are made — the alternative
+ * was passing `newId` out of the outbox module, which is not something a screen should reach for.
+ */
+export const newDishId = (): string => newId()
+
+/** One fresh dish id per source dish, so a copied dish stays one dish. */
+function dishIdFor(entry: LogEntry, minted: Map<string, string>): string | null {
+  if (entry.dishId === null) return null
+  const existing = minted.get(entry.dishId)
+  if (existing) return existing
+  const next = newId()
+  minted.set(entry.dishId, next)
+  return next
+}
+
+/**
+ * Logs a dish again, exactly as it was eaten, at a new time.
+ *
+ * "I had another one of those" is the whole point of naming a dish. Without it, having the same
+ * described meal twice means describing it twice and spending a second model request on a question
+ * already answered.
+ */
+export async function logDishAgain(
+  dishId: string,
+  into: { meal?: MealSlot; at?: number; multiple?: number } = {},
+): Promise<number> {
+  const rows = (await db.logEntries.where('dishId').equals(dishId).filter(alive).toArray()).sort(
+    (a, b) => a.sortIndex - b.sortIndex,
+  )
+  if (rows.length === 0) return 0
+  return relogEntries(rows, { at: into.at ?? Date.now(), meal: into.meal, multiple: into.multiple })
+}
+
+// --- Water ------------------------------------------------------------------------
+
+/**
+ * A day's water, by a deterministic id.
+ *
+ * `w:${userId}:${day}` rather than a random id, for the same reason weigh-ins use one: tapping
+ * "+ a glass" eight times is eight edits to one running total, not eight events, and two devices
+ * that each recorded some of a day's water must converge on one row rather than accumulate two.
+ */
+const waterId = (day: string): string => `w:${activeUserId}:${day}`
+
+export function waterForDay(day: string): Promise<WaterRow | undefined> {
+  return db.waterLogs.get(waterId(day))
+}
+
+export function waterBetween(fromDay: string, toDay: string): Promise<WaterRow[]> {
+  return db.waterLogs.where('day').between(fromDay, toDay, true, true).filter(alive).toArray()
+}
+
+/** Adds (or, with a negative delta, removes) water. Never goes below zero. */
+export async function addWater(day: string, deltaMl: number): Promise<number> {
+  const id = waterId(day)
+  const existing = await db.waterLogs.get(id)
+  const ml = Math.max(0, Math.round((existing?.ml ?? 0) + deltaMl))
+
+  if (existing) {
+    await patch('waterLogs', id, { ml, deletedAt: null })
+    return ml
+  }
+  const row: WaterRow = { id, userId: activeUserId, day, ml, ...syncStamp() }
+  await db.waterLogs.put(row)
+  await enqueue('waterLogs', id)
+  return ml
+}
+
+export function setWaterTarget(ml: number | null): Promise<void> {
+  return saveProfile({ waterTargetMl: ml })
+}
+
+export function setReminders(reminders: RemindersConfig | null): Promise<void> {
+  return saveProfile({ reminders })
 }
 
 // --- Recipes ----------------------------------------------------------------------
@@ -764,6 +911,7 @@ export async function logRecipeIngredients(
 ): Promise<number> {
   const share = servings / Math.max(1, recipe.servings)
   const foods = await foodsByIds(recipe.ingredients.map((row) => row.foodId).filter(isPresent))
+  const dishId = newId()
 
   let written = 0
   for (const ingredient of recipe.ingredients) {
@@ -777,52 +925,17 @@ export async function logRecipeIngredients(
       eatenAt: at,
       venue,
       source: 'recipe',
-      // The recipe's name on every row, so the day still reads as one dish rather than as nine
-      // unrelated foods that happen to share a timestamp.
       note: recipe.name,
-      // And its id, so "what you cook" and `recipeUsage` still see the dish.
+      // Its id, so "what you cook" and `recipeUsage` still see the dish...
       fromRecipeId: recipe.id,
+      // ...and one dish id across the set, so the day shows one line the user recognises rather
+      // than nine unrelated foods that happen to share a timestamp.
+      dishId,
+      dishName: recipe.name,
     })
     written += 1
   }
   return written
-}
-
-/** Logs `servings` of a recipe as one entry, so the day reads "Chilli · 1.5 servings". */
-export async function logRecipeServing(
-  recipe: Recipe,
-  servings: number,
-  meal: MealSlot,
-  at = Date.now(),
-  // A recipe is something you cooked, so home is the default here rather than a guess — the one
-  // place in the app where the venue is genuinely implied by the action.
-  venue: Venue | null = 'home',
-): Promise<string> {
-  const nutrients = scaleNutrients(perServing(recipe), servings)
-  const entry: LogEntry = {
-    id: newId(),
-    userId: activeUserId,
-    day: dayKey(at),
-    eatenAt: at,
-    meal,
-    sortIndex: at,
-    foodId: null,
-    recipeId: recipe.id,
-    quickAdd: null,
-    fromRecipeId: null,
-    grams: recipe.yieldGrams ? (recipe.yieldGrams / Math.max(1, recipe.servings)) * servings : 0,
-    portionId: null,
-    portionCount: servings,
-    nutrients,
-    source: 'recipe',
-    estimate: null,
-    venue,
-    note: `${recipe.name}${servings === 1 ? '' : ` × ${servings}`}`,
-    ...syncStamp(),
-  }
-  await db.logEntries.put(entry)
-  await enqueue('logEntries', entry.id)
-  return entry.id
 }
 
 const isPresent = (value: string | null): value is string => value !== null
@@ -890,6 +1003,7 @@ export async function logMealTemplate(
   multiple = 1,
   venue: Venue | null = null,
 ): Promise<number> {
+  const dishId = newId()
   for (const item of template.items) {
     const entry: LogEntry = {
       id: newId(),
@@ -901,6 +1015,8 @@ export async function logMealTemplate(
       foodId: item.foodId,
       recipeId: item.recipeId,
       fromRecipeId: null,
+      dishId,
+      dishName: template.name,
       quickAdd:
         item.foodId === null && item.recipeId === null
           ? scaleNutrients(item.nutrients, multiple)
@@ -921,34 +1037,124 @@ export async function logMealTemplate(
   return template.items.length
 }
 
-/** Recently logged meals, newest first — the "eat that again" list. */
-export async function recentMeals(days = 14, limit = 12): Promise<RecentMeal[]> {
-  const from = dayKey(Date.now() - days * DAY_MS)
-  const entries = await entriesBetween(from, dayKey(Date.now()))
-  const groups = new Map<string, LogEntry[]>()
-  for (const entry of entries) {
-    const key = `${entry.day}|${entry.meal}`
-    groups.set(key, [...(groups.get(key) ?? []), entry])
-  }
-  return [...groups.entries()]
-    .map(([key, rows]) => {
-      const [day, meal] = key.split('|') as [string, MealSlot]
-      return {
-        day,
-        meal,
-        entries: rows.sort((a, b) => a.sortIndex - b.sortIndex),
-        nutrients: sumNutrients(rows.map((row) => row.nutrients)),
-      }
-    })
-    .sort((a, b) => b.day.localeCompare(a.day))
-    .slice(0, limit)
+/**
+ * What you have actually been eating, newest first — the list that should open when you tap "Log".
+ *
+ * This replaces a list keyed on `day|meal`, which was the app's worst piece of modelling. A
+ * filing coordinate is not an identity, so eating the same lunch every weekday produced *eight
+ * separate rows* — each labelled "Lunch · Tuesday", none naming a single food — and the list grew
+ * forever instead of converging on the six things a real person eats.
+ *
+ * Keyed on **contents** instead: a dish's signature is its foods and their rounded amounts, so those
+ * eight lunches become one row that says "8×". Single foods get a row each. A food that has only ever
+ * been eaten as part of a dish is left out, because "Cheese, Ricotta" is not something anyone logs on
+ * its own — it arrived inside the lasagna, and the lasagna is already in the list.
+ */
+export interface RecentFood {
+  kind: 'food'
+  food: Food
+  lastAt: number
+  times: number
+  amount: LastAmount | null
 }
 
-export interface RecentMeal {
-  day: string
-  meal: MealSlot
-  entries: LogEntry[]
+export interface RecentDish {
+  kind: 'dish'
+  /** The most recent sitting's id — what "log this again" re-logs. */
+  dishId: string
+  name: string
+  lastAt: number
+  times: number
   nutrients: Nutrients
+  /** Food names in order, for a subtitle a person can recognise the dish by. */
+  parts: string[]
+}
+
+export type RecentItem = RecentFood | RecentDish
+
+export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> {
+  const from = dayKey(Date.now() - days * DAY_MS)
+  /**
+   * Oldest first, so "the latest one wins" is decided by position.
+   *
+   * See `byRecency` for why the tie-break matters.
+   */
+  const entries = (await entriesBetween(from, dayKey(Date.now()))).sort(byRecency)
+
+  const dishRows = new Map<string, LogEntry[]>()
+  const loose: LogEntry[] = []
+  for (const entry of entries) {
+    if (entry.dishId === null) loose.push(entry)
+    else dishRows.set(entry.dishId, [...(dishRows.get(entry.dishId) ?? []), entry])
+  }
+
+  const foods = await foodsByIds([
+    ...entries.map((entry) => entry.foodId).filter(isPresent),
+  ])
+  const nameOf = (entry: LogEntry): string =>
+    (entry.foodId ? foods.get(entry.foodId)?.description : null) ?? entry.note ?? ''
+
+  // Sittings collapsed by what they contained, so the same dinner counts rather than repeats.
+  const bySignature = new Map<string, { rows: LogEntry[][]; lastAt: number; latest: string }>()
+  for (const [dishId, rows] of dishRows) {
+    const ordered = [...rows].sort((a, b) => a.sortIndex - b.sortIndex)
+    const signature = [
+      ordered[0]?.dishName ?? '',
+      ...ordered.map((row) => `${row.foodId ?? row.recipeId ?? 'q'}:${Math.round(row.grams)}`).sort(),
+    ].join('|')
+    const lastAt = Math.max(...ordered.map((row) => row.eatenAt))
+    const current = bySignature.get(signature)
+    if (!current) bySignature.set(signature, { rows: [ordered], lastAt, latest: dishId })
+    else {
+      current.rows.push(ordered)
+      if (lastAt > current.lastAt) {
+        current.lastAt = lastAt
+        current.latest = dishId
+      }
+    }
+  }
+
+  const dishes: RecentDish[] = [...bySignature.values()].map((group) => {
+    const newest = group.rows.find((rows) => rows.some((row) => row.eatenAt === group.lastAt)) ?? group.rows[0]!
+    return {
+      kind: 'dish',
+      dishId: group.latest,
+      name: newest[0]?.dishName ?? 'Dish',
+      lastAt: group.lastAt,
+      times: group.rows.length,
+      nutrients: sumNutrients(newest.map((row) => row.nutrients)),
+      parts: newest.map(nameOf).filter(Boolean),
+    }
+  })
+
+  // Loose foods, one row each. `quickAdd` rows are included: a quick add is a thing you ate.
+  const byFood = new Map<string, { entry: LogEntry; times: number }>()
+  for (const entry of loose) {
+    const key = entry.foodId ?? `note:${entry.note}`
+    const current = byFood.get(key)
+    if (!current) byFood.set(key, { entry, times: 1 })
+    else {
+      current.times += 1
+      current.entry = entry
+    }
+  }
+
+  const items: RecentItem[] = [...dishes]
+  for (const { entry, times } of byFood.values()) {
+    const food = entry.foodId ? foods.get(entry.foodId) : undefined
+    if (!food) continue
+    items.push({
+      kind: 'food',
+      food,
+      lastAt: entry.eatenAt,
+      times,
+      amount: entry.grams > 0
+        ? { grams: entry.grams, portionId: entry.portionId, portionCount: entry.portionCount }
+        : null,
+    })
+  }
+
+  return items.sort((a, b) => b.lastAt - a.lastAt).slice(0, limit)
 }
 
 // --- Bodyweight -------------------------------------------------------------------
@@ -1405,6 +1611,34 @@ export async function claimLocalData(userId: string): Promise<number> {
       claimed += 1
     }
   }
+
+  claimed += await claimWater(userId)
+  return claimed
+}
+
+/**
+ * Water has to be re-keyed, not just re-owned.
+ *
+ * Its id embeds the owner — `w:${userId}:${day}` — because that determinism is what stops eight taps
+ * of "+ a glass" becoming eight rows. Updating `userId` in place would leave the old owner in the id,
+ * so the next `addWater` on the same day would compute a *different* id, insert a second row, and hit
+ * the server's unique (user_id, day) index. Delete and re-insert, exactly as the profile does.
+ */
+async function claimWater(userId: string): Promise<number> {
+  const stale = await db.waterLogs.where('userId').notEqual(userId).toArray()
+  let claimed = 0
+  for (const row of stale) {
+    const id = `w:${userId}:${row.day}`
+    const existing = await db.waterLogs.get(id)
+    // A row already under the new owner wins: it belongs to the account, and this one is a local
+    // draft for the same day.
+    if (!existing) {
+      await db.waterLogs.put({ ...row, id, userId, ...touch(row.clientRev) })
+      await enqueue('waterLogs', id)
+      claimed += 1
+    }
+    await db.waterLogs.delete(row.id)
+  }
   return claimed
 }
 
@@ -1419,6 +1653,7 @@ export async function clearLocalData(): Promise<void> {
     db.customFoods.clear(),
     db.logEntries.clear(),
     db.bodyWeights.clear(),
+    db.waterLogs.clear(),
     db.recipes.clear(),
     db.mealTemplates.clear(),
     db.programs.clear(),

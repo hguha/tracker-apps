@@ -454,11 +454,55 @@ describe('recipes', () => {
     const recipe = (await repo.recipes()).find((r) => r.id === id)!
     const wholeTray = recipe.nutrients.kcal
 
-    await repo.logRecipeServing(recipe, 1, 'dinner')
+    await repo.logRecipeIngredients(recipe, 1, 'dinner')
     const [entry] = await repo.entriesForDay(dayKey(Date.now()))
-    expect(entry!.recipeId).toBe(id)
     expect(entry!.nutrients.kcal).toBe(Math.round(wholeTray / 4))
     expect(entry!.source).toBe('recipe')
+    // Provenance, not subject: the row's food is the chicken, and the recipe rides alongside.
+    expect(entry!.foodId).toBe(food.id)
+    expect(entry!.fromRecipeId).toBe(id)
+  })
+
+  it('logs a recipe as one named dish over its ingredients', async () => {
+    // The whole point of the dish columns: several rows the user reads as one thing they ate. There
+    // used to be a second write path producing a single opaque row, and the two disagreed depending
+    // on which screen you happened to log from.
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Lasagna soup',
+      servings: 2,
+      ingredients: [
+        { foodId: food.id, label: food.description, grams: 300 },
+        { foodId: food.id, label: 'more of the same', grams: 100 },
+      ],
+    })
+    const recipe = (await repo.recipes()).find((r) => r.id === id)!
+    await repo.logRecipeIngredients(recipe, 1, 'dinner')
+
+    const rows = await repo.entriesForDay(dayKey(Date.now()))
+    expect(rows).toHaveLength(2)
+    expect(new Set(rows.map((row) => row.dishId)).size).toBe(1)
+    expect(rows[0]!.dishId).not.toBeNull()
+    expect(rows.every((row) => row.dishName === 'Lasagna soup')).toBe(true)
+  })
+
+  it('has this again as a fresh dish, not a second sitting of the old one', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Chicken tray',
+      servings: 1,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 200 }],
+    })
+    const recipe = (await repo.recipes()).find((r) => r.id === id)!
+    await repo.logRecipeIngredients(recipe, 1, 'dinner')
+    const first = (await repo.entriesForDay(dayKey(Date.now())))[0]!
+
+    await repo.logDishAgain(first.dishId!)
+    const rows = await repo.entriesForDay(dayKey(Date.now()))
+    expect(rows).toHaveLength(2)
+    // Same name, different id — otherwise logging it again would re-log both sittings next time.
+    expect(new Set(rows.map((row) => row.dishId)).size).toBe(2)
+    expect(rows.every((row) => row.dishName === 'Chicken tray')).toBe(true)
   })
 
   it('ignores an ingredient nothing matched rather than guessing at it', async () => {
@@ -473,6 +517,140 @@ describe('recipes', () => {
     })
     const recipe = (await repo.recipes()).find((r) => r.id === id)!
     expect(recipe.nutrients.kcal).toBe(nutrientsFor(food, 100).kcal)
+  })
+})
+
+describe('recentItems', () => {
+  it('counts a repeated dish once, rather than once per day', async () => {
+    // The list this replaces keyed on `day|meal`, so eating the same lunch on five weekdays produced
+    // five rows — none of which named a food — and it grew without bound instead of converging on the
+    // handful of things a person actually eats.
+    const food = await chicken()
+    for (const day of ['2026-09-06', '2026-09-07', '2026-09-08']) {
+      const dishId = repo.newDishId()
+      const at = Date.parse(`${day}T12:30:00`)
+      await repo.logFood({ food, grams: 150, meal: 'lunch', eatenAt: at, dishId, dishName: 'Usual lunch' })
+      await repo.logFood({ food, grams: 50, meal: 'lunch', eatenAt: at, dishId, dishName: 'Usual lunch' })
+    }
+
+    const items = await repo.recentItems(30, 40)
+    const dishes = items.filter((item) => item.kind === 'dish')
+    expect(dishes).toHaveLength(1)
+    expect(dishes[0]).toMatchObject({ name: 'Usual lunch', times: 3 })
+  })
+
+  it('treats a different amount as a different dish', async () => {
+    // The signature is the contents, so half a portion is a genuinely different thing to re-log.
+    const food = await chicken()
+    for (const grams of [150, 300]) {
+      const dishId = repo.newDishId()
+      await repo.logFood({ food, grams, meal: 'lunch', dishId, dishName: 'Bowl' })
+    }
+    const dishes = (await repo.recentItems()).filter((item) => item.kind === 'dish')
+    expect(dishes).toHaveLength(2)
+  })
+
+  it('leaves out a food that has only ever been part of a dish', async () => {
+    // "Cheese, Ricotta" is not something anyone logs on its own — it arrived inside the lasagna, and
+    // the lasagna is already the row above.
+    const food = await chicken()
+    await repo.logFood({ food, grams: 100, meal: 'dinner', dishId: repo.newDishId(), dishName: 'Bake' })
+    const items = await repo.recentItems()
+    expect(items.map((item) => item.kind)).toEqual(['dish'])
+  })
+
+  it('remembers the amount a loose food was last eaten in', async () => {
+    // Explicit times, because "last" is a fact about the clock. Two rows written in the same
+    // millisecond are equally recent and `byRecency` picks between them arbitrarily-but-stably —
+    // asserting on that would be asserting on the tie-break rather than on the behaviour.
+    const food = await chicken()
+    const day = dayKey(Date.now())
+    await repo.logFood({ food, grams: 90, meal: 'breakfast', eatenAt: Date.parse(`${day}T08:00:00`) })
+    await repo.logFood({ food, grams: 180, meal: 'lunch', eatenAt: Date.parse(`${day}T13:00:00`) })
+    const items = await repo.recentItems()
+    const row = items.find((item) => item.kind === 'food')
+    expect(row).toMatchObject({ times: 2 })
+    expect(row?.kind === 'food' ? row.amount?.grams : null).toBe(180)
+  })
+})
+
+describe('water', () => {
+  it('accumulates onto one row per day', async () => {
+    const day = dayKey(Date.now())
+    await repo.addWater(day, 250)
+    await repo.addWater(day, 250)
+    expect((await repo.waterForDay(day))?.ml).toBe(500)
+    expect(await db.waterLogs.count()).toBe(1)
+  })
+
+  it('never goes below zero', async () => {
+    const day = dayKey(Date.now())
+    await repo.addWater(day, 250)
+    await repo.addWater(day, -400)
+    expect((await repo.waterForDay(day))?.ml).toBe(0)
+  })
+
+  it('re-keys onto the account rather than leaving the old owner in the id', async () => {
+    // The id embeds the owner, so re-owning in place would leave `w:local-user:` in it — and the next
+    // "+ a glass" would compute a different id, insert a second row, and collide with the server's
+    // unique (user_id, day) index.
+    await repo.addWater('2026-09-01', 500)
+    await repo.claimLocalData('real-user')
+    const rows = await db.waterLogs.toArray()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.id).toBe('w:real-user:2026-09-01')
+    expect(rows[0]!.userId).toBe('real-user')
+    expect(rows[0]!.ml).toBe(500)
+  })
+
+  it('keys on the day, so two devices converge rather than accumulate', async () => {
+    await repo.addWater('2026-09-01', 500)
+    await repo.addWater('2026-09-02', 500)
+    expect(await db.waterLogs.count()).toBe(2)
+    expect((await repo.waterBetween('2026-09-01', '2026-09-02')).length).toBe(2)
+  })
+})
+
+describe('editing what was logged', () => {
+  const bread = () =>
+    givenFoods(
+      testFood({
+        id: 'usda:test-bread',
+        description: 'Sliceable bread',
+        portions: [{ id: 'p1', label: 'slice', grams: 28, isDefault: true }],
+      }),
+    )
+
+  it('keeps the portion when the new amount is a whole number of them', async () => {
+    // "2 slices" corrected to 3 must stay 3 slices. It used to become a bare gram figure, which then
+    // became the prefill for that food forever after.
+    const withPortion = await bread()
+    const id = await repo.logFood({ food: withPortion, portionId: 'p1', portionCount: 2, meal: 'breakfast' })
+
+    await repo.updateEntryAmount(id, 84)
+    const entry = (await repo.entriesForDay(dayKey(Date.now()))).find((row) => row.id === id)!
+    expect(entry.portionId).toBe('p1')
+    expect(entry.portionCount).toBe(3)
+  })
+
+  it('drops the portion when the amount no longer matches one', async () => {
+    const withPortion = await bread()
+    const id = await repo.logFood({ food: withPortion, portionId: 'p1', portionCount: 2, meal: 'breakfast' })
+    await repo.updateEntryAmount(id, 70)
+    const entry = (await repo.entriesForDay(dayKey(Date.now()))).find((row) => row.id === id)!
+    expect(entry.portionId).toBeNull()
+    expect(entry.grams).toBe(70)
+  })
+
+  it('edits a quick add rather than telling the user it cannot be edited', async () => {
+    const id = await repo.logQuickAdd({ ...EMPTY_NUTRIENTS, kcal: 520, proteinMg: 30_000 }, 'lunch', 'Canteen stir fry')
+    await repo.updateQuickAdd(id, { kcal: 480 })
+    const entry = (await repo.entriesForDay(dayKey(Date.now())))[0]!
+    // Both copies move together: `nutrients` is what every total reads, `quickAdd` is what the row
+    // re-renders from, and letting them drift would show one number and count another.
+    expect(entry.nutrients.kcal).toBe(480)
+    expect(entry.quickAdd?.kcal).toBe(480)
+    expect(entry.nutrients.proteinMg).toBe(30_000)
   })
 })
 

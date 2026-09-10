@@ -3,6 +3,15 @@
  * hue in every ring, bar and chart — and the status ramp encodes how a day sits against its
  * target. Neither shifts with the accent, because both are properties of the data.
  *
+ * **The two scales must not share values.** They did: `--target-under` was byte-identical to
+ * `--macro-carbs`, `--target-over` was a shade off `--macro-protein`, and `--confidence-high` was
+ * identical to `--target-on`. On a screen showing both — the day's macro bars above a "2 low"
+ * pill — blue meant "carbohydrate" and "below target" at the same time. The status ramp is
+ * therefore pulled away: `under` is neutral, because being under a target is not an alarm, and
+ * `over` is a brick red no macro uses.
+ *
+ * `*-ink` is the ink that can sit on top of that fill and still clear WCAG AA.
+ *
  * Surfaces, ink and the accent live in themes.css.
  */
 
@@ -14,19 +23,19 @@
   --macro-alcohol: #9c5bd6;
 
   /* Against target: under, on, over. Paired with a label, never colour alone. */
-  --target-under: #2a78d6;
-  --target-on: #0ca30c;
-  --target-over: #d03b3b;
+  --target-under: #5b6470;
+  --target-on: #0a7a33;
+  --target-over: #96121f;
 
   /* Confidence in a number the app inferred (expenditure, a photo estimate). */
-  --confidence-high: #0ca30c;
-  --confidence-medium: #fab219;
-  --confidence-low: #a8a69e;
+  --confidence-high: #0a7a33;
+  --confidence-medium: #875603;
+  --confidence-low: #6a655c;
 
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
+  --status-good: #0a7a33;
+  --status-warning: #875603;
+  --status-serious: #994312;
+  --status-critical: #a8202b;
 
   --accent-contrast: #ffffff;
 }
@@ -38,9 +47,16 @@
   --macro-fiber: #22c07d;
   --macro-alcohol: #ad76e6;
 
-  --target-under: #4a97ec;
-  --target-on: #35a865;
-  --target-over: #e35670;
+  --target-under: #99a2af;
+  --target-on: #4cc47d;
+  --target-over: #ff9a6b;
 
-  --confidence-low: #6f6d67;
+  --confidence-high: #4cc47d;
+  --confidence-medium: #e8b545;
+  --confidence-low: #948d81;
+
+  --status-good: #4cc47d;
+  --status-warning: #e8b545;
+  --status-serious: #f0955f;
+  --status-critical: #f2707f;
 }

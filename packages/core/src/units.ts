@@ -10,16 +10,29 @@
 export type WeightUnit = 'lb' | 'kg'
 export type DistanceUnit = 'mi' | 'km'
 export type LengthUnit = 'in' | 'cm'
+export type VolumeUnit = 'floz' | 'ml'
 
 /** One switch per app, so "imperial" can't mean lb here and in there. */
 export interface UnitPreference {
   weight: WeightUnit
   length: LengthUnit
   distance: DistanceUnit
+  /** Only MACROcosm shows a volume; it lives here so "imperial" means one thing everywhere. */
+  volume: VolumeUnit
 }
 
-export const METRIC: UnitPreference = { weight: 'kg', length: 'cm', distance: 'km' }
-export const IMPERIAL: UnitPreference = { weight: 'lb', length: 'in', distance: 'mi' }
+export const METRIC: UnitPreference = {
+  weight: 'kg',
+  length: 'cm',
+  distance: 'km',
+  volume: 'ml',
+}
+export const IMPERIAL: UnitPreference = {
+  weight: 'lb',
+  length: 'in',
+  distance: 'mi',
+  volume: 'floz',
+}
 
 /** For apps that store one metric/imperial flag rather than three separate units. */
 export const unitsFor = (system: 'metric' | 'imperial'): UnitPreference =>
@@ -28,6 +41,8 @@ export const unitsFor = (system: 'metric' | 'imperial'): UnitPreference =>
 export const LB_PER_KG = 2.20462262185
 const KM_PER_MI = 1.609344
 const CM_PER_IN = 2.54
+/** US fluid ounce. Storage is millilitres, exactly like weight is kilograms. */
+const ML_PER_FLOZ = 29.5735295625
 
 // A stored NaN reads as `!== null`, so it counts as a logged value and poisons
 // every downstream sum. Every commit boundary parses through this.
@@ -130,4 +145,24 @@ export function lengthToCm(value: number, from: LengthUnit): number {
 
 export function lengthFromCm(cm: number, to: LengthUnit): number {
   return clean(to === 'cm' ? cm : cm / CM_PER_IN, 2)
+}
+
+export function volumeToMl(value: number, from: VolumeUnit): number {
+  return from === 'ml' ? value : value * ML_PER_FLOZ
+}
+
+export function volumeFromMl(ml: number, to: VolumeUnit): number {
+  return clean(to === 'ml' ? ml : ml / ML_PER_FLOZ, 1)
+}
+
+/**
+ * Rounded to something a person would say: whole fluid ounces, millilitres below a litre, and one
+ * decimal above it — "1.8 L", not "1.75 L". Water is counted in glasses, so the second decimal is
+ * precision the number doesn't have.
+ */
+export function formatVolume(ml: number, unit: VolumeUnit): string {
+  // Rounded from the raw conversion, not from `volumeFromMl`'s one-decimal result: 250 ml is
+  // 8.45 fl oz, which that rounds to 8.5, which `Math.round` then rounds *up* to 9.
+  if (unit === 'floz') return `${Math.round(ml / ML_PER_FLOZ)} fl oz`
+  return ml >= 1000 ? `${(ml / 1000).toFixed(1)} L` : `${Math.round(ml)} ml`
 }

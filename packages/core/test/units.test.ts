@@ -6,15 +6,45 @@ import {
   lengthFromCm,
   lengthToCm,
   parseNumber,
+  formatVolume,
   unitsFor,
+  volumeFromMl,
+  volumeToMl,
   weightFromKg,
   weightToKg,
 } from '../src/units'
 
 describe('unitsFor', () => {
-  it('maps one metric/imperial flag onto the three units', () => {
-    expect(unitsFor('metric')).toEqual({ weight: 'kg', length: 'cm', distance: 'km' })
-    expect(unitsFor('imperial')).toEqual({ weight: 'lb', length: 'in', distance: 'mi' })
+  it('maps one metric/imperial flag onto every unit', () => {
+    expect(unitsFor('metric')).toEqual({
+      weight: 'kg',
+      length: 'cm',
+      distance: 'km',
+      volume: 'ml',
+    })
+    expect(unitsFor('imperial')).toEqual({
+      weight: 'lb',
+      length: 'in',
+      distance: 'mi',
+      volume: 'floz',
+    })
+  })
+})
+
+describe('volume', () => {
+  it('stores millilitres and converts only for display, like weight does', () => {
+    expect(volumeToMl(8, 'floz')).toBeCloseTo(236.6, 1)
+    expect(volumeToMl(250, 'ml')).toBe(250)
+    expect(volumeFromMl(250, 'floz')).toBeCloseTo(8.5, 1)
+  })
+
+  it('reads as a person would say it', () => {
+    expect(formatVolume(250, 'ml')).toBe('250 ml')
+    // One decimal past a litre: water is counted in glasses, so "1.75 L" claims precision it hasn't
+    // got — and the second decimal is the kind of detail that makes a number look computed.
+    expect(formatVolume(1750, 'ml')).toBe('1.8 L')
+    expect(formatVolume(2000, 'ml')).toBe('2.0 L')
+    expect(formatVolume(250, 'floz')).toBe('8 fl oz')
   })
 })
 

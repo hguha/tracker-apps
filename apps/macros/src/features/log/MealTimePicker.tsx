@@ -3,12 +3,11 @@ import {
   fromDateTimeInputValue,
   toDateTimeInputValue,
 } from '@tracker-engine/core'
-import { VenuePicker } from '@/features/shared/VenuePicker'
 import { MealPicker } from './MealPicker'
-import type { MealSlot, Venue } from '@/domain/types'
+import type { MealSlot } from '@/domain/types'
 
 /**
- * Which meal, when, and where.
+ * Which meal, and when.
  *
  * The time is a first-class control rather than a hidden `Date.now()`, because "when" is data
  * here: an eating window, a fasting streak and the coach's read on meal timing are all wrong if
@@ -16,26 +15,25 @@ import type { MealSlot, Venue } from '@/domain/types'
  *
  * A full datetime field, the same control REPutation uses to correct a workout's date — chips for
  * "today" and "yesterday" only ever covered two of the days someone might be catching up on.
+ *
+ * The venue used to be here too, and was the wrong place for it: on the photo and describe paths this
+ * control isn't reachable, so the field was blank on exactly the restaurant meals it exists to
+ * measure. It's asked on the finished meal instead — see `features/shared/VenueChoice`.
  */
 export function MealTimePicker({
   meal,
   at,
-  venue,
   onMeal,
   onAt,
-  onVenue,
 }: {
   meal: MealSlot
   at: number
-  venue: Venue | null
   onMeal: (meal: MealSlot) => void
   onAt: (at: number) => void
-  onVenue: (venue: Venue | null) => void
 }) {
   return (
     <div className="space-y-2">
       <MealPicker value={meal} onChange={onMeal} />
-      <VenuePicker value={venue} onChange={onVenue} />
 
       <label className="block">
         <span className="text-[11px] text-ink-muted">

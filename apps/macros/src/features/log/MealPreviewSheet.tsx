@@ -4,8 +4,8 @@ import { BottomSheet, Button, useToast } from '@tracker-engine/ui'
 import { cn } from '@/lib/cn'
 import * as repo from '@/data/repository'
 import { scale } from '@/lib/nutrition'
-import { grams } from '@/features/shared/format'
-import { MEAL_LABELS } from '@/features/shared/meals'
+import { MacroNumbers } from '@/features/shared/MacroNumbers'
+import { MEAL_LABELS } from '@/lib/meals'
 import type { Food, MealSlot, Nutrients } from '@/domain/types'
 
 export interface MealPreviewItem {
@@ -68,19 +68,24 @@ export function MealPreviewSheet({
 
       <ul className="flex-1 divide-y divide-line overflow-y-auto">
         {preview.items.map((item, index) => (
-          <li key={index} className="flex items-baseline gap-2 px-4 py-2">
-            <span className="min-w-0 flex-1 truncate text-[13.5px]">
-              {(item.foodId ? foods?.get(item.foodId)?.description : null) ?? item.label}
-              {item.grams > 0 && (
-                <span className="tabular text-ink-muted">
-                  {' '}
-                  {Math.round(item.grams * multiple)}g
-                </span>
-              )}
-            </span>
-            <span className="tabular shrink-0 text-[13px] text-ink-secondary">
-              {Math.round(item.nutrients.kcal * multiple)}
-            </span>
+          <li key={index} className="px-4 py-2">
+            <div className="flex items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate text-[13.5px]">
+                {(item.foodId ? foods?.get(item.foodId)?.description : null) ?? item.label}
+                {item.grams > 0 && (
+                  <span className="tabular text-ink-muted">
+                    {' '}
+                    {Math.round(item.grams * multiple)}g
+                  </span>
+                )}
+              </span>
+              <span className="tabular shrink-0 text-[13px] text-ink-secondary">
+                {Math.round(item.nutrients.kcal * multiple)}
+              </span>
+            </div>
+            {/* Per row, not just in the footer: "is this the right amount" is a question about the
+                protein in the chicken, and a total can't answer it. */}
+            <MacroNumbers nutrients={scale(item.nutrients, multiple)} className="mt-0.5" />
           </li>
         ))}
       </ul>
@@ -104,9 +109,9 @@ export function MealPreviewSheet({
           ))}
         </div>
 
-        <p className="tabular text-[13.5px] font-semibold">
-          {totals.kcal} kcal · {grams(totals.proteinMg)}P {grams(totals.carbsMg)}C{' '}
-          {grams(totals.fatMg)}F
+        <p className="tabular flex items-baseline gap-2 text-[13.5px]">
+          <span className="font-semibold">{totals.kcal} kcal</span>
+          <MacroNumbers nutrients={totals} />
         </p>
 
         <Button
