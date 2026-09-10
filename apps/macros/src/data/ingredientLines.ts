@@ -1,7 +1,6 @@
 import { parseIngredientLine, type ParsedIngredient } from '@/lib/parseIngredient'
 import { isConfident, resolveAmount, type ResolvedAmount } from '@/lib/resolveAmount'
-import * as repo from '@/data/repository'
-import { searchRemote } from '@/data/foodLookup'
+import { matchIngredient } from '@/data/matchFood'
 import type { Food } from '@/domain/types'
 
 /**
@@ -18,6 +17,8 @@ import type { Food } from '@/domain/types'
 export interface ResolvedLine {
   parsed: ParsedIngredient
   food: Food | null
+  /** Whether the name matched as written, or only after relaxing it. See `data/matchFood`. */
+  matchedBy: 'exact' | 'fuzzy' | 'unmatched'
   grams: number | null
   basis: ResolvedAmount['basis']
   /** True when the figure is exact or measured; false when it's an assumption worth showing. */
@@ -42,11 +43,15 @@ export async function resolveLines(rawLines: readonly string[]): Promise<LinesRe
 
   const lines = await Promise.all(
     parsed.map(async (line): Promise<ResolvedLine> => {
-      const food = line.isToTaste && line.quantity === null ? null : await bestMatch(line.name)
-      const amount = resolveAmount(line, food)
+      const matched =
+        line.isToTaste && line.quantity === null
+          ? { food: null, matchedBy: 'unmatched' as const }
+          : await matchIngredient(line.name)
+      const amount = resolveAmount(line, matched.food)
       return {
         parsed: line,
-        food,
+        food: matched.food,
+        matchedBy: matched.matchedBy,
         grams: amount.grams,
         basis: amount.basis,
         isConfident: isConfident(amount.basis),
@@ -55,27 +60,6 @@ export async function resolveLines(rawLines: readonly string[]): Promise<LinesRe
   )
 
   return { lines, assumptions: describe(lines) }
-}
-
-/** Local, then one remote search — the same order every other lookup in the app uses. */
-async function bestMatch(name: string): Promise<Food | null> {
-  const local = await repo.searchFoods(name, 1)
-  if (local[0]) return local[0]
-
-  // Generic sources only: these are ingredients, and Open Food Facts' packaged rows are the wrong
-  // answer for "cooked spaghetti" as well as the slowest part of resolving nineteen of them.
-  await searchRemote(name, { branded: false })
-  const matched = await repo.searchFoods(name, 1)
-  if (matched[0]) return matched[0]
-
-  // One retry on the head noun. "low sodium chicken broth" may miss where "chicken broth" hits, and
-  // a slightly wrong row the user can see beats an unmatched line contributing zero.
-  const head = name.split(/\s+/).slice(-2).join(' ')
-  if (head !== name && head.length > 3) {
-    const fallback = await repo.searchFoods(head, 1)
-    if (fallback[0]) return fallback[0]
-  }
-  return null
 }
 
 /**

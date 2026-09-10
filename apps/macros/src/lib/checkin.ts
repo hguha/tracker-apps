@@ -27,7 +27,7 @@ export const WEEK_STARTS_ON: WeekStart = 1
 export interface CheckInInputs {
   now: number
   program: Program
-  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex'>
+  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex' | 'activity'>
   weights: readonly BodyWeight[]
   /** One entry per logged day; days with nothing logged must be absent, not zero. */
   intake: readonly IntakeDay[]
@@ -142,15 +142,16 @@ function split(kcal: number, trendKg: number, program: Program): MacroTargets {
  * the data overwrites it within a fortnight.
  */
 function coldStart(inputs: CheckInInputs, trendKg: number): ExpenditureState | null {
-  const { heightCm, birthYear, sex } = inputs.profile
+  const { heightCm, birthYear, sex, activity } = inputs.profile
   if (heightCm === null || birthYear === null || sex === null) return null
   return estimateInitialExpenditure({
     kg: trendKg,
     heightCm,
     age: new Date(inputs.now).getFullYear() - birthYear,
     sex,
-    // Without the REPutation link there's nothing measured to go on, so assume moderate.
-    sessionsPerWeek: 3,
+    // Null when nobody has been asked yet, which the estimator reads as moderate and a wider
+    // error bar — never as a fact about this person.
+    activity: activity ?? null,
   })
 }
 
@@ -176,7 +177,7 @@ function explain(
  */
 export function initialTargets(
   program: Program,
-  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex'>,
+  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex' | 'activity'>,
   weights: readonly BodyWeight[],
   now = Date.now(),
 ): MacroTargets | null {
@@ -195,7 +196,7 @@ export function initialTargets(
  */
 export function initialTargetsFromTrend(
   program: Program,
-  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex'>,
+  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex' | 'activity'>,
   trendKg: number,
   now = Date.now(),
 ): MacroTargets | null {

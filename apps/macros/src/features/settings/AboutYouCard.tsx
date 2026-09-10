@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { lengthFromCm, lengthToCm } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
+import { ActivityPicker } from '@/features/shared/ActivityPicker'
 import { useUnits } from '@/features/shared/useUnits'
 
 /**
@@ -56,6 +57,18 @@ export function AboutYouCard() {
         </label>
       </div>
 
+      <div className="mt-3 border-t border-line pt-3">
+        <p className="text-[12.5px] font-semibold">How active are you?</p>
+        <p className="mb-2 text-[12px] text-ink-muted">
+          {profile.activity === null
+            ? 'Unanswered, so the starting estimate assumes moderately active — the two ends of this list are about 700 kcal a day apart.'
+            : 'Same story: this seeds the first estimate and then stops being used.'}
+        </p>
+        <ActivityPicker
+          value={profile.activity}
+          onChange={(activity) => void repo.saveProfile({ activity })}
+        />
+      </div>
     </Card>
   )
 }

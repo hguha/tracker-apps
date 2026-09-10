@@ -59,6 +59,15 @@ async function completeOnboarding(
     await page.getByRole('button', { name: /rather not say/ }).click()
   }
 
+  // Activity: the last guess the app makes, and the only input to the cold-start estimate that
+  // isn't a measurement. Skippable, like the numbers before it.
+  if (facts) {
+    await page.getByRole('radio', { name: /Moderately active/ }).click()
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  } else {
+    await page.getByRole('button', { name: /not sure/ }).click()
+  }
+
   if (weight) {
     await page.getByPlaceholder(/Today's weight/).fill(weight)
     await page.getByRole('button', { name: 'Start logging' }).click()
@@ -109,6 +118,13 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   // units are on every option, so nobody has to convert to check they picked the right one.
   await expect(page.locator('select').first().locator('option', { hasText: /5′10″ · 178 cm/ })).toHaveCount(1)
   await page.getByRole('button', { name: /rather not say/ }).click()
+
+  // Activity: the last guess the app makes before it has anything to measure. Answered here, because
+  // the two ends of the scale are several hundred kcal a day apart on the same body.
+  await expect(page.getByRole('heading', { name: /How active is your week/ })).toBeVisible()
+  await page.getByRole('radio', { name: /Very active/ }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
   await expect(page.getByRole('heading', { name: /Today's weight/ })).toBeVisible()
   await page.getByPlaceholder(/Today's weight \(lb\)/).fill('176')
   await page.getByRole('button', { name: 'Start logging' }).click()
@@ -145,14 +161,24 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await whenChip.click()
   await expect(page.getByRole('button', { name: 'Breakfast', exact: true })).toBeVisible()
   await whenChip.click()
-  // Every logging path is reachable from here, including the ones that need a network.
-  await expect(page.getByRole('button', { name: 'Log from a photo' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Add calories and macros directly/ })).toBeVisible()
+  // Every other way in is behind one named list rather than a row of unlabelled glyphs. Three of
+  // these were icons nobody could guess ("+" was quick-add) and two were only reachable from a
+  // different screen — which is why making a recipe looked like it had disappeared.
+  await page.getByRole('button', { name: 'More ways to add' }).click()
+  for (const way of [
+    'Photo of the plate',
+    'New recipe',
+    'Add a food from its label',
+    'Quick add',
+  ]) {
+    await expect(page.getByRole('button', { name: new RegExp(way) })).toBeVisible()
+  }
   // Venue is deliberately *not* here. It used to be, and was unreachable on the photo and describe
   // paths — so the field was blank on exactly the restaurant meals it exists to measure.
   await expect(page.getByRole('button', { name: 'Takeaway', exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
 
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByRole('button', { name: /^Log it/ })).toBeEnabled()
   await page.getByRole('button', { name: /^Log it/ }).click()
@@ -169,9 +195,15 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   // The day editor: totals against that day's target, then one card per meal.
   await expect(page.getByText(/of \d+ kcal|no target for this day/)).toBeVisible()
-  // Where it was eaten is asked here, on the finished meal, where the answer is actually known —
-  // and nothing is preselected, because a default is indistinguishable from an answer.
-  for (const venue of ['Home', 'Out', 'Takeaway']) {
+  // Where it was eaten is asked here, on the finished meal, where the answer is actually known.
+  // New rows arrive as "home" — the write-time default. It used to be unrecorded, on the grounds
+  // that a default is indistinguishable from an answer; true, but it made *unrecorded* the
+  // commonest value, which is a worse lie told about the same data.
+  await expect(page.getByRole('button', { name: 'Home', exact: true }).first()).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  for (const venue of ['Out', 'Takeaway']) {
     await expect(page.getByRole('button', { name: venue, exact: true }).first()).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -205,7 +237,7 @@ test('a food the databases do not have can be entered and logged offline', async
   await completeOnboarding(page, { facts: false, weight: '' })
 
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('corner shop wrap')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('corner shop wrap')
   await page.getByRole('button', { name: /Add .corner shop wrap. from its label/ }).click()
 
   await page.getByPlaceholder('Corner shop chicken wrap').fill('Corner shop wrap')
@@ -265,8 +297,10 @@ test('every tab and the coach render without errors', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
   // The same words the log screen uses, in the same order: "Saved" there and "Meals" here described
   // one thing, which is most of why it was unclear where anything would show up.
-  for (const tab of ['Recipes', 'Saved', 'My foods']) {
-    await page.getByRole('button', { name: tab, exact: true }).click()
+  for (const tab of ['Recipes', 'Saved', 'Foods']) {
+    // Anchored, not exact: a tab's label gains a count badge inside the button as soon as its live
+    // query lands, so "Saved" and "Saved 1" are the same tab a few milliseconds apart.
+    await page.getByRole('button', { name: new RegExp(`^${tab}`) }).click()
     await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
   }
   await page.getByRole('button', { name: 'Back' }).click()
@@ -389,7 +423,7 @@ test('several foods log at once, at the amount each was last eaten in', async ({
 
   // Log one food the ordinary way, at an amount nothing would have guessed.
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   // One amount and a unit. It used to be "Servings" *and* "or weigh it (g)", where writing in either
   // silently cleared the other — so which number the app would use was a precedence rule with no
@@ -403,12 +437,12 @@ test('several foods log at once, at the amount each was last eaten in', async ({
 
   // Now the tick path, without leaving: the screen stayed open, which is the point of it.
   await expect(page.getByText('1 item added')).toBeVisible()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /^Add Chicken breast/ }).first().click()
   // The ticked row states what it is about to commit. The bar used to *describe* it — "at the amount
   // you last had each" — so a one-off 300 g portion was silently repeated with nothing to catch it.
   await expect(page.getByText(/183 g · \d+ kcal/).first()).toBeVisible()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('egg')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('egg')
   await page.getByRole('button', { name: /^Add Egg/ }).first().click()
   const logBoth = page.getByRole('button', { name: /^Log 2 · \d+ kcal$/ })
   await expect(logBoth).toBeVisible()
@@ -514,7 +548,7 @@ test('a saved meal can be opened and renamed', async ({ page }) => {
   await completeOnboarding(page, { facts: false, weight: '' })
 
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: /Done · 1/ }).click()
@@ -531,7 +565,7 @@ test('a saved meal can be opened and renamed', async ({ page }) => {
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: /Your library/ }).click()
-  await page.getByRole('button', { name: 'Saved', exact: true }).click()
+  await page.getByRole('button', { name: /^Saved/ }).click()
   const saved = page.getByRole('button', { name: /\d+ item.*kcal/ }).first()
   await saved.click()
   await expect(page.getByText(/Chicken breast/)).toBeVisible()
@@ -627,7 +661,7 @@ test('the log screen opens on what you ate, and a repeat is one tap', async ({ p
   )
   await expect(page.getByText(/Everything you log turns up here/)).toBeVisible()
 
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await page.getByRole('button', { name: /^Log it/ }).click()
 
@@ -646,7 +680,7 @@ test('a described dish can be removed, and kept as one of its units', async ({ p
   // No model here (empty Supabase env), so the dish is built by hand — the paths after the breakdown
   // are the same either way, and those are what this is about.
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: /^Done · / }).click()
@@ -669,7 +703,7 @@ test('the day screen shows what each food contributes, and what the day comes to
   await completeOnboarding(page, { weight: '85' })
 
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
 
   // The portion screen answers "does this fit", not just "what is in it" — a ring for the day it will
@@ -693,6 +727,74 @@ test('the day screen shows what each food contributes, and what the day comes to
   // that one genuinely stays unknown: absence is not zero.
   await expect(page.getByText('6 of 7 recorded')).toBeVisible()
   await expect(page.getByText('none of these foods record it')).toHaveCount(1)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('your own recipes and saved meals are findable from the search box', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  // A recipe the user named themselves used to be unreachable by name: searching "lasagna soup"
+  // returned USDA's lasagna rows and not theirs, and the only way in was to remember it existed and
+  // switch tabs. A thing you saved is the most likely answer to typing its name.
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByRole('button', { name: /^Recipes/ }).click()
+  await page.getByRole('button', { name: /New recipe/ }).click()
+  await page.getByPlaceholder('Sunday chilli').fill('Lasagna soup')
+  await page.getByPlaceholder('Find a food').or(page.getByPlaceholder('Add an ingredient by hand')).fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Save recipe/ }).click()
+
+  await page.getByPlaceholder('Search foods, your recipes, or describe a meal').fill('lasagna soup')
+  // Under "Yours", above the database.
+  await expect(page.getByText('Yours')).toBeVisible()
+  await page.getByRole('button', { name: /Lasagna soup/ }).first().click()
+
+  // And it opens the same add screen as a plain food does: an amount, a unit, the day it will make,
+  // and what is in it. It used to be a different control for every kind of thing.
+  await expect(page.getByRole('heading', { name: 'Lasagna soup' })).toBeVisible()
+  await expect(page.getByLabel('Amount')).toBeVisible()
+  await expect(page.getByText(/serving/).first()).toBeVisible()
+  await expect(page.getByText(/item|ingredient/).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('what fits is a question you can ask, not a card buried under recipes', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  // It used to live at the bottom of the Recipes tab, which is the last place anybody would look for
+  // a *food* suggestion — and it's a question people ask out loud, so it gets a door with the
+  // question written on it.
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByRole('button', { name: /Find something that fits/ }).click()
+  await expect(page.getByRole('heading', { name: 'What still fits' })).toBeVisible()
+  // With no target yet, it says so rather than showing an empty list.
+  await expect(page.getByText(/kcal|No target yet/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('any food can be looked up in the library, with its micronutrients', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  // There was nowhere in the app to ask "how much potassium is in this" — the Foods tab listed only
+  // the handful of rows typed in from a label, despite every food ever logged being cached locally.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Your library/ }).click()
+  await page.getByRole('button', { name: /^Foods/ }).click()
+  await page.getByPlaceholder(/Any food/).fill('chicken breast')
+
+  const row = page.getByRole('button', { name: /Chicken breast/ }).first()
+  await row.click()
+  await expect(page.getByText('Per 100 g')).toBeVisible()
+  // Named nutrients, and a source that never recorded one shows "—" rather than a zero.
+  for (const nutrient of ['Fibre', 'Potassium', 'Iron', 'Sodium']) {
+    await expect(page.getByText(nutrient, { exact: true })).toBeVisible()
+  }
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

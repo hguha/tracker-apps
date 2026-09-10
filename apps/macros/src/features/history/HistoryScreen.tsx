@@ -17,7 +17,7 @@ import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
-import { mealGroups } from '@/lib/dayGroups'
+import { dishGroups, mealGroups } from '@/lib/dayGroups'
 import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
 import {
   MEAL_SLOTS,
@@ -70,12 +70,20 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
   const range = RANGES.find((option) => option.key === rangeKey)!
   const from = dayKeyOffset(Date.now(), range.days)
 
-  const entries = useLiveQuery(() => repo.entriesBetween(from, today), [from, today], [])
+  /**
+   * `undefined` until loaded, not `[]`.
+   *
+   * A live query given `[]` is indistinguishable from one that found nothing, so opening History
+   * showed **"Nothing logged yet."** for the first frame — a flat statement that the diary is empty,
+   * on the screen whose whole job is the diary.
+   */
+  const entries = useLiveQuery(() => repo.entriesBetween(from, today), [from, today], undefined)
   const foods = useLiveQuery(
     async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
     [entries],
     new Map<string, Food>(),
   )
+  const isLoaded = entries !== undefined
 
   // Filters apply to entries first, so a day only appears when something in it matches — the
   // alternative (filter the days, show every entry) makes a search result lie about its own hits.
@@ -94,13 +102,9 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
     byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry])
   }
 
-  const days = [...byDay.keys()].sort((a, b) => {
-    if (sort === 'newest') return b.localeCompare(a)
-    if (sort === 'oldest') return a.localeCompare(b)
-    const kcalA = dayTotals(byDay.get(a) ?? []).kcal
-    const kcalB = dayTotals(byDay.get(b) ?? []).kcal
-    return sort === 'most' ? kcalB - kcalA : kcalA - kcalB
-  })
+  const days = [...byDay.keys()].sort((a, b) =>
+    sort === 'newest' ? b.localeCompare(a) : a.localeCompare(b),
+  )
 
   const targets = useLiveQuery(() => repo.targetsByDay(days), [days.join(',')], new Map())
   const averages = dailyAverage(matching)
@@ -151,7 +155,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 pb-8">
-        {days.length === 0 ? (
+        {!isLoaded ? null : days.length === 0 ? (
           <Card className="p-4 text-center text-[13.5px] text-ink-muted">
             {isFiltered ? 'Nothing matches these filters.' : 'Nothing logged yet.'}
           </Card>
@@ -302,17 +306,23 @@ function DayCard({
 }
 
 /**
- * What the day was, in one line: how many meals, and the biggest thing in it.
+ * What the day was, in one line: how many meals, and the biggest things in it.
  *
- * Enough to recognise a day by without listing it. "4 meals · Chicken breast, Guacamole" answers
- * "which day was that" far faster than fifteen rows of grams do.
+ * **Dishes, not their ingredients.** It ranked raw log rows, so a day whose biggest meal was "3 steak
+ * tacos" was summarised as "Tortillas, corn, Cheddar cheese" — the two heaviest *components* of one
+ * dish, which is not a thing anybody ate and not a day anybody recognises. Grouping first means the
+ * dish competes as one item, under the name the user gave it.
  */
 function summarise(entries: readonly LogEntry[], foods: ReadonlyMap<string, Food>): string {
   const occasions = eatingOccasions(entries)
-  const top = [...entries]
-    .sort((a, b) => b.nutrients.kcal - a.nutrients.kcal)
+  const top = dishGroups(entries)
+    .map((group) => ({
+      name: group.name ?? entryName(group.entries[0]!, foods),
+      kcal: group.nutrients.kcal,
+    }))
+    .sort((a, b) => b.kcal - a.kcal)
     .slice(0, 2)
-    .map((entry) => entryName(entry, foods))
+    .map((thing) => thing.name)
   return [
     `${occasions.length} meal${occasions.length === 1 ? '' : 's'}`,
     top.join(', '),

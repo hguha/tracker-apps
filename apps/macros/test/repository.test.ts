@@ -458,6 +458,52 @@ describe('your own foods', () => {
   })
 })
 
+describe('searchLibrary', () => {
+  it('finds your own recipe by name, which the food database never could', async () => {
+    // "lasagna soup" is a recipe the user imported and cooked twice, and searching for it returned
+    // USDA's lasagna rows and not theirs — the only way to reach it was to remember it existed.
+    const food = await chicken()
+    await repo.saveRecipe({
+      name: 'Lasagna soup',
+      servings: 4,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 400 }],
+    })
+    const hits = await repo.searchLibrary('lasagna soup')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]!.kind).toBe('recipe')
+    expect(hits[0]!.name).toBe('Lasagna soup')
+  })
+
+  it('finds saved meals too, and matches terms in any order', async () => {
+    const food = await chicken()
+    await repo.logFood({ food, grams: 200, meal: 'dinner' })
+    await repo.saveMealTemplate('Usual dinner', await repo.entriesForDay(dayKey(Date.now())))
+    expect(await repo.searchLibrary('dinner usual')).toHaveLength(1)
+  })
+
+  it('matches the name only — an ingredient list is not a name', async () => {
+    const food = await chicken()
+    await repo.saveRecipe({
+      name: 'Sunday tray',
+      servings: 2,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 400 }],
+    })
+    // Every recipe with an onion in it turning up for "onion" would make the list useless.
+    expect(await repo.searchLibrary('chicken')).toEqual([])
+  })
+
+  it('leaves a deleted recipe out', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Old tray',
+      servings: 2,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 100 }],
+    })
+    await repo.deleteRecipe(id)
+    expect(await repo.searchLibrary('old tray')).toEqual([])
+  })
+})
+
 describe('recipes', () => {
   it('divides the total by servings and logs one serving at a time', async () => {
     const food = await chicken()

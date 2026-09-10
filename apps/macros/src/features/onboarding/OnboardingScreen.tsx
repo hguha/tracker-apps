@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import { Apple, ArrowLeft, Ruler, Scale, Target, Utensils } from 'lucide-react'
+import { Activity, Apple, ArrowLeft, Ruler, Scale, Target, Utensils } from 'lucide-react'
 import { lengthFromCm, lengthToCm, unitsFor, weightToKg } from '@tracker-engine/core'
 import { Button } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
-import type { Goal, UnitSystem } from '@/domain/types'
+import { ActivityPicker } from '@/features/shared/ActivityPicker'
+import type { ActivityLevel, Goal, UnitSystem } from '@/domain/types'
 
 /**
  * Bump to re-run setup for everyone. It's compared against the profile's
  * `onboardingVersion`, which syncs, so a reworked flow reaches every device once and a second
  * device never re-runs a version the account already finished.
  */
-export const ONBOARDING_VERSION = 2
+export const ONBOARDING_VERSION = 3
 
 const GOALS: { id: Goal; label: string; blurb: string; rate: number }[] = [
   { id: 'lose', label: 'Lose fat', blurb: 'About 0.5% of bodyweight a week.', rate: -0.5 },
@@ -19,7 +20,7 @@ const GOALS: { id: Goal; label: string; blurb: string; rate: number }[] = [
   { id: 'gain', label: 'Build', blurb: 'A slow surplus, about 0.25% a week.', rate: 0.25 },
 ]
 
-type Step = 'welcome' | 'goal' | 'units' | 'about' | 'weight' | 'done'
+type Step = 'welcome' | 'goal' | 'units' | 'about' | 'activity' | 'weight' | 'done'
 
 /**
  * Units are asked *before* the numbers, and that ordering is the whole fix.
@@ -28,7 +29,7 @@ type Step = 'welcome' | 'goal' | 'units' | 'about' | 'weight' | 'done'
  * choosing imperial changed the label on nothing and stored 70 inches as 70 centimetres. A question
  * that changes how later questions are asked has to come first.
  */
-const ORDER: Step[] = ['welcome', 'goal', 'units', 'about', 'weight', 'done']
+const ORDER: Step[] = ['welcome', 'goal', 'units', 'about', 'activity', 'weight', 'done']
 
 /**
  * Bounded values, as pickers — and pre-set to the middle of the range rather than to "—".
@@ -78,6 +79,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [totalInches, setTotalInches] = useState(String(DEFAULT_INCHES))
   const [birthYear, setBirthYear] = useState(String(DEFAULT_YEAR))
   const [sex, setSex] = useState<'male' | 'female' | ''>('')
+  const [activity, setActivity] = useState<ActivityLevel | null>(null)
   const [weight, setWeight] = useState('')
   const [goalWeight, setGoalWeight] = useState('')
   const [isBusy, setIsBusy] = useState(false)
@@ -107,6 +109,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         heightCm,
         birthYear: birthYear ? Number(birthYear) : null,
         sex: sex || null,
+        activity,
         onboardedAt: Date.now(),
         onboardingVersion: ONBOARDING_VERSION,
       })
@@ -292,6 +295,27 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
               className="mt-2 w-full py-2 text-[13.5px] font-semibold text-ink-muted active:opacity-60"
             >
               I&rsquo;d rather not say
+            </button>
+          </Panel>
+        )}
+
+        {step === 'activity' && (
+          <Panel
+            icon={Activity}
+            title="How active is your week?"
+            blurb="The last guess the app has to make. Two weeks of logs and weigh-ins replace it with your measured expenditure."
+          >
+            <ActivityPicker value={activity} onChange={setActivity} />
+            <Button size="lg" className="mt-4 w-full" disabled={activity === null} onClick={next}>
+              Continue
+            </Button>
+            {/* Same door as the previous step, and the same reason: unanswered is read as moderate
+                with a wider error bar, which is a state the app can be honest about. */}
+            <button
+              onClick={next}
+              className="mt-2 w-full py-2 text-[13.5px] font-semibold text-ink-muted active:opacity-60"
+            >
+              I&rsquo;m not sure
             </button>
           </Panel>
         )}

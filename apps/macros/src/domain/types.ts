@@ -373,6 +373,18 @@ export const WATER_STEPS = {
   ],
 } as const satisfies Record<UnitSystem, readonly { ml: number; label: string }[]>
 
+/**
+ * Physical activity, as the five buckets people can actually place themselves in.
+ *
+ * Deliberately about the *week*, not about training alone: someone who lifts four times a week and
+ * sits down for the other 160 hours burns less than a roofer who never trains, and a "sessions per
+ * week" question can't tell them apart. Each bucket carries a physical-activity level (PAL)
+ * multiplier on BMR — the standard model, and the one whose numbers are defensible.
+ */
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'athlete'
+
+export const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'active', 'athlete'] as const
+
 export type UnitSystem = 'metric' | 'imperial'
 export type ThemePreset =
   | 'default'
@@ -420,6 +432,16 @@ export interface Profile extends SyncColumns {
    * follow the account onto a second device the same way appearance does.
    */
   favouriteFoodIds: string[]
+  /**
+   * How active the user is, for the cold-start estimate only.
+   *
+   * Null until asked, which is honest: the app's whole premise is that expenditure is *measured*
+   * from intake against weight trend, and from the second check-in onward this field changes
+   * nothing. But for the first fortnight there is nothing to measure, and the formula was assuming
+   * three training sessions a week for everybody — so a desk-bound week one and a manual labourer's
+   * week one got the same target, wrong in opposite directions by about 500 kcal.
+   */
+  activity: ActivityLevel | null
   /** Millilitres a day. Null until the user sets one; the card still counts without a target. */
   waterTargetMl: number | null
   /** When to be nudged about logging. Null means never, which is the default. */

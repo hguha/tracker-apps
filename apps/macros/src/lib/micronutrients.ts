@@ -49,7 +49,11 @@ export function nutrientTargets(sex: ReferenceSex = null): NutrientTarget[] {
     // Ceilings: the useful signal is being consistently over, not under.
     { key: 'sodiumMg', label: 'Sodium', reference: 2_300, isFloor: false },
     { key: 'satFatMg', label: 'Saturated fat', reference: 20_000, isFloor: false },
-    { key: 'sugarMg', label: 'Added sugar', reference: 50_000, isFloor: false },
+    // "Sugars", not "Added sugar": USDA records total sugars, so a banana reports 12 g of it and
+    // has no added sugar at all. The 50 g reference *is* the added-sugar Daily Value, kept as a
+    // rough ceiling because there is no total-sugars one — but labelling the field with it made the
+    // app tell people their fruit was half a day's added sugar.
+    { key: 'sugarMg', label: 'Sugars', reference: 50_000, isFloor: false },
   ]
 }
 
@@ -179,9 +183,12 @@ function list(items: string[]): string {
 export function formatAmount(status: Pick<NutrientStatus, 'key' | 'amount'>): string {
   const grams = ['fiberMg', 'satFatMg', 'sugarMg']
   if (status.amount === null) return '—'
-  return grams.includes(status.key)
-    ? `${Math.round(mgToGrams(status.amount))}g`
-    : `${Math.round(status.amount)}mg`
+  if (grams.includes(status.key)) return `${Math.round(mgToGrams(status.amount))}g`
+  // A decimal under 10 mg, because rounding is the difference between "a little" and "none". A
+  // banana's 0.26 mg of iron printed as "0mg", which reads as a food containing no iron — and this
+  // is now shown per 100 g of a single food, where sub-milligram figures are the normal case.
+  if (status.amount > 0 && status.amount < 10) return `${status.amount.toFixed(1)}mg`
+  return `${Math.round(status.amount)}mg`
 }
 
 /**

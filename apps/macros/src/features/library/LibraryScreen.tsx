@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Button, Card, Screen, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
-import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { Card, Screen, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
+import { ChevronDown, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { grams } from '@/features/shared/format'
 import { CustomFoodPanel } from '@/features/log/CustomFoodPanel'
+import { FoodsTab } from './FoodsTab'
 import { RecipesScreen } from '@/features/recipes/RecipesScreen'
 import type { Food, MealTemplate } from '@/domain/types'
 
@@ -37,14 +38,15 @@ export function LibraryScreen({
 
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
-  const foods = useLiveQuery(() => repo.customFoods(), [], [])
 
   const tabs: SegmentedTab<Tab>[] = [
     { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
     // The same word the log screen uses for the same list. "Saved" there and "Meals" here described
     // one thing, which is most of why it was unclear where anything would show up.
     { key: 'meals', label: 'Saved', badge: (templates ?? []).length || undefined },
-    { key: 'foods', label: 'My foods', badge: (foods ?? []).length || undefined },
+    // "Foods" rather than "My foods": the tab searches everything the app knows, and the user's
+    // own label entries are one short list inside it.
+    { key: 'foods', label: 'Foods' },
   ]
 
   // Recipes own a whole screen of their own — a list, filters, a sort, a detail view and an editor
@@ -198,80 +200,3 @@ function MealRow({
 }
 
 const isPresent = (value: string | null): value is string => value !== null
-
-function FoodsTab({ onAdd }: { onAdd: () => void }) {
-  const foods = useLiveQuery(() => repo.customFoods(), [], [])
-
-  return (
-    <>
-      <p className="px-1 text-[12.5px] text-ink-muted">
-        A food is <span className="font-semibold">one thing off a label</span> that the databases
-        don&rsquo;t have.
-      </p>
-      {/* Addable from here, not only from the moment a search fails — which was the only way in
-          and meant you couldn't set one up in advance. */}
-      <Button variant="secondary" className="w-full" onClick={onAdd}>
-        <Plus size={15} />
-        Add a food from its label
-      </Button>
-      <Rows
-        rows={(foods ?? []).map((food) => ({
-          id: food.id,
-          title: food.description,
-          subtitle:
-            `${food.brand ? `${food.brand} · ` : ''}${food.per100.kcal} kcal / 100g · ` +
-            `${grams(food.per100.proteinMg)}P ${grams(food.per100.carbsMg)}C ` +
-            `${grams(food.per100.fatMg)}F`,
-        }))}
-        onDelete={repo.deleteCustomFood}
-        empty="Nothing added yet."
-        footnote="Deleting a food leaves what you already logged alone — entries keep the nutrients they were logged with."
-      />
-    </>
-  )
-}
-
-function Rows({
-  rows,
-  onDelete,
-  empty,
-  footnote,
-}: {
-  rows: { id: string; title: string; subtitle: string }[]
-  onDelete: (id: string) => Promise<unknown>
-  empty: string
-  footnote?: string
-}) {
-  const toast = useToast()
-
-  if (rows.length === 0) {
-    return <Card className="p-4 text-center text-[13.5px] text-ink-muted">{empty}</Card>
-  }
-
-  return (
-    <Card className="p-0">
-      <ul className="divide-y divide-line">
-        {rows.map((row) => (
-          <li key={row.id} className="flex items-center gap-2 px-4 py-2.5">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[14px]">{row.title}</span>
-              <span className="tabular block text-[12px] text-ink-muted">{row.subtitle}</span>
-            </span>
-            <button
-              onClick={() => {
-                void onDelete(row.id).then(() => toast.show(`Deleted ${row.title}`))
-              }}
-              aria-label={`Delete ${row.title}`}
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-            >
-              <Trash2 size={16} />
-            </button>
-          </li>
-        ))}
-      </ul>
-      {footnote !== undefined && (
-        <p className="border-t border-line px-4 py-2.5 text-[12px] text-ink-muted">{footnote}</p>
-      )}
-    </Card>
-  )
-}

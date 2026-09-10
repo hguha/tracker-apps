@@ -60,7 +60,7 @@ function inputs(over: Partial<CheckInInputs> = {}): CheckInInputs {
   return {
     now: NOW,
     program: program(),
-    profile: { heightCm: 180, birthYear: 1996, sex: 'male' },
+    profile: { heightCm: 180, birthYear: 1996, sex: 'male', activity: 'moderate' },
     weights: weights(80, -0.07),
     intake: intake(2200),
     prior: null,
@@ -167,7 +167,7 @@ describe('buildCheckIn', () => {
 
   it('still works with no profile, just without a cold-start prior', () => {
     const outcome = buildCheckIn(
-      inputs({ profile: { heightCm: null, birthYear: null, sex: null } }),
+      inputs({ profile: { heightCm: null, birthYear: null, sex: null, activity: null } }),
     )
     expect(outcome.kind).toBe('ready')
   })

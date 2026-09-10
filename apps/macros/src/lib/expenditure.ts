@@ -1,5 +1,5 @@
 import { trendChangePerWeek, type TrendPoint } from '@tracker-engine/body'
-import type { Goal, Program } from '@/domain/types'
+import type { ActivityLevel, Goal, Program } from '@/domain/types'
 
 /**
  * Measures energy expenditure from weight trend and logged intake, instead of predicting it
@@ -152,27 +152,44 @@ export function stepToward(current: number, proposed: number): number {
 }
 
 /**
+ * Physical-activity level: the multiplier on BMR for each bucket.
+ *
+ * The conventional Harris–Benedict/FAO figures, unaltered. `moderate` is the fallback when nobody
+ * has said, which is what the app assumed for everyone before there was a question — the point of
+ * asking is that the two ends are 45% apart, which on a 1,600 kcal BMR is 700 kcal a day.
+ */
+export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+  athlete: 1.9,
+}
+
+/**
  * Cold-start expenditure: Mifflin–St Jeor times an activity factor.
  *
- * A prior the data overwrites, not an answer — the first fortnight is explicitly low
- * confidence. If REPutation is connected, `sessionsPerWeek` comes from measured training
- * rather than asking the user to rate their own activity, which people do badly.
+ * A prior the data overwrites, not an answer — the first fortnight is explicitly low confidence, and
+ * from the first real check-in the measured figure takes over entirely. That is why this is the only
+ * place the activity question is used, and why it is asked once rather than kept up to date: people
+ * rate their own activity badly, and after two weeks the app no longer has to care.
  */
 export function estimateInitialExpenditure(input: {
   kg: number
   heightCm: number
   age: number
   sex: 'male' | 'female'
-  sessionsPerWeek: number
+  activity: ActivityLevel | null
 }): ExpenditureState {
   const bmr =
     10 * input.kg +
     6.25 * input.heightCm -
     5 * input.age +
     (input.sex === 'male' ? 5 : -161)
-  const factor = 1.2 + Math.min(6, Math.max(0, input.sessionsPerWeek)) * 0.055
-  // A wide error bar, because this is a population average standing in for one person.
-  return { kcal: Math.round(bmr * factor), se: 350 }
+  const factor = ACTIVITY_FACTORS[input.activity ?? 'moderate']
+  // A wide error bar, because this is a population average standing in for one person. Wider still
+  // when nobody has said how active they are, since that is a whole bucket of uncertainty on top.
+  return { kcal: Math.round(bmr * factor), se: input.activity === null ? 450 : 350 }
 }
 
 function standardDeviation(values: readonly number[]): number {

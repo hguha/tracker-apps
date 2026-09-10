@@ -9,6 +9,8 @@ import { grams } from '@/features/shared/format'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
 import { estimateIngredients, estimateMeal } from '@/features/log/estimate'
+import { resolveAmount } from '@/lib/resolveAmount'
+import type { ParsedIngredient } from '@/lib/parseIngredient'
 import { resolveLines } from '@/data/ingredientLines'
 import { importRecipeFromUrl, type ImportedRecipe } from '@/data/recipeImport'
 import { CUISINES, type CuisineKey, type Food } from '@/domain/types'
@@ -17,6 +19,16 @@ interface Draft {
   foodId: string | null
   label: string
   grams: number
+  /**
+   * The line this row was read from, kept for the session.
+   *
+   * Because "2 cups" cannot be weighed without knowing what's in the cup: a cup of flour is 120 g
+   * and a cup of oil is 218 g. So an unmatched line has a perfectly good amount and no grams — and
+   * the moment the user picks a food, that amount becomes weighable against *its* portions. Without
+   * this the pick set the name and left the row at 0 g, which is the same wrong total with a
+   * right-looking name on it.
+   */
+  parsed?: ParsedIngredient
 }
 
 /**
@@ -169,9 +181,17 @@ export function RecipeEditor({
           foodId: line.food?.id ?? null,
           label: line.food?.description ?? line.parsed.name,
           grams: line.grams!,
+          parsed: line.parsed,
         })),
       ])
-      setNotes(local.assumptions)
+      // Said out loud, because from outside the two paths are indistinguishable and it looked like
+      // every import went to the model. Nineteen lines read in a second, or two lines that needed a
+      // request, are different facts about how much of this you should double-check.
+      setNotes(
+        [readingNote(resolved.length, unreadable.length), local.assumptions]
+          .filter(Boolean)
+          .join('. '),
+      )
       setPending(null)
 
       // Only the leftovers go to the model, so a nineteen-line import spends a request on the two
@@ -181,17 +201,22 @@ export function RecipeEditor({
           const estimate = await estimateIngredients(unreadable.map((line) => line.parsed.raw))
           setItems((current) => [...current, ...estimate.items.map(toDraft)])
         } catch (cause) {
+          // Kept, with the amount the line stated, rather than dropped. A recipe is worth having as
+          // a recipe even when a line's macros aren't known — and the stated amount is the thing
+          // that makes it one, so throwing it away to leave a bare "red pepper flakes" would lose
+          // the only part of the line nobody has to guess at.
           setItems((current) => [
             ...current,
             ...unreadable.map((line) => ({
               foodId: line.food?.id ?? null,
-              label: line.parsed.name,
+              label: withAmount(line.parsed),
               grams: 0,
+              parsed: line.parsed,
             })),
           ])
           setError(
             `${cause instanceof Error ? cause.message : 'Could not weigh every line.'} ` +
-              `${unreadable.length} line${unreadable.length === 1 ? '' : 's'} came in at 0 g — set those amounts by hand.`,
+              `${unreadable.length} line${unreadable.length === 1 ? '' : 's'} kept at the amount written — pick a food on each and the weight follows.`,
           )
         }
       }
@@ -427,7 +452,7 @@ export function RecipeEditor({
           </h2>
           {unmatched > 0 && (
             <span className="text-[11.5px]" style={{ color: 'var(--status-serious)' }}>
-              {unmatched} not counted
+              {unmatched} without macros
             </span>
           )}
         </div>
@@ -462,9 +487,7 @@ export function RecipeEditor({
                         onPick={(food) => {
                           setItems(
                             items.map((draft, i) =>
-                              i === index
-                                ? { ...draft, foodId: food.id, label: food.description }
-                                : draft,
+                              i === index ? matchDraftTo(draft, food) : draft,
                             ),
                           )
                           setEditing(null)
@@ -476,7 +499,7 @@ export function RecipeEditor({
                   subtitle={
                     item.foodId === null ? (
                       <span style={{ color: 'var(--status-serious)' }}>
-                        no match for “{item.label}” — not counted
+                        stays in the recipe, but no food matched it, so it adds no macros
                       </span>
                     ) : (
                       <span className="tabular text-ink-muted">
@@ -541,8 +564,9 @@ export function RecipeEditor({
         {notes && <p className="mt-1.5 text-[12px] text-ink-muted">{notes}</p>}
         {unmatched > 0 && (
           <p className="mt-1.5 text-[12px]" style={{ color: 'var(--status-serious)' }}>
-            {unmatched} ingredient{unmatched === 1 ? '' : 's'} matched nothing and count zero, so
-            this total is low. Search a match on each one above.
+            {unmatched} ingredient{unmatched === 1 ? '' : 's'} matched no food, so{' '}
+            {unmatched === 1 ? 'it adds' : 'they add'} nothing to this total. The recipe saves with{' '}
+            {unmatched === 1 ? 'it' : 'them'} either way — match a food above to have it counted.
           </p>
         )}
         {source && (
@@ -571,6 +595,38 @@ const toDraft = (item: { food: Food | null; query: string; grams: number }): Dra
   label: item.food?.description ?? item.query,
   grams: item.grams,
 })
+
+/**
+ * Points a row at a food, and re-weighs it against that food's own portions.
+ *
+ * The weight is the whole reason this isn't a one-line setter: "9 lasagna noodles" has a perfectly
+ * clear amount that no table can convert, because it depends on the noodle. USDA measured it, so the
+ * moment there's a food the number is available — and only ever falls back to what was already on
+ * the row, never to a guess.
+ */
+function matchDraftTo(draft: Draft, food: Food): Draft {
+  const weighed = draft.parsed ? resolveAmount(draft.parsed, food).grams : null
+  return {
+    ...draft,
+    foodId: food.id,
+    label: food.description,
+    grams: weighed ?? (draft.grams > 0 ? draft.grams : 100),
+  }
+}
+
+/** The food with the amount the line stated, for a row that has no grams to show instead. */
+function withAmount(parsed: ParsedIngredient): string {
+  if (parsed.quantity === null) return parsed.name
+  const rounded = Math.round(parsed.quantity * 100) / 100
+  return `${parsed.name} (${rounded}${parsed.unit && parsed.unit !== 'piece' ? ` ${parsed.unit}` : ''})`
+}
+
+/** How much of the list was read without a model, in a sentence rather than a spinner. */
+function readingNote(readLocally: number, neededModel: number): string {
+  if (readLocally === 0) return ''
+  if (neededModel === 0) return `Read all ${readLocally} lines directly — no AI involved`
+  return `Read ${readLocally} of ${readLocally + neededModel} lines directly; ${neededModel} needed the AI`
+}
 
 const isPresent = (value: string | null): value is string => value !== null
 

@@ -11,9 +11,14 @@ import { VENUES, type LogEntry, type Venue } from '@/domain/types'
  * exactly on the restaurant meals it exists to measure. Here the meal is finished and in front of
  * you, and one tap covers every row in it.
  *
- * Nothing is pre-selected. A default of "home" would be right most of the time and would therefore be
- * indistinguishable, in the data, from an answer — and the chart built on it would report the default
- * back as a habit. Unset stays unset until someone says.
+ * New rows arrive as "home", which is the write-time default (see `LogScreen`). The argument against
+ * it was that a default is indistinguishable from an answer, and the chart would report the default
+ * back as a habit — true, but the alternative made *unrecorded* the commonest value, which is a worse
+ * lie told about the same data. Home is right for most meals, correcting it is one tap here, and the
+ * interesting answer is the one people will bother to give.
+ *
+ * Tapping the selected one still clears it, so "I'd rather not say" remains reachable, and rows logged
+ * before the default existed keep reading as unanswered.
  */
 export function VenueChoice({ entries }: { entries: readonly LogEntry[] }) {
   const current = entries.find((entry) => entry.venue !== null)?.venue ?? null

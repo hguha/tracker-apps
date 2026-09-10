@@ -1,8 +1,7 @@
 import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
-import { searchRemote } from '@/data/foodLookup'
+import { matchIngredient } from '@/data/matchFood'
 import { nutrientsFor, sum } from '@/lib/nutrition'
-import { matchesQuery, queryTerms } from '@/lib/foodSearch'
 import { EMPTY_NUTRIENTS, type Food, type Nutrients } from '@/domain/types'
 
 /**
@@ -172,31 +171,17 @@ async function toItem(raw: RawItem, index: number): Promise<EstimatedItem> {
   const confidence =
     raw.confidence === 'high' || raw.confidence === 'medium' ? raw.confidence : 'low'
 
-  const food = query ? await bestMatch(query) : null
+  const matched = query
+    ? await matchIngredient(query)
+    : { food: null, matchedBy: 'unmatched' as const }
   return {
     id: `est-${index}`,
     query: query || 'Unknown item',
     grams: Number.isFinite(grams) && grams > 0 ? Math.round(grams) : 0,
     confidence,
-    food,
-    matchedBy: food === null ? 'unmatched' : matchQuality(food, query),
+    food: matched.food,
+    matchedBy: matched.matchedBy,
   }
-}
-
-/** Local first, then remote once — a described meal shouldn't cost one API call per ingredient
- *  if the ingredients are already cached. */
-async function bestMatch(query: string): Promise<Food | null> {
-  const local = await repo.searchFoods(query, 1)
-  if (local[0]) return local[0]
-
-  // Generic sources only: these are ingredients, and Open Food Facts' packaged rows are both the
-  // wrong answer for "cooked spaghetti" and the slowest part of breaking down a six-item meal.
-  await searchRemote(query, { branded: false })
-  return (await repo.searchFoods(query, 1))[0] ?? null
-}
-
-function matchQuality(food: Food, query: string): 'exact' | 'fuzzy' {
-  return matchesQuery(food, queryTerms(query)) ? 'exact' : 'fuzzy'
 }
 
 export function totalOf(items: readonly EstimatedItem[]): Nutrients {

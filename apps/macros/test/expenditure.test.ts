@@ -146,18 +146,35 @@ describe('stepToward', () => {
 describe('estimateInitialExpenditure', () => {
   const base = { kg: 80, heightCm: 180, age: 30, sex: 'male' as const }
 
-  it('rises with training frequency', () => {
-    const rest = estimateInitialExpenditure({ ...base, sessionsPerWeek: 0 })
-    const trained = estimateInitialExpenditure({ ...base, sessionsPerWeek: 5 })
-    expect(trained.kcal).toBeGreaterThan(rest.kcal)
+  it('rises with activity', () => {
+    const still = estimateInitialExpenditure({ ...base, activity: 'sedentary' })
+    const busy = estimateInitialExpenditure({ ...base, activity: 'athlete' })
+    expect(busy.kcal).toBeGreaterThan(still.kcal)
   })
 
   it('carries a wide error bar, being a population average', () => {
-    expect(estimateInitialExpenditure({ ...base, sessionsPerWeek: 3 }).se).toBeGreaterThan(250)
+    expect(estimateInitialExpenditure({ ...base, activity: 'moderate' }).se).toBeGreaterThan(250)
+  })
+
+  it('is wider still when nobody has said how active they are', () => {
+    // Unasked is read as moderate — the assumption the app used to make silently for everybody —
+    // but it must not be recorded with the same confidence as an answer.
+    const guessed = estimateInitialExpenditure({ ...base, activity: null })
+    const answered = estimateInitialExpenditure({ ...base, activity: 'moderate' })
+    expect(guessed.kcal).toBe(answered.kcal)
+    expect(guessed.se).toBeGreaterThan(answered.se)
+  })
+
+  it('spans a real difference between the ends of the scale', () => {
+    // The reason the question is worth asking at all: on the same body, sedentary and athlete are
+    // several hundred kcal a day apart, and the app was giving both the middle answer.
+    const still = estimateInitialExpenditure({ ...base, activity: 'sedentary' })
+    const busy = estimateInitialExpenditure({ ...base, activity: 'athlete' })
+    expect(busy.kcal - still.kcal).toBeGreaterThan(500)
   })
 
   it('lands in a plausible range', () => {
-    const est = estimateInitialExpenditure({ ...base, sessionsPerWeek: 3 })
+    const est = estimateInitialExpenditure({ ...base, activity: 'moderate' })
     expect(est.kcal).toBeGreaterThan(2000)
     expect(est.kcal).toBeLessThan(3400)
   })

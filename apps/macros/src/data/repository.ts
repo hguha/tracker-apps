@@ -37,7 +37,7 @@ import {
   sum as sumNutrients,
 } from '@/lib/nutrition'
 import { multiplierForDay } from '@/lib/cycling'
-import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
+import { haystackOf, matchesHaystack, queryTerms, rankFoods } from '@/lib/foodSearch'
 import {
   buildCheckIn,
   initialTargetsFromTrend,
@@ -58,6 +58,24 @@ export function setActiveUserId(userId: string): void {
   activeUserId = userId
 }
 
+/**
+ * Where a row sits within its day.
+ *
+ * The timestamp, plus a counter — because a dish is written as several rows inside the same
+ * millisecond, so `sortIndex: eatenAt` gave all of them the same position and left the order to
+ * whatever IndexedDB returned. The parts of "3 steak tacos" then listed in a different order on
+ * different devices, and a recipe's ingredients came out shuffled from the order they were entered.
+ *
+ * Milliseconds rather than a separate fraction, so old rows (which stored the bare timestamp) stay
+ * comparable with new ones. A shift of under a second cannot reorder anything a person would notice.
+ */
+let sortSequence = 0
+
+function nextSortIndex(eatenAt: number): number {
+  sortSequence = (sortSequence + 1) % 900
+  return eatenAt + sortSequence
+}
+
 // --- Profile (synced, one row per user) -------------------------------------------
 
 function defaultProfile(userId: string): Profile {
@@ -75,6 +93,7 @@ function defaultProfile(userId: string): Profile {
     onboardingVersion: 0,
     dietNotes: '',
     eatingWindow: null,
+    activity: null,
     favouriteFoodIds: [],
     waterTargetMl: null,
     reminders: null,
@@ -97,6 +116,7 @@ export async function getProfile(): Promise<Profile> {
     favouriteFoodIds: row.favouriteFoodIds ?? [],
     waterTargetMl: row.waterTargetMl ?? null,
     reminders: row.reminders ?? null,
+    activity: row.activity ?? null,
   }
 }
 
@@ -170,7 +190,13 @@ export async function findByBarcode(barcode: string): Promise<Food | undefined> 
  * Invalidated by every write path, so a newly cached remote food is searchable immediately. The
  * whole point of the local index is that it agrees with the database.
  */
-let foodIndex: { rows: Food[]; size: number } | null = null
+let foodIndex: { rows: IndexedFood[]; size: number } | null = null
+
+/** A cached row with its match text precomputed — see `matchesHaystack`. */
+interface IndexedFood {
+  food: Food
+  haystack: string
+}
 
 export function invalidateFoodIndex(): void {
   foodIndex = null
@@ -188,7 +214,7 @@ export function invalidateFoodIndex(): void {
  * 2. They're the validity check, so a write that forgets `invalidateFoodIndex` still can't serve a
  *    stale list — a count is an index-only read and costs nothing next to a full scan.
  */
-async function allCachedFoods(): Promise<Food[]> {
+async function allCachedFoods(): Promise<IndexedFood[]> {
   const [referenceCount, customCount] = await Promise.all([
     db.foods.count(),
     db.customFoods.count(),
@@ -200,7 +226,10 @@ async function allCachedFoods(): Promise<Food[]> {
     db.foods.toArray(),
     db.customFoods.filter(alive).toArray(),
   ])
-  foodIndex = { rows: [...reference, ...custom], size }
+  foodIndex = {
+    rows: [...reference, ...custom].map((food) => ({ food, haystack: haystackOf(food) })),
+    size,
+  }
   return foodIndex.rows
 }
 
@@ -209,9 +238,49 @@ export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
   const terms = queryTerms(query)
   if (query.trim().length < 2) return []
 
-  const matches = (await allCachedFoods()).filter((food) => matchesQuery(food, terms))
+  const matches = (await allCachedFoods()).flatMap((row) =>
+    matchesHaystack(row.haystack, terms) ? [row.food] : [],
+  )
   return rankFoods(matches, query, limit)
 }
+
+/**
+ * The user's own recipes and saved meals, matched by name.
+ *
+ * Because they were unfindable. Searching "lasagna soup" — a recipe the user had imported, named and
+ * cooked twice — returned USDA's lasagna rows and not their own, and the only way to reach it was to
+ * remember it existed and go to a different tab. A thing you saved is the *most* likely answer to
+ * typing its name, so these rank above the database rather than beside it.
+ *
+ * Substring over every term, in any order, over the name only: an ingredient list is not a name, and
+ * matching on it would make every recipe containing an onion a hit for "onion".
+ */
+export async function searchLibrary(query: string, limit = 8): Promise<LibraryHit[]> {
+  const terms = queryTerms(query)
+  if (terms.length === 0) return []
+
+  const hits = (r: { name: string }) => terms.every((term) => r.name.toLowerCase().includes(term))
+  const [recipeRows, templateRows] = await Promise.all([
+    db.recipes.filter((row) => alive(row) && hits(row)).toArray(),
+    db.mealTemplates.filter((row) => alive(row) && hits(row)).toArray(),
+  ])
+
+  return [
+    ...recipeRows.map((recipe) => ({ kind: 'recipe' as const, recipe, name: recipe.name })),
+    ...templateRows.map((template) => ({ kind: 'meal' as const, template, name: template.name })),
+  ]
+    // A name that *starts* with what was typed first, then alphabetically: with a handful of saved
+    // things any stable order will do, and "starts with" is the one that feels like a search.
+    .sort((a, b) => {
+      const rank = (name: string) => (name.toLowerCase().startsWith(terms[0]!) ? 0 : 1)
+      return rank(a.name) - rank(b.name) || a.name.localeCompare(b.name)
+    })
+    .slice(0, limit)
+}
+
+export type LibraryHit =
+  | { kind: 'recipe'; recipe: Recipe; name: string }
+  | { kind: 'meal'; template: MealTemplate; name: string }
 
 // --- The user's own foods ----------------------------------------------------------
 
@@ -488,7 +557,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     day: input.day ?? dayKey(eatenAt),
     eatenAt,
     meal: input.meal,
-    sortIndex: eatenAt,
+    sortIndex: nextSortIndex(eatenAt),
     foodId: input.food.id,
     recipeId: null,
     quickAdd: null,
@@ -524,7 +593,7 @@ export async function logQuickAdd(
     day: dayKey(eatenAt),
     eatenAt,
     meal,
-    sortIndex: eatenAt,
+    sortIndex: nextSortIndex(eatenAt),
     foodId: null,
     recipeId: null,
     quickAdd: { ...EMPTY_NUTRIENTS, ...nutrients },
@@ -696,7 +765,7 @@ export async function relogEntries(
       day,
       meal: into.meal ?? entry.meal,
       eatenAt,
-      sortIndex: eatenAt,
+      sortIndex: nextSortIndex(eatenAt),
       grams: entry.grams * multiple,
       nutrients: scaleNutrients(entry.nutrients, multiple),
       quickAdd: entry.quickAdd === null ? null : scaleNutrients(entry.quickAdd, multiple),
@@ -752,6 +821,12 @@ export async function logDishAgain(
   )
   if (rows.length === 0) return 0
   return relogEntries(rows, { at: into.at ?? Date.now(), meal: into.meal, multiple: into.multiple })
+}
+
+/** The rows one dish was written as, in the order they were written. */
+export async function dishEntries(dishId: string): Promise<LogEntry[]> {
+  const rows = await db.logEntries.where('dishId').equals(dishId).filter(alive).toArray()
+  return rows.sort((a, b) => a.sortIndex - b.sortIndex)
 }
 
 // --- Water ------------------------------------------------------------------------
@@ -1047,7 +1122,8 @@ export async function logMealTemplate(
   meal: MealSlot,
   at = Date.now(),
   multiple = 1,
-  venue: Venue | null = null,
+  // Home by default, like every other write path — see `LogScreen` on why the default beats null.
+  venue: Venue | null = 'home',
 ): Promise<number> {
   const dishId = newId()
   for (const item of template.items) {
@@ -1057,7 +1133,7 @@ export async function logMealTemplate(
       day: dayKey(at),
       eatenAt: at,
       meal,
-      sortIndex: at,
+      sortIndex: nextSortIndex(at),
       foodId: item.foodId,
       recipeId: item.recipeId,
       fromRecipeId: null,
