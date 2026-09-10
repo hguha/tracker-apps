@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   NUTRIENT_TARGETS,
   bmi,
+  coverageNote,
   dietQuality,
   goalWeightKg,
   nutrientStatus,
@@ -121,5 +122,36 @@ describe('sex-adjusted references', () => {
 
   it('falls back to a neutral set with no sex on file', () => {
     expect(nutrientTargets(null).map((t) => t.key)).toEqual(NUTRIENT_TARGETS.map((t) => t.key))
+  })
+})
+
+describe('coverage gates the verdict', () => {
+  it('will not judge a nutrient most of the day did not report', () => {
+    // The alternative is calling a day short on fibre when two thirds of its calories never reported
+    // any — a warning that is wrong, and that teaches people to ignore the whole panel.
+    const [fibre] = nutrientStatus({ ...EMPTY_NUTRIENTS, fiberMg: 12_000 }, 'male', {
+      fiberMg: 0.3,
+    })
+    expect(fibre!.verdict).toBe('unknown')
+    // The measured amount is still carried, so the bar can be drawn at what was actually seen.
+    expect(fibre!.amount).toBe(12_000)
+    expect(coverageNote(fibre!)).toBe('only 30% of what you ate records it')
+  })
+
+  it('judges once most of the day reports it', () => {
+    const [fibre] = nutrientStatus({ ...EMPTY_NUTRIENTS, fiberMg: 12_000 }, 'male', {
+      fiberMg: 0.9,
+    })
+    expect(fibre!.verdict).toBe('short')
+  })
+
+  it('treats missing coverage as fully covered, so an old caller still works', () => {
+    const [fibre] = nutrientStatus({ ...EMPTY_NUTRIENTS, fiberMg: 40_000 }, 'male')
+    expect(fibre!.verdict).toBe('ok')
+  })
+
+  it('says nothing recorded it when nothing did', () => {
+    const [fibre] = nutrientStatus({ ...EMPTY_NUTRIENTS, fiberMg: null }, 'male', { fiberMg: 0 })
+    expect(coverageNote(fibre!)).toBe('none of these foods record it')
   })
 })

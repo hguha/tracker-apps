@@ -2,7 +2,12 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend, type TrendPoint } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
-import { dailyAverage, dayTotals, mgToGrams } from '@/lib/nutrition'
+import {
+  dailyAverageCovered,
+  mgToGrams,
+  sumCovered,
+  type CoveredNutrients,
+} from '@/lib/nutrition'
 import { groupByWeek } from '@/lib/checkin'
 import { filterExpenditure, kcalPerKg, windowEstimate, type ExpenditureWindow } from '@/lib/expenditure'
 import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
@@ -13,7 +18,6 @@ import type {
   CuisineKey,
   LogEntry,
   MacroTargets,
-  Nutrients,
   Profile,
   Program,
 } from '@/domain/types'
@@ -33,8 +37,10 @@ export interface InsightsDay {
   protein: number
   carbs: number
   fat: number
-  /** Null when nothing logged that day recorded fibre — never zero (see lib/nutrition). */
+  /** Null only when *nothing* that day recorded fibre — never zero (see lib/nutrition). */
   fiber: number | null
+  /** Share of the day's calories from foods that reported fibre, 0–1. */
+  fiberCoverage: number
   targetKcal: number | null
   targetProtein: number | null
   occasions: number
@@ -42,9 +48,16 @@ export interface InsightsDay {
   lastMinute: number | null
 }
 
+/** One day's water, in millilitres. Null when nothing was logged — never zero. */
+export interface WaterDay {
+  day: string
+  ml: number | null
+}
+
 export interface InsightsData {
   isLoading: boolean
   days: InsightsDay[]
+  water: WaterDay[]
   trend: TrendPoint[]
   ratePerWeek: number | null
   windows: ExpenditureWindow[]
@@ -54,8 +67,8 @@ export interface InsightsData {
   program: Program | undefined
   profile: Profile | undefined
   targets: MacroTargets | null
-  /** Per-day average over the window, for the nutrient adequacy chart. */
-  averages: Nutrients
+  /** Per-day average over the window, with per-nutrient coverage — see `sumCovered`. */
+  nutrition: CoveredNutrients
   loggedDayCount: number
   /** kcal eaten in each hour of the day, summed across the window. */
   kcalByHour: number[]
@@ -83,6 +96,7 @@ export function useInsightsData(windowDays: number): InsightsData {
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
+  const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], undefined)
 
   const byDay = new Map<string, LogEntry[]>()
   for (const entry of entries ?? []) {
@@ -99,7 +113,9 @@ export function useInsightsData(windowDays: number): InsightsData {
     const rows = byDay.get(day) ?? []
     const occasions = eatingOccasions(rows)
     const target = targetsByDay?.get(day) ?? null
-    const totals = dayTotals(rows)
+    // Covered, not strict: one taco ingredient with no fibre figure used to drop the entire day
+    // off the fibre chart. See `sumCovered`.
+    const { totals, coverage } = sumCovered(rows.map((row) => row.nutrients))
     return {
       day,
       kcal: totals.kcal,
@@ -107,6 +123,7 @@ export function useInsightsData(windowDays: number): InsightsData {
       carbs: mgToGrams(totals.carbsMg),
       fat: mgToGrams(totals.fatMg),
       fiber: totals.fiberMg === null ? null : mgToGrams(totals.fiberMg),
+      fiberCoverage: coverage.fiberMg,
       targetKcal: target?.kcal ?? null,
       targetProtein: target ? mgToGrams(target.proteinMg) : null,
       occasions: occasions.length,
@@ -170,8 +187,20 @@ export function useInsightsData(windowDays: number): InsightsData {
   const last = trend[trend.length - 1]
 
   return {
-    isLoading: entries === undefined || weights === undefined,
+    isLoading: entries === undefined || weights === undefined || waterRows === undefined,
     days,
+    /**
+     * The union of days with food and days with water, so a day of only water still appears.
+     *
+     * A gap rather than a zero for a day nothing was recorded — "didn't log it" and "drank none" are
+     * different facts, and a run of zeroes would make the first look like the second.
+     */
+    water: [...new Set([...dayKeys, ...(waterRows ?? []).map((row) => row.day)])]
+      .sort()
+      .map((day) => ({
+        day,
+        ml: (waterRows ?? []).find((row) => row.day === day)?.ml ?? null,
+      })),
     trend,
     ratePerWeek: trendChangePerWeek(trend),
     windows,
@@ -181,7 +210,7 @@ export function useInsightsData(windowDays: number): InsightsData {
     program,
     profile,
     targets,
-    averages: dailyAverage(entries ?? []),
+    nutrition: dailyAverageCovered(entries ?? []),
     loggedDayCount: dayKeys.length,
     kcalByHour,
     sourceCounts: [...sourceTally.entries()]

@@ -9,6 +9,11 @@ import type { Food } from '@/domain/types'
  * breaking because USDA now ranks a different oat first.
  *
  * Ids are `seed:*` so a USDA row (`usda:<fdcId>`) can never collide with one.
+ *
+ * The micronutrients came from `scripts/fill-staple-micros.mjs`, which fills only the fields that were
+ * null and only from a generic USDA row whose macros match — so the hand-checked energy and macros stay
+ * authoritative and a mismatched candidate leaves the gap rather than inventing a figure. A remaining
+ * null is a field USDA does not record for that food either.
  */
 export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 'clientRev'>[] =
 
@@ -28,12 +33,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 2600,
       "fiberMg": 0,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "satFatMg": 349,
+      "sodiumMg": 66,
+      "potassiumMg": 330,
+      "cholesterolMg": 73,
+      "calciumMg": 4,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -61,12 +66,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 6600,
       "fiberMg": 0,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "satFatMg": 1658,
+      "sodiumMg": 62,
+      "potassiumMg": 272,
+      "cholesterolMg": 92,
+      "calciumMg": 6,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -93,13 +98,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 0,
       "fatMg": 10000,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 0,
+      "satFatMg": 3927,
+      "sodiumMg": 66,
+      "potassiumMg": 321,
+      "cholesterolMg": 65,
+      "calciumMg": 12,
+      "ironMg": 2
     },
     "gramsPerMl": null,
     "portions": [
@@ -126,13 +131,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 0,
       "fatMg": 13400,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 0,
+      "satFatMg": 3050,
+      "sodiumMg": 59,
+      "potassiumMg": 363,
+      "cholesterolMg": 55,
+      "calciumMg": 9,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -159,13 +164,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 700,
       "fatMg": 9500,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 200,
+      "satFatMg": 3200,
+      "sodiumMg": 129,
+      "potassiumMg": 132,
+      "cholesterolMg": 411,
+      "calciumMg": 48,
+      "ironMg": 2
     },
     "gramsPerMl": null,
     "portions": [
@@ -192,13 +197,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 700,
       "fatMg": 200,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 710,
+      "satFatMg": 0,
+      "sodiumMg": 166,
+      "potassiumMg": 163,
+      "cholesterolMg": 0,
+      "calciumMg": 7,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -226,12 +231,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 400,
       "fiberMg": 0,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "satFatMg": 108,
+      "sodiumMg": 36,
+      "potassiumMg": 141,
+      "cholesterolMg": 5,
+      "calciumMg": 111,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -258,13 +263,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 4800,
       "fatMg": 2000,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 4890,
+      "satFatMg": 1110,
+      "sodiumMg": 39,
+      "potassiumMg": 159,
+      "cholesterolMg": 8,
+      "calciumMg": 126,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -291,13 +296,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 3100,
       "fatMg": 33100,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 330,
+      "satFatMg": 19200,
+      "sodiumMg": 654,
+      "potassiumMg": 77,
+      "cholesterolMg": 100,
+      "calciumMg": 707,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -325,12 +330,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 2300,
       "fiberMg": 0,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "satFatMg": 1260,
+      "sodiumMg": 321,
+      "potassiumMg": 120,
+      "cholesterolMg": 12,
+      "calciumMg": 103,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -357,13 +362,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 8000,
       "fatMg": 2000,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 0,
+      "satFatMg": 781,
+      "sodiumMg": 156,
+      "potassiumMg": 500,
+      "cholesterolMg": 16,
+      "calciumMg": 469,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -391,12 +396,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 8700,
       "fiberMg": 2300,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "satFatMg": 1261,
+      "sodiumMg": 14,
+      "potassiumMg": 237,
+      "cholesterolMg": 0,
+      "calciumMg": 683,
+      "ironMg": 3
     },
     "gramsPerMl": null,
     "portions": [
@@ -423,13 +428,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 23700,
       "fatMg": 500,
       "fiberMg": 8700,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 320,
+      "satFatMg": 139,
+      "sodiumMg": 237,
+      "potassiumMg": 355,
+      "cholesterolMg": 0,
+      "calciumMg": 27,
+      "ironMg": 2
     },
     "gramsPerMl": null,
     "portions": [
@@ -456,13 +461,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 20100,
       "fatMg": 400,
       "fiberMg": 7900,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 1800,
+      "satFatMg": 53,
+      "sodiumMg": 238,
+      "potassiumMg": 369,
+      "cholesterolMg": 0,
+      "calciumMg": 19,
+      "ironMg": 3
     },
     "gramsPerMl": null,
     "portions": [
@@ -489,13 +494,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 27400,
       "fatMg": 2600,
       "fiberMg": 7600,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 4800,
+      "satFatMg": 269,
+      "sodiumMg": 243,
+      "potassiumMg": 291,
+      "cholesterolMg": 0,
+      "calciumMg": 49,
+      "ironMg": 3
     },
     "gramsPerMl": null,
     "portions": [
@@ -522,13 +527,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 28200,
       "fatMg": 300,
       "fiberMg": 400,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 110,
+      "satFatMg": 74,
+      "sodiumMg": 2,
+      "potassiumMg": 56,
+      "cholesterolMg": 0,
+      "calciumMg": 19,
+      "ironMg": 2
     },
     "gramsPerMl": null,
     "portions": [
@@ -555,13 +560,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 25600,
       "fatMg": 1000,
       "fiberMg": 1600,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 220,
+      "satFatMg": 200,
+      "sodiumMg": 3,
+      "potassiumMg": 80,
+      "cholesterolMg": 0,
+      "calciumMg": 5,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -588,13 +593,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 30900,
       "fatMg": 900,
       "fiberMg": 1800,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 560,
+      "satFatMg": 175,
+      "sodiumMg": 232,
+      "potassiumMg": 44,
+      "cholesterolMg": 0,
+      "calciumMg": 7,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -621,13 +626,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 41000,
       "fatMg": 3400,
       "fiberMg": 6800,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 4410,
+      "satFatMg": 732,
+      "sodiumMg": 430,
+      "potassiumMg": 250,
+      "cholesterolMg": 0,
+      "calciumMg": 163,
+      "ironMg": 3
     },
     "gramsPerMl": null,
     "portions": [
@@ -654,13 +659,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 66300,
       "fatMg": 6900,
       "fiberMg": 10600,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 1430,
+      "satFatMg": 1430,
+      "sodiumMg": 5,
+      "potassiumMg": 579,
+      "cholesterolMg": 0,
+      "calciumMg": 79,
+      "ironMg": 8
     },
     "gramsPerMl": null,
     "portions": [
@@ -689,11 +694,11 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fiberMg": 1300,
       "sugarMg": null,
       "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
+      "sodiumMg": 3,
+      "potassiumMg": 450,
       "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "calciumMg": 8,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -722,11 +727,11 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fiberMg": 3000,
       "sugarMg": null,
       "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
+      "sodiumMg": 0,
+      "potassiumMg": 486,
       "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "calciumMg": 22,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -753,13 +758,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 21300,
       "fatMg": 1900,
       "fiberMg": 2800,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 870,
+      "satFatMg": 231,
+      "sodiumMg": 7,
+      "potassiumMg": 172,
+      "cholesterolMg": 0,
+      "calciumMg": 17,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -786,13 +791,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 51400,
       "fatMg": 7000,
       "fiberMg": 3000,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 3710,
+      "satFatMg": 2920,
+      "sodiumMg": 700,
+      "potassiumMg": 125,
+      "cholesterolMg": 0,
+      "calciumMg": 146,
+      "ironMg": 4
     },
     "gramsPerMl": null,
     "portions": [
@@ -819,13 +824,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 22800,
       "fatMg": 300,
       "fiberMg": 2600,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 15800,
+      "satFatMg": 112,
+      "sodiumMg": 0,
+      "potassiumMg": 326,
+      "cholesterolMg": 0,
+      "calciumMg": 5,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -852,13 +857,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 13800,
       "fatMg": 200,
       "fiberMg": 2400,
-      "sugarMg": null,
+      "sugarMg": 13330,
       "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
+      "sodiumMg": 1,
+      "potassiumMg": 104,
       "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "calciumMg": 6,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -885,13 +890,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 14500,
       "fatMg": 300,
       "fiberMg": 2400,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 9360,
+      "satFatMg": 28,
+      "sodiumMg": 0,
+      "potassiumMg": 86,
+      "cholesterolMg": 0,
+      "calciumMg": 12,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -918,13 +923,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 7700,
       "fatMg": 300,
       "fiberMg": 2000,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 4860,
+      "satFatMg": 0,
+      "sodiumMg": 0,
+      "potassiumMg": 161,
+      "cholesterolMg": 0,
+      "calciumMg": 17,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -951,13 +956,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 11800,
       "fatMg": 100,
       "fiberMg": 2400,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 8960,
+      "satFatMg": 15,
+      "sodiumMg": 4,
+      "potassiumMg": 174,
+      "cholesterolMg": 0,
+      "calciumMg": 42,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -984,13 +989,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 8500,
       "fatMg": 14700,
       "fiberMg": 6700,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 660,
+      "satFatMg": 2130,
+      "sodiumMg": 7,
+      "potassiumMg": 485,
+      "cholesterolMg": 0,
+      "calciumMg": 12,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -1017,13 +1022,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 6600,
       "fatMg": 400,
       "fiberMg": 2600,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 1400,
+      "satFatMg": 39,
+      "sodiumMg": 36,
+      "potassiumMg": 303,
+      "cholesterolMg": 0,
+      "calciumMg": 46,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -1050,13 +1055,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 3600,
       "fatMg": 400,
       "fiberMg": 2200,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 420,
+      "satFatMg": 63,
+      "sodiumMg": 111,
+      "potassiumMg": 582,
+      "cholesterolMg": 0,
+      "calciumMg": 68,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -1083,13 +1088,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 9600,
       "fatMg": 200,
       "fiberMg": 2800,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 4750,
+      "satFatMg": 28,
+      "sodiumMg": 75,
+      "potassiumMg": 258,
+      "cholesterolMg": 0,
+      "calciumMg": 36,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1116,13 +1121,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 6000,
       "fatMg": 300,
       "fiberMg": 2100,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 4200,
+      "satFatMg": 59,
+      "sodiumMg": 4,
+      "potassiumMg": 211,
+      "cholesterolMg": 0,
+      "calciumMg": 7,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1149,13 +1154,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 3900,
       "fatMg": 200,
       "fiberMg": 1200,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 2630,
+      "satFatMg": 28,
+      "sodiumMg": 4,
+      "potassiumMg": 226,
+      "cholesterolMg": 0,
+      "calciumMg": 10,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1182,13 +1187,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 9300,
       "fatMg": 100,
       "fiberMg": 1700,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 5800,
+      "satFatMg": 42,
+      "sodiumMg": 1,
+      "potassiumMg": 171,
+      "cholesterolMg": 0,
+      "calciumMg": 17,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1215,13 +1220,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 0,
       "fatMg": 100000,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 0,
+      "satFatMg": 15500,
+      "sodiumMg": 2,
+      "potassiumMg": 1,
+      "cholesterolMg": 0,
+      "calciumMg": 1,
+      "ironMg": 1
     },
     "gramsPerMl": null,
     "portions": [
@@ -1248,13 +1253,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 100,
       "fatMg": 81100,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 60,
+      "satFatMg": 51368,
+      "sodiumMg": 643,
+      "potassiumMg": 24,
+      "cholesterolMg": 215,
+      "calciumMg": 24,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1281,13 +1286,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 19600,
       "fatMg": 50400,
       "fiberMg": 6000,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 10500,
+      "satFatMg": 10300,
+      "sodiumMg": 426,
+      "potassiumMg": 558,
+      "cholesterolMg": 0,
+      "calciumMg": 49,
+      "ironMg": 2
     },
     "gramsPerMl": null,
     "portions": [
@@ -1315,12 +1320,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 49900,
       "fiberMg": 12500,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
+      "satFatMg": 3785,
+      "sodiumMg": 0,
+      "potassiumMg": 733,
       "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "calciumMg": 254,
+      "ironMg": 4
     },
     "gramsPerMl": null,
     "portions": [
@@ -1348,12 +1353,12 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fatMg": 65200,
       "fiberMg": 6700,
       "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
+      "satFatMg": 6054,
+      "sodiumMg": 0,
+      "potassiumMg": 424,
       "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "calciumMg": 88,
+      "ironMg": 2
     },
     "gramsPerMl": null,
     "portions": [
@@ -1380,13 +1385,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 82400,
       "fatMg": 0,
       "fiberMg": 200,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 82120,
+      "satFatMg": 0,
+      "sodiumMg": 4,
+      "potassiumMg": 52,
+      "cholesterolMg": 0,
+      "calciumMg": 6,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1415,11 +1420,11 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "fiberMg": 0,
       "sugarMg": null,
       "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
+      "sodiumMg": 1,
+      "potassiumMg": 2,
       "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "calciumMg": 1,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1446,13 +1451,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 0,
       "fatMg": 0,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 0,
+      "satFatMg": 2,
+      "sodiumMg": 2,
+      "potassiumMg": 49,
+      "cholesterolMg": 0,
+      "calciumMg": 2,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1479,13 +1484,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 3600,
       "fatMg": 0,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 0,
+      "satFatMg": 0,
+      "sodiumMg": 4,
+      "potassiumMg": 27,
+      "cholesterolMg": 0,
+      "calciumMg": 4,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [
@@ -1512,13 +1517,13 @@ export const STAPLE_FOODS: Omit<Food, 'createdAt' | 'updatedAt' | 'deletedAt' | 
       "carbsMg": 2600,
       "fatMg": 0,
       "fiberMg": 0,
-      "sugarMg": null,
-      "satFatMg": null,
-      "sodiumMg": null,
-      "potassiumMg": null,
-      "cholesterolMg": null,
-      "calciumMg": null,
-      "ironMg": null
+      "sugarMg": 620,
+      "satFatMg": 0,
+      "sodiumMg": 4,
+      "potassiumMg": 127,
+      "cholesterolMg": 0,
+      "calciumMg": 8,
+      "ironMg": 0
     },
     "gramsPerMl": null,
     "portions": [

@@ -23,8 +23,13 @@ import * as repo from '@/data/repository'
  * more than the cost when the seed was 46 hand-written foods. At 1,462 it is a megabyte of parse on
  * every open to usually change nothing — so the version is compared instead, and the payload is only
  * fetched when it has actually moved.
+ *
+ * v4 backfills the staples' micronutrients (scripts/fill-staple-micros.mjs). They had only macros and
+ * fibre, and being short clean descriptions they *outrank* the fuller USDA rows for the queries people
+ * type most — so the app's most-logged foods were its least complete, and a day built from them
+ * reported six of seven nutrients as unrecorded.
  */
-const SEED_VERSION = 3
+const SEED_VERSION = 4
 const VERSION_KEY = 'macros.seed.version'
 
 export async function seedFoods(): Promise<number> {

@@ -174,6 +174,11 @@ export function DayScreen({
                 if (n > 0) toast.show(`${name} logged again`)
               })
             }}
+            onRemove={(dishId, name) => {
+              void repo.deleteDish(dishId).then((n) => {
+                if (n > 0) toast.show(`${name} removed`)
+              })
+            }}
           />
         ))}
 
@@ -246,6 +251,7 @@ function MealCard({
   onSave,
   onDetails,
   onLogAgain,
+  onRemove,
 }: {
   group: MealGroup
   foods: ReadonlyMap<string, Food>
@@ -255,6 +261,7 @@ function MealCard({
   onSave: () => void
   onDetails: (entry: LogEntry) => void
   onLogAgain: (dishId: string, name: string) => void
+  onRemove: (dishId: string, name: string) => void
 }) {
   return (
     <Card className="p-0">
@@ -304,6 +311,7 @@ function MealCard({
               onExpandEntry={onExpand}
               onDetails={onDetails}
               onLogAgain={() => onLogAgain(dish.dishId!, dish.name ?? 'Dish')}
+              onRemove={() => onRemove(dish.dishId!, dish.name ?? 'Dish')}
             />
           ),
         )}
@@ -338,6 +346,7 @@ function DishRow({
   onExpandEntry,
   onDetails,
   onLogAgain,
+  onRemove,
 }: {
   dish: DishGroup
   foods: ReadonlyMap<string, Food>
@@ -347,6 +356,7 @@ function DishRow({
   onExpandEntry: (key: string) => void
   onDetails: (entry: LogEntry) => void
   onLogAgain: () => void
+  onRemove: () => void
 }) {
   return (
     <li>
@@ -391,13 +401,25 @@ function DishRow({
               />
             ))}
           </ul>
-          <button
-            onClick={onLogAgain}
-            className="flex w-full items-center justify-center gap-1.5 border-t border-line py-2 text-[12.5px] font-semibold text-accent active:bg-sunken"
-          >
-            <Plus size={13} />
-            Have this again
-          </button>
+          {/* Both actions on the dish, not on its parts. Removing "3 steak tacos" by deleting six
+              rows one at a time is not a thing anyone should have to do. */}
+          <div className="flex items-center gap-1 border-t border-line">
+            <button
+              onClick={onLogAgain}
+              className="flex min-w-0 flex-1 items-center justify-center gap-1.5 py-2 text-[12.5px] font-semibold text-accent active:bg-sunken"
+            >
+              <Plus size={13} />
+              Have this again
+            </button>
+            <button
+              onClick={onRemove}
+              aria-label={`Remove ${dish.name ?? 'this dish'}`}
+              className="mr-2 flex size-8 shrink-0 items-center justify-center rounded-lg active:bg-sunken"
+              style={{ color: 'var(--status-critical)' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
         </div>
       )}
     </li>

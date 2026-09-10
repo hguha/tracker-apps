@@ -16,7 +16,6 @@ import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
-import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
 import { mealGroups } from '@/lib/dayGroups'
 import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
@@ -244,6 +243,20 @@ function DayCard({
   const delta = target && !isPartial ? totals.kcal - target.kcal : null
   const timing = dayTiming(entries)
 
+  // Joined rather than concatenated with leading separators: the macro figures used to open this line
+  // and moved into the bar, which left a stray "· " at the front of every row.
+  const parts: string[] = []
+  if (delta !== null) {
+    parts.push(
+      delta === 0 ? 'on target' : `${Math.abs(delta)} kcal ${delta > 0 ? 'over' : 'under'}`,
+    )
+  }
+  if (isPartial) parts.push(`${entries.length} match${entries.length === 1 ? '' : 'es'}`)
+  if (!isPartial && timing.spanMinutes !== null) {
+    parts.push(`${mealGroups(entries).length} meals over ${formatDuration(timing.spanMinutes)}`)
+  }
+  const subtitle = parts.join(' · ')
+
   return (
     <Card className="p-0">
       <div className="flex items-center">
@@ -258,17 +271,7 @@ function DayCard({
             <span className="tabular text-[14px] font-semibold">{totals.kcal}</span>
             <ChevronRight size={16} className="shrink-0 text-ink-muted" />
           </div>
-          <p className="tabular mt-0.5 flex items-baseline gap-2 text-[12.5px] text-ink-muted">
-            <MacroNumbers nutrients={totals} />
-            <span>
-            {delta !== null &&
-              ` · ${delta === 0 ? 'on target' : `${Math.abs(delta)} kcal ${delta > 0 ? 'over' : 'under'}`}`}
-            {isPartial && ` · ${entries.length} match${entries.length === 1 ? '' : 'es'}`}
-            {!isPartial &&
-              timing.spanMinutes !== null &&
-              ` · ${mealGroups(entries).length} meals over ${formatDuration(timing.spanMinutes)}`}
-            </span>
-          </p>
+          <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">{subtitle}</p>
         </button>
       </div>
 
@@ -279,6 +282,9 @@ function DayCard({
         the per-meal breakdown belongs on the day screen, one tap away.
       */}
       <div className="px-4 pb-3">
+        {/* The macro numbers live *in* the bar now, rather than as a row of "44gP 50gC 6gF" above it —
+            same three facts, one line instead of two, and the width says the shape while the label
+            says the amount. */}
         <MacroSplitBar nutrients={totals} />
         <p className="tabular mt-1.5 flex items-baseline gap-2 text-[11.5px] text-ink-muted">
           <span className="min-w-0 flex-1 truncate">{summarise(entries, foods)}</span>

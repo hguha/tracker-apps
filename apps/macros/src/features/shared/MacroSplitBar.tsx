@@ -2,17 +2,20 @@ import { mgToGrams } from '@/lib/nutrition'
 import type { Nutrients } from '@/domain/types'
 
 /**
- * The protein/carb/fat split as one thin bar.
- *
- * Replaces "39gP 0gC 5gF" repeated down a screen of fifteen rows. That text is unreadable at the
- * size it has to render, it triples the width every row needs, and nobody reads the third one — the
- * question it answers is "roughly what shape is this", which a bar answers instantly and a row of
- * digits answers slowly.
+ * The protein/carb/fat split as one bar, with each macro's grams written inside its own segment.
  *
  * By *calories*, not grams: fat is 9 kcal a gram and carbs are 4, so a gram-width bar would show a
- * fatty meal as mostly carbohydrate and be quietly wrong about the only thing it's for.
+ * fatty meal as mostly carbohydrate and be quietly wrong about the only thing it's for. The number
+ * inside each segment is in grams, because that is the unit people think in — so the widths answer
+ * "what shape was this day" and the labels answer "how much".
+ *
+ * The label is dropped from any segment too narrow to hold it, rather than shrunk or allowed to spill.
+ * Ink comes from `--macro-*-ink`, which exists because white does not clear AA on the yellow.
  */
 const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 }
+
+/** Below this share, "24g" at 11px doesn't fit and the segment shows colour only. */
+const LABEL_MIN_SHARE = 0.16
 
 export function MacroSplitBar({
   nutrients,
@@ -21,25 +24,45 @@ export function MacroSplitBar({
   nutrients: Nutrients
   className?: string
 }) {
-  const protein = mgToGrams(nutrients.proteinMg) * KCAL_PER_G.protein
-  const carbs = mgToGrams(nutrients.carbsMg) * KCAL_PER_G.carbs
-  const fat = mgToGrams(nutrients.fatMg) * KCAL_PER_G.fat
-  const total = protein + carbs + fat
-  if (total <= 0) return null
+  const parts = [
+    { key: 'protein', grams: mgToGrams(nutrients.proteinMg), kcalPerG: KCAL_PER_G.protein },
+    { key: 'carbs', grams: mgToGrams(nutrients.carbsMg), kcalPerG: KCAL_PER_G.carbs },
+    { key: 'fat', grams: mgToGrams(nutrients.fatMg), kcalPerG: KCAL_PER_G.fat },
+  ].map((part) => ({ ...part, kcal: part.grams * part.kcalPerG }))
 
-  const pct = (value: number) => `${(value / total) * 100}%`
+  const total = parts.reduce((sum, part) => sum + part.kcal, 0)
+  if (total <= 0) return null
 
   return (
     <span
-      className={`flex h-1 overflow-hidden rounded-full bg-sunken ${className}`}
+      className={`flex h-[22px] overflow-hidden rounded-md bg-sunken ${className}`}
       role="img"
-      aria-label={`${Math.round((protein / total) * 100)}% protein, ${Math.round(
-        (carbs / total) * 100,
-      )}% carbs, ${Math.round((fat / total) * 100)}% fat by calories`}
+      aria-label={parts
+        .map(
+          (part) =>
+            `${Math.round(part.grams)} g ${part.key}, ${Math.round((part.kcal / total) * 100)}% of the calories`,
+        )
+        .join('; ')}
     >
-      <span style={{ width: pct(protein), background: 'var(--macro-protein)' }} />
-      <span style={{ width: pct(carbs), background: 'var(--macro-carbs)' }} />
-      <span style={{ width: pct(fat), background: 'var(--macro-fat)' }} />
+      {parts.map((part) => {
+        const share = part.kcal / total
+        return (
+          <span
+            key={part.key}
+            className="flex items-center justify-center overflow-hidden"
+            style={{ width: `${share * 100}%`, background: `var(--macro-${part.key})` }}
+          >
+            {share >= LABEL_MIN_SHARE && (
+              <span
+                className="tabular text-[11px] font-semibold leading-none"
+                style={{ color: `var(--macro-${part.key}-ink)` }}
+              >
+                {Math.round(part.grams)}g
+              </span>
+            )}
+          </span>
+        )
+      })}
     </span>
   )
 }

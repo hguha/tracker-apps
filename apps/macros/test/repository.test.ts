@@ -29,6 +29,21 @@ beforeEach(reset)
 const chicken = async () => testFood()
 
 describe('seedFoods', () => {
+  it('gives the staples their micronutrients', async () => {
+    // These 46 rows are short, clean descriptions, so `rankFoods` puts them above the fuller USDA rows
+    // for the queries people type most — which made the app's most-logged foods its least complete, and
+    // a day built from them reported six of seven nutrients as unrecorded. See
+    // scripts/fill-staple-micros.mjs.
+    const chicken = await repo.getFood('seed:0')
+    expect(chicken?.description).toBe('Chicken breast, skinless, raw')
+    for (const key of ['sodiumMg', 'potassiumMg', 'calciumMg', 'satFatMg'] as const) {
+      expect(chicken?.per100[key], `${key} is missing`).not.toBeNull()
+    }
+    // And the hand-checked macros are untouched: the backfill only ever fills a null.
+    expect(chicken?.per100.kcal).toBe(120)
+    expect(chicken?.per100.proteinMg).toBe(22_500)
+  })
+
   it('is idempotent, so editing the seed corrects existing installs', async () => {
     const before = await db.foods.count()
     await seedFoods()

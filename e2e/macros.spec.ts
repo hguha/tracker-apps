@@ -65,6 +65,17 @@ async function completeOnboarding(
   } else {
     await page.getByRole('button', { name: 'Skip for now' }).click()
   }
+
+  /**
+   * Wait for the shell, not just for the click.
+   *
+   * `finish()` writes the profile, the weigh-in and the program, and the tab shell only mounts once the
+   * *profile* write reaches the live query — so for a moment after the click the onboarding tree is
+   * still on screen and the tabs are not. A test that carried straight on would sometimes act on the
+   * tree about to be replaced and see its own controls detach mid-fill.
+   */
+  await expect(page.getByRole('button', { name: 'Insights', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start logging' })).toHaveCount(0)
 }
 
 test('macros boots with no page errors', async ({ page }) => {
@@ -127,7 +138,7 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   // old one asserted "Breakfast" and only passed because the picker rendered every option as a
   // button, whatever the actual slot was.
   const whenChip = page.getByRole('button', {
-    name: /^(Breakfast|Lunch|Dinner|Snack)\s*·.*\d\d:\d\d/,
+    name: /^(Breakfast|Lunch|Dinner|Snack)\s*·.*\d{1,2}:\d\d/,
   })
   await expect(whenChip).toBeVisible()
   // And it opens the picker, which is where the slot can be corrected.
@@ -143,8 +154,8 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await expect(page.getByRole('button', { name: 'Log it' })).toBeEnabled()
-  await page.getByRole('button', { name: 'Log it' }).click()
+  await expect(page.getByRole('button', { name: /^Log it/ })).toBeEnabled()
+  await page.getByRole('button', { name: /^Log it/ }).click()
 
   // The screen stays open and keeps score, so a five-item breakfast is one visit rather than five.
   // It used to close on every write, which meant re-picking the meal and the time each round.
@@ -207,7 +218,7 @@ test('a food the databases do not have can be entered and logged offline', async
 
   // Straight to the portion step for the food just created, then onto the day.
   await expect(page.getByRole('heading', { name: 'Corner shop wrap' })).toBeVisible()
-  await page.getByRole('button', { name: 'Log it' }).click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: /Done · 1/ }).click()
   await expect(page.getByText(/Corner shop wrap/).first()).toBeVisible()
 
@@ -380,8 +391,15 @@ test('several foods log at once, at the amount each was last eaten in', async ({
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await page.locator('input[type=number]').nth(1).fill('183')
-  await page.getByRole('button', { name: 'Log it' }).click()
+  // One amount and a unit. It used to be "Servings" *and* "or weigh it (g)", where writing in either
+  // silently cleared the other — so which number the app would use was a precedence rule with no
+  // visual expression.
+  await page.getByLabel('Unit').selectOption({ label: 'grams' })
+  await page.getByLabel('Amount', { exact: true }).fill('183')
+  // And the screen says what it does to the day, which is the question at this moment. This account
+  // has no target (facts skipped), so it states the day's totals rather than a ring against one.
+  await expect(page.getByText('Your day, once this is logged')).toBeVisible()
+  await page.getByRole('button', { name: /^Log it/ }).click()
 
   // Now the tick path, without leaving: the screen stayed open, which is the point of it.
   await expect(page.getByText('1 item added')).toBeVisible()
@@ -498,7 +516,7 @@ test('a saved meal can be opened and renamed', async ({ page }) => {
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await page.getByRole('button', { name: 'Log it' }).click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: /Done · 1/ }).click()
 
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
@@ -534,16 +552,18 @@ test('water counts on the home screen, in the units you picked', async ({ page }
 
   // It was the most conspicuous gap in the app: water is the second-most-logged thing in every
   // tracker and there was nowhere at all to put it.
-  await expect(page.getByText('Water — tap to add a glass.')).toBeVisible()
-  const glass = page.getByRole('button', { name: /Add 250 millilitres of water/ })
+  await expect(page.getByText('Water — tap an amount to start.')).toBeVisible()
+  // Three sizes, not one: a litre bottle used to be four taps of a number that was never 8 oz.
+  const glass = page.getByRole('button', { name: 'Add Glass of water' })
   await glass.click()
   await glass.click()
-  await expect(page.getByText('500 ml')).toBeVisible()
-  await expect(page.getByText('2 glasses today')).toBeVisible()
+  await expect(page.getByText('500 ml', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Add Bottle of water' }).click()
+  await expect(page.getByText('1.0 L', { exact: true })).toBeVisible()
 
   // Removing one, because a mis-tap should not need a settings screen to undo.
-  await page.getByRole('button', { name: 'Remove a glass of water' }).click()
-  await expect(page.getByText('250 ml')).toBeVisible()
+  await page.getByRole('button', { name: 'Remove Glass of water' }).click()
+  await expect(page.getByText('750 ml', { exact: true })).toBeVisible()
 
   // A target turns the count into progress, and the glass fills against it.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -552,7 +572,7 @@ test('water counts on the home screen, in the units you picked', async ({ page }
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByText('of 2.0 L')).toBeVisible()
-  await expect(page.getByText('1.8 L to go')).toBeVisible()
+  await expect(page.getByText('1.3 L to go')).toBeVisible()
 
   // Millilitres are what's stored; the unit is a display preference, so switching converts rather
   // than reinterpreting — 250 ml is 8 fl oz, not 250 fl oz.
@@ -561,8 +581,7 @@ test('water counts on the home screen, in the units you picked', async ({ page }
   await page.getByRole('button', { name: /lb \/ in/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
-  // Exact, because "68 fl oz" — the converted target on the same card — contains "8 fl oz".
-  await expect(page.getByText('8 fl oz', { exact: true })).toBeVisible()
+  await expect(page.getByText('25 fl oz', { exact: true })).toBeVisible()
   await expect(page.getByText('of 68 fl oz')).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
@@ -610,12 +629,70 @@ test('the log screen opens on what you ate, and a repeat is one tap', async ({ p
 
   await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await page.getByRole('button', { name: 'Log it' }).click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
 
   // Now Recent has it, with the amount it was eaten in — so the second time is one tap and no
   // arithmetic. There is no "Suggested" tab any more; four entry points, not five.
   await expect(page.getByRole('button', { name: /^Suggested/ })).toHaveCount(0)
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a described dish can be removed, and kept as one of its units', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  // No model here (empty Supabase env), so the dish is built by hand — the paths after the breakdown
+  // are the same either way, and those are what this is about.
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: /^Done · / }).click()
+
+  // A single food is not wrapped in a dish: that would add a layer to open for nothing.
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+  await expect(page.getByRole('button', { name: /Have this again/ })).toHaveCount(0)
+
+  // Removing a lone row is the row's own bin.
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await expect(page.getByRole('button', { name: /^Remove Chicken breast/ })).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('the day screen shows what each food contributes, and what the day comes to', async ({
+  page,
+}) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { weight: '85' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, or describe a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+
+  // The portion screen answers "does this fit", not just "what is in it" — a ring for the day it will
+  // make, and each macro bar split into what's already eaten plus what this adds.
+  await expect(page.getByText(/still free after this/)).toBeVisible()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: /^Done · / }).click()
+
+  // Home lists only the meals with food in them. Four rows of em-dashes was most of the card saying
+  // nothing, every morning.
+  await expect(page.getByRole('button', { name: /^Breakfast/ })).toHaveCount(0)
+  // And the card that navigates says so, rather than needing a sentence to explain itself.
+  await expect(page.getByText("Today's food")).toBeVisible()
+
+  // The micronutrients survive. `sum` is all-or-nothing, which is right for a recipe and wrong for a
+  // day: one food with a gap used to erase that nutrient from the whole day.
+  await page.getByRole('button', { name: /Nutrition/ }).click()
+  // Six of seven, not one of seven. The staples used to carry only macros and fibre, and being short
+  // clean descriptions they outrank the fuller USDA rows for exactly the queries people type — so the
+  // app's most-logged foods were its least complete. USDA records no sugar figure for raw chicken, and
+  // that one genuinely stays unknown: absence is not zero.
+  await expect(page.getByText('6 of 7 recorded')).toBeVisible()
+  await expect(page.getByText('none of these foods record it')).toHaveCount(1)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

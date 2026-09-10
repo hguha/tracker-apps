@@ -9,6 +9,8 @@ import {
   proteinPer100Kcal,
   splitTargets,
   sum,
+  sumCovered,
+  dailyAverageCovered,
 } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food, type Nutrients } from '@/domain/types'
 
@@ -70,6 +72,72 @@ describe('sum', () => {
 
   it('is empty for no items', () => {
     expect(sum([])).toEqual(EMPTY_NUTRIENTS)
+  })
+})
+
+describe('sumCovered', () => {
+  it('reports what was measured instead of erasing the nutrient', () => {
+    // The bug this exists for: `sum` is all-or-nothing, which is right for a recipe and wrong for a
+    // day. 218 of the 1,463 seeded foods have a gap, so a six-ingredient dish had a ~62% chance of
+    // containing one — and that single row erased the nutrient for the whole day. Logging "3 steak
+    // tacos" matched an Applebee's sirloin with no fibre figure and the day reported no fibre at all.
+    const { totals, coverage } = sumCovered([
+      nutrients({ kcal: 900, fiberMg: 4_000 }),
+      nutrients({ kcal: 100, fiberMg: null }),
+    ])
+    expect(totals.fiberMg).toBe(4_000)
+    expect(coverage.fiberMg).toBeCloseTo(0.9)
+  })
+
+  it('weights coverage by calories, not by rows', () => {
+    // A gap on a 600 kcal main course matters; a gap on a squeeze of lime does not, and counting rows
+    // would treat the two the same.
+    const { coverage } = sumCovered([
+      nutrients({ kcal: 5, fiberMg: null }),
+      nutrients({ kcal: 5, fiberMg: null }),
+      nutrients({ kcal: 590, fiberMg: 6_000 }),
+    ])
+    expect(coverage.fiberMg).toBeGreaterThan(0.95)
+  })
+
+  it('is null only when nothing reported it', () => {
+    const { totals, coverage } = sumCovered([
+      nutrients({ kcal: 100, ironMg: null }),
+      nutrients({ kcal: 100, ironMg: null }),
+    ])
+    expect(totals.ironMg).toBeNull()
+    expect(coverage.ironMg).toBe(0)
+  })
+
+  it('counts rows when the day has no calories at all', () => {
+    // Otherwise coverage is 0/0 for a day of black coffee and water, and every nutrient reads as
+    // unmeasured rather than as measured-and-zero.
+    const { coverage } = sumCovered([
+      nutrients({ kcal: 0, sodiumMg: 5 }),
+      nutrients({ kcal: 0, sodiumMg: null }),
+    ])
+    expect(coverage.sodiumMg).toBe(0.5)
+  })
+
+  it('never lets a gap touch a macro', () => {
+    const { totals } = sumCovered([
+      nutrients({ kcal: 100, proteinMg: 9_000, fiberMg: null }),
+      nutrients({ kcal: 200, proteinMg: 1_000, fiberMg: 500 }),
+    ])
+    expect(totals).toMatchObject({ kcal: 300, proteinMg: 10_000 })
+  })
+})
+
+describe('dailyAverageCovered', () => {
+  it('divides by logged days and keeps the coverage', () => {
+    const rows = [
+      { day: '2026-09-01', nutrients: nutrients({ kcal: 1000, fiberMg: 20_000 }) },
+      { day: '2026-09-02', nutrients: nutrients({ kcal: 1000, fiberMg: null }) },
+    ]
+    const { totals, coverage } = dailyAverageCovered(rows)
+    expect(totals.kcal).toBe(1000)
+    expect(totals.fiberMg).toBe(10_000)
+    expect(coverage.fiberMg).toBeCloseTo(0.5)
   })
 })
 

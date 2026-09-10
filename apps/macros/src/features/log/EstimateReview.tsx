@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Bookmark, Check, Sparkles } from 'lucide-react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { portionFor } from '@/lib/nutrition'
+import { parseQuantity } from '@/lib/parseQuantity'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
@@ -145,6 +146,8 @@ export function EstimateReview({
       >
         {isSaving ? 'Logging…' : `Log ${name.trim() || 'this'}`}
       </Button>
+
+      <SaveForNextTime items={loggable} label={name} />
     </>
   )
 }
@@ -272,3 +275,72 @@ function ItemNote({ item }: { item: EstimatedItem }) {
 }
 
 const nutrientsOf = (item: EstimatedItem) => totalOf([item])
+
+/**
+ * Keeping the breakdown, so the next one costs nothing.
+ *
+ * A described meal spends a request from a small daily allowance and then a minute of correcting gram
+ * figures. Throwing that away and asking the model the same question next week is the most wasteful
+ * thing the app can do, and there was no way to keep it.
+ *
+ * **Saved per unit where there is one.** "3 steak tacos" is stored as one steak taco, because that is
+ * the thing worth keeping: 1, 3 and 5 of them are all a multiple away, whereas a saved "3 steak tacos"
+ * makes having one tomorrow either mental arithmetic or a second near-identical entry.
+ */
+function SaveForNextTime({ items, label }: { items: readonly EstimatedItem[]; label: string }) {
+  const toast = useToast()
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
+
+  const trimmed = label.trim()
+  const quantity = parseQuantity(trimmed)
+  const savedName = quantity?.unit ?? trimmed
+  if (items.length === 0 || savedName === '') return null
+
+  const save = () => {
+    if (isSaving) return
+    setIsSaving(true)
+    void repo
+      .saveMealFromParts(
+        savedName,
+        items.map((item) => ({
+          foodId: item.food!.id,
+          grams: item.grams,
+          nutrients: nutrientsOf(item),
+        })),
+        quantity?.count ?? 1,
+      )
+      .then(() => {
+        setIsSaved(true)
+        toast.show(`${savedName} saved to your library`)
+      })
+      .finally(() => setIsSaving(false))
+  }
+
+  return (
+    <div className="rounded-xl bg-sunken/60 p-2.5">
+      <p className="text-[12.5px] text-ink-secondary">
+        {quantity
+          ? `Keep this as one ${quantity.unit} and you can log any number of them later, without asking again.`
+          : 'Keep this and you can log it again without asking again.'}
+      </p>
+      <button
+        onClick={save}
+        disabled={isSaving || isSaved}
+        className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line py-2 text-[13px] font-semibold text-accent active:bg-accent-wash disabled:opacity-50"
+      >
+        {isSaved ? (
+          <>
+            <Check size={14} />
+            Saved
+          </>
+        ) : (
+          <>
+            <Bookmark size={14} />
+            {isSaving ? 'Saving…' : `Save ${quantity ? `1 ${quantity.unit}` : savedName}`}
+          </>
+        )}
+      </button>
+    </div>
+  )
+}

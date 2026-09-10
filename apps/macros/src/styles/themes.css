@@ -1,39 +1,49 @@
 /**
- * MACROcosm's own `default` preset: warm paper, appetite orange.
+ * MACROcosm's own `default` preset: warm sand, burnt orange.
  *
- * The other presets come from @tracker-engine/ui/styles/themes.css and are shared with REPutation;
- * see that file for how these values are derived. The category palette in `tokens.css` is
- * deliberately NOT themeable, and no hex literal belongs anywhere but these two files.
+ * These are the values the shared file calls `sunset`, and that is deliberate rather than accidental.
+ * The app's own preset started as a cooler "warm grey" that sat two hues away from `sunset` — close
+ * enough that switching between them looked like nothing had happened, which is a worse fault in a
+ * theme picker than either one being wrong. So the warmer of the two wins outright and the other is
+ * left out of this app's list; `sunset` stays in the shared file for REPutation, where it sits next to
+ * a blue default and is genuinely distinct.
+ *
+ * A profile that already stored `sunset` therefore keeps rendering exactly as before.
+ *
+ * The other presets come from @tracker-engine/ui/styles/themes.css; see that file for how these values
+ * are derived and why they are generated against a contrast budget rather than picked. The category
+ * palette in `tokens.css` is deliberately NOT themeable, and no hex literal belongs anywhere but these
+ * two files.
  */
 
 [data-theme='default'][data-scheme='light'] {
-  --surface-1: #fffefa;
-  --surface-page: #f2eee3;
-  --surface-sunken: #f1eee6;
+  --surface-1: #fffdfa;
+  --surface-page: #fbecdf;
+  --surface-sunken: #fdf1e7;
   --text-primary: #0c0b0a;
-  --text-secondary: #524e48;
-  --text-muted: #6f6a61;
-  --gridline: #e6e4e2;
-  --axis: #cbc7c2;
+  --text-secondary: #544d48;
+  --text-muted: #736962;
+  --gridline: #e7e4e2;
+  --axis: #cdc6c2;
   --border: rgba(12, 11, 10, 0.11);
   --border-strong: rgba(12, 11, 10, 0.2);
-  --accent: #ac4f15;
-  --accent-wash: rgba(172, 79, 21, 0.11);
+  --accent: #b34c19;
+  --accent-wash: rgba(179, 76, 25, 0.11);
   --accent-contrast: #ffffff;
 }
 
 [data-theme='default'][data-scheme='dark'] {
-  --surface-1: #1c1b17;
-  --surface-page: #100e0b;
-  --surface-sunken: #272521;
+  --surface-1: #1f1711;
+  --surface-page: #130c06;
+  --surface-sunken: #2b1f18;
   --text-primary: #fbfafa;
-  --text-secondary: #b5b0a8;
-  --text-muted: #948d81;
-  --gridline: #33312d;
-  --axis: #494540;
+  --text-secondary: #b5aba4;
+  --text-muted: #95887e;
+  --gridline: #35302d;
+  --axis: #4b4540;
   --border: rgba(255, 255, 255, 0.11);
   --border-strong: rgba(255, 255, 255, 0.2);
-  --accent: #f0813a;
-  --accent-wash: rgba(240, 129, 58, 0.18);
+  --accent: #f2803f;
+  --accent-wash: rgba(242, 128, 63, 0.18);
   --accent-contrast: #0c0b0a;
 }

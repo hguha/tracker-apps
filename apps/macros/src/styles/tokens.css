@@ -10,17 +10,26 @@
  * therefore pulled away: `under` is neutral, because being under a target is not an alarm, and
  * `over` is a brick red no macro uses.
  *
- * `*-ink` is the ink that can sit on top of that fill and still clear WCAG AA.
+ * `*-ink` is the ink that can sit on top of that fill and still clear WCAG AA — needed because the
+ * history bars write each macro's grams inside its own segment. Two of the light hues were nudged a
+ * shade darker so white clears 4.5 on them (carbs 4.42 → 4.61); light fat takes dark ink instead,
+ * because nothing legible sits on a yellow that bright.
  *
  * Surfaces, ink and the accent live in themes.css.
  */
 
 :root {
-  --macro-protein: #d0453b;
-  --macro-carbs: #2a78d6;
+  --macro-protein: #cf453b;
+  --macro-carbs: #2975d1;
   --macro-fat: #eda100;
-  --macro-fiber: #1f8a5f;
-  --macro-alcohol: #9c5bd6;
+  --macro-fiber: #1e855b;
+  --macro-alcohol: #9657ce;
+
+  --macro-protein-ink: #ffffff;
+  --macro-carbs-ink: #ffffff;
+  --macro-fat-ink: #0f0f0f;
+  --macro-fiber-ink: #ffffff;
+  --macro-alcohol-ink: #ffffff;
 
   /* Against target: under, on, over. Paired with a label, never colour alone. */
   --target-under: #5b6470;
@@ -46,6 +55,14 @@
   --macro-fat: #f0b52a;
   --macro-fiber: #22c07d;
   --macro-alcohol: #ad76e6;
+
+  /* Every dark-scheme macro colour is light enough to take dark ink, which also keeps a bar's label
+     reading the same way across all of them. */
+  --macro-protein-ink: #0f0f0f;
+  --macro-carbs-ink: #0f0f0f;
+  --macro-fat-ink: #0f0f0f;
+  --macro-fiber-ink: #0f0f0f;
+  --macro-alcohol-ink: #0f0f0f;
 
   --target-under: #99a2af;
   --target-on: #4cc47d;

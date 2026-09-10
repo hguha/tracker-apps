@@ -46,6 +46,15 @@ export function nutrientsFor(food: Food, grams: number): Nutrients {
 /**
  * Sums a list. A nullable nutrient is null unless *every* contributor reports it —
  * summing only the known rows would understate the total while looking precise.
+ *
+ * All-or-nothing is right for a **recipe**, which is what this is for: a dish whose paprika has no
+ * fibre figure genuinely has an unknown fibre total, and there is no honest number to show.
+ *
+ * It is the wrong rule for a **day**, and using it there was a bug. 218 of the 1,463 seeded foods
+ * have at least one missing micronutrient, so a six-ingredient dish had a ~62% chance of containing
+ * one — and that single row erased that nutrient for the whole day. Logging "3 steak tacos" matched
+ * an Applebee's sirloin with no fibre figure and the day reported no fibre at all. Days use
+ * `sumCovered`, which reports what was measured alongside how much of the day it covers.
  */
 export function sum(items: readonly Nutrients[]): Nutrients {
   if (items.length === 0) return { ...EMPTY_NUTRIENTS }
@@ -60,6 +69,61 @@ export function sum(items: readonly Nutrients[]): Nutrients {
       : null
   }
   return out as Nutrients
+}
+
+/** Every nutrient that can be missing — the ones a food database may simply not record. */
+export const MICRO_KEYS = NUTRIENT_KEYS.filter(
+  (key) => !(CORE_NUTRIENT_KEYS as readonly string[]).includes(key),
+) as Exclude<keyof Nutrients, (typeof CORE_NUTRIENT_KEYS)[number]>[]
+
+export type MicroKey = (typeof MICRO_KEYS)[number]
+
+export interface CoveredNutrients {
+  /** Micros are the sum of what *was* reported; null only when nothing reported it at all. */
+  totals: Nutrients
+  /**
+   * Share of the period's calories that came from foods reporting this nutrient, 0–1.
+   *
+   * Calories rather than rows, because a gap on a 600 kcal main course matters and a gap on a
+   * 5 kcal squeeze of lime does not. This is what lets the UI say "26 g of fibre, from 91% of what
+   * you ate" — a floor with its own confidence attached — instead of choosing between a wrong number
+   * and no number.
+   */
+  coverage: Record<MicroKey, number>
+}
+
+export function sumCovered(items: readonly Nutrients[]): CoveredNutrients {
+  const totals: NutrientRecord = { ...EMPTY_NUTRIENTS }
+  for (const key of CORE_NUTRIENT_KEYS) {
+    totals[key] = items.reduce((acc, item) => acc + item[key], 0)
+  }
+
+  // Rows with no calories still count as covered or not; they just carry no weight. A day of only
+  // zero-calorie rows falls back to counting rows, so coverage isn't 0/0.
+  const totalKcal = items.reduce((acc, item) => acc + item.kcal, 0)
+  const weightOf = (item: Nutrients) => (totalKcal > 0 ? item.kcal : 1)
+  const totalWeight = totalKcal > 0 ? totalKcal : items.length
+
+  const coverage = {} as Record<MicroKey, number>
+  for (const key of MICRO_KEYS) {
+    const reported = items.filter((item) => item[key] !== null)
+    totals[key] = reported.length === 0
+      ? null
+      : reported.reduce((acc, item) => acc + (item[key] ?? 0), 0)
+    coverage[key] =
+      totalWeight === 0 ? 0 : reported.reduce((acc, item) => acc + weightOf(item), 0) / totalWeight
+  }
+
+  return { totals: totals as Nutrients, coverage }
+}
+
+/** The same, averaged per *logged* day — see `dailyAverage` for why that denominator. */
+export function dailyAverageCovered(
+  entries: readonly Pick<LogEntry, 'nutrients' | 'day'>[],
+): CoveredNutrients {
+  const days = new Set(entries.map((entry) => entry.day)).size
+  const { totals, coverage } = sumCovered(entries.map((entry) => entry.nutrients))
+  return { totals: days === 0 ? { ...EMPTY_NUTRIENTS } : scale(totals, 1 / days), coverage }
 }
 
 export function dayTotals(entries: readonly Pick<LogEntry, 'nutrients'>[]): Nutrients {

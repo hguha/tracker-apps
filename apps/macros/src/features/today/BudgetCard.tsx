@@ -1,5 +1,5 @@
 import { Card, ProgressRing } from '@tracker-engine/ui'
-import { Moon, Utensils } from 'lucide-react'
+import { ChevronRight, Moon, Utensils } from 'lucide-react'
 import { grams } from '@/features/shared/format'
 import { macroSharePct } from '@/lib/nutrition'
 import { formatClock, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
@@ -71,10 +71,19 @@ export function BudgetCard({
       </div>
 
       {left && targets ? (
-        <p className="mt-3 text-[13px] text-ink-secondary">
-          {left.kcal >= 0
-            ? `${left.kcal} kcal and ${grams(Math.max(0, left.proteinMg))} protein left.`
-            : `${Math.abs(left.kcal)} kcal over target.`}
+        // The footer says where the tap goes. A card that navigates has to look like it does, and a
+        // ring plus three bars looks like a readout — which is why the old version needed a sentence
+        // ("4 items today — tap to see them") to explain itself.
+        <p className="mt-3 flex items-center gap-1.5 text-[13px]">
+          <span className="min-w-0 flex-1 text-ink-secondary">
+            {left.kcal >= 0
+              ? `${left.kcal} kcal and ${grams(Math.max(0, left.proteinMg))} protein left.`
+              : `${Math.abs(left.kcal)} kcal over target.`}
+          </span>
+          <span className="flex shrink-0 items-center gap-0.5 font-semibold text-accent">
+            {entries.length === 0 ? 'Start the day' : "Today's food"}
+            <ChevronRight size={15} />
+          </span>
         </p>
       ) : (
         <div className="mt-3">

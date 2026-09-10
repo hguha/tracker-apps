@@ -1,11 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, formatVolume, volumeFromMl } from '@tracker-engine/core'
+import { dayKey, formatVolume } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import { Minus, Plus } from 'lucide-react'
 import { haptic } from '@tracker-engine/platform'
 import * as repo from '@/data/repository'
 import { useUnits } from '@/features/shared/useUnits'
-import { GLASS_ML } from '@/domain/types'
+import { WATER_STEPS } from '@/domain/types'
 
 /**
  * Water, as a glass that fills.
@@ -27,7 +27,10 @@ export function WaterCard() {
 
   const ml = row?.ml ?? 0
   const targetMl = profile?.waterTargetMl ?? null
-  const step = units.volume === 'floz' ? GLASS_ML.imperial : GLASS_ML.metric
+  // Three sizes, not one. A single "+ glass" made a litre bottle four taps of a number that was never
+  // what the user drank; the values are round in their own system rather than converted.
+  const steps = units.volume === 'floz' ? WATER_STEPS.imperial : WATER_STEPS.metric
+  const smallest = steps[0]!.ml
   // Without a target the glass fills against a two-litre day, which is a scale rather than a goal:
   // an empty-looking glass at 1.8 L would be a lie, and a full one at 200 ml would be worse.
   const scaleMl = targetMl ?? 2000
@@ -39,11 +42,11 @@ export function WaterCard() {
   }
 
   return (
-    <Card className="flex items-center gap-3 p-4">
+    <Card className="flex items-start gap-3 p-4">
       <Glass fraction={fraction} />
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-1.5">
+        <div className="flex flex-wrap items-baseline gap-x-1.5">
           <span className="tabular text-[20px] font-bold leading-none">
             {formatVolume(ml, units.volume)}
           </span>
@@ -55,32 +58,35 @@ export function WaterCard() {
         </div>
         <p className="mt-0.5 text-[12px] text-ink-muted">
           {ml === 0
-            ? 'Water — tap to add a glass.'
+            ? 'Water — tap an amount to start.'
             : targetMl === null
-              ? `${Math.round(ml / step)} glass${Math.round(ml / step) === 1 ? '' : 'es'} today`
+              ? `${formatVolume(ml, units.volume)} so far today`
               : ml >= targetMl
                 ? 'Target reached.'
                 : `${formatVolume(targetMl - ml, units.volume)} to go.`}
         </p>
-      </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          onClick={() => add(-step)}
-          disabled={ml === 0}
-          aria-label="Remove a glass of water"
-          className="flex size-9 items-center justify-center rounded-xl bg-sunken text-ink-secondary disabled:opacity-30 active:opacity-60"
-        >
-          <Minus size={17} />
-        </button>
-        <button
-          onClick={() => add(step)}
-          aria-label={`Add ${Math.round(volumeFromMl(step, units.volume))} ${units.volume === 'floz' ? 'fluid ounces' : 'millilitres'} of water`}
-          className="flex h-9 items-center gap-1 rounded-xl bg-accent px-3 text-[13px] font-semibold text-accent-contrast active:brightness-90"
-        >
-          <Plus size={15} />
-          Glass
-        </button>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {steps.map((option) => (
+            <button
+              key={option.ml}
+              onClick={() => add(option.ml)}
+              aria-label={`Add ${option.label} of water`}
+              className="flex h-8 items-center gap-0.5 rounded-lg bg-accent px-2.5 text-[12.5px] font-semibold text-accent-contrast active:brightness-90"
+            >
+              <Plus size={13} />
+              {option.label}
+            </button>
+          ))}
+          <button
+            onClick={() => add(-smallest)}
+            disabled={ml === 0}
+            aria-label={`Remove ${steps[0]!.label} of water`}
+            className="flex size-8 items-center justify-center rounded-lg bg-sunken text-ink-secondary disabled:opacity-30 active:opacity-60"
+          >
+            <Minus size={15} />
+          </button>
+        </div>
       </div>
     </Card>
   )

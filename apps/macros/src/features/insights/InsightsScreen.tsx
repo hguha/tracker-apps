@@ -6,6 +6,7 @@ import {
   type SegmentedTab,
 } from '@tracker-engine/ui'
 import { TrendingUp } from 'lucide-react'
+import { unitsFor } from '@tracker-engine/core'
 import { kcalPerKg } from '@/lib/expenditure'
 import { IntakeChart } from './IntakeChart'
 import { WeightChart } from './WeightChart'
@@ -16,6 +17,7 @@ import { AdherenceChart, ProteinChart, TopFoodsChart, WeekdayChart } from './cha
 import { BalanceChart, ExpenditureChart } from './chartsBody'
 import { ConsistencyChart, MealTimingChart, SourceMixChart } from './chartsHabits'
 import { AdequacyChart, FiberChart } from './chartsNutrients'
+import { WaterChart } from './chartsWater'
 import { CuisineMixCard, VenueSplitChart } from './chartsVenue'
 import { useInsightsData } from './useInsightsData'
 
@@ -132,11 +134,18 @@ export function InsightsScreen() {
             {tab === 'nutrients' && (
               <>
                 <AdequacyChart
-                  averages={data.averages}
+                  nutrition={data.nutrition}
                   dayCount={data.loggedDayCount}
                   sex={data.profile?.sex ?? null}
                 />
                 <FiberChart days={data.days} sex={data.profile?.sex ?? null} />
+                {/* Water sits under Nutrients rather than Habits: it belongs with the things measured
+                    against a daily reference, not with when and where you eat. */}
+                <WaterChart
+                  days={data.water}
+                  targetMl={data.profile?.waterTargetMl ?? null}
+                  unit={unitsFor(data.profile?.units ?? 'metric').volume}
+                />
               </>
             )}
           </>

@@ -312,11 +312,16 @@ export async function loggedDays(): Promise<string[]> {
 export const countLoggedDays = async (): Promise<number> => (await loggedDays()).length
 
 /**
- * Distinct foods logged most often, for the Log screen's frequents.
+ * Distinct foods logged most often *on their own*, for the Log screen's frequents.
  *
  * Windowed rather than lifetime: this runs every time the Add food screen opens, and a food last
  * eaten eight months ago is not what "frequent" means to anyone. The `day` index makes it a range
  * scan instead of a walk over the whole history.
+ *
+ * Rows belonging to a dish are skipped. Counting them filled the list with things nobody logs by
+ * itself — after three taco dinners, "Often" offered coriander, onion and sour cream, because each
+ * had been written three times. The dish is already one row in `recentItems` with its own count; its
+ * parts are an implementation detail of that row, not foods the user reaches for.
  */
 export async function frequentFoodIds(limit = 20, days = 90): Promise<string[]> {
   const counts = new Map<string, number>()
@@ -326,7 +331,9 @@ export async function frequentFoodIds(limit = 20, days = 90): Promise<string[]> 
     .aboveOrEqual(from)
     .filter(alive)
     .each((entry) => {
-      if (entry.foodId) counts.set(entry.foodId, (counts.get(entry.foodId) ?? 0) + 1)
+      if (entry.foodId && entry.dishId === null) {
+        counts.set(entry.foodId, (counts.get(entry.foodId) ?? 0) + 1)
+      }
     })
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -960,12 +967,44 @@ export async function saveMealTemplate(
   name: string,
   entries: readonly LogEntry[],
 ): Promise<string> {
-  const items: MealTemplateItem[] = entries.map((entry) => ({
+  return saveMealFromParts(
+    name,
+    entries.map((entry) => ({
+      foodId: entry.foodId,
+      recipeId: entry.recipeId,
+      grams: entry.grams,
+      nutrients: entry.nutrients,
+    })),
+  )
+}
+
+export interface MealPart {
+  foodId: string | null
+  recipeId?: string | null
+  grams: number
+  nutrients: Nutrients
+}
+
+/**
+ * Saves a set of foods as a meal, optionally divided down to one of something.
+ *
+ * `perUnit` is why this exists. "3 steak tacos" resolves to six foods at the amounts for three tacos,
+ * and saving *that* means having one tomorrow needs either mental arithmetic or a second near-identical
+ * saved meal. Divided by the count, one taco is what's stored — and 1, 3 or 5 of them are all a
+ * multiple away, which `logMealTemplate` already takes.
+ */
+export async function saveMealFromParts(
+  name: string,
+  parts: readonly MealPart[],
+  perUnit = 1,
+): Promise<string> {
+  const share = 1 / Math.max(1, perUnit)
+  const items: MealTemplateItem[] = parts.map((part) => ({
     id: newId(),
-    foodId: entry.foodId,
-    recipeId: entry.recipeId,
-    grams: entry.grams,
-    nutrients: entry.nutrients,
+    foodId: part.foodId,
+    recipeId: part.recipeId ?? null,
+    grams: part.grams * share,
+    nutrients: scaleNutrients(part.nutrients, share),
   }))
   const template: MealTemplate = {
     id: newId(),
@@ -978,6 +1017,13 @@ export async function saveMealTemplate(
   await db.mealTemplates.put(template)
   await enqueue('mealTemplates', template.id)
   return template.id
+}
+
+/** Removes a whole dish — every row it was logged as, in one action. */
+export async function deleteDish(dishId: string): Promise<number> {
+  const rows = await db.logEntries.where('dishId').equals(dishId).filter(alive).toArray()
+  for (const row of rows) await patch('logEntries', row.id, { deletedAt: Date.now() })
+  return rows.length
 }
 
 /** A saved meal's default name is a date, so renaming it is what makes the list usable. */

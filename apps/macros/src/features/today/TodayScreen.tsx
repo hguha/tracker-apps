@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset, dayStreaks, formatDayHeading } from '@tracker-engine/core'
 import { Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { dailyAverage, dayTotals, remaining } from '@/lib/nutrition'
+import { dailyAverageCovered, dayTotals, remaining } from '@/lib/nutrition'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { foodIdsOf } from '@/features/shared/entryName'
 import { BadgeStrip } from '@/features/badges/BadgeStrip'
@@ -108,7 +108,7 @@ export function TodayScreen({
 
       {weekDayCount > 0 && (
         <NutritionCard
-          averages={dailyAverage(week ?? [])}
+          nutrition={dailyAverageCovered(week ?? [])}
           dayCount={weekDayCount}
           sex={profile?.sex ?? null}
         />

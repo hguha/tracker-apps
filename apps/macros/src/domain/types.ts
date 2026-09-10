@@ -352,8 +352,26 @@ export interface WaterRow extends SyncColumns {
   ml: number
 }
 
-/** One glass, in each unit system. The step the "+" button adds. */
-export const GLASS_ML = { metric: 250, imperial: 240 } as const
+/**
+ * The amounts the water card offers, per unit system.
+ *
+ * More than one, because a single "+ glass" button means logging a litre bottle is four taps and a
+ * 32 oz flask is four taps of a number that was never 8 oz. The values are round in their *own*
+ * system rather than converted from the other, so neither reads as an approximation of the other: a
+ * US pint is 473 ml and calling it 500 would be wrong by a twentieth every time.
+ */
+export const WATER_STEPS = {
+  metric: [
+    { ml: 250, label: 'Glass' },
+    { ml: 500, label: 'Bottle' },
+    { ml: 1000, label: '1 L' },
+  ],
+  imperial: [
+    { ml: 237, label: '8 oz' },
+    { ml: 473, label: '16 oz' },
+    { ml: 946, label: '32 oz' },
+  ],
+} as const satisfies Record<UnitSystem, readonly { ml: number; label: string }[]>
 
 export type UnitSystem = 'metric' | 'imperial'
 export type ThemePreset =

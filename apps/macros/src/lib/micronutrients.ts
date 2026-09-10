@@ -59,21 +59,40 @@ export const NUTRIENT_TARGETS: NutrientTarget[] = nutrientTargets(null)
 export type NutrientVerdict = 'short' | 'ok' | 'over' | 'unknown'
 
 export interface NutrientStatus extends NutrientTarget {
-  /** null when nothing logged that day recorded this nutrient. */
+  /** null when nothing logged recorded this nutrient at all. */
   amount: number | null
   /** Fraction of the reference, or null when unknown. */
   ratio: number | null
   verdict: NutrientVerdict
+  /** Share of the period's calories from foods that reported it, 0–1. */
+  coverage: number
 }
 
 /** Below this fraction of a floor counts as short; a ceiling is "over" above 1. */
 const SHORT_BELOW = 0.7
 
-export function nutrientStatus(totals: Nutrients, sex: ReferenceSex = null): NutrientStatus[] {
+/**
+ * Below this share of the day's calories, a total isn't worth judging.
+ *
+ * Not zero, and not one. The old rule was effectively one — a single food missing a figure made the
+ * whole day's nutrient unknown — which is why a day could report no fibre at all. But judging 26 g of
+ * fibre as "short" when half the day's calories never reported any would be worse than saying nothing.
+ * Two thirds is the point where the measured total is a useful floor.
+ */
+const MIN_COVERAGE = 0.66
+
+export function nutrientStatus(
+  totals: Nutrients,
+  sex: ReferenceSex = null,
+  coverage: Partial<Record<keyof Nutrients, number>> = {},
+): NutrientStatus[] {
   return nutrientTargets(sex).map((target) => {
     const amount = totals[target.key]
-    if (amount === null) {
-      return { ...target, amount: null, ratio: null, verdict: 'unknown' as const }
+    // Absent coverage means the caller didn't measure it — treat as fully covered rather than
+    // silently reporting everything as unknown.
+    const covered = coverage[target.key] ?? 1
+    if (amount === null || covered < MIN_COVERAGE) {
+      return { ...target, amount, ratio: null, verdict: 'unknown' as const, coverage: covered }
     }
     const ratio = amount / target.reference
     const verdict: NutrientVerdict = target.isFloor
@@ -83,7 +102,7 @@ export function nutrientStatus(totals: Nutrients, sex: ReferenceSex = null): Nut
       : ratio > 1
         ? 'over'
         : 'ok'
-    return { ...target, amount, ratio, verdict }
+    return { ...target, amount, ratio, verdict, coverage: covered }
   })
 }
 
@@ -112,8 +131,12 @@ export interface DietQuality {
  * nothing else, and counting those as an absence would punish the user for a gap in the
  * database.
  */
-export function dietQuality(totals: Nutrients, sex: ReferenceSex = null): DietQuality {
-  const statuses = nutrientStatus(totals, sex)
+export function dietQuality(
+  totals: Nutrients,
+  sex: ReferenceSex = null,
+  coverage: Partial<Record<keyof Nutrients, number>> = {},
+): DietQuality {
+  const statuses = nutrientStatus(totals, sex, coverage)
   const known = statuses.filter((s) => s.verdict !== 'unknown')
   const short = known.filter((s) => s.verdict === 'short')
   const over = known.filter((s) => s.verdict === 'over')
@@ -153,12 +176,24 @@ function list(items: string[]): string {
 }
 
 /** For display: mg is right for micros, grams for the ones people think of in grams. */
-export function formatAmount(status: NutrientStatus): string {
+export function formatAmount(status: Pick<NutrientStatus, 'key' | 'amount'>): string {
   const grams = ['fiberMg', 'satFatMg', 'sugarMg']
   if (status.amount === null) return '—'
   return grams.includes(status.key)
     ? `${Math.round(mgToGrams(status.amount))}g`
     : `${Math.round(status.amount)}mg`
+}
+
+/**
+ * Why a nutrient couldn't be judged, in the user's terms.
+ *
+ * "Not recorded" is true but useless when the real situation is "two thirds of your food reported it
+ * and the steak didn't" — that's actionable, because the fix is correcting one row.
+ */
+export function coverageNote(status: NutrientStatus): string {
+  if (status.amount === null) return 'none of these foods record it'
+  const pct = Math.round(status.coverage * 100)
+  return `only ${pct}% of what you ate records it`
 }
 
 /** Bodyweight goal, for the Today header. Derived, never stored — the program owns the intent

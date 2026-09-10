@@ -1,14 +1,14 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import {
+  coverageNote,
   formatAmount,
   nutrientStatus,
   nutrientTargets,
   type ReferenceSex,
 } from '@/lib/micronutrients'
-import { mgToGrams } from '@/lib/nutrition'
+import { mgToGrams, type CoveredNutrients } from '@/lib/nutrition'
 import { shortDay, useChartTokens } from './chartTokens'
-import type { Nutrients } from '@/domain/types'
 import type { InsightsDay } from './useInsightsData'
 
 /**
@@ -19,16 +19,16 @@ import type { InsightsDay } from './useInsightsData'
  * not as zero.
  */
 export function AdequacyChart({
-  averages,
+  nutrition,
   dayCount,
   sex,
 }: {
-  averages: Nutrients
+  nutrition: CoveredNutrients
   dayCount: number
   sex: ReferenceSex
 }) {
   const tokens = useChartTokens()
-  const statuses = nutrientStatus(averages, sex)
+  const statuses = nutrientStatus(nutrition.totals, sex, nutrition.coverage)
   const known = statuses.filter((status) => status.verdict !== 'unknown')
 
   const colorFor = (verdict: string): string =>
@@ -80,7 +80,7 @@ export function AdequacyChart({
         known.length === 0
           ? undefined
           : `Daily average over ${dayCount} logged day${dayCount === 1 ? '' : 's'}` +
-            (unknown > 0 ? ` · ${unknown} not recorded` : '')
+            (unknown > 0 ? ` · ${unknown} too patchily recorded to judge` : '')
       }
       isEmpty={known.length === 0}
       emptyMessage="None of the foods logged carried micronutrient data."
@@ -88,7 +88,7 @@ export function AdequacyChart({
         columns: ['Nutrient', 'Average', 'Reference', 'Share'],
         rows: statuses.map((status) => [
           status.label,
-          status.verdict === 'unknown' ? 'not recorded' : formatAmount(status),
+          status.verdict === 'unknown' ? coverageNote(status) : formatAmount(status),
           formatAmount({ ...status, amount: status.reference }),
           status.ratio === null ? '—' : `${Math.round(status.ratio * 100)}%`,
         ]),
@@ -111,7 +111,10 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
   const reference =
     nutrientTargets(sex).find((target) => target.key === 'fiberMg')?.reference ?? 28_000
   const referenceG = Math.round(mgToGrams(reference))
-  const measured = days.filter((day) => day.fiber !== null)
+  // A day whose fibre came from only part of what was eaten is a floor, not a reading, so it is
+  // excluded from the mean rather than dragging it down.
+  const MIN_COVERAGE = 0.66
+  const measured = days.filter((day) => day.fiber !== null && day.fiberCoverage >= MIN_COVERAGE)
 
   const option: EChartsOption = {
     animation: false,
@@ -137,7 +140,12 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
             ? null
             : {
                 value: Math.round(day.fiber),
-                itemStyle: { color: day.fiber >= referenceG ? tokens.on : tokens.inkMuted },
+                itemStyle: {
+                  color: day.fiber >= referenceG ? tokens.on : tokens.inkMuted,
+                  // Hollow when only part of the day reported fibre: the bar is a floor, and a solid
+                  // one would claim the day fell short when the database simply didn't say.
+                  opacity: day.fiberCoverage >= MIN_COVERAGE ? 1 : 0.4,
+                },
               },
         ),
         markLine: {
@@ -157,13 +165,20 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
       subtitle={
         measured.length === 0
           ? undefined
-          : `Recorded on ${measured.length} of ${days.length} logged days · reference ${referenceG}g`
+          : `Fully recorded on ${measured.length} of ${days.length} logged days · reference ${referenceG}g`
       }
       isEmpty={measured.length === 0}
       emptyMessage="None of the foods logged carried a fibre figure."
       table={{
         columns: ['Day', 'Fibre (g)'],
-        rows: days.map((day) => [day.day, day.fiber === null ? 'not recorded' : Math.round(day.fiber)]),
+        rows: days.map((day) => [
+          day.day,
+          day.fiber === null
+            ? 'not recorded'
+            : day.fiberCoverage >= MIN_COVERAGE
+              ? Math.round(day.fiber)
+              : `${Math.round(day.fiber)}+ (partial)`,
+        ]),
       }}
     >
       <Chart option={option} ariaLabel="Fibre per day against the reference intake" />

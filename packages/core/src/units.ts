@@ -155,6 +155,11 @@ export function volumeFromMl(ml: number, to: VolumeUnit): number {
   return clean(to === 'ml' ? ml : ml / ML_PER_FLOZ, 1)
 }
 
+/** Litres, for a chart axis. Here rather than inline so volume arithmetic stays in one file. */
+export function litresFromMl(ml: number): number {
+  return clean(ml / 1000, 2)
+}
+
 /**
  * Rounded to something a person would say: whole fluid ounces, millilitres below a litre, and one
  * decimal above it — "1.8 L", not "1.75 L". Water is counted in glasses, so the second decimal is

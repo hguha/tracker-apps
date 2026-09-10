@@ -3,12 +3,13 @@ import { ChevronDown } from 'lucide-react'
 import { Card } from '@tracker-engine/ui'
 import { cn } from '@/lib/cn'
 import {
+  coverageNote,
   dietQuality,
   formatAmount,
   nutrientStatus,
   type ReferenceSex,
 } from '@/lib/micronutrients'
-import type { Nutrients } from '@/domain/types'
+import type { CoveredNutrients } from '@/lib/nutrition'
 
 const VERDICT_COLOR: Record<string, string> = {
   short: 'var(--target-under)',
@@ -27,18 +28,19 @@ const VERDICT_COLOR: Record<string, string> = {
  * them to a score that would mean nothing (see lib/micronutrients).
  */
 export function NutritionCard({
-  averages,
+  nutrition,
   dayCount,
   sex,
 }: {
-  averages: Nutrients
+  /** Averages *and* how much of the period each nutrient covers — see `sumCovered`. */
+  nutrition: CoveredNutrients
   dayCount: number
   /** References differ by sex for iron, fibre and potassium — see lib/micronutrients. */
   sex: ReferenceSex
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const quality = dietQuality(averages, sex)
-  const statuses = nutrientStatus(averages, sex)
+  const quality = dietQuality(nutrition.totals, sex, nutrition.coverage)
+  const statuses = nutrientStatus(nutrition.totals, sex, nutrition.coverage)
 
   return (
     <Card className="p-0">
@@ -86,15 +88,20 @@ export function NutritionCard({
                   </span>
                   <span className="tabular text-ink-muted">
                     {status.verdict === 'unknown'
-                      ? 'not recorded'
+                      ? coverageNote(status)
                       : `${formatAmount(status)} / ${formatAmount({ ...status, amount: status.reference })}`}
                   </span>
                 </div>
+                {/*
+                  Drawn at what *was* measured even when it can't be judged, in the grey that means
+                  "don't read too much into this". A zero-width bar next to "only 58% records it"
+                  would say the opposite of what the sentence says.
+                */}
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-sunken">
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.min(100, Math.max(0, (status.ratio ?? 0) * 100))}%`,
+                      width: `${Math.min(100, Math.max(0, ((status.amount ?? 0) / status.reference) * 100))}%`,
                       background: VERDICT_COLOR[status.verdict],
                     }}
                   />
@@ -105,9 +112,10 @@ export function NutritionCard({
 
           {quality.measured < quality.tracked && (
             <p className="mt-3 text-[12px] text-ink-muted">
-              {quality.tracked - quality.measured} of {quality.tracked} aren&rsquo;t recorded for
-              the foods you logged — judged over the rest, never counted as zero. Foods from the
-              USDA database carry the most detail.
+              {quality.tracked - quality.measured} of {quality.tracked} can&rsquo;t be judged: too
+              little of what you ate reports them. A total is still added up from the foods that do —
+              it&rsquo;s a floor, not a zero. USDA rows carry the most detail; branded ones often
+              carry only macros.
             </p>
           )}
         </div>
