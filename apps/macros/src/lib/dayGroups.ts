@@ -30,6 +30,13 @@ export interface MealGroup {
   dishes: DishGroup[]
   nutrients: Nutrients
   firstAt: number
+  /**
+   * When the last thing in this sitting was eaten.
+   *
+   * Because a slot is not a moment: a snack at 2pm and another at 10pm are one "Snack" group, and
+   * heading it with `firstAt` alone stated one of their times as though it were both.
+   */
+  lastAt: number
 }
 
 export function mealGroups(entries: readonly LogEntry[]): MealGroup[] {
@@ -48,7 +55,8 @@ export function mealGroups(entries: readonly LogEntry[]): MealGroup[] {
         entries: ordered,
         dishes: dishGroups(ordered),
         nutrients: sum(ordered.map((entry) => entry.nutrients)),
-        firstAt: ordered[0]!.eatenAt,
+        firstAt: Math.min(...ordered.map((entry) => entry.eatenAt)),
+        lastAt: Math.max(...ordered.map((entry) => entry.eatenAt)),
       },
     ]
   })

@@ -3,7 +3,8 @@ import { Camera, RotateCcw } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from './target'
-import { estimatePhoto, type MealEstimate } from './estimate'
+import { describePhoto } from './estimate'
+import { useEstimate } from './useEstimate'
 
 /** Below this the model can't resolve a plate; above it the upload is slow on a phone. */
 const MAX_EDGE = 1024
@@ -30,23 +31,20 @@ export function PhotoPanel({
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [note, setNote] = useState('')
-  const [estimate, setEstimate] = useState<MealEstimate | null>(null)
-  const [isBusy, setIsBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { estimate, setEstimate, phase, error, run, reset } = useEstimate()
+  const [shrinkError, setShrinkError] = useState<string | null>(null)
+  const isBusy = phase === 'reading' || phase === 'matching'
 
   async function handleFile(file: File | undefined) {
     if (!file) return
-    setError(null)
-    setEstimate(null)
-    setIsBusy(true)
+    reset()
+    setShrinkError(null)
     try {
       const shrunk = await downscale(file)
       setPreview(shrunk.dataUrl)
-      setEstimate(await estimatePhoto(shrunk.base64, 'image/jpeg', note))
+      await run(() => describePhoto(shrunk.base64, 'image/jpeg', note))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not read that photo.')
-    } finally {
-      setIsBusy(false)
+      setShrinkError(cause instanceof Error ? cause.message : 'Could not read that photo.')
     }
   }
 
@@ -67,9 +65,8 @@ export function PhotoPanel({
         </div>
       ) : (
         <p className="text-[13px] text-ink-secondary">
-          Take a photo of the whole plate, with something for scale in frame — cutlery, a hand, the
-          plate edge. Oil, butter and sauce worked into a dish never show up, so check the
-          assumptions before logging.
+          The whole plate, with something for scale in frame. Oil and sauce never show up, so check
+          the weights.
         </p>
       )}
 
@@ -82,10 +79,16 @@ export function PhotoPanel({
 
       <Button className="w-full" disabled={isBusy} onClick={() => fileRef.current?.click()}>
         {preview ? <RotateCcw size={16} /> : <Camera size={16} />}
-        {isBusy ? 'Looking at it…' : preview ? 'Take another' : 'Take a photo'}
+        {phase === 'reading'
+          ? 'Looking at it…'
+          : phase === 'matching'
+            ? 'Finding the foods…'
+            : preview
+              ? 'Take another'
+              : 'Take a photo'}
       </Button>
 
-      {error && (
+      {(error ?? shrinkError) !== null && (
         <p
           role="alert"
           className="rounded-xl px-3.5 py-2.5 text-[13px]"
@@ -94,7 +97,7 @@ export function PhotoPanel({
             color: 'var(--status-critical)',
           }}
         >
-          {error}
+          {error ?? shrinkError}
         </p>
       )}
 
@@ -105,6 +108,11 @@ export function PhotoPanel({
           source="photo"
           onChange={setEstimate}
           onDone={onDone}
+          onRefine={(extra) => {
+            setNote(extra)
+            fileRef.current?.click()
+          }}
+          isRefining={isBusy}
         />
       )}
     </div>

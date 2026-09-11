@@ -9,7 +9,6 @@ import {
   type SegmentedTab,
 } from '@tracker-engine/ui'
 import {
-  Check,
   ChefHat,
   ChevronDown,
   Compass,
@@ -131,22 +130,21 @@ export function LogScreen({
 
   return (
     <div className="flex h-full flex-col">
+      {/*
+        No "Done" button. It called `onClose` — exactly what the back arrow does — so the screen had
+        two controls with different words for one action, and the obvious reading of that is that one
+        of them commits something. Nothing needs committing: every write has already happened. What
+        the button was really for is the count, and that belongs in the title.
+      */}
       <ScreenHeader
-        title={panel.kind === 'browse' ? `Add to ${MEAL_LABELS[meal].toLowerCase()}` : 'Add food'}
-        onBack={() => (panel.kind === 'browse' ? onClose() : setPanel({ kind: 'browse' }))}
-        action={
-          // Done, once anything has been added — so leaving is a choice rather than a side effect
-          // of having logged something.
-          added > 0 ? (
-            <button
-              onClick={onClose}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-semibold text-accent-contrast active:brightness-90"
-            >
-              <Check size={15} />
-              Done · {added}
-            </button>
-          ) : undefined
+        title={
+          panel.kind !== 'browse'
+            ? 'Add food'
+            : added > 0
+              ? `${added} added to ${MEAL_LABELS[meal].toLowerCase()}`
+              : `Add to ${MEAL_LABELS[meal].toLowerCase()}`
         }
+        onBack={() => (panel.kind === 'browse' ? onClose() : setPanel({ kind: 'browse' }))}
       />
 
       <div className="flex-1 overflow-y-auto pb-8">

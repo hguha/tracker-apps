@@ -112,3 +112,24 @@ describe('dishGroups', () => {
     expect(groups[1]!.entries).toHaveLength(2)
   })
 })
+
+describe('a sitting that spans the day', () => {
+  it('reports both ends, so a 2pm and a 10pm snack are not both called 2pm', () => {
+    // Grouping is by meal slot, which is right — but a slot is not a moment, and heading the card
+    // with the first row's time stated one snack's time as though it were both.
+    const early = entry({ id: 'a', meal: 'snack', hour: 14, kcal: 100 })
+    const late = entry({ id: 'b', meal: 'snack', hour: 22, kcal: 200 })
+    // Given out of order on purpose: the group's ends are facts about the clock, not about the
+    // order the rows happened to arrive in.
+    const [group] = mealGroups([late, early])
+    expect(group!.firstAt).toBe(early.eatenAt)
+    expect(group!.lastAt).toBe(late.eatenAt)
+    expect(Number.isFinite(group!.firstAt)).toBe(true)
+  })
+
+  it('has firstAt equal to lastAt for a single row', () => {
+    const only = entry({ id: 'a', meal: 'lunch', hour: 12, kcal: 50 })
+    const [group] = mealGroups([only])
+    expect(group!.firstAt).toBe(group!.lastAt)
+  })
+})

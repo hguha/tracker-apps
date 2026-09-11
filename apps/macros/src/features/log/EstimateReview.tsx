@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bookmark, Check, Sparkles } from 'lucide-react'
+import { Bookmark, Check, Loader2, Sparkles } from 'lucide-react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { portionFor } from '@/lib/nutrition'
@@ -33,22 +33,36 @@ export function EstimateReview({
   source,
   onChange,
   onDone,
+  onRefine,
+  isRefining = false,
 }: {
   estimate: MealEstimate
   target: LogTarget
   source: EntrySource
   onChange: (estimate: MealEstimate) => void
   onDone: () => void
+  /** Ask again with a correction appended. Absent where re-asking isn't possible. */
+  onRefine?: (extra: string) => void
+  isRefining?: boolean
 }) {
   const toast = useToast()
   const [isSaving, setIsSaving] = useState(false)
   const [name, setName] = useState(estimate.label)
+  /** Which row has its swap box open. */
+  const [swapping, setSwapping] = useState<string | null>(null)
 
   const update = (items: EstimatedItem[]) =>
     onChange({ ...estimate, items, nutrients: totalOf(items) })
   const loggable = estimate.items.filter((item) => item.food !== null && item.grams > 0)
-  const unmatched = estimate.items.filter((item) => item.food === null)
-  const ordered = [...unmatched, ...estimate.items.filter((item) => item.food !== null)]
+  const unmatched = estimate.items.filter((item) => item.food === null && !item.isMatching)
+  const matching = estimate.items.filter((item) => item.isMatching).length
+  // Unmatched first, then still-looking, then done — so the rows needing attention are at the top and
+  // nothing jumps position as the lookups land.
+  const ordered = [
+    ...unmatched,
+    ...estimate.items.filter((item) => item.isMatching),
+    ...estimate.items.filter((item) => item.food !== null),
+  ]
 
   return (
     <>
@@ -66,7 +80,13 @@ export function EstimateReview({
         />
       </label>
 
-      {unmatched.length > 0 && (
+      {matching > 0 && (
+        <p className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+          <Loader2 size={13} className="shrink-0 animate-spin" />
+          {estimate.items.length - matching} of {estimate.items.length} matched
+        </p>
+      )}
+      {matching === 0 && unmatched.length > 0 && (
         <p className="text-[12.5px]" style={{ color: 'var(--status-serious)' }}>
           {unmatched.length} matched no food and count nothing.
         </p>
@@ -77,12 +97,43 @@ export function EstimateReview({
           <GramsRow
             key={item.id}
             title={item.food?.description ?? item.query}
-            subtitle={<ItemNote item={item} />}
+            subtitle={
+              <ItemNote
+                item={item}
+                onSwap={
+                  swapping === item.id ? () => setSwapping(null) : () => setSwapping(item.id)
+                }
+              />
+            }
             grams={item.grams}
             onGrams={(value) =>
               update(estimate.items.map((i) => (i.id === item.id ? { ...i, grams: value } : i)))
             }
             onRemove={() => update(estimate.items.filter((i) => i.id !== item.id))}
+            after={
+              /*
+                A swap box on every row, seeded with what the model called it.
+                This is the deterministic answer to "it got the wrong food": the model's *name* was
+                usually right ("zucchini muffin") and the database's first hit for it wasn't, so what
+                the user needs is the rest of that ranking — not another go at the model.
+              */
+              item.isMatching ? undefined : swapping === item.id || item.food === null ? (
+                <FoodSearchPicker
+                  placeholder={`Which “${item.query}”?`}
+                  initialQuery={item.query}
+                  branded={false}
+                  limit={6}
+                  onPick={(food) => {
+                    update(
+                      estimate.items.map((i) =>
+                        i.id === item.id ? { ...i, food, matchedBy: 'exact' } : i,
+                      ),
+                    )
+                    setSwapping(null)
+                  }}
+                />
+              ) : undefined
+            }
           />
         ))}
       </ul>
@@ -144,6 +195,8 @@ export function EstimateReview({
         {isSaving ? 'Logging…' : `Log ${name.trim() || 'this'}`}
       </Button>
 
+      {onRefine && <Refine onRefine={onRefine} isBusy={isRefining} />}
+
       <SaveForNextTime items={loggable} label={name} />
     </>
   )
@@ -180,6 +233,7 @@ export function AddToDraft({
         confidence: 'high',
         food,
         matchedBy: 'exact',
+        isMatching: false,
       },
     ])
   }
@@ -255,16 +309,26 @@ export function AddToDraft({
  * matcher's own vocabulary — under every row, which answers a question the user never asked while
  * leaving the one they did ask ("how much protein was in that?") unanswered.
  */
-function ItemNote({ item }: { item: EstimatedItem }) {
-  if (item.food === null) {
+function ItemNote({ item, onSwap }: { item: EstimatedItem; onSwap: () => void }) {
+  if (item.isMatching) {
     return (
-      <span style={{ color: 'var(--status-serious)' }}>no match — pick one below</span>
+      <span className="flex items-center gap-1.5 text-ink-muted">
+        <Loader2 size={11} className="shrink-0 animate-spin" />
+        looking it up
+      </span>
     )
+  }
+  if (item.food === null) {
+    return <span style={{ color: 'var(--status-serious)' }}>no match — pick one below</span>
   }
   return (
     <span className="tabular flex items-baseline gap-2">
       <span className="text-ink-secondary">{nutrientsOf(item).kcal} kcal</span>
       <MacroNumbers nutrients={nutrientsOf(item)} />
+      {/* The one thing missing when the model named it right and the database ranked it wrong. */}
+      <button onClick={onSwap} className="font-semibold text-accent active:opacity-60">
+        not this?
+      </button>
     </span>
   )
 }
@@ -330,6 +394,45 @@ function SaveForNextTime({ items, label }: { items: readonly EstimatedItem[]; la
             {isSaving ? 'Saving…' : `Save ${quantity ? `1 ${quantity.unit}` : savedName}`}
           </>
         )}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Asking again with the missing detail.
+ *
+ * "Zucchini muffins" coming back as a plain muffin is the model missing a word, and the only recourse
+ * was retyping the whole meal and hoping. This appends the correction to the original description —
+ * one short box, because the correction is always short.
+ */
+function Refine({
+  onRefine,
+  isBusy,
+}: {
+  onRefine: (extra: string) => void
+  isBusy: boolean
+}) {
+  const [extra, setExtra] = useState('')
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={extra}
+        onChange={(event) => setExtra(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && extra.trim()) onRefine(extra)
+        }}
+        placeholder="Missed something? e.g. zucchini, not plain"
+        className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2 text-[13.5px] outline-none"
+      />
+      <button
+        onClick={() => extra.trim() && onRefine(extra)}
+        disabled={isBusy || extra.trim().length === 0}
+        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-wash text-accent disabled:opacity-40 active:opacity-60"
+        aria-label="Ask again with this detail"
+      >
+        <Sparkles size={16} />
       </button>
     </div>
   )

@@ -202,6 +202,15 @@ Deno.serve(async (request) => {
     code?: string
     id?: string
     limit?: number
+    /**
+     * Skip the branded query entirely.
+     *
+     * Set by every ingredient lookup — matching "cooked spaghetti" out of a recipe or a described
+     * meal, where a packaged product is the wrong answer anyway. It halves the upstream work on the
+     * app's hottest path: a nineteen-line recipe import was firing thirty-eight USDA requests, half
+     * of them for results that were then discarded client-side.
+     */
+    generic?: boolean
   }
 
   // No key configured: say so with empty results, so the client falls back rather than errors.
@@ -226,7 +235,12 @@ Deno.serve(async (request) => {
     }
 
     if (body.op === 'search' && body.q) {
-      const found = await searchGenericFirst(key, body.q, Math.min(50, body.limit ?? 25))
+      const found = await searchGenericFirst(
+        key,
+        body.q,
+        Math.min(50, body.limit ?? 25),
+        body.generic === true,
+      )
       const rows = (await withPortions(key, found)).filter(hasEnergy)
       if (rows.length > 0) await admin.from('foods').upsert(rows)
       return json({ foods: rows.map(toClient) })
@@ -258,11 +272,18 @@ Deno.serve(async (request) => {
  *
  * Costs one extra request per search, against a 1,000/hour key.
  */
-async function searchGenericFirst(key: string, query: string, pageSize: number) {
-  const brandedQuota = Math.min(10, Math.max(5, Math.floor(pageSize / 3)))
+async function searchGenericFirst(
+  key: string,
+  query: string,
+  pageSize: number,
+  genericOnly = false,
+) {
+  const brandedQuota = genericOnly ? 0 : Math.min(10, Math.max(5, Math.floor(pageSize / 3)))
   const [generic, branded] = await Promise.all([
     search(key, query, pageSize, ['Foundation', 'SR Legacy', 'Survey (FNDDS)']),
-    search(key, query, brandedQuota, ['Branded']).catch(() => []),
+    brandedQuota === 0
+      ? Promise.resolve([])
+      : search(key, query, brandedQuota, ['Branded']).catch(() => []),
   ])
 
   const seen = new Set<number>()

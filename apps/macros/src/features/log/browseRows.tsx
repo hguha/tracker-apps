@@ -126,16 +126,14 @@ export function RecentList({
                 onClick={() => onOpen({ kind: 'food', food: item.food })}
                 title={item.food.description}
                 nutrients={nutrientsFor(item.food, amountGrams(item.food, item.amount))}
-                detail={describeAmount(item.food, item.amount)}
-                times={item.times}
+                detail={withTimes(describeAmount(item.food, item.amount), item.times)}
               />
             ) : (
               <Row
                 onClick={() => onOpen({ kind: 'dish', dish: item })}
                 title={item.name}
                 nutrients={item.nutrients}
-                detail={item.parts.join(', ')}
-                times={item.times}
+                detail={withTimes(item.parts.join(', '), item.times)}
               />
             )}
           </li>
@@ -145,28 +143,32 @@ export function RecentList({
   )
 }
 
+/**
+ * How often it's been eaten, said in words.
+ *
+ * It was a bare "2×" floating at the end of the row, which states a number without its unit: two
+ * portions? twice today? Folded into the detail line, where the sentence can carry the window.
+ */
+function withTimes(detail: string, times: number): string {
+  if (times < 2) return detail
+  return [detail, `${times} times this month`].filter(Boolean).join(' · ')
+}
+
 /** One tappable thing: what it is, what it costs, and one line of detail. Nothing else. */
 function Row({
   onClick,
   title,
   nutrients,
   detail,
-  times,
 }: {
   onClick: () => void
   title: string
   nutrients: Parameters<typeof MacroNumbers>[0]['nutrients']
   detail: string
-  times?: number
 }) {
   return (
     <button onClick={onClick} className="w-full px-4 py-2.5 text-left active:bg-sunken">
-      <span className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-[14px]">{title}</span>
-        {times !== undefined && times > 1 && (
-          <span className="tabular shrink-0 text-[11.5px] text-ink-muted">{times}×</span>
-        )}
-      </span>
+      <span className="block truncate text-[14px]">{title}</span>
       <span className="tabular mt-0.5 flex items-baseline gap-2">
         <span className="shrink-0 text-[12px] font-semibold">{nutrients.kcal} kcal</span>
         <MacroNumbers nutrients={nutrients} />

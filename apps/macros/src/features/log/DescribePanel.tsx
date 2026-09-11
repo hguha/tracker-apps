@@ -3,13 +3,17 @@ import { Sparkles } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from './target'
-import { estimateMeal, type MealEstimate } from './estimate'
+import { describeMeal } from './estimate'
+import { useEstimate } from './useEstimate'
 
 /**
  * "Turkey sandwich" instead of four separate lookups.
  *
- * The result is a draft, never a log: every row shows what it matched and how confident the
- * breakdown was, and the grams are editable before anything is written.
+ * The result is a draft, never a log: every row shows what it matched, and the grams are editable
+ * before anything is written.
+ *
+ * **The model's reading appears before the lookups finish.** See `useEstimate` — the two phases used
+ * to be one await behind one spinner, which meant half a minute of a screen that might have hung.
  */
 export function DescribePanel({
   target,
@@ -22,22 +26,8 @@ export function DescribePanel({
   onDone: () => void
 }) {
   const [text, setText] = useState(initialText)
-  const [estimate, setEstimate] = useState<MealEstimate | null>(null)
-  const [isBusy, setIsBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function run() {
-    if (text.trim().length < 3) return
-    setIsBusy(true)
-    setError(null)
-    try {
-      setEstimate(await estimateMeal(text))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not work that out.')
-    } finally {
-      setIsBusy(false)
-    }
-  }
+  const { estimate, setEstimate, phase, error, run } = useEstimate()
+  const isBusy = phase === 'reading' || phase === 'matching'
 
   return (
     <div className="flex max-h-full flex-col">
@@ -50,7 +40,7 @@ export function DescribePanel({
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
-              void run()
+              void run(() => describeMeal(text))
             }
           }}
           placeholder="3 steak tacos, or a turkey sandwich and an apple"
@@ -60,10 +50,14 @@ export function DescribePanel({
         <Button
           className="w-full"
           disabled={text.trim().length < 3 || isBusy}
-          onClick={() => void run()}
+          onClick={() => void run(() => describeMeal(text))}
         >
           <Sparkles size={16} />
-          {isBusy ? 'Working it out…' : 'Break it down'}
+          {phase === 'reading'
+            ? 'Reading it…'
+            : phase === 'matching'
+              ? 'Finding the foods…'
+              : 'Break it down'}
         </Button>
 
         {error && (
@@ -86,6 +80,9 @@ export function DescribePanel({
             source="describe"
             onChange={setEstimate}
             onDone={onDone}
+            // Re-asks with the correction appended, rather than making the user retype the meal.
+            onRefine={(extra) => void run(() => describeMeal(text, extra))}
+            isRefining={isBusy}
           />
         )}
       </div>

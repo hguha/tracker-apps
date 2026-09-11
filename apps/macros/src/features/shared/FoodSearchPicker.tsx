@@ -21,6 +21,7 @@ export function FoodSearchPicker({
   branded = true,
   minChars = 2,
   autoFocus = false,
+  initialQuery = '',
   children,
 }: {
   placeholder: string
@@ -30,10 +31,18 @@ export function FoodSearchPicker({
   branded?: boolean
   minChars?: number
   autoFocus?: boolean
+  /**
+   * Opened with something already typed.
+   *
+   * For "the model named it right and the database ranked it wrong": the useful thing at that moment
+   * is the *rest* of the ranking for the same words, and making the user retype them to see it is
+   * asking them to repeat what the app already knows.
+   */
+  initialQuery?: string
   /** Rendered under the results, with the current query — for an "ask instead" escape hatch. */
   children?: (query: string) => React.ReactNode
 }) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const trimmed = query.trim()
   const { results, isSearching, isEmpty } = useFoodSearch(query, { limit, branded })
 

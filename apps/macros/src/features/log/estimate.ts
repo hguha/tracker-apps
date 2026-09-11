@@ -21,6 +21,15 @@ export interface EstimatedItem {
   /** null when nothing in the database matched; that row contributes nothing to the totals. */
   food: Food | null
   matchedBy: 'exact' | 'fuzzy' | 'unmatched'
+  /**
+   * True while this row is still being looked up.
+   *
+   * The whole reason the two phases are separate. A six-item meal meant one model request *and then*
+   * up to six food-database round trips before anything appeared, all behind a single
+   * "Working it out…" — thirty seconds of a screen that might equally have been broken. Now the
+   * model's reading appears immediately and each row resolves in view.
+   */
+  isMatching: boolean
 }
 
 export interface MealEstimate {
@@ -90,8 +99,21 @@ interface RawItem {
   confidence?: unknown
 }
 
+/**
+ * Phase one: what the model read, with nothing looked up yet.
+ *
+ * Returns the moment the model answers, so the draft can be on screen while the database work
+ * happens. `extra` is appended to the description — the refine path, where the user says "zucchini,
+ * not plain" after seeing a wrong answer.
+ */
+export async function describeMeal(description: string, extra = ''): Promise<MealEstimate> {
+  const text = extra.trim() ? `${description.trim()} (${extra.trim()})` : description.trim()
+  return runDescribe({ mode: 'estimate', description: text }, description.trim())
+}
+
+/** Both phases, for callers that have nothing to show in between. */
 export async function estimateMeal(description: string): Promise<MealEstimate> {
-  return runEstimate({ mode: 'estimate', description }, description.trim())
+  return matchDraft(await describeMeal(description))
 }
 
 /**
@@ -102,12 +124,12 @@ export async function estimateMeal(description: string): Promise<MealEstimate> {
  * was cooked in — so the result arrives as an editable draft with its assumptions stated, exactly
  * like a described meal, and never as a number to accept.
  */
-export async function estimatePhoto(
+export async function describePhoto(
   base64: string,
   mimeType: string,
   note = '',
 ): Promise<MealEstimate> {
-  return runEstimate({ mode: 'photo', image: base64, mimeType, description: note }, note.trim())
+  return runDescribe({ mode: 'photo', image: base64, mimeType, description: note }, note.trim())
 }
 
 /**
@@ -118,10 +140,10 @@ export async function estimatePhoto(
  * size instead would quietly divide the dish.
  */
 export async function estimateIngredients(lines: readonly string[]): Promise<MealEstimate> {
-  return runEstimate({ mode: 'ingredients', lines }, '')
+  return matchDraft(await runDescribe({ mode: 'ingredients', lines }, ''))
 }
 
-async function runEstimate(body: Record<string, unknown>, label: string): Promise<MealEstimate> {
+async function runDescribe(body: Record<string, unknown>, label: string): Promise<MealEstimate> {
   const client = getSupabase()
   if (!client) {
     throw new EstimateUnavailable(
@@ -161,27 +183,61 @@ async function runEstimate(body: Record<string, unknown>, label: string): Promis
     )
   }
 
-  const items = await Promise.all(data.items.map(toItem))
+  const items = data.items.map(toItem)
   return { items, assumptions: data.assumptions ?? '', nutrients: totalOf(items), label }
 }
 
-async function toItem(raw: RawItem, index: number): Promise<EstimatedItem> {
+function toItem(raw: RawItem, index: number): EstimatedItem {
   const query = String(raw.query ?? '').trim()
   const grams = Number(raw.grams)
   const confidence =
     raw.confidence === 'high' || raw.confidence === 'medium' ? raw.confidence : 'low'
 
-  const matched = query
-    ? await matchIngredient(query)
-    : { food: null, matchedBy: 'unmatched' as const }
   return {
     id: `est-${index}`,
     query: query || 'Unknown item',
     grams: Number.isFinite(grams) && grams > 0 ? Math.round(grams) : 0,
     confidence,
-    food: matched.food,
-    matchedBy: matched.matchedBy,
+    food: null,
+    matchedBy: 'unmatched',
+    isMatching: query.length > 0,
   }
+}
+
+/**
+ * Phase two: a food row for every name, reported as each one lands.
+ *
+ * Identical queries share one lookup — "2 tbsp olive oil" twice in a recipe is one round trip, and a
+ * described meal repeats ingredients more often than you would think.
+ */
+export async function matchDraft(
+  draft: MealEstimate,
+  onItem?: (item: EstimatedItem) => void,
+): Promise<MealEstimate> {
+  const inFlight = new Map<string, Promise<Awaited<ReturnType<typeof matchIngredient>>>>()
+  const lookup = (query: string) => {
+    const existing = inFlight.get(query)
+    if (existing) return existing
+    const started = matchIngredient(query)
+    inFlight.set(query, started)
+    return started
+  }
+
+  const items = await Promise.all(
+    draft.items.map(async (item): Promise<EstimatedItem> => {
+      if (!item.isMatching) return item
+      const matched = await lookup(item.query)
+      const resolved: EstimatedItem = {
+        ...item,
+        food: matched.food,
+        matchedBy: matched.matchedBy,
+        isMatching: false,
+      }
+      onItem?.(resolved)
+      return resolved
+    }),
+  )
+  return { ...draft, items, nutrients: totalOf(items) }
 }
 
 export function totalOf(items: readonly EstimatedItem[]): Nutrients {

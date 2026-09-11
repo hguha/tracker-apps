@@ -38,8 +38,19 @@ export interface LinesResult {
  * limited: nineteen misses would otherwise be nineteen USDA round trips. Local first, and only the
  * lines that missed go out — which for a second import of the same recipe is none of them.
  */
-export async function resolveLines(rawLines: readonly string[]): Promise<LinesResult> {
+export async function resolveLines(
+  rawLines: readonly string[],
+  /**
+   * Called as each line lands, so a nineteen-line import can count up on screen.
+   *
+   * Without it the whole thing sat behind one "Working out the amounts…" for however long the
+   * slowest lookup took, which is indistinguishable from a hang — and it's the step people wrongly
+   * assumed was the AI.
+   */
+  onProgress?: (done: number, total: number) => void,
+): Promise<LinesResult> {
   const parsed = rawLines.map(parseIngredientLine).filter((line) => line.name.length > 1)
+  let done = 0
 
   const lines = await Promise.all(
     parsed.map(async (line): Promise<ResolvedLine> => {
@@ -48,6 +59,8 @@ export async function resolveLines(rawLines: readonly string[]): Promise<LinesRe
           ? { food: null, matchedBy: 'unmatched' as const }
           : await matchIngredient(line.name)
       const amount = resolveAmount(line, matched.food)
+      done += 1
+      onProgress?.(done, parsed.length)
       return {
         parsed: line,
         food: matched.food,

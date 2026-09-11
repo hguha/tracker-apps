@@ -50,7 +50,19 @@ export function NutritionCard({
         className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-sunken"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-medium">Nutrition</div>
+          {/*
+            The window is in the title, not folded away. Macros reset at midnight because a calorie
+            target is a day; micronutrients don't because one day of fibre means nothing — but with
+            both on the same screen and only one of them labelled, midnight read as a half-broken
+            reset rather than as two deliberate windows.
+          */}
+          <div className="text-[14px] font-medium">
+            Nutrition
+            <span className="font-normal text-ink-muted">
+              {' '}
+              · last {dayCount} day{dayCount === 1 ? '' : 's'}
+            </span>
+          </div>
           <div className="truncate text-[12.5px] text-ink-muted">{quality.summary}</div>
         </div>
         {quality.measured > 0 && (
@@ -75,8 +87,7 @@ export function NutritionCard({
       {isOpen && (
         <div className="border-t border-line px-4 py-3">
           <p className="text-[12px] text-ink-muted">
-            Daily average across {dayCount} logged day{dayCount === 1 ? '' : 's'}, against adult
-            reference intakes.
+            Daily average, against adult reference intakes.
           </p>
           <ul className="mt-2 space-y-2">
             {statuses.map((status) => (
@@ -112,10 +123,8 @@ export function NutritionCard({
 
           {quality.measured < quality.tracked && (
             <p className="mt-3 text-[12px] text-ink-muted">
-              {quality.tracked - quality.measured} of {quality.tracked} can&rsquo;t be judged: too
-              little of what you ate reports them. A total is still added up from the foods that do —
-              it&rsquo;s a floor, not a zero. USDA rows carry the most detail; branded ones often
-              carry only macros.
+              {quality.tracked - quality.measured} can&rsquo;t be judged: too little of what you ate
+              reports them. The totals shown are floors, not zeroes.
             </p>
           )}
         </div>

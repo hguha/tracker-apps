@@ -32,6 +32,9 @@ import {
 } from '@/domain/types'
 import { DayTotals } from './DayTotals'
 
+/** Past this, a meal slot covers two separate sittings and its header needs to say a range. */
+const SPREAD_MS = 90 * 60_000
+
 /**
  * One day of food, editable.
  *
@@ -267,8 +270,16 @@ function MealCard({
       <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold">{MEAL_LABELS[group.meal]}</span>
+          {/*
+            A range when the sitting spans the day. Two snacks eight hours apart both filed under
+            "2:00 PM" — the slot's first row — which is a fact about one of them presented as a fact
+            about both.
+          */}
           <span className="tabular block text-[11.5px] text-ink-muted">
-            {formatTimeOfDay(group.firstAt)} · {group.nutrients.kcal} kcal
+            {formatTimeOfDay(group.firstAt)}
+            {group.lastAt - group.firstAt >= SPREAD_MS && `–${formatTimeOfDay(group.lastAt)}`}
+            {' · '}
+            {group.nutrients.kcal} kcal
           </span>
         </span>
         <button
@@ -478,7 +489,17 @@ function EntryRow({
             className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
           />
         </span>
-        <MacroNumbers nutrients={entry.nutrients} className="mt-0.5" />
+        {/*
+          The row's own clock time, beside its macros. Grouping is by meal slot, so a snack at 2pm and
+          another at 10pm share a card — and without this there was nothing on either row to tell them
+          apart, or to catch one stamped at the wrong hour.
+        */}
+        <span className="mt-0.5 flex items-baseline gap-2">
+          <MacroNumbers nutrients={entry.nutrients} />
+          <span className="tabular flex-1 text-right text-[11px] text-ink-muted">
+            {formatTimeOfDay(entry.eatenAt)}
+          </span>
+        </span>
       </button>
 
       {isOpen && (

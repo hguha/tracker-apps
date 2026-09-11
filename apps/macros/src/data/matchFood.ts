@@ -30,9 +30,10 @@ export async function matchIngredient(name: string): Promise<MatchedFood> {
   const [exact] = await repo.searchFoods(query, 1)
   if (exact) return { food: exact, matchedBy: 'exact' }
 
-  // Generic sources only: these are ingredients, and Open Food Facts' packaged rows are both the
-  // wrong answer for "cooked spaghetti" and the slowest part of resolving a whole recipe.
-  const remote = await searchRemote(query, { branded: false })
+  // Generic sources only, and a short page: these are ingredients, Open Food Facts' packaged rows
+  // are the wrong answer for "cooked spaghetti", and only the top hit is ever used — the function
+  // fetches full details for everything it returns, so a shorter page is a third off the wait.
+  const remote = await searchRemote(query, { branded: false, limit: INGREDIENT_CANDIDATES })
   const [best] = rankFoods(remote, query, 1)
   if (best) return { food: best, matchedBy: 'fuzzy' }
 
@@ -47,3 +48,6 @@ export interface MatchedFood {
 }
 
 const NO_MATCH: MatchedFood = { food: null, matchedBy: 'unmatched' }
+
+/** Enough for `rankFoods` to have a real choice, few enough to be quick. Measured; see above. */
+const INGREDIENT_CANDIDATES = 8

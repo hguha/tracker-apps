@@ -180,7 +180,7 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   // The screen stays open and keeps score in the header, so a five-item breakfast is one visit
   // rather than five. It used to close on every write, which meant re-picking the meal each round.
-  await page.getByRole('button', { name: /Done · 1/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   // Home shows the food. It used to show a ring, a weigh-in, a goal, badges and a coach button —
   // everything except the diary — and seeing what you ate meant guessing that the ring was tappable.
@@ -248,7 +248,7 @@ test('a food the databases do not have can be entered and logged offline', async
   // Straight to the portion step for the food just created, then onto the day.
   await expect(page.getByRole('heading', { name: 'Corner shop wrap' })).toBeVisible()
   await page.getByRole('button', { name: /^Log it/ }).click()
-  await page.getByRole('button', { name: /Done · 1/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
   await expect(page.getByText(/Corner shop wrap/).first()).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
@@ -433,7 +433,9 @@ test('several foods log at once, at the amount each was last eaten in', async ({
   await page.getByRole('button', { name: /^Log it/ }).click()
 
   // Now the tick path, without leaving: the screen stayed open, which is the point of it.
-  await expect(page.getByRole('button', { name: /Done · 1/ })).toBeVisible()
+  // The count lives in the title now: a "Done" button that called the same thing as the back arrow
+  // was two words for one action, which reads as one of them committing something.
+  await expect(page.getByRole('heading', { name: /1 added to/ })).toBeVisible()
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   // The tickbox, which queues a food at the amount it was last eaten in. Distinct from tapping the
   // row, which opens an amount — they used to be a "+" and a name, which read as two paths to one act.
@@ -446,7 +448,8 @@ test('several foods log at once, at the amount each was last eaten in', async ({
   const logBoth = page.getByRole('button', { name: /^Log 2 · \d+ kcal$/ })
   await expect(logBoth).toBeVisible()
   await logBoth.click()
-  await page.getByRole('button', { name: /Done · 3/ }).click()
+  await expect(page.getByRole('heading', { name: /3 added to/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   // Three items on the day, and the chicken came back at 183 g rather than a database default —
   // which is the whole reason logging in MyFitnessPal feels quick.
@@ -549,7 +552,7 @@ test('a saved meal can be opened and renamed', async ({ page }) => {
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await page.getByRole('button', { name: /^Log it/ }).click()
-  await page.getByRole('button', { name: /Done · 1/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
   await page.getByRole('button', { name: /Save this meal/ }).click()
@@ -681,7 +684,7 @@ test('a described dish can be removed, and kept as one of its units', async ({ p
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await page.getByRole('button', { name: /^Log it/ }).click()
-  await page.getByRole('button', { name: /^Done · / }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   // A single food is not wrapped in a dish: that would add a layer to open for nothing.
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
@@ -708,7 +711,7 @@ test('the day screen shows what each food contributes, and what the day comes to
   // make, and each macro bar split into what's already eaten plus what this adds.
   await expect(page.getByText(/still free after this/)).toBeVisible()
   await page.getByRole('button', { name: /^Log it/ }).click()
-  await page.getByRole('button', { name: /^Done · / }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   // Home lists only the meals with food in them. Four rows of em-dashes was most of the card saying
   // nothing, every morning.
@@ -833,6 +836,43 @@ test('what fits can be narrowed to one kind of thing', async ({ page }) => {
   }
   await page.getByRole('button', { name: 'Cook', exact: true }).click()
   await expect(page.getByText(/Nothing here fits/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a logged row carries its own clock time', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  // Grouping is by meal slot, which is right — but a slot is not a moment. A snack at 2pm and
+  // another at 10pm share one card, and with only the card's heading to go on there was nothing on
+  // either row to tell them apart, or to catch one stamped at the wrong hour.
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+  // h:mm a — the same format the rest of the app uses.
+  await expect(page.getByText(/\d{1,2}:\d\d\s?(AM|PM)/).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('the nutrition card says which window it covers', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { weight: '80' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  // Macros reset at midnight because a calorie target is a day; micronutrients don't, because one
+  // day of fibre means nothing. With only one of them labelled, midnight read as a half-broken reset.
+  await expect(page.getByText(/last \d day/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

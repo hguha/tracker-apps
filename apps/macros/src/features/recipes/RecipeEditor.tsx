@@ -92,6 +92,16 @@ export function RecipeEditor({
   const [pending, setPending] = useState<Pending | null>(null)
   const [isReading, setIsReading] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
+  /**
+   * How far the conversion has got, and which half is running.
+   *
+   * "Sometimes instant, sometimes slow" was two different steps behind one label: reading the amounts
+   * is local and takes a second, while the leftover lines go to the model and take thirty. Naming the
+   * step and counting the lines is the whole fix — nothing here got faster.
+   */
+  const [progress, setProgress] = useState<{ done: number; total: number; isModel: boolean } | null>(
+    null,
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -170,8 +180,11 @@ export function RecipeEditor({
     if (lines.length === 0 || isConverting) return
     setIsConverting(true)
     setError(null)
+    setProgress({ done: 0, total: lines.length, isModel: false })
     try {
-      const local = await resolveLines(lines)
+      const local = await resolveLines(lines, (done, total) =>
+        setProgress({ done, total, isModel: false }),
+      )
       const resolved = local.lines.filter((line) => line.grams !== null && line.grams > 0)
       const unreadable = local.lines.filter((line) => line.grams === null && !line.parsed.isToTaste)
 
@@ -197,6 +210,7 @@ export function RecipeEditor({
       // Only the leftovers go to the model, so a nineteen-line import spends a request on the two
       // lines that needed one — or none at all.
       if (unreadable.length > 0) {
+        setProgress({ done: resolved.length, total: local.lines.length, isModel: true })
         try {
           const estimate = await estimateIngredients(unreadable.map((line) => line.parsed.raw))
           setItems((current) => [...current, ...estimate.items.map(toDraft)])
@@ -228,6 +242,7 @@ export function RecipeEditor({
       )
     } finally {
       setIsConverting(false)
+      setProgress(null)
     }
   }
 
@@ -391,7 +406,7 @@ export function RecipeEditor({
           {isReading
             ? 'Reading the page…'
             : isConverting
-              ? 'Working out the amounts…'
+              ? convertingLabel(progress)
               : mode === 'link'
                 ? 'Read the ingredients'
                 : mode === 'paste'
@@ -435,7 +450,7 @@ export function RecipeEditor({
           >
             <Wand2 size={15} />
             {isConverting
-              ? 'Working out the amounts…'
+              ? convertingLabel(progress)
               : `Convert ${pending.lines.length} amounts to weights`}
           </Button>
           <button
@@ -630,4 +645,18 @@ function hostOf(url: string): string {
   } catch {
     return url
   }
+}
+
+/**
+ * Which step is running, and how far through.
+ *
+ * Two genuinely different waits used to share one sentence: reading the amounts is local and takes a
+ * second, and the leftovers go to a language model and take most of a minute.
+ */
+function convertingLabel(
+  progress: { done: number; total: number; isModel: boolean } | null,
+): string {
+  if (!progress) return 'Working out the amounts…'
+  if (progress.isModel) return 'Asking the AI about the rest…'
+  return `Matching foods — ${progress.done} of ${progress.total}`
 }

@@ -50,6 +50,15 @@ export interface SearchOptions {
    * "cooked spaghetti", while its 503s made a six-ingredient soup feel broken.
    */
   branded?: boolean
+  /**
+   * How many rows to ask for.
+   *
+   * Worth setting low for an ingredient lookup, which only ever takes the top hit: the function
+   * fetches full details for every result it returns, and measured against the live database,
+   * asking for 8 instead of 25 cuts 30–50% off the round trip. The search box keeps the long list,
+   * because there a person is reading it.
+   */
+  limit?: number
 }
 
 /**
@@ -62,7 +71,7 @@ export interface SearchOptions {
  */
 export async function searchRemote(
   query: string,
-  { branded = true }: SearchOptions = {},
+  { branded = true, limit = 25 }: SearchOptions = {},
 ): Promise<Food[]> {
   // Normalised here so USDA sees what the local index sees: "80/20 ground beef" matches nothing
   // upstream, and "80 20 ground beef" matches the right row.
@@ -74,7 +83,9 @@ export async function searchRemote(
   // with portions and micronutrients — sat invisible for however long Open Food Facts took to
   // fail. With OFF down that was an extra 2.5s of "Nothing matched." on every single search.
   const both = await Promise.all([
-    searchBackend(q).then(cacheAll),
+    // `branded` governs both sources: an ingredient lookup wants neither Open Food Facts' packaged
+    // rows nor USDA's, and telling the function so halves the requests it makes upstream.
+    searchBackend(q, !branded, limit).then(cacheAll),
     branded ? searchOpenFoodFacts(q).then(cacheAll) : Promise.resolve([]),
   ])
   return both.flat()
@@ -85,12 +96,12 @@ async function cacheAll(foods: Food[]): Promise<Food[]> {
   return foods
 }
 
-async function searchBackend(query: string): Promise<Food[]> {
+async function searchBackend(query: string, genericOnly: boolean, limit: number): Promise<Food[]> {
   const client = getSupabase()
   if (!client) return []
   try {
     const { data, error } = await client.functions.invoke<{ foods: Food[] }>('foods', {
-      body: { op: 'search', q: query, limit: 25 },
+      body: { op: 'search', q: query, limit, generic: genericOnly },
     })
     return error ? [] : (data?.foods ?? [])
   } catch {
