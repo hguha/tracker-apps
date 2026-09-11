@@ -399,12 +399,14 @@ export function RecipeEditor({
                   : 'Break it into ingredients'}
         </Button>
 
+        {/* One line each. The three-sentence versions explained *how* the import works, which is the
+            app's business — what the user needs is which box to type in. */}
         <p className="text-[12px] text-ink-muted">
           {mode === 'link'
-            ? 'Reads the recipe the site publishes for search engines — its name, servings, cuisine and ingredient lines. Nothing nutritional comes from the page: the weights come from the amounts it states, and every macro from the food database.'
+            ? 'Macros come from the food database, never from the page.'
             : mode === 'paste'
-              ? 'One ingredient per line, at the amounts written. Works for any site, including the ones a link can’t read.'
-              : 'For a dish with no written recipe. Ordinary portions are assumed, so check the weights.'}
+              ? 'One ingredient per line, at the amounts written.'
+              : 'Ordinary portions are assumed, so check the weights.'}
         </p>
 
         {error && (
@@ -498,9 +500,7 @@ export function RecipeEditor({
                   title={food?.description ?? item.label}
                   subtitle={
                     item.foodId === null ? (
-                      <span style={{ color: 'var(--status-serious)' }}>
-                        stays in the recipe, but no food matched it, so it adds no macros
-                      </span>
+                      <span style={{ color: 'var(--status-serious)' }}>no macros — match a food</span>
                     ) : (
                       <span className="tabular text-ink-muted">
                         {food ? `${Math.round(nutrientsFor(food, item.grams).kcal)} kcal` : '…'}
@@ -534,10 +534,6 @@ export function RecipeEditor({
               ])
             }
           />
-          <p className="mt-1 text-[11.5px] text-ink-muted">
-            Comes in at 100 g — set the amount on the row. Usually quicker to paste the whole
-            ingredient list above and correct what it got wrong.
-          </p>
         </div>
       </Card>
 
@@ -564,9 +560,8 @@ export function RecipeEditor({
         {notes && <p className="mt-1.5 text-[12px] text-ink-muted">{notes}</p>}
         {unmatched > 0 && (
           <p className="mt-1.5 text-[12px]" style={{ color: 'var(--status-serious)' }}>
-            {unmatched} ingredient{unmatched === 1 ? '' : 's'} matched no food, so{' '}
-            {unmatched === 1 ? 'it adds' : 'they add'} nothing to this total. The recipe saves with{' '}
-            {unmatched === 1 ? 'it' : 'them'} either way — match a food above to have it counted.
+            {unmatched} ingredient{unmatched === 1 ? '' : 's'} add nothing to this total. The recipe
+            saves either way.
           </p>
         )}
         {source && (
@@ -580,9 +575,7 @@ export function RecipeEditor({
         </Button>
         {!canSave && (
           <p className="mt-1.5 text-center text-[12px] text-ink-muted">
-            {name.trim().length === 0
-              ? 'Give it a name first.'
-              : 'Add at least one ingredient first.'}
+            {name.trim().length === 0 ? 'Needs a name.' : 'Needs an ingredient.'}
           </p>
         )}
       </Card>

@@ -11,7 +11,6 @@ import {
   Plus,
   RotateCcw,
   Trash2,
-  Utensils,
 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
@@ -366,11 +365,13 @@ function DishRow({
         className={cn('w-full px-3.5 py-2.5 text-left active:bg-sunken', isOpen && 'bg-sunken/60')}
       >
         <span className="flex items-baseline gap-2">
-          <Utensils size={13} className="shrink-0 translate-y-px text-ink-muted" />
           <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
             {dish.name ?? 'Dish'}
           </span>
-          <span className="tabular shrink-0 text-[13px] font-semibold">
+          <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
+            {dish.entries.length} item{dish.entries.length === 1 ? '' : 's'}
+          </span>
+          <span className="tabular w-11 shrink-0 text-right text-[13px] font-semibold">
             {dish.nutrients.kcal}
           </span>
           <ChevronDown
@@ -378,12 +379,7 @@ function DishRow({
             className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
           />
         </span>
-        <span className="mt-0.5 flex items-baseline gap-2 pl-[21px]">
-          <MacroNumbers nutrients={dish.nutrients} className="shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-muted">
-            {dish.entries.length} item{dish.entries.length === 1 ? '' : 's'}
-          </span>
-        </span>
+        <MacroNumbers nutrients={dish.nutrients} className="mt-0.5" />
       </button>
 
       {isOpen && (
@@ -463,16 +459,24 @@ function EntryRow({
           isOpen && 'bg-sunken/60',
         )}
       >
+        {/*
+          The same three columns as every other row, at the same widths. Grams used to appear only
+          when a row had them and the chevron only on a dish, so a meal of four things had four
+          different layouts and the calorie column never lined up. A quick add has no weight, so its
+          slot stays empty rather than collapsing and shunting the numbers sideways.
+        */}
         <span className="flex items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate text-[13.5px]">{name}</span>
-          {entry.grams > 0 && (
-            <span className="tabular shrink-0 text-[11.5px] text-ink-muted">
-              {Math.round(entry.grams)}g
-            </span>
-          )}
+          <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
+            {entry.grams > 0 ? `${Math.round(entry.grams)}g` : ''}
+          </span>
           <span className="tabular w-11 shrink-0 text-right text-[13px] font-medium">
             {entry.nutrients.kcal}
           </span>
+          <ChevronDown
+            size={15}
+            className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
+          />
         </span>
         <MacroNumbers nutrients={entry.nutrients} className="mt-0.5" />
       </button>

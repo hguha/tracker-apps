@@ -36,32 +36,25 @@ export function FoodsTab({ onAdd }: { onAdd: () => void }) {
       <SearchField
         value={query}
         onChange={setQuery}
-        placeholder="Any food — see its macros and micronutrients"
+        placeholder="Any food you have logged"
       />
 
+      {/* Addable from here, not only from the moment a search fails — which was the only way in and
+          meant you couldn't set one up in advance. */}
       {isBrowsing && (
-        <>
-          <p className="px-1 text-[12.5px] text-ink-muted">
-            Search above for anything you&rsquo;ve logged or looked up. Below are the foods{' '}
-            <span className="font-semibold">you</span> added from a label, for something the
-            databases don&rsquo;t have.
-          </p>
-          {/* Addable from here, not only from the moment a search fails — which was the only way in
-              and meant you couldn't set one up in advance. */}
-          <Button variant="secondary" className="w-full" onClick={onAdd}>
-            <Plus size={15} />
-            Add a food from its label
-          </Button>
-        </>
+        <Button variant="secondary" className="w-full" onClick={onAdd}>
+          <Plus size={15} />
+          Create a food
+        </Button>
       )}
 
       {shown.length === 0 ? (
         <Card className="p-4 text-center text-[13.5px] text-ink-muted">
           {isBrowsing
-            ? 'Nothing added yet.'
+            ? 'Search above for anything you have logged.'
             : isSearching
               ? 'Searching…'
-              : 'Nothing matched. Foods arrive here as you log them.'}
+              : 'Nothing matched.'}
         </Card>
       ) : (
         <Card className="p-0">
@@ -78,12 +71,6 @@ export function FoodsTab({ onAdd }: { onAdd: () => void }) {
         </Card>
       )}
 
-      {isBrowsing && (own ?? []).length > 0 && (
-        <p className="px-1 text-[12px] text-ink-muted">
-          Deleting a food leaves what you already logged alone — entries keep the nutrients they were
-          logged with.
-        </p>
-      )}
     </>
   )
 }

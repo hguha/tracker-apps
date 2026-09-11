@@ -159,7 +159,6 @@ export function LogScreen({
             onAt={setAt}
             onOpen={(loggable) => setPanel({ kind: 'add', loggable })}
             onPanel={setPanel}
-            added={added}
             onLogged={onLogged}
           />
         )}
@@ -200,7 +199,6 @@ function BrowsePanel({
   onAt,
   onOpen,
   onPanel,
-  added,
   onLogged,
 }: {
   target: LogTarget
@@ -210,7 +208,6 @@ function BrowsePanel({
   onAt: (at: number) => void
   onOpen: (loggable: Loggable) => void
   onPanel: (panel: Panel) => void
-  added: number
   onLogged: (count: number) => void
 }) {
   const { meal, at } = target
@@ -238,7 +235,7 @@ function BrowsePanel({
   const { results, isSearching } = useFoodSearch(query)
   const libraryHits = useLiveQuery(() => repo.searchLibrary(trimmed), [trimmed], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  const favouriteIds = profile?.favouriteFoodIds ?? []
+  const savedIds = profile?.favouriteFoodIds ?? []
   /**
    * `undefined` until loaded, not `[]`.
    *
@@ -249,15 +246,15 @@ function BrowsePanel({
   const templates = useLiveQuery(() => repo.mealTemplates(), [], undefined)
   const recipes = useLiveQuery(() => repo.recipes(), [], undefined)
   const recents = useLiveQuery(() => repo.recentItems(), [], undefined)
-  const starred = useLiveQuery(
+  const savedFoods = useLiveQuery(
     async () => {
-      const found = await repo.foodsByIds(favouriteIds)
-      return favouriteIds.flatMap((id) => {
+      const found = await repo.foodsByIds(savedIds)
+      return savedIds.flatMap((id) => {
         const food = found.get(id)
         return food ? [food] : []
       })
     },
-    [favouriteIds.join(',')],
+    [savedIds.join(',')],
     undefined,
   )
   // Every ticked food's last amount, in one query rather than one per row, so the confirmation bar
@@ -269,21 +266,27 @@ function BrowsePanel({
   )
 
   const canScan = isBarcodeScanningAvailable()
-  // Worth offering a breakdown when the text names more than one thing. It leads only when the
-  // search came up thin: a query with real matches is answered by those matches.
-  const looksComposed = trimmed.split(/\s+/).length >= 2
+  /**
+   * Offered for anything typed, not only for a phrase.
+   *
+   * It used to need two words, on the theory that one word is a food and several are a dish. But
+   * "pizza", "lasagna" and "curry" are the clearest examples of things worth breaking into
+   * ingredients, and the rule silently withheld the feature from exactly them.
+   */
   const describeRow =
-    isTyping && looksComposed ? (
+    trimmed.length >= 3 ? (
       <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} />
     ) : null
   // Only lead with the breakdown once the search has actually finished coming up thin — and never
   // when something the user saved themselves already matches the name.
   const describeLeads = !isSearching && results.length < 3 && (libraryHits ?? []).length === 0
 
+  const savedCount = (templates ?? []).length + (savedFoods ?? []).length
+
   const tabs: SegmentedTab<BrowseTab>[] = [
     { key: 'recent', label: 'Recent', badge: (recents ?? []).length || undefined },
     // Deliberately the same word the library uses for the same thing.
-    { key: 'saved', label: 'Saved', badge: (templates ?? []).length || undefined },
+    { key: 'saved', label: 'Saved', badge: savedCount || undefined },
     { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
   ]
 
@@ -294,13 +297,6 @@ function BrowsePanel({
 
   return (
     <div className="space-y-3 px-3 py-3">
-      {added > 0 && (
-        <p className="rounded-xl bg-accent-wash px-3 py-2 text-[12.5px] text-accent">
-          {added} item{added === 1 ? '' : 's'} added. Keep going, or tap{' '}
-          <span className="font-semibold">Done</span> when you&rsquo;ve finished this meal.
-        </p>
-      )}
-
       {/*
         Meal and time as one line you can tap, not a card that owns the top third of the screen.
         Both are already right on almost every log — `mealForHour` and now — and both are correctable
@@ -336,7 +332,7 @@ function BrowsePanel({
             autoFocus
             value={query}
             onChange={onQuery}
-            placeholder="Search foods, your recipes, or describe a meal"
+            placeholder="Search a food, a recipe, or a meal"
           />
         </div>
         {canScan && (
@@ -374,7 +370,7 @@ function BrowsePanel({
             onSelect={(food) => onOpen({ kind: 'food', food })}
             picked={picked}
             onToggle={toggle}
-            favourites={favouriteIds}
+            saved={savedIds}
             lastAmounts={lastAmounts ?? new Map()}
             emptyLabel="Nothing matched."
             footer={isSearching ? <SearchingRow /> : null}
@@ -385,7 +381,7 @@ function BrowsePanel({
             className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
           >
             <PlusCircle size={15} />
-            Add “{trimmed}” from its label
+            Create “{trimmed}”
           </button>
         </>
       ) : (
@@ -402,70 +398,63 @@ function BrowsePanel({
           >
             <Compass size={16} className="shrink-0 text-accent" />
             <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-accent">
-              Find something that fits what&rsquo;s left today
+              What can I still have?
             </span>
           </button>
 
           <SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />
 
-          {tab === 'recent' && (
-            <>
-              {/*
-                Starred foods, above the list rather than in a tab of their own. A star is the answer
-                to "where do I save just this food", and it only works if the pinned thing is visible
-                without a detour.
-              */}
-              {(starred ?? []).length > 0 && (
-                <FoodList
-                  foods={starred ?? []}
-                  onSelect={(food) => onOpen({ kind: 'food', food })}
-                  picked={picked}
-                  onToggle={toggle}
-                  favourites={favouriteIds}
-                  lastAmounts={lastAmounts ?? new Map()}
-                  emptyLabel=""
-                  heading="Pinned"
-                />
-              )}
-              {recents === undefined ? null : recents.length === 0 ? (
-                <Empty>
-                  Everything you log turns up here, newest first — so the second time you eat
-                  something it&rsquo;s one tap.
-                </Empty>
-              ) : (
-                <RecentList items={recents} onOpen={onOpen} />
-              )}
-            </>
-          )}
-
-          {tab === 'saved' &&
-            (templates === undefined ? null : templates.length === 0 ? (
-              <Empty>
-                Tap the bookmark on a meal in your day to save it — then it&rsquo;s one tap here, at
-                any multiple. For a dish you cook in batches, make it a recipe instead.
-              </Empty>
+          {tab === 'recent' &&
+            (recents === undefined ? null : recents.length === 0 ? (
+              <Empty>Everything you log turns up here.</Empty>
             ) : (
-              <Card className="p-0">
-                <ul className="divide-y divide-line">
-                  {templates.map((template) => (
-                    <li key={template.id}>
-                      <button
-                        onClick={() => onOpen({ kind: 'meal', template })}
-                        className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                      >
-                        <div className="truncate text-[14px]">{template.name}</div>
-                        <div className="tabular flex items-baseline gap-2 text-[12px] text-ink-muted">
-                          <span>{template.nutrients.kcal} kcal</span>
-                          <MacroNumbers nutrients={template.nutrients} />
-                          <span>
-                            {template.items.length} item{template.items.length === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
+              <RecentList items={recents} onOpen={onOpen} />
+            ))}
+
+          {/*
+            One Saved list, holding both kinds. A bookmarked food and a kept meal were two features
+            with two words — "pinned" and "saved" — living in two places, so there was no answering
+            the question "where did that go?".
+          */}
+          {tab === 'saved' &&
+            (templates === undefined || savedFoods === undefined ? null : savedCount === 0 ? (
+              <Empty>Bookmark a food, or a whole meal from your day, and it lands here.</Empty>
+            ) : (
+              <>
+                {templates.length > 0 && (
+                  <Card className="p-0">
+                    <ul className="divide-y divide-line">
+                      {templates.map((template) => (
+                        <li key={template.id}>
+                          <button
+                            onClick={() => onOpen({ kind: 'meal', template })}
+                            className="w-full px-4 py-2.5 text-left active:bg-sunken"
+                          >
+                            <div className="truncate text-[14px]">{template.name}</div>
+                            <div className="tabular mt-0.5 flex items-baseline gap-2">
+                              <span className="shrink-0 text-[12px] font-semibold">
+                                {template.nutrients.kcal} kcal
+                              </span>
+                              <MacroNumbers nutrients={template.nutrients} />
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+                {savedFoods.length > 0 && (
+                  <FoodList
+                    foods={savedFoods}
+                    onSelect={(food) => onOpen({ kind: 'food', food })}
+                    picked={picked}
+                    onToggle={toggle}
+                    saved={savedIds}
+                    lastAmounts={lastAmounts ?? new Map()}
+                    emptyLabel=""
+                  />
+                )}
+              </>
             ))}
 
           {tab === 'recipes' && (
@@ -478,10 +467,7 @@ function BrowsePanel({
                 New recipe
               </button>
               {recipes === undefined ? null : recipes.length === 0 ? (
-                <Empty>
-                  No recipes yet. Paste a link into a new recipe and the whole ingredient list comes
-                  across.
-                </Empty>
+                <Empty>Paste a recipe link and the whole ingredient list comes across.</Empty>
               ) : (
                 <Card className="p-0">
                   <ul className="divide-y divide-line">

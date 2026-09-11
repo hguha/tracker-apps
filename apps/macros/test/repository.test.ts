@@ -458,6 +458,31 @@ describe('your own foods', () => {
   })
 })
 
+describe('recipeUsage', () => {
+  it('counts sittings, not the rows a recipe was written as', async () => {
+    // A fourteen-ingredient recipe reported "cooked 14 times" the first evening it was made — and
+    // that number is what drives "you cook this a lot", so the recipe recommended itself on the
+    // strength of its own ingredient list.
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Lasagna soup',
+      servings: 4,
+      ingredients: [
+        { foodId: food.id, label: 'a', grams: 100 },
+        { foodId: food.id, label: 'b', grams: 100 },
+        { foodId: food.id, label: 'c', grams: 100 },
+      ],
+    })
+    const recipe = (await repo.recipes()).find((row) => row.id === id)!
+
+    await repo.logRecipeIngredients(recipe, 1, 'dinner')
+    expect((await repo.recipeUsage()).get(id)?.timesCooked).toBe(1)
+
+    await repo.logRecipeIngredients(recipe, 1, 'lunch')
+    expect((await repo.recipeUsage()).get(id)?.timesCooked).toBe(2)
+  })
+})
+
 describe('searchLibrary', () => {
   it('finds your own recipe by name, which the food database never could', async () => {
     // "lasagna soup" is a recipe the user imported and cooked twice, and searching for it returned

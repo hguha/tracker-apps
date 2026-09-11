@@ -71,7 +71,6 @@ export function AddPanel({
   const typed = Number(amount)
   const count = !Number.isFinite(typed) || typed <= 0 ? 0 : typed
   const adding = count === 0 ? null : unit.nutrientsAt(count)
-  const grams = count === 0 ? null : unit.gramsAt(count)
 
   const day = dayKey(target.at)
   /**
@@ -196,12 +195,8 @@ export function AddPanel({
       </div>
 
       <p className="tabular text-[12.5px] text-ink-muted">
-        {count === 0
-          ? 'Pick an amount'
-          : grams === null
-            ? `${adding?.kcal ?? 0} kcal`
-            : `${Math.round(grams)} g`}
-        {last !== undefined && last !== null && !isEdited && ' · the amount you had last time'}
+        {count === 0 ? 'Pick an amount' : unit.summaryAt(count)}
+        {last !== undefined && last !== null && !isEdited && ' · what you had last time'}
       </p>
 
       {isDayLoaded ? (
@@ -211,17 +206,10 @@ export function AddPanel({
         <div className="h-[122px] rounded-xl bg-sunken" aria-hidden />
       )}
 
-      {/*
-        What's in it, under the question it answers. The screen had the room — this was the "lots of
-        empty screen real estate" — and a composite is exactly where the parts matter: a saved meal
-        nobody remembers the contents of is a saved meal nobody dares log.
-      */}
+      {/* What's in it. A saved meal nobody remembers the contents of is one nobody dares log. */}
       {subject.isComposite && parts !== undefined && parts.length > 0 && (
         <div className="rounded-xl bg-sunken/60 px-3 py-2">
-          <p className="text-[11px] text-ink-muted">
-            {parts.length} item{parts.length === 1 ? '' : 's'}, at {amount} × {unit.label}
-          </p>
-          <ul className="mt-1 divide-y divide-line">
+          <ul className="divide-y divide-line">
             {parts.map((part, index) => (
               <PartRow key={index} part={part} count={count} />
             ))}

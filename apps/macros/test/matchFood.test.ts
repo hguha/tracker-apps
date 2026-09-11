@@ -3,7 +3,7 @@ import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { matchIngredient } from '@/data/matchFood'
 import { seedFoods } from '@/db/seed'
-import { normalizeQuery, queryTerms, searchVariants } from '@/lib/foodSearch'
+import { normalizeQuery, overlapScore, queryTerms } from '@/lib/foodSearch'
 
 beforeAll(async () => {
   await seedFoods()
@@ -28,48 +28,51 @@ describe('normalizeQuery', () => {
   })
 })
 
-describe('searchVariants', () => {
-  it('offers the name as written first', () => {
-    expect(searchVariants('cooked spaghetti')[0]).toBe('cooked spaghetti')
+describe('overlapScore', () => {
+  it('weighs the head noun above a modifier, with no table to maintain', () => {
+    // This is what replaced 55 hand-written ingredient aliases. "lasagna noodles, dry" must land on
+    // a noodle rather than on "Lasagna with meat", and nobody should have to write that rule down.
+    const terms = queryTerms('lasagna noodles dry')
+    expect(overlapScore('noodles, egg, dry, enriched', terms)).toBeGreaterThan(
+      overlapScore('lasagna with meat', terms),
+    )
   })
 
-  it('translates a recipe name into USDA vocabulary', () => {
-    // The whole reason aliases exist: USDA has no "lasagna noodles" at all.
-    expect(searchVariants('lasagna noodles, dry')).toContain('pasta dry enriched')
+  it('scores a row sharing nothing at zero, so it can be excluded rather than ranked', () => {
+    expect(overlapScore('beef, ground, raw', queryTerms('tangerine'))).toBe(0)
+  })
+})
+
+describe('dialect', () => {
+  it('translates the words a US database has never seen', () => {
+    // Spelling, not synonymy: FoodData Central returns literally nothing for "courgette", and no
+    // relevance ranking can bridge a word the index does not contain.
+    expect(normalizeQuery('2 courgettes, sliced')).toBe('2 zucchini sliced')
+    expect(normalizeQuery('500g beef mince')).toBe('500g beef ground')
   })
 
-  it('relaxes from the front, because the head noun is last', () => {
-    const variants = searchVariants('lasagna noodles dry')
-    expect(variants).toContain('lasagna noodles')
-    expect(variants).toContain('noodles dry')
-    expect(variants).toContain('noodles')
-    // "dry" on its own is four letters of nothing; it must not become a query.
-    expect(variants).not.toContain('dry')
-  })
-
-  it('never invents a word that wasn’t asked for, aliases aside', () => {
-    const asked = new Set(['low', 'sodium', 'chicken', 'broth'])
-    const aliased = searchVariants('low sodium chicken broth')
-    for (const variant of aliased) {
-      if (variant === 'soup chicken broth canned') continue
-      for (const word of variant.split(' ')) expect(asked.has(word)).toBe(true)
-    }
-  })
-
-  it('declines a name too short to mean anything', () => {
-    expect(searchVariants('')).toEqual([])
-    expect(searchVariants('a')).toEqual([])
+  it('leaves alone what USDA resolves on its own', () => {
+    // Checked against the live database: "heavy whipping cream", "scallions" and "Italian sausage"
+    // all return the right row first, so listing them would be maintenance for nothing.
+    expect(normalizeQuery('heavy whipping cream')).toBe('heavy whipping cream')
+    expect(normalizeQuery('italian sausage')).toBe('italian sausage')
   })
 })
 
 describe('matchIngredient', () => {
   it('finds a food whose name the user wrote differently', async () => {
-    // "lasagna noodles, dry" against the seed. Every term must appear was the old rule, and no row
-    // contains all three — so the line came back unmatched and contributed zero calories to a meal.
+    // "lasagna noodles, dry" against the seed, with no network. Every term must appear was the old
+    // rule, and no row contains all three — so the line came back unmatched and contributed zero
+    // calories to a meal, which looks exactly like the food being free.
     const matched = await matchIngredient('lasagna noodles, dry')
     expect(matched.food).not.toBeNull()
     expect(matched.matchedBy).toBe('fuzzy')
     expect(matched.food!.description.toLowerCase()).toMatch(/pasta|noodle/)
+  })
+
+  it('translates a dialect word before searching', async () => {
+    const matched = await matchIngredient('courgette')
+    expect(matched.food?.description.toLowerCase()).toContain('zucchini')
   })
 
   it('calls an as-written hit exact, so the UI can tell them apart', async () => {
@@ -79,6 +82,6 @@ describe('matchIngredient', () => {
 
   it('says so rather than guessing when there is genuinely nothing', async () => {
     const matched = await matchIngredient('zzzqx')
-    expect(matched).toEqual({ food: null, matchedBy: 'unmatched', usedQuery: null })
+    expect(matched).toEqual({ food: null, matchedBy: 'unmatched' })
   })
 })

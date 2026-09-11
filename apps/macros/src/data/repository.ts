@@ -37,7 +37,13 @@ import {
   sum as sumNutrients,
 } from '@/lib/nutrition'
 import { multiplierForDay } from '@/lib/cycling'
-import { haystackOf, matchesHaystack, queryTerms, rankFoods } from '@/lib/foodSearch'
+import {
+  haystackOf,
+  matchesHaystack,
+  overlapScore,
+  queryTerms,
+  rankFoods,
+} from '@/lib/foodSearch'
 import {
   buildCheckIn,
   initialTargetsFromTrend,
@@ -121,12 +127,16 @@ export async function getProfile(): Promise<Profile> {
 }
 
 /**
- * Pins or unpins a food.
+ * Saves or unsaves a food.
+ *
+ * Named `toggleSaved` because there is one word for this now. A starred food used to be "pinned" and
+ * a kept meal "saved" — two words for one idea, so it was impossible to guess where either would
+ * turn up. The stored field keeps its old name; renaming a synced column buys nothing.
  *
  * Newest first, so the list reads as "what I've been eating lately" rather than as an archive, and
- * capped — a favourites list of ninety is the frequents list with extra steps.
+ * capped — a saved list of ninety is the frequents list with extra steps.
  */
-export async function toggleFavourite(foodId: string): Promise<void> {
+export async function toggleSaved(foodId: string): Promise<void> {
   const current = (await getProfile()).favouriteFoodIds
   const next = current.includes(foodId)
     ? current.filter((id) => id !== foodId)
@@ -242,6 +252,33 @@ export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
     matchesHaystack(row.haystack, terms) ? [row.food] : [],
   )
   return rankFoods(matches, query, limit)
+}
+
+/**
+ * The same search, ranked by how much of the query each row matches rather than requiring all of it.
+ *
+ * The offline half of `matchIngredient`. Strict matching is right for a search box — a user typing
+ * "chicken thigh" does not want beef — but wrong for an ingredient name, where a row sharing the head
+ * noun is far better than an unmatched line silently contributing nothing. Terms count for their own
+ * length, so the head noun outweighs a modifier without anyone hand-writing that.
+ */
+export async function searchFoodsLoose(query: string, limit = 40): Promise<Food[]> {
+  const terms = queryTerms(query)
+  if (terms.length === 0) return []
+
+  const scored = (await allCachedFoods())
+    .map((row) => ({ row, overlap: overlapScore(row.haystack, terms) }))
+    .filter((entry) => entry.overlap > 0)
+  if (scored.length === 0) return []
+
+  // Only the rows that matched the most of the query compete on the usual ranking; below that they
+  // are a different food that happens to share a word.
+  const best = Math.max(...scored.map((entry) => entry.overlap))
+  return rankFoods(
+    scored.filter((entry) => entry.overlap === best).map((entry) => entry.row.food),
+    query,
+    limit,
+  )
 }
 
 /**
@@ -950,26 +987,39 @@ export function deleteRecipe(id: string): Promise<void> {
  * query each.
  */
 export async function recipeUsage(days = 365): Promise<Map<string, RecipeUsage>> {
-  const usage = new Map<string, RecipeUsage>()
+  /**
+   * Servings, not rows.
+   *
+   * A recipe is logged as one row per ingredient, so counting rows said a fourteen-ingredient
+   * lasagna soup had been cooked **fourteen times** the first evening it was made — and that number
+   * drives "you cook this a lot", which then recommended it on the strength of its own ingredient
+   * list. Rows written together share a `dishId`, so a sitting is a dishId; a row without one is its
+   * own sitting, which is the older single-row shape.
+   */
+  const sittings = new Map<string, Set<string>>()
+  const lastDay = new Map<string, string>()
   const from = dayKeyOffset(Date.now(), days)
+
   await db.logEntries
     .where('day')
     .aboveOrEqual(from)
     .filter(alive)
     .each((entry) => {
-      // Either shape counts as having cooked it: one row for the dish, or one row per ingredient.
       const recipeId = entry.recipeId ?? entry.fromRecipeId
       if (!recipeId) return
-      const current = usage.get(recipeId) ?? { timesCooked: 0, lastCookedDay: null }
-      usage.set(recipeId, {
-        timesCooked: current.timesCooked + 1,
-        lastCookedDay:
-          current.lastCookedDay === null || entry.day > current.lastCookedDay
-            ? entry.day
-            : current.lastCookedDay,
-      })
+      const seen = sittings.get(recipeId) ?? new Set<string>()
+      seen.add(entry.dishId ?? entry.id)
+      sittings.set(recipeId, seen)
+      const known = lastDay.get(recipeId)
+      if (known === undefined || entry.day > known) lastDay.set(recipeId, entry.day)
     })
-  return usage
+
+  return new Map(
+    [...sittings].map(([recipeId, seen]) => [
+      recipeId,
+      { timesCooked: seen.size, lastCookedDay: lastDay.get(recipeId) ?? null },
+    ]),
+  )
 }
 
 /**

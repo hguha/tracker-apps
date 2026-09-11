@@ -84,13 +84,10 @@ function MealsTab() {
 
   return (
     <>
-      <p className="px-1 text-[12.5px] text-ink-muted">
-        A saved meal is <span className="font-semibold">these exact items again</span> —
-        yesterday&rsquo;s lunch, at half or double. Nothing is created from scratch here: it comes from
-        a real meal, so tap the bookmark beside any meal in your day and it lands in this list.
-      </p>
       {(templates ?? []).length === 0 ? (
-        <Card className="p-4 text-center text-[13.5px] text-ink-muted">Nothing saved yet.</Card>
+        <Card className="p-4 text-center text-[13.5px] text-ink-muted">
+          Bookmark a meal in your day and it lands here.
+        </Card>
       ) : (
         (templates ?? []).map((template) => (
           <MealRow

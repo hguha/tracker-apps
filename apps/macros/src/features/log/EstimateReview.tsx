@@ -68,8 +68,7 @@ export function EstimateReview({
 
       {unmatched.length > 0 && (
         <p className="text-[12.5px]" style={{ color: 'var(--status-serious)' }}>
-          {unmatched.length} of these didn&rsquo;t match a food, so {unmatched.length === 1 ? 'it counts' : 'they count'} nothing.
-          Pick a match below, or remove {unmatched.length === 1 ? 'it' : 'them'}.
+          {unmatched.length} matched no food and count nothing.
         </p>
       )}
 
@@ -89,9 +88,7 @@ export function EstimateReview({
       </ul>
 
       {estimate.items.length === 0 && (
-        <p className="text-[13px] text-ink-muted">
-          Nothing recognisable came back. Add the parts yourself below, or search for them.
-        </p>
+        <p className="text-[13px] text-ink-muted">Nothing came back — add the parts below.</p>
       )}
 
       <AddToDraft
@@ -163,7 +160,7 @@ export function EstimateReview({
 export function AddToDraft({
   onAdd,
   nextIndex,
-  placeholder = 'Something missing? Add it here',
+  placeholder = 'Add something it missed',
 }: {
   onAdd: (items: EstimatedItem[]) => void
   nextIndex: number
@@ -261,9 +258,7 @@ export function AddToDraft({
 function ItemNote({ item }: { item: EstimatedItem }) {
   if (item.food === null) {
     return (
-      <span style={{ color: 'var(--status-serious)' }}>
-        no match for “{item.query}” — pick one below
-      </span>
+      <span style={{ color: 'var(--status-serious)' }}>no match — pick one below</span>
     )
   }
   return (
@@ -319,11 +314,6 @@ function SaveForNextTime({ items, label }: { items: readonly EstimatedItem[]; la
 
   return (
     <div className="rounded-xl bg-sunken/60 p-2.5">
-      <p className="text-[12.5px] text-ink-secondary">
-        {quantity
-          ? `Keep this as one ${quantity.unit} and you can log any number of them later, without asking again.`
-          : 'Keep this and you can log it again without asking again.'}
-      </p>
       <button
         onClick={save}
         disabled={isSaving || isSaved}

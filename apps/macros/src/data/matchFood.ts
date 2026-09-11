@@ -1,55 +1,49 @@
 import * as repo from '@/data/repository'
 import { searchRemote } from '@/data/foodLookup'
-import { searchVariants } from '@/lib/foodSearch'
+import { rankFoods } from '@/lib/foodSearch'
 import type { Food } from '@/domain/types'
 
 /**
  * One ingredient name to one food row — the app's single matcher.
  *
- * There were two, and they disagreed. `data/ingredientLines` retried on the head noun; `features/log/estimate`
- * didn't, so the same name resolved from a pasted recipe and came back unmatched from an AI
- * breakdown. Worse, both required *every* word of the name to appear in one description, which is a
- * rule that can only work when the person and the database happen to use the same vocabulary:
- * "lasagna noodles, dry" matched nothing at all, because USDA calls it "Pasta, dry, enriched".
+ * There were two, and they disagreed. Both also required *every* word of a name to appear in one
+ * description, which is a rule that can only work when the person and the database happen to use the
+ * same vocabulary: "lasagna noodles, dry" matched nothing, because USDA files it under "Noodles, egg,
+ * dry". An unmatched row contributes zero calories, so a miss here doesn't look like a miss — it
+ * looks like the food being free.
  *
- * An unmatched row contributes zero calories to the meal, so a miss here doesn't look like a miss —
- * it looks like the food being free. That is the worst failure this app can have, and it is why the
- * search relaxes rather than giving up.
+ * **The fix is to stop re-filtering the search engine's answer.** USDA's own relevance ranking
+ * handles synonymy perfectly well — it returns the right row for "heavy whipping cream", "scallions"
+ * and "Italian sausage" — and the bug was fetching those results and then throwing them away with an
+ * all-terms rule. So the remote step now hands its candidates straight to `rankFoods`, and the
+ * hand-written alias table that used to paper over this is gone.
  *
- * Order: every variant locally, then one remote round for the two most specific variants, then
- * locally again. Local-first because a second import of the same recipe should cost no requests, and
- * only two variants go out because nineteen ingredients × six variants is a rate limit.
+ * Three steps, cheapest first:
+ *  1. Local, all terms. Free, offline, and right for anything already logged.
+ *  2. Remote, ranked but not filtered — one request, whatever the database thinks is closest.
+ *  3. Local, best partial overlap. The offline fallback: a row sharing the head noun beats nothing.
  */
 export async function matchIngredient(name: string): Promise<MatchedFood> {
-  const variants = searchVariants(name)
-  if (variants.length === 0) return { food: null, matchedBy: 'unmatched', usedQuery: null }
+  const query = name.trim()
+  if (query.length < 2) return NO_MATCH
 
-  const localHit = await firstLocal(variants)
-  if (localHit) return localHit
+  const [exact] = await repo.searchFoods(query, 1)
+  if (exact) return { food: exact, matchedBy: 'exact' }
 
   // Generic sources only: these are ingredients, and Open Food Facts' packaged rows are both the
   // wrong answer for "cooked spaghetti" and the slowest part of resolving a whole recipe.
-  await Promise.all(
-    variants.slice(0, 2).map((variant) => searchRemote(variant, { branded: false })),
-  )
+  const remote = await searchRemote(query, { branded: false })
+  const [best] = rankFoods(remote, query, 1)
+  if (best) return { food: best, matchedBy: 'fuzzy' }
 
-  return (await firstLocal(variants)) ?? { food: null, matchedBy: 'unmatched', usedQuery: null }
+  const [loose] = await repo.searchFoodsLoose(query, 1)
+  return loose ? { food: loose, matchedBy: 'fuzzy' } : NO_MATCH
 }
 
 export interface MatchedFood {
   food: Food | null
-  /** `exact` when the name as written matched; `fuzzy` when a relaxation or an alias did. */
+  /** `exact` when the name as written matched every word; `fuzzy` when relevance found it. */
   matchedBy: 'exact' | 'fuzzy' | 'unmatched'
-  /** Which query found it, so a surprising match is explainable rather than mysterious. */
-  usedQuery: string | null
 }
 
-async function firstLocal(variants: readonly string[]): Promise<MatchedFood | null> {
-  for (const [index, variant] of variants.entries()) {
-    const [found] = await repo.searchFoods(variant, 1)
-    if (found) {
-      return { food: found, matchedBy: index === 0 ? 'exact' : 'fuzzy', usedQuery: variant }
-    }
-  }
-  return null
-}
+const NO_MATCH: MatchedFood = { food: null, matchedBy: 'unmatched' }

@@ -117,123 +117,29 @@ export function matchesHaystack(haystack: string, terms: readonly string[]): boo
   return terms.every((term) => haystack.includes(term))
 }
 
-export function queryTerms(query: string): string[] {
-  return normalizeQuery(query).split(/\s+/).filter(Boolean)
+/**
+ * How many of the query's terms this row contains, and how specific those terms were.
+ *
+ * The loose counterpart to `matchesHaystack`, for when nothing matches every word. This replaced a
+ * hand-written table of ingredient aliases — 55 rows of "lasagna noodles means pasta, dry" — which
+ * was unmaintainable and, it turned out, mostly redundant: USDA's own search resolves "heavy
+ * whipping cream", "scallions" and "Italian sausage" correctly on its own. What was actually broken
+ * was re-filtering those results locally with an all-terms rule, which threw the right answer away.
+ *
+ * Longer terms count for more, so "noodles" outweighs "dry" and a row matching the head noun beats
+ * one matching only a modifier — which is what puts "Noodles, egg, dry" above "Lasagna with meat"
+ * for "lasagna noodles, dry" without anyone writing that rule down.
+ */
+export function overlapScore(haystack: string, terms: readonly string[]): number {
+  let score = 0
+  for (const term of terms) {
+    if (haystack.includes(term)) score += Math.min(4, term.length)
+  }
+  return score
 }
 
-/**
- * How recipes name things, against how USDA names them.
- *
- * The reason "lasagna noodles, dry" matched nothing: USDA has no such row. It has "Pasta, dry,
- * enriched" — the same food, under the name a food scientist would use. No amount of relaxing the
- * query bridges that, because the words simply aren't there, and every recipe on the internet is
- * written in the first vocabulary while the whole database is written in the second.
- *
- * Only entries where the two vocabularies genuinely disagree. "Chicken breast" and "olive oil" need
- * no help and are deliberately absent — an alias that isn't needed is a wrong answer waiting for the
- * day the database improves.
- */
-export const INGREDIENT_ALIASES: [written: string, usda: string][] = [
-  ['lasagna noodles', 'pasta dry enriched'],
-  ['lasagne sheets', 'pasta dry enriched'],
-  ['lasagna sheets', 'pasta dry enriched'],
-  ['egg noodles', 'noodles egg dry enriched'],
-  ['red pepper flakes', 'spices pepper red cayenne'],
-  ['crushed red pepper', 'spices pepper red cayenne'],
-  ['cayenne', 'spices pepper red cayenne'],
-  ['black pepper', 'spices pepper black'],
-  ['garlic powder', 'spices garlic powder'],
-  ['onion powder', 'spices onion powder'],
-  ['italian seasoning', 'spices oregano dried'],
-  ['kosher salt', 'salt table'],
-  ['sea salt', 'salt table'],
-  ['heavy whipping cream', 'cream fluid heavy whipping'],
-  ['heavy cream', 'cream fluid heavy whipping'],
-  ['double cream', 'cream fluid heavy whipping'],
-  ['half and half', 'cream fluid half and half'],
-  ['sour cream', 'cream sour cultured'],
-  ['cream cheese', 'cheese cream'],
-  ['parmesan', 'cheese parmesan grated'],
-  ['mozzarella', 'cheese mozzarella whole milk'],
-  ['ricotta', 'cheese ricotta whole milk'],
-  ['unsalted butter', 'butter without salt'],
-  ['ground beef', 'beef ground 85 15 raw'],
-  ['beef mince', 'beef ground 85 15 raw'],
-  ['ground turkey', 'turkey ground raw'],
-  ['italian sausage', 'sausage italian pork raw'],
-  ['chicken broth', 'soup chicken broth canned'],
-  ['chicken stock', 'soup chicken broth canned'],
-  ['beef broth', 'soup beef broth bouillon'],
-  ['beef stock', 'soup beef broth bouillon'],
-  ['vegetable broth', 'soup vegetable broth'],
-  ['tomato paste', 'tomato products canned paste'],
-  ['crushed tomatoes', 'tomato products canned crushed'],
-  ['diced tomatoes', 'tomatoes red ripe canned'],
-  ['tomato sauce', 'tomato products canned sauce'],
-  ['all purpose flour', 'wheat flour white all purpose enriched'],
-  ['plain flour', 'wheat flour white all purpose enriched'],
-  ['brown sugar', 'sugars brown'],
-  ['powdered sugar', 'sugars powdered'],
-  ['icing sugar', 'sugars powdered'],
-  ['baking soda', 'leavening agents baking soda'],
-  ['baking powder', 'leavening agents baking powder'],
-  ['soy sauce', 'soy sauce made from soy and wheat shoyu'],
-  ['green onions', 'onions spring or scallions raw'],
-  ['scallions', 'onions spring or scallions raw'],
-  ['spring onions', 'onions spring or scallions raw'],
-  ['cilantro', 'coriander leaves raw'],
-  ['bell pepper', 'peppers sweet red raw'],
-  ['zucchini', 'squash summer zucchini raw'],
-  ['courgette', 'squash summer zucchini raw'],
-  ['aubergine', 'eggplant raw'],
-  ['cornflour', 'cornstarch'],
-  ['breadcrumbs', 'bread crumbs dry grated'],
-  ['bread crumbs', 'bread crumbs dry grated'],
-  ['panko', 'bread crumbs dry grated'],
-  ['tortilla chips', 'snacks tortilla chips'],
-  ['vanilla extract', 'vanilla extract'],
-]
-
-/** Longest first, so "heavy whipping cream" isn't caught by "heavy cream". */
-const ALIASES_BY_LENGTH = [...INGREDIENT_ALIASES].sort((a, b) => b[0].length - a[0].length)
-
-/**
- * One ingredient name, as a series of progressively looser queries — best first.
- *
- * Every step is a real drop in precision, so the order matters and the caller takes the first hit.
- * The alternative was what the app did before: one query, all terms required, and a name USDA words
- * differently came back unmatched and contributed **zero calories** to the meal. A slightly wrong
- * row the user can see and swap beats a silent zero every time.
- *
- * The relaxations are all *substrings* of what was asked for, plus curated aliases — never new
- * words. Dropping from the front before the back, because an English food name puts the head noun
- * last: "lasagna noodles" is a kind of noodle, and "noodles" is the query that finds one.
- */
-export function searchVariants(name: string): string[] {
-  const normalized = normalizeQuery(name)
-  if (!normalized) return []
-
-  const variants: string[] = [normalized]
-
-  for (const [written, usda] of ALIASES_BY_LENGTH) {
-    if (normalized === written || normalized.includes(written)) {
-      variants.push(usda)
-      break
-    }
-  }
-
-  const words = normalized.split(' ')
-  if (words.length > 1) {
-    variants.push(words.slice(0, -1).join(' '))
-    variants.push(words.slice(1).join(' '))
-    if (words.length > 2) variants.push(words.slice(1, -1).join(' '))
-    // A single word is only worth trying when it's long enough to mean something on its own:
-    // "oil" and "red" match half the database.
-    const last = words[words.length - 1]!
-    if (last.length > 4) variants.push(last)
-  }
-
-  return [...new Set(variants)].filter((variant) => variant.length >= 3)
+export function queryTerms(query: string): string[] {
+  return normalizeQuery(query).split(/\s+/).filter(Boolean)
 }
 
 /**
@@ -266,8 +172,36 @@ export function normalizeQuery(query: string): string {
       .replace(/[,;:.!?()[\]"']+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
+      .replace(DIALECT, (word) => DIALECT_WORDS[word] ?? word)
   )
 }
+
+/**
+ * British and Japanese words for American foods.
+ *
+ * Spelling, not synonymy — which is why this exists and a table of ingredient aliases doesn't.
+ * FoodData Central is a US database: "courgette" and "panko" return *literally nothing* from it, and
+ * no amount of relevance ranking can bridge a word the index has never seen. Everything a US search
+ * engine can resolve on its own is deliberately absent.
+ */
+const DIALECT_WORDS: Record<string, string> = {
+  courgette: 'zucchini',
+  courgettes: 'zucchini',
+  aubergine: 'eggplant',
+  aubergines: 'eggplant',
+  coriander: 'cilantro',
+  rocket: 'arugula',
+  swede: 'rutabaga',
+  beetroot: 'beets',
+  prawns: 'shrimp',
+  prawn: 'shrimp',
+  panko: 'bread crumbs',
+  mince: 'ground',
+  passata: 'tomato puree',
+  sultanas: 'raisins',
+}
+
+const DIALECT = new RegExp(`\\b(${Object.keys(DIALECT_WORDS).join('|')})\\b`, 'g')
 
 /**
  * Crude singularisation, only enough to make "meatballs" and "meatball" the same word.

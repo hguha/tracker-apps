@@ -201,14 +201,10 @@ export function TargetsCard() {
               what you log, then adjusted at each check-in. Protein and fat are floors carved out of
               that number; carbohydrate is whatever is left.
             </p>
-            {/* Asked because it was the one silent guess left. Said here because "how active am I"
-                is the question people expect a calorie target to hinge on, and in this app it very
-                nearly doesn't — which is worth knowing before you go looking for the setting. */}
+            {/* Said here because "how active am I" is the question people expect a calorie target
+                to hinge on, and in this app it very nearly doesn't. */}
             <p className="text-[12px] text-ink-muted">
-              Your height, age, sex and{' '}
-              <span className="font-semibold">how active you are</span> (all under About you) only
-              seed the very first estimate, before a week of data qualifies. After that they change
-              nothing.
+              Height, age, sex and how active you are (under About you) only seed the first estimate.
             </p>
           </div>
         )}

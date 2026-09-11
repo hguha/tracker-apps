@@ -19,8 +19,8 @@ export function AboutYouCard() {
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">About you</h2>
       <p className="mt-1 text-[12.5px] text-ink-muted">
-        Only used for your starting target. After a week of weigh-ins and logs, the app
-        measures your expenditure and stops guessing.
+        Only used for your starting target. After a week of logs and weigh-ins the app measures your
+        expenditure instead.
       </p>
 
       <div className="mt-2 grid grid-cols-3 gap-2">
@@ -58,12 +58,7 @@ export function AboutYouCard() {
       </div>
 
       <div className="mt-3 border-t border-line pt-3">
-        <p className="text-[12.5px] font-semibold">How active are you?</p>
-        <p className="mb-2 text-[12px] text-ink-muted">
-          {profile.activity === null
-            ? 'Unanswered, so the starting estimate assumes moderately active — the two ends of this list are about 700 kcal a day apart.'
-            : 'Same story: this seeds the first estimate and then stops being used.'}
-        </p>
+        <p className="mb-2 text-[12.5px] font-semibold">How active are you?</p>
         <ActivityPicker
           value={profile.activity}
           onChange={(activity) => void repo.saveProfile({ activity })}

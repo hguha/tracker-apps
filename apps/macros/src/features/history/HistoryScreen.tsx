@@ -15,7 +15,7 @@ import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
-import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { entryName, foodIdsOf, searchableNames } from '@/features/shared/entryName'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
 import { dishGroups, mealGroups } from '@/lib/dayGroups'
 import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
@@ -93,7 +93,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
       if (meals.length > 0 && !meals.includes(entry.meal)) return false
       if (venues.length > 0 && !venues.includes(entry.venue ?? 'none')) return false
       if (!needle) return true
-      return entryName(entry, foods ?? new Map()).toLowerCase().includes(needle)
+      return searchableNames(entry, foods ?? new Map()).toLowerCase().includes(needle)
     })
   }, [entries, foods, meals, venues, query])
 
@@ -246,6 +246,8 @@ function DayCard({
   const totals = dayTotals(entries)
   const delta = target && !isPartial ? totals.kcal - target.kcal : null
   const timing = dayTiming(entries)
+  const venues = venueCounts(entries)
+  const meals = mealGroups(entries).length
 
   // Joined rather than concatenated with leading separators: the macro figures used to open this line
   // and moved into the bar, which left a stray "· " at the front of every row.
@@ -256,9 +258,9 @@ function DayCard({
     )
   }
   if (isPartial) parts.push(`${entries.length} match${entries.length === 1 ? '' : 'es'}`)
-  if (!isPartial && timing.spanMinutes !== null) {
-    parts.push(`${mealGroups(entries).length} meals over ${formatDuration(timing.spanMinutes)}`)
-  }
+  // The span, not the meal count: that moved down beside the venue chips, where it fills a line that
+  // otherwise held a floating icon and nothing else.
+  if (!isPartial && timing.spanMinutes !== null) parts.push(`over ${formatDuration(timing.spanMinutes)}`)
   const subtitle = parts.join(' · ')
 
   return (
@@ -290,9 +292,20 @@ function DayCard({
             same three facts, one line instead of two, and the width says the shape while the label
             says the amount. */}
         <MacroSplitBar nutrients={totals} />
+        {/*
+          Named foods only when a search is on, and then the ones that *matched*.
+          Unfiltered it listed the day's two biggest items, which reads as an arbitrary pick — and it
+          was: a day with carrot cake in it never mentioned the carrot cake, but typing "carrot" made
+          it appear, so the line looked like it was hiding things. Its only real use was confirming a
+          search hit, so that is all it does now.
+        */}
         <p className="tabular mt-1.5 flex items-baseline gap-2 text-[11.5px] text-ink-muted">
-          <span className="min-w-0 flex-1 truncate">{summarise(entries, foods)}</span>
-          <VenueSummary entries={entries} />
+          <span className="min-w-0 flex-1 truncate">
+            {isPartial
+              ? matchedNames(entries, foods)
+              : `${meals} meal${meals === 1 ? '' : 's'}`}
+          </span>
+          <VenueSummary counts={venues} />
         </p>
       </div>
 
@@ -306,44 +319,36 @@ function DayCard({
 }
 
 /**
- * What the day was, in one line: how many meals, and the biggest things in it.
+ * What matched, on a day a search brought back.
  *
- * **Dishes, not their ingredients.** It ranked raw log rows, so a day whose biggest meal was "3 steak
- * tacos" was summarised as "Tortillas, corn, Cheddar cheese" — the two heaviest *components* of one
- * dish, which is not a thing anybody ate and not a day anybody recognises. Grouping first means the
- * dish competes as one item, under the name the user gave it.
+ * Dishes rather than their rows: a hit on "3 steak tacos" should say that, not name the two heaviest
+ * USDA components of it.
  */
-function summarise(entries: readonly LogEntry[], foods: ReadonlyMap<string, Food>): string {
-  const occasions = eatingOccasions(entries)
-  const top = dishGroups(entries)
-    .map((group) => ({
-      name: group.name ?? entryName(group.entries[0]!, foods),
-      kcal: group.nutrients.kcal,
-    }))
-    .sort((a, b) => b.kcal - a.kcal)
-    .slice(0, 2)
-    .map((thing) => thing.name)
-  return [
-    `${occasions.length} meal${occasions.length === 1 ? '' : 's'}`,
-    top.join(', '),
-  ]
-    .filter(Boolean)
-    .join(' · ')
+function matchedNames(entries: readonly LogEntry[], foods: ReadonlyMap<string, Food>): string {
+  return dishGroups(entries)
+    .map((group) => group.name ?? entryName(group.entries[0]!, foods))
+    .join(', ')
 }
 
-/**
- * Where the day's meals happened, counted.
- *
- * With one bar per day the per-sitting venue chips had nowhere to live, and a "Where" filter with
- * no visible venues is a filter you can't check. "2 home · 1 out" keeps the answer on the row that
- * matched it.
- */
-function VenueSummary({ entries }: { entries: readonly LogEntry[] }) {
+/** How many of the day's sittings happened where. Counted outside the component so the row above
+ *  can decide whether it has anything to say at all. */
+function venueCounts(entries: readonly LogEntry[]): Map<Venue, number> {
   const counts = new Map<Venue, number>()
   for (const occasion of eatingOccasions(entries)) {
     const venue = occasion.entries.find((entry) => entry.venue !== null)?.venue
     if (venue) counts.set(venue, (counts.get(venue) ?? 0) + 1)
   }
+  return counts
+}
+
+/**
+ * Where the day's meals happened.
+ *
+ * With one bar per day the per-sitting venue chips had nowhere to live, and a "Where" filter with
+ * no visible venues is a filter you can't check. "2 home · 1 out" keeps the answer on the row that
+ * matched it.
+ */
+function VenueSummary({ counts }: { counts: Map<Venue, number> }) {
   if (counts.size === 0) return null
 
   return (

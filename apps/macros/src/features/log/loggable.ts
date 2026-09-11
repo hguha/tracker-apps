@@ -36,6 +36,14 @@ export interface AddUnit {
   nutrientsAt: (count: number) => Nutrients
   /** The weight of `count` of these, when there is one. Null for a recipe serving. */
   gramsAt: (count: number) => number | null
+  /**
+   * What `count` of these *is*, in a few words.
+   *
+   * A recipe made the amount box ambiguous: the screen said "7 servings" and the box said "1", so it
+   * was impossible to tell whether one or seven were about to be logged. Grams answer this for a
+   * food; nothing but words answer it for a serving of a batch.
+   */
+  summaryAt: (count: number) => string
   /** How much the ± buttons move. Half a serving is meaningful; half a taco is not. */
   step: number
   /** The smallest amount this unit can be logged at. */
@@ -76,6 +84,7 @@ function foodSubject(food: Food): AddSubject {
       label: portionWithGrams(portion),
       nutrientsAt: (count: number) => nutrientsFor(food, portion.grams * count),
       gramsAt: (count: number) => portion.grams * count,
+      summaryAt: (count: number) => `${Math.round(portion.grams * count)} g`,
       step: 0.5,
       min: 0.5,
     })),
@@ -84,6 +93,7 @@ function foodSubject(food: Food): AddSubject {
       label: 'grams',
       nutrientsAt: (count: number) => nutrientsFor(food, count),
       gramsAt: (count: number) => count,
+      summaryAt: (count: number) => `${Math.round(count)} g`,
       // Bigger steps on bigger amounts: nudging 250 g of rice by 1 g is thirty taps to a
       // difference nobody can taste.
       step: 10,
@@ -117,17 +127,22 @@ function foodSubject(food: Food): AddSubject {
 
 function recipeSubject(recipe: Recipe): AddSubject {
   const each = perServing(recipe)
+  const batch = Math.max(1, recipe.servings)
   const unit: AddUnit = {
     id: 'serving',
-    label: recipe.servings === 1 ? 'the whole recipe' : 'serving',
-    nutrientsAt: (count) => scale(recipe.nutrients, count / Math.max(1, recipe.servings)),
+    label: 'serving',
+    nutrientsAt: (count) => scale(recipe.nutrients, count / batch),
     gramsAt: () => null,
+    // The one place the batch size belongs: beside the number being logged. As part of the heading
+    // it read as the amount ("7 servings"), which is the opposite of what the box was set to.
+    summaryAt: (count) =>
+      count >= batch ? `the whole recipe (${batch})` : `${count} of ${batch} servings`,
     step: 0.5,
     min: 0.5,
   }
   return {
     title: recipe.name,
-    subtitle: `${recipe.servings} servings · ${each.kcal} kcal each · ${recipe.ingredients.length} ingredients`,
+    subtitle: `${each.kcal} kcal a serving`,
     units: [unit],
     initialUnitId: unit.id,
     isComposite: true,
@@ -139,18 +154,17 @@ function recipeSubject(recipe: Recipe): AddSubject {
 function mealSubject(template: MealTemplate): AddSubject {
   const unit: AddUnit = {
     id: 'portion',
-    label: 'of this meal',
+    label: template.items.length === 1 ? 'of this' : 'of this meal',
     nutrientsAt: (count) => scale(template.nutrients, count),
     gramsAt: (count) =>
       template.items.reduce((total, item) => total + item.grams, 0) * count || null,
+    summaryAt: (count) => plural(template.items.length * count, 'item'),
     step: 0.5,
     min: 0.5,
   }
   return {
     title: template.name,
-    subtitle: `Saved meal · ${template.nutrients.kcal} kcal · ${template.items.length} item${
-      template.items.length === 1 ? '' : 's'
-    }`,
+    subtitle: `Saved · ${template.nutrients.kcal} kcal`,
     units: [unit],
     initialUnitId: unit.id,
     isComposite: true,
@@ -165,6 +179,7 @@ function dishSubject(dish: RecentDish): AddSubject {
     label: dish.parts.length > 1 ? 'of this dish' : 'of this',
     nutrientsAt: (count) => scale(dish.nutrients, count),
     gramsAt: () => null,
+    summaryAt: (count) => plural(dish.parts.length * count, 'item'),
     // Whole copies only. A dish is already "3 steak tacos" as logged, and 1.5 of it means nothing
     // — the way to have one taco is to save it as one, which the breakdown screen offers.
     step: 1,
@@ -172,9 +187,7 @@ function dishSubject(dish: RecentDish): AddSubject {
   }
   return {
     title: dish.name,
-    subtitle: `${dish.nutrients.kcal} kcal · ${dish.parts.length} item${
-      dish.parts.length === 1 ? '' : 's'
-    }`,
+    subtitle: `${dish.nutrients.kcal} kcal`,
     units: [unit],
     initialUnitId: unit.id,
     isComposite: true,
@@ -240,3 +253,6 @@ export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
     nutrients: row.nutrients,
   }))
 }
+
+const plural = (count: number, word: string): string =>
+  `${Math.round(count)} ${word}${Math.round(count) === 1 ? '' : 's'}`
