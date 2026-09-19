@@ -197,9 +197,9 @@ export function TargetsCard() {
             </Field>
 
             <p className="text-[12px] text-ink-muted">
-              Calories aren&rsquo;t set anywhere: they&rsquo;re measured from your weight trend and
-              what you log, then adjusted at each check-in. Protein and fat are floors carved out of
-              that number; carbohydrate is whatever is left.
+              Calories are measured from your weight trend and what you log, then adjusted at each
+              check-in. Protein and fat are floors carved out of that number; carbohydrate is
+              whatever is left. Below, you can type all four in instead.
             </p>
             {/* Said here because "how active am I" is the question people expect a calorie target
                 to hinge on, and in this app it very nearly doesn't. */}

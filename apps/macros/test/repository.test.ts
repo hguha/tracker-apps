@@ -453,7 +453,10 @@ describe('your own foods', () => {
     await repo.logFood({ food: food!, grams: 100, meal: 'snack' })
 
     await repo.deleteCustomFood(id)
-    expect(await repo.searchFoods('weird protein')).toEqual([])
+    // Not `toEqual([])`: the search relaxes to partial matches when nothing matches every word, so
+    // "protein" alone still finds protein bars in the seed. What matters is that the deleted row is
+    // gone — which is what this test is about.
+    expect((await repo.searchFoods('weird protein')).map((f) => f.id)).not.toContain(id)
     expect((await repo.entriesForDay(dayKey(Date.now())))[0]!.nutrients.kcal).toBe(400)
   })
 })
@@ -772,5 +775,124 @@ describe('importing weigh-ins from Health', () => {
     const rows = await repo.weights()
     expect(rows).toHaveLength(1)
     expect(rows[0]!.kg).toBe(79.6)
+  })
+})
+
+describe('searchFoods', () => {
+  it('relaxes when nothing matches every word, instead of reporting nothing', async () => {
+    // USDA returns 24 rows for "spaghetti noodles" and not one of them contains the word "noodles" —
+    // they are "Spaghetti, cooked", "Noodles, egg, dry", "Spaghetti sauce". So the remote search
+    // worked, its rows were cached, and re-filtering them with an all-terms rule deleted the lot and
+    // the screen said nothing matched.
+    const found = await repo.searchFoods('spaghetti noodles')
+    expect(found.length).toBeGreaterThan(0)
+    expect(found.map((f) => f.description.toLowerCase()).join(' ')).toMatch(/noodle|spaghetti|pasta/)
+  })
+
+  it('leaves a query with real answers alone', async () => {
+    // The relaxation only fires when the strict search has come up short. "Chicken breast" has plenty
+    // of exact answers and must not start listing everything containing "chicken".
+    const found = await repo.searchFoods('chicken breast')
+    expect(found.length).toBeGreaterThanOrEqual(3)
+    for (const food of found) {
+      const text = food.description.toLowerCase()
+      expect(text.includes('chicken') && text.includes('breast')).toBe(true)
+    }
+  })
+
+  it('does not relax a single word, which has nothing to relax', async () => {
+    expect(await repo.searchFoods('qwertyfood')).toEqual([])
+  })
+})
+
+describe('searchHistory', () => {
+  it('finds a dish by the name you gave it, long after Recent has dropped it', async () => {
+    // Recent holds thirty days, which is right for a list you browse and wrong for a question you
+    // ask: "carrot cake" was in the diary and unreachable except by scrolling to the day it was on.
+    const food = await chicken()
+    const at = Date.now() - 90 * 24 * 60 * 60 * 1000
+    await repo.logFoods([food], { meal: 'dinner', eatenAt: at, venue: null })
+    const [entry] = await repo.entriesForDay(dayKey(at))
+    await db.logEntries.update(entry!.id, { dishId: 'dish-1', dishName: 'Carrot cake' })
+
+    const hits = await repo.searchHistory('carrot cake')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]!.kind).toBe('dish')
+    expect(hits[0]!.kind === 'dish' && hits[0]!.name).toBe('Carrot cake')
+  })
+
+  it('counts sittings of the same name, and re-logs the newest one', async () => {
+    const food = await chicken()
+    for (const [index, day] of ['2026-09-01', '2026-09-08'].entries()) {
+      const at = Date.parse(`${day}T19:00:00`)
+      await repo.logFoods([food], { meal: 'dinner', eatenAt: at, venue: null })
+      const rows = await repo.entriesForDay(dayKey(at))
+      await db.logEntries.update(rows[0]!.id, { dishId: `dish-${index}`, dishName: 'Chilli' })
+    }
+    const [hit] = await repo.searchHistory('chilli', { days: 3650 })
+    expect(hit!.kind === 'dish' && hit!.times).toBe(2)
+    // The newest sitting, because that is the one "have this again" should copy.
+    expect(hit!.kind === 'dish' && hit!.dishId).toBe('dish-1')
+  })
+
+  it('leaves out a food that only ever arrived inside a dish', async () => {
+    // "Cheese, ricotta" is not something anybody logged — it came with the lasagna, and the lasagna
+    // is already an answer.
+    const food = await chicken()
+    await repo.logFood({ food, grams: 100, meal: 'dinner' })
+    const [entry] = await repo.entriesForDay(dayKey(Date.now()))
+    await db.logEntries.update(entry!.id, { dishId: 'dish-1', dishName: 'Tray bake' })
+    expect(await repo.searchHistory(food.description)).toEqual([])
+  })
+
+  it('offers a past dish through searchLibrary, but not twice when a recipe owns the name', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Lasagna soup',
+      servings: 2,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 300 }],
+    })
+    const recipe = (await repo.recipes()).find((row) => row.id === id)!
+    await repo.logRecipeIngredients(recipe, 1, 'dinner')
+
+    // Logging a recipe copies its name onto every row, so the dish and the recipe are the same
+    // answer — and the recipe is the better door, because it can be logged at any number of servings.
+    const hits = await repo.searchLibrary('lasagna soup')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]!.kind).toBe('recipe')
+  })
+})
+
+describe('manual targets', () => {
+  it('wins over the measured target, from the day it was set', async () => {
+    await repo.startProgram({
+      goal: 'lose',
+      ratePctPerWeek: -0.5,
+      proteinGPerKg: 1.8,
+      fatMinPctKcal: 25,
+    })
+    await repo.setManualTargets({
+      kcal: 2400,
+      proteinMg: 180_000,
+      carbsMg: 250_000,
+      fatMg: 70_000,
+    })
+
+    const today = dayKey(Date.now())
+    expect((await repo.currentTargets())?.kcal).toBe(2400)
+
+    // Yesterday keeps whatever it was scored against: a number set today did not exist then, and
+    // applying it backwards is what makes changing a goal look like it rewrites history.
+    const yesterday = dayKey(Date.now() - 24 * 60 * 60 * 1000)
+    const byDay = await repo.targetsByDay([yesterday, today])
+    expect(byDay.get(today)?.kcal).toBe(2400)
+    expect(byDay.get(yesterday)?.kcal).not.toBe(2400)
+  })
+
+  it('goes back to the measured target when cleared', async () => {
+    await repo.setManualTargets({ kcal: 2400, proteinMg: 180_000, carbsMg: 250_000, fatMg: 70_000 })
+    await repo.setManualTargets(null)
+    expect((await repo.getProfile()).manualTargets).toBeNull()
+    expect((await repo.currentTargets())?.kcal).not.toBe(2400)
   })
 })

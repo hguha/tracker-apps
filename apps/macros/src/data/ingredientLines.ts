@@ -54,10 +54,17 @@ export async function resolveLines(
 
   const lines = await Promise.all(
     parsed.map(async (line): Promise<ResolvedLine> => {
-      const matched =
-        line.isToTaste && line.quantity === null
-          ? { food: null, matchedBy: 'unmatched' as const }
-          : await matchIngredient(line.name)
+      /**
+       * A seasoning is not looked up at all.
+       *
+       * Not just to save a request. A to-taste line has no weight anyone can supply, so the matched
+       * row contributes nothing — but the UI shows the *food's* name, so "1 pinch of saffron" came out
+       * labelled "CHICKEN BIRYANI" (a branded row that mentions saffron). A match that adds no number
+       * and overwrites the user's own words is worse than no match.
+       */
+      const matched = line.isToTaste
+        ? { food: null, matchedBy: 'unmatched' as const }
+        : await matchIngredient(line.name)
       const amount = resolveAmount(line, matched.food)
       done += 1
       onProgress?.(done, parsed.length)
@@ -95,7 +102,7 @@ function describe(lines: readonly ResolvedLine[]): string {
   }
   if (skipped.length > 0) {
     parts.push(
-      `Skipped ${skipped.map((line) => line.parsed.name).join(', ')}: no amount stated, and a weight invented for seasoning is worse than none`,
+      `${skipped.map((line) => line.parsed.name).join(', ')} are listed at the amount written and count nothing — a weight invented for a seasoning is worse than none`,
     )
   }
   return parts.join('. ')

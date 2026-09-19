@@ -5,6 +5,7 @@ import { weightTrend, type TrendPoint } from '@tracker-engine/body'
 import { db, owner } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
 import {
+  DEFAULT_REMINDERS,
   EMPTY_NUTRIENTS,
   type BodyWeightRow,
   type CuisineKey,
@@ -102,6 +103,7 @@ function defaultProfile(userId: string): Profile {
     activity: null,
     favouriteFoodIds: [],
     waterTargetMl: null,
+    manualTargets: null,
     reminders: null,
     ...syncStamp(),
   }
@@ -121,7 +123,12 @@ export async function getProfile(): Promise<Profile> {
     ...row,
     favouriteFoodIds: row.favouriteFoodIds ?? [],
     waterTargetMl: row.waterTargetMl ?? null,
-    reminders: row.reminders ?? null,
+    manualTargets: row.manualTargets ?? null,
+    // The weigh-in nudge arrived after the config did, so a row written before it has no such key —
+    // and `config.weighIn.enabled` on undefined throws rather than reading as off.
+    reminders: row.reminders
+      ? { ...row.reminders, weighIn: row.reminders.weighIn ?? DEFAULT_REMINDERS.weighIn }
+      : null,
     activity: row.activity ?? null,
   }
 }
@@ -243,36 +250,55 @@ async function allCachedFoods(): Promise<IndexedFood[]> {
   return foodIndex.rows
 }
 
-/** Substring search over everything cached locally, ranked by lib/foodSearch. */
+/**
+ * Substring search over everything cached locally, ranked by lib/foodSearch.
+ *
+ * **Every term first, then whatever matched most of the query.** The all-terms rule on its own was
+ * deleting the right answer: USDA returns 24 rows for "spaghetti noodles" and not one of them
+ * contains the word "noodles" — they are "Spaghetti, cooked", "Noodles, egg, dry", "Spaghetti sauce"
+ * — so the remote search worked, its rows were cached, and then re-filtering them here threw the lot
+ * away and the screen said nothing matched. Exactly the defect the ingredient matcher had, in the
+ * search box. See `overlapScore` for why the head noun wins the top-up.
+ */
+/** Below this many all-terms matches the query has effectively failed, and relaxing it beats nothing. */
+const ENOUGH_STRICT = 3
+
 export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
   const terms = queryTerms(query)
   if (query.trim().length < 2) return []
 
-  const matches = (await allCachedFoods()).flatMap((row) =>
-    matchesHaystack(row.haystack, terms) ? [row.food] : [],
-  )
-  return rankFoods(matches, query, limit)
+  const strict: Food[] = []
+  const rest: IndexedFood[] = []
+  for (const row of await allCachedFoods()) {
+    if (matchesHaystack(row.haystack, terms)) strict.push(row.food)
+    else rest.push(row)
+  }
+
+  const ranked = rankFoods(strict, query, limit)
+  // Only when the strict search has genuinely come up short. A single-term query has nothing to relax,
+  // and a query with a real page of exact matches doesn't want rows that matched half of it: "chicken
+  // thigh" with a dozen answers should not start listing everything containing "chicken".
+  if (terms.length < 2 || ranked.length >= ENOUGH_STRICT) return ranked
+  return [...ranked, ...bestOverlap(rest, terms, query, limit - ranked.length)]
 }
 
 /**
- * The same search, ranked by how much of the query each row matches rather than requiring all of it.
+ * The rows that matched the most of the query, ranked normally among themselves.
  *
- * The offline half of `matchIngredient`. Strict matching is right for a search box — a user typing
- * "chicken thigh" does not want beef — but wrong for an ingredient name, where a row sharing the head
- * noun is far better than an unmatched line silently contributing nothing. Terms count for their own
- * length, so the head noun outweighs a modifier without anyone hand-writing that.
+ * Only the top overlap tier competes: below it a row is a different food that happens to share a
+ * word, and letting those in is how "chicken thigh" starts returning beef.
  */
-export async function searchFoodsLoose(query: string, limit = 40): Promise<Food[]> {
-  const terms = queryTerms(query)
-  if (terms.length === 0) return []
-
-  const scored = (await allCachedFoods())
+function bestOverlap(
+  rows: readonly IndexedFood[],
+  terms: readonly string[],
+  query: string,
+  limit: number,
+): Food[] {
+  const scored = rows
     .map((row) => ({ row, overlap: overlapScore(row.haystack, terms) }))
     .filter((entry) => entry.overlap > 0)
   if (scored.length === 0) return []
 
-  // Only the rows that matched the most of the query compete on the usual ranking; below that they
-  // are a different food that happens to share a word.
   const best = Math.max(...scored.map((entry) => entry.overlap))
   return rankFoods(
     scored.filter((entry) => entry.overlap === best).map((entry) => entry.row.food),
@@ -302,10 +328,21 @@ export async function searchLibrary(query: string, limit = 8): Promise<LibraryHi
     db.mealTemplates.filter((row) => alive(row) && hits(row)).toArray(),
   ])
 
-  return [
+  const saved: LibraryHit[] = [
     ...recipeRows.map((recipe) => ({ kind: 'recipe' as const, recipe, name: recipe.name })),
     ...templateRows.map((template) => ({ kind: 'meal' as const, template, name: template.name })),
   ]
+
+  // Dishes from the diary too, because a described meal is not saved anywhere: "3 steak tacos" was
+  // eaten, named and re-loggable, and could only be reached by scrolling back to the day it was on.
+  // Dropped where a recipe or saved meal already answers by that name — logging a recipe copies its
+  // name onto every row, so the two would otherwise be the same answer twice.
+  const named = new Set(saved.map((hit) => hit.name.toLowerCase()))
+  const dishes = (await searchHistory(query, { limit }))
+    .filter((item): item is RecentDish => item.kind === 'dish' && !named.has(item.name.toLowerCase()))
+    .map((dish) => ({ kind: 'dish' as const, dish, name: dish.name }))
+
+  return [...saved, ...dishes]
     // A name that *starts* with what was typed first, then alphabetically: with a handful of saved
     // things any stable order will do, and "starts with" is the one that feels like a search.
     .sort((a, b) => {
@@ -318,6 +355,96 @@ export async function searchLibrary(query: string, limit = 8): Promise<LibraryHi
 export type LibraryHit =
   | { kind: 'recipe'; recipe: Recipe; name: string }
   | { kind: 'meal'; template: MealTemplate; name: string }
+  | { kind: 'dish'; dish: RecentDish; name: string }
+
+/**
+ * Things you have actually eaten, matched by name, going much further back than Recent shows.
+ *
+ * Recent holds thirty days and forty rows, which is the right size for a list you browse and the wrong
+ * one for a question you ask: "carrot cake" was in the diary and unfindable, because the only way to
+ * reach a past dish was to scroll to the day it was on. Searching what you've eaten is also the
+ * *fastest* search there is — it's local, it's small, and it's far more likely to be the answer than
+ * anything USDA has.
+ *
+ * Dishes are keyed by name here rather than by contents (`recentItems` does it by signature): for a
+ * search, two slightly different lasagna soups are one answer, and the newest sitting is the one worth
+ * re-logging.
+ */
+export async function searchHistory(
+  query: string,
+  { days = 180, limit = 8 }: { days?: number; limit?: number } = {},
+): Promise<RecentItem[]> {
+  const terms = queryTerms(query)
+  if (terms.length === 0) return []
+
+  const from = dayKey(Date.now() - days * DAY_MS)
+  const entries = await entriesBetween(from, dayKey(Date.now()))
+  const foods = await foodsByIds(entries.map((entry) => entry.foodId).filter(isPresent))
+  const hits = (text: string) => {
+    const lower = text.toLowerCase()
+    return terms.every((term) => lower.includes(term))
+  }
+
+  // One group per dish *name*, holding every sitting of it.
+  const byName = new Map<string, Map<string, LogEntry[]>>()
+  const byFood = new Map<string, { entry: LogEntry; times: number }>()
+  for (const entry of entries) {
+    if (entry.dishId !== null && entry.dishName !== null) {
+      if (!hits(entry.dishName)) continue
+      const key = entry.dishName.toLowerCase()
+      const sittings = byName.get(key) ?? new Map<string, LogEntry[]>()
+      sittings.set(entry.dishId, [...(sittings.get(entry.dishId) ?? []), entry])
+      byName.set(key, sittings)
+      continue
+    }
+    // A food that only ever arrived inside a dish is left out for the same reason it is in
+    // `recentItems`: "Cheese, ricotta" is not something anybody logged, it came with the lasagna.
+    if (entry.dishId !== null || entry.foodId === null) continue
+    const food = foods.get(entry.foodId)
+    if (!food || !hits(food.description)) continue
+    const current = byFood.get(entry.foodId)
+    if (!current) byFood.set(entry.foodId, { entry, times: 1 })
+    else {
+      current.times += 1
+      if (entry.eatenAt > current.entry.eatenAt) current.entry = entry
+    }
+  }
+
+  const items: RecentItem[] = []
+  for (const sittings of byName.values()) {
+    const newest = [...sittings.values()].sort(
+      (a, b) => Math.max(...b.map((r) => r.eatenAt)) - Math.max(...a.map((r) => r.eatenAt)),
+    )[0]!
+    const ordered = [...newest].sort((a, b) => a.sortIndex - b.sortIndex)
+    items.push({
+      kind: 'dish',
+      dishId: ordered[0]!.dishId!,
+      name: ordered[0]!.dishName ?? 'Dish',
+      lastAt: Math.max(...ordered.map((row) => row.eatenAt)),
+      times: sittings.size,
+      nutrients: sumNutrients(ordered.map((row) => row.nutrients)),
+      parts: ordered
+        .map((row) => (row.foodId ? foods.get(row.foodId)?.description : null) ?? row.note)
+        .filter(Boolean),
+    })
+  }
+  for (const { entry, times } of byFood.values()) {
+    const food = foods.get(entry.foodId!)
+    if (!food) continue
+    items.push({
+      kind: 'food',
+      food,
+      lastAt: entry.eatenAt,
+      times,
+      amount:
+        entry.grams > 0
+          ? { grams: entry.grams, portionId: entry.portionId, portionCount: entry.portionCount }
+          : null,
+    })
+  }
+
+  return items.sort((a, b) => b.lastAt - a.lastAt).slice(0, limit)
+}
 
 // --- The user's own foods ----------------------------------------------------------
 
@@ -909,6 +1036,19 @@ export function setReminders(reminders: RemindersConfig | null): Promise<void> {
   return saveProfile({ reminders })
 }
 
+/**
+ * Sets or clears targets by hand.
+ *
+ * Stamped with today, so it governs from now on and leaves what's already been scored alone — see
+ * `ManualTargets`. Null goes back to the measured target, which is still being computed underneath
+ * the whole time.
+ */
+export function setManualTargets(targets: MacroTargets | null): Promise<void> {
+  return saveProfile({
+    manualTargets: targets === null ? null : { ...targets, fromDay: dayKey(Date.now()) },
+  })
+}
+
 // --- Recipes ----------------------------------------------------------------------
 
 export function recipes(): Promise<Recipe[]> {
@@ -922,7 +1062,14 @@ export function getRecipe(id: string): Promise<Recipe | undefined> {
 export interface RecipeInput {
   name: string
   servings: number
-  ingredients: { foodId: string | null; label: string; grams: number; optional?: boolean }[]
+  ingredients: {
+    foodId: string | null
+    label: string
+    grams: number
+    optional?: boolean
+    /** What the recipe said — "1 cup", "2 tbsp". See `RecipeIngredient.amount`. */
+    amount?: string | null
+  }[]
   steps?: string[]
   yieldGrams?: number | null
   cuisine?: CuisineKey | null
@@ -947,6 +1094,7 @@ export async function saveRecipe(input: RecipeInput, id = newId()): Promise<stri
     label: ingredient.label.trim(),
     grams: ingredient.grams,
     optional: ingredient.optional ?? false,
+    amount: ingredient.amount ?? null,
   }))
   const foods = await foodsByIds(ingredients.map((i) => i.foodId).filter(isPresent))
   const existing = await db.recipes.get(id)
@@ -1587,6 +1735,13 @@ export async function targetsByDay(
       : cycleDayTargets(targets, multiplierForDay(program?.cycling ?? null, day))
 
   for (const day of days) {
+    // Typed-in targets win outright, from the day they were set. Not cycled either: calorie cycling
+    // redistributes a number the app worked out, and a number somebody chose is the number they meant.
+    if (profile.manualTargets && day >= profile.manualTargets.fromDay) {
+      const { kcal, proteinMg, carbsMg, fatMg } = profile.manualTargets
+      out.set(day, { kcal, proteinMg, carbsMg, fatMg })
+      continue
+    }
     const week = weekKeyForDay(day)
     const inForce = applied.find((c) => c.weekStart < week)
     if (inForce) {

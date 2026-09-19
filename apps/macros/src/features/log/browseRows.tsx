@@ -1,12 +1,13 @@
 import { BottomSheet, Card } from '@tracker-engine/ui'
-import { Bookmark, Camera, ChefHat, Check, PencilLine, Plus, Sparkles } from 'lucide-react'
+import { Bookmark, Camera, ChefHat, Check, PencilLine, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import * as repo from '@/data/repository'
 import { nutrientsFor, perServing, portionFor } from '@/lib/nutrition'
-import { portionLabel, portionWithGrams } from '@/features/shared/format'
+import { amountGrams, portionLabel, portionWithGrams } from '@/features/shared/format'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
+import { SwipeRow, type SwipeAction } from '@/features/shared/SwipeRow'
 import type { LastAmount, LibraryHit, RecentItem } from '@/data/repository'
-import type { Food } from '@/domain/types'
+import type { Food, MealTemplate } from '@/domain/types'
 import type { Loggable } from './loggable'
 
 /**
@@ -62,7 +63,17 @@ export function MoreWaysSheet({
   )
 }
 
-/** Your own recipes and saved things, above the database — because you named them yourself. */
+const keyOf = (hit: LibraryHit): string =>
+  hit.kind === 'recipe' ? `r:${hit.recipe.id}` : hit.kind === 'meal' ? `m:${hit.template.id}` : `d:${hit.dish.dishId}`
+
+const loggableOf = (hit: LibraryHit): Loggable =>
+  hit.kind === 'recipe'
+    ? { kind: 'recipe', recipe: hit.recipe }
+    : hit.kind === 'meal'
+      ? { kind: 'meal', template: hit.template }
+      : { kind: 'dish', dish: hit.dish }
+
+/** Your own recipes, saved meals and past dishes, above the database — because you named them. */
 export function LibraryHits({
   hits,
   onOpen,
@@ -74,25 +85,28 @@ export function LibraryHits({
     <Card className="p-0">
       <Heading>Yours</Heading>
       <ul className="divide-y divide-line">
-        {hits.map((hit) => {
-          const each = hit.kind === 'recipe' ? perServing(hit.recipe) : hit.template.nutrients
-          return (
-            <li key={`${hit.kind}:${hit.kind === 'recipe' ? hit.recipe.id : hit.template.id}`}>
-              <Row
-                onClick={() =>
-                  onOpen(
-                    hit.kind === 'recipe'
-                      ? { kind: 'recipe', recipe: hit.recipe }
-                      : { kind: 'meal', template: hit.template },
-                  )
-                }
-                title={hit.name}
-                nutrients={each}
-                detail={hit.kind === 'recipe' ? 'a serving' : 'saved'}
-              />
-            </li>
-          )
-        })}
+        {hits.map((hit) => (
+          <li key={keyOf(hit)}>
+            <Row
+              onClick={() => onOpen(loggableOf(hit))}
+              title={hit.name}
+              nutrients={
+                hit.kind === 'recipe'
+                  ? perServing(hit.recipe)
+                  : hit.kind === 'meal'
+                    ? hit.template.nutrients
+                    : hit.dish.nutrients
+              }
+              detail={
+                hit.kind === 'recipe'
+                  ? 'a serving'
+                  : hit.kind === 'meal'
+                    ? 'saved'
+                    : withTimes(hit.dish.parts.join(', '), hit.dish.times)
+              }
+            />
+          </li>
+        ))}
       </ul>
     </Card>
   )
@@ -160,13 +174,16 @@ function Row({
   title,
   nutrients,
   detail,
+  actions,
 }: {
   onClick: () => void
   title: string
   nutrients: Parameters<typeof MacroNumbers>[0]['nutrients']
   detail: string
+  /** Revealed by a swipe. See `SwipeRow`; omitted where there is nothing to do but log it. */
+  actions?: readonly SwipeAction[]
 }) {
-  return (
+  const body = (
     <button onClick={onClick} className="w-full px-4 py-2.5 text-left active:bg-sunken">
       <span className="block truncate text-[14px]">{title}</span>
       <span className="tabular mt-0.5 flex items-baseline gap-2">
@@ -177,6 +194,49 @@ function Row({
         <span className="block truncate text-[11.5px] text-ink-muted">{detail}</span>
       )}
     </button>
+  )
+  return actions && actions.length > 0 ? <SwipeRow actions={actions}>{body}</SwipeRow> : body
+}
+
+/**
+ * The meals you kept, with a way to stop keeping them.
+ *
+ * There wasn't one. A bookmarked food had a filled bookmark to tap again, but a saved meal could only
+ * be deleted from a different screen in Settings — so the answer to "how do I get rid of this" was
+ * "somewhere else", which is the same as no answer.
+ */
+export function SavedMeals({
+  templates,
+  onOpen,
+  onRemove,
+}: {
+  templates: readonly MealTemplate[]
+  onOpen: (loggable: Loggable) => void
+  onRemove: (template: MealTemplate) => void
+}) {
+  return (
+    <Card className="p-0">
+      <ul className="divide-y divide-line">
+        {templates.map((template) => (
+          <li key={template.id}>
+            <Row
+              onClick={() => onOpen({ kind: 'meal', template })}
+              title={template.name}
+              nutrients={template.nutrients}
+              detail={`${template.items.length} item${template.items.length === 1 ? '' : 's'}`}
+              actions={[
+                {
+                  label: 'Remove',
+                  icon: Trash2,
+                  tone: 'critical',
+                  onAction: () => onRemove(template),
+                },
+              ]}
+            />
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 
@@ -190,13 +250,6 @@ function Heading({ children }: { children: React.ReactNode }) {
 
 export function Empty({ children }: { children: React.ReactNode }) {
   return <Card className="p-4 text-center text-[13px] text-ink-muted">{children}</Card>
-}
-
-/** The grams a tick will log — the last amount, or the food's own portion, or 100 g. */
-export function amountGrams(food: Food, last: LastAmount | null | undefined): number {
-  if (last && last.grams > 0) return last.grams
-  const portion = portionFor(food, null)
-  return portion ? portion.grams : 100
 }
 
 function describeAmount(food: Food, last: LastAmount | null | undefined): string {
@@ -218,6 +271,7 @@ export function FoodList({
   emptyLabel,
   footer = null,
   heading,
+  isRemovable = false,
 }: {
   foods: readonly Food[]
   onSelect: (food: Food) => void
@@ -231,6 +285,11 @@ export function FoodList({
   /** Shown under the rows — a "still searching" line, so results never have to disappear. */
   footer?: React.ReactNode
   heading?: string
+  /**
+   * Whether a swipe offers to unsave. On for the Saved list, where getting rid of something is half
+   * of what the list is visited for; off in search results, where nothing is being kept yet.
+   */
+  isRemovable?: boolean
 }) {
   return (
     <Card className="p-0">
@@ -242,8 +301,8 @@ export function FoodList({
           {foods.map((food) => {
             const isPicked = picked.some((row) => row.id === food.id)
             const isSaved = saved.includes(food.id)
-            return (
-              <li key={food.id} className="flex items-center">
+            const row = (
+              <div className="flex items-center bg-surface">
                 <button
                   onClick={() => onSelect(food)}
                   className="min-w-0 flex-1 px-4 py-2.5 text-left active:bg-sunken"
@@ -301,6 +360,26 @@ export function FoodList({
                 >
                   <Check size={14} strokeWidth={3} />
                 </button>
+              </div>
+            )
+            return (
+              <li key={food.id}>
+                {isRemovable ? (
+                  <SwipeRow
+                    actions={[
+                      {
+                        label: 'Remove',
+                        icon: Trash2,
+                        tone: 'critical',
+                        onAction: () => void repo.toggleSaved(food.id),
+                      },
+                    ]}
+                  >
+                    {row}
+                  </SwipeRow>
+                ) : (
+                  row
+                )}
               </li>
             )
           })}

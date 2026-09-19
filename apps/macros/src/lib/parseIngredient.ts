@@ -60,6 +60,49 @@ export interface ParsedIngredient {
 
 const GRAMS_PER: Record<string, number> = { g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237 }
 
+/** How each unit is written back out. Short forms, because that is how recipes print them. */
+const UNIT_LABELS: Partial<Record<AmountUnit, [one: string, many: string]>> = {
+  g: ['g', 'g'],
+  kg: ['kg', 'kg'],
+  oz: ['oz', 'oz'],
+  lb: ['lb', 'lb'],
+  ml: ['ml', 'ml'],
+  l: ['l', 'l'],
+  tsp: ['tsp', 'tsp'],
+  tbsp: ['tbsp', 'tbsp'],
+  cup: ['cup', 'cups'],
+  'fl-oz': ['fl oz', 'fl oz'],
+  pint: ['pint', 'pints'],
+  quart: ['quart', 'quarts'],
+  clove: ['clove', 'cloves'],
+  slice: ['slice', 'slices'],
+  can: ['can', 'cans'],
+  package: ['package', 'packages'],
+  bunch: ['bunch', 'bunches'],
+  sprig: ['sprig', 'sprigs'],
+  stalk: ['stalk', 'stalks'],
+  head: ['head', 'heads'],
+  pinch: ['pinch', 'pinches'],
+}
+
+/**
+ * The amount a line stated, as a cook reads it: "1 cup", "½ tsp", "1 lb", "9".
+ *
+ * Kept on the recipe so it survives the import (see `RecipeIngredient.amount`). Grams remain the
+ * canonical figure and the only one anything is computed from — but "½ cup flour" turning into "63 g"
+ * loses the one form of the amount that can be measured in a kitchen without a scale.
+ */
+export function statedAmount(parsed: ParsedIngredient): string | null {
+  if (parsed.quantity === null || parsed.quantity <= 0) return null
+  const count = formatQuantity(parsed.quantity)
+  // A bare count has no unit to print: "9 lasagna noodles" states nine of the thing it names.
+  if (parsed.unit === null || parsed.unit === 'piece') return count
+  const label = UNIT_LABELS[parsed.unit]
+  if (!label) return count
+  // Singular at or below one, as a recipe writes it: "½ cup", not "½ cups".
+  return `${count} ${parsed.quantity <= 1 ? label[0] : label[1]}`
+}
+
 /** Millilitres, for the volumes that have a fixed one. US customary, which is what recipes use. */
 export const ML_PER: Partial<Record<AmountUnit, number>> = {
   ml: 1,
@@ -108,6 +151,35 @@ const VULGAR: Record<string, number> = {
   '⅕': 0.2, '⅖': 0.4, '⅗': 0.6, '⅘': 0.8, '⅙': 1 / 6, '⅛': 0.125, '⅜': 0.375, '⅝': 0.625, '⅞': 0.875,
 }
 
+/** Rounding grain for the fractional part, so 0.3333333 recognises as a third. */
+const FRACTION_PRECISION = 1e3
+
+/** The fractions worth writing back out, and how close a number has to be to count as one. */
+const WRITTEN: [value: number, glyph: string][] = [
+  [0.125, '⅛'],
+  [0.25, '¼'],
+  [1 / 3, '⅓'],
+  [0.5, '½'],
+  [2 / 3, '⅔'],
+  [0.75, '¾'],
+]
+
+/**
+ * A count written the way a recipe writes it: "1½", "¾", "2".
+ *
+ * Next to the fractions it reads, so a number that came in as "1 1/2" goes back out as "1½" rather
+ * than as "1.5". Shared with `lib/householdAmount`, which reconstructs amounts the same way, so one
+ * ingredient list can't mix the two spellings depending on whether the amount survived an import.
+ */
+export function formatQuantity(count: number): string {
+  const whole = Math.floor(count)
+  const rest = Math.round((count - whole) * FRACTION_PRECISION) / FRACTION_PRECISION
+  if (rest === 0) return String(whole)
+  const fraction = WRITTEN.find(([value]) => Math.abs(value - rest) < 0.02)?.[1]
+  if (!fraction) return String(Math.round(count * 100) / 100)
+  return whole === 0 ? fraction : `${whole}${fraction}`
+}
+
 /**
  * Words describing what was done to the food, not what it is.
  *
@@ -125,9 +197,16 @@ const PREP_WORDS = [
   'broken into pieces', 'cut into pieces', 'cut into chunks', 'large', 'small', 'medium',
 ]
 
-/** A line with one of these and no weight is a seasoning, and inventing a gram figure for it is
- *  worse than leaving it out. */
-const TO_TASTE = /\b(to taste|for (serving|garnish|drizzling|brushing)|as needed|optional)\b/i
+/**
+ * A line with one of these is a seasoning, and inventing a gram figure for it is worse than leaving
+ * it out.
+ *
+ * "A pinch" belongs here rather than among the countable units: it is a *quantity word for
+ * seasoning*, not a measure anything was weighed in, and treating it as countable is how "1 pinch of
+ * saffron" came out as one 283 g serving of chicken biryani.
+ */
+const TO_TASTE =
+  /\b(to taste|for (serving|garnish|drizzling|brushing)|as needed|optional|pinch(es)?)\b/i
 
 export function parseIngredientLine(raw: string): ParsedIngredient {
   const line = raw.replace(/\s+/g, ' ').trim()

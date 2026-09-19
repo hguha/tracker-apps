@@ -72,8 +72,14 @@ export function resolveAmount(parsed: ParsedIngredient, food: Food | null): Reso
     return { grams: Math.round(quantity * ml * food.gramsPerMl), basis: 'density' }
   }
 
-  // 4. A countable unit against the food's default portion: "1 onion" is one portion of onion.
+  // 4. A bare count against the food's default portion: "1 onion" is one portion of onion.
+  //
+  // Only a bare count. Any *named* unit that got this far has no portion meaning it (step 2 failed),
+  // and reading it as one serving of the food is how "1 pinch of saffron" became a 283 g portion of
+  // chicken biryani and put 461 kcal into a recipe. A pinch is not a serving, a sprig of thyme is not
+  // a serving of thyme, and a row the user can see is uncounted beats a number from nowhere.
   if (ml === undefined) {
+    if (unit !== 'piece') return { grams: null, basis: 'unresolved' }
     const fallback = food.portions.find((row) => row.isDefault) ?? food.portions[0]
     if (fallback) return { grams: Math.round(quantity * fallback.grams), basis: 'portion' }
     return { grams: null, basis: 'unresolved' }

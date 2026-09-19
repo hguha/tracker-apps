@@ -194,6 +194,16 @@ export interface RecipeIngredient {
   label: string
   grams: number
   optional: boolean
+  /**
+   * The amount the recipe stated, verbatim-ish: "1 cup", "2 tbsp", "9 noodles".
+   *
+   * Grams are canonical and always will be — they're what the nutrients are computed from — but they
+   * are not what a cook measures. A recipe that said "½ cup flour" came out as "63 g of flour", which
+   * is the same fact in a form nobody can follow at a worktop, and it was *thrown away* on import
+   * rather than being unavailable. Null on anything entered by hand in grams, and on every row saved
+   * before the field existed; `lib/householdAmount` reconstructs a volume for those where it can.
+   */
+  amount: string | null
 }
 
 export interface Recipe extends SyncColumns {
@@ -308,6 +318,23 @@ export interface MacroTargets {
   proteinMg: number
   carbsMg: number
   fatMg: number
+}
+
+/**
+ * Targets the user typed in, and the day they start applying from.
+ *
+ * The app's premise is that a calorie target is *measured* rather than chosen, and that premise is
+ * right — but it left no way to say "I want 2,400 and 180 g of protein", which people have perfectly
+ * good reasons for: a coach's plan, a training block, a number that has worked before. Refusing the
+ * question doesn't make the answer come from the weight trend; it makes the app the wrong tool.
+ *
+ * Dated, and only applying forward, for the same reason a check-in is: yesterday's 2,300 kcal was not
+ * over a target that only exists now, and scoring the past against a number set today is what makes
+ * changing a goal look like it rewrites history. Clearing it returns to the measured target.
+ */
+export interface ManualTargets extends MacroTargets {
+  /** `yyyy-MM-dd`. Days before this keep whatever was in force then. */
+  fromDay: string
 }
 
 /** One weekly recalculation. Immutable audit trail — never updated in place. */
@@ -444,6 +471,8 @@ export interface Profile extends SyncColumns {
   activity: ActivityLevel | null
   /** Millilitres a day. Null until the user sets one; the card still counts without a target. */
   waterTargetMl: number | null
+  /** Targets set by hand, which win over the measured ones from their day onward. Null is the default. */
+  manualTargets: ManualTargets | null
   /** When to be nudged about logging. Null means never, which is the default. */
   reminders: RemindersConfig | null
 }
@@ -457,10 +486,19 @@ export interface Profile extends SyncColumns {
  * that would have worked. That check is the whole feature; the times are just times.
  */
 export interface RemindersConfig {
-  /** Minutes from local midnight, per meal. */
+  /** Minutes from local midnight, per meal. Any slot may be present, including `snack`. */
   meals: { meal: MealSlot; minute: number; enabled: boolean }[]
   /** A single evening nudge, only if the day is completely empty. */
   endOfDay: { minute: number; enabled: boolean }
+  /**
+   * A nudge to step on the scales, only if there's no weigh-in today.
+   *
+   * Here rather than in its own setting because it obeys the same rule as the rest: conditional on
+   * the thing still being undone when it fires. A weigh-in is also the one input the app cannot
+   * derive from anything else — without it there is no trend, and without a trend there is no
+   * measured expenditure — so it is the reminder with the most to lose by being missed.
+   */
+  weighIn: { minute: number; enabled: boolean }
 }
 
 export const DEFAULT_REMINDERS: RemindersConfig = {
@@ -468,8 +506,11 @@ export const DEFAULT_REMINDERS: RemindersConfig = {
     { meal: 'breakfast', minute: 9 * 60 + 30, enabled: true },
     { meal: 'lunch', minute: 13 * 60 + 30, enabled: true },
     { meal: 'dinner', minute: 20 * 60, enabled: true },
+    // Off by default: a snack is the one meal plenty of people deliberately don't have.
+    { meal: 'snack', minute: 16 * 60, enabled: false },
   ],
   endOfDay: { minute: 21 * 60 + 30, enabled: true },
+  weighIn: { minute: 7 * 60 + 30, enabled: false },
 }
 
 /**

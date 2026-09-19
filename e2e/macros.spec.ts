@@ -279,7 +279,8 @@ test('every tab and the coach render without errors', async ({ page }) => {
     'Targets & goal',
     'Weekly check-in',
     'About you',
-    'Food, water & reminders',
+    'Food & water',
+    'Reminders',
     'Appearance',
     'Badges',
   ]) {
@@ -390,7 +391,7 @@ test('switching to imperial changes every weight on screen', async ({ page }) =>
   await expect(page.getByText(/80 kg|80\.0 kg/).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food, water & reminders/ }).click()
+  await page.getByRole('button', { name: /Food & water/ }).click()
   await page.getByRole('button', { name: /lb \/ in/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
 
@@ -405,7 +406,7 @@ test('switching to imperial changes every weight on screen', async ({ page }) =>
   await page.getByRole('button', { name: /About you/ }).click()
   await expect(page.getByText('Height (in)')).toBeVisible()
   await page.getByRole('button', { name: 'Back' }).click()
-  await page.getByRole('button', { name: /Food, water & reminders/ }).click()
+  await page.getByRole('button', { name: /Food & water/ }).click()
   await page.getByRole('button', { name: /kg \/ cm/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -483,7 +484,7 @@ test('an eating window shows itself on the day it applies to', async ({ page }) 
   await completeOnboarding(page, { facts: false, weight: '' })
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food, water & reminders/ }).click()
+  await page.getByRole('button', { name: /Food & water/ }).click()
   await page.getByRole('button', { name: /16:8/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -602,7 +603,7 @@ test('water counts on the home screen, in the units you picked', async ({ page }
 
   // A target turns the count into progress, and the glass fills against it.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food, water & reminders/ }).click()
+  await page.getByRole('button', { name: /Food & water/ }).click()
   await page.getByRole('button', { name: '2.0 L', exact: true }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -612,7 +613,7 @@ test('water counts on the home screen, in the units you picked', async ({ page }
   // Millilitres are what's stored; the unit is a display preference, so switching converts rather
   // than reinterpreting — 250 ml is 8 fl oz, not 250 fl oz.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food, water & reminders/ }).click()
+  await page.getByRole('button', { name: /Food & water/ }).click()
   await page.getByRole('button', { name: /lb \/ in/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -626,25 +627,37 @@ test('reminders are off by default and say what they will and will not do', asyn
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
 
+  // Its own destination now. A notification setting is not something anyone looks for under "food
+  // and water", which is where it used to be, third card down.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food, water & reminders/ }).click()
+  await page.getByRole('button', { name: /^Reminders/ }).click()
 
   // Off until asked for. Nothing in this app should start sending notifications on install.
   const toggle = page.getByRole('button', { name: 'Reminders', exact: true })
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.getByText(/Log breakfast and the breakfast reminder doesn’t arrive/)).toBeVisible()
+  await expect(page.getByText(/Log breakfast and the breakfast reminder doesn’t come/)).toBeVisible()
   await toggle.click()
 
-  // A time per meal, and an end-of-day nudge that only fires on a completely empty day.
-  for (const meal of ['Breakfast', 'Lunch', 'Dinner']) {
-    await expect(page.getByText(meal, { exact: true })).toBeVisible()
+  // Every slot, the empty-day nudge, and the weigh-in — each with a free time rather than a row of
+  // presets, because five half-hourly options per meal excluded anyone whose lunch is at 12:15.
+  for (const label of [
+    'Breakfast not logged',
+    'Lunch not logged',
+    'Dinner not logged',
+    'Snack not logged',
+    'Nothing logged at all',
+    'Weigh in',
+  ]) {
+    await expect(page.getByRole('checkbox', { name: label })).toBeVisible()
   }
-  await expect(page.getByText('Only if the whole day is empty.')).toBeVisible()
-  await page.getByRole('button', { name: '13:00', exact: true }).click()
+  const lunch = page.getByLabel('Lunch not logged time')
+  await expect(lunch).toHaveValue('13:30')
+  await lunch.fill('12:15')
+  await expect(page.getByLabel('Lunch not logged time')).toHaveValue('12:15')
 
-  // And the setting is visible from the list, so it isn't a feature you have to remember enabling.
+  // And the count is visible from the list, so it isn't a feature you have to remember enabling.
   await page.getByRole('button', { name: 'Back' }).click()
-  await expect(page.getByText(/reminders \d+ a day/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Reminders.*\d+ a day/s })).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -873,6 +886,156 @@ test('the nutrition card says which window it covers', async ({ page }) => {
   // Macros reset at midnight because a calorie target is a day; micronutrients don't, because one
   // day of fibre means nothing. With only one of them labelled, midnight read as a half-broken reset.
   await expect(page.getByText(/last \d day/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a logged row can be swiped away, and the gesture is not the only way in', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder(/Search a food/).fill('chicken breast')
+  await page.getByRole('button', { name: /^Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+  const row = page.getByRole('button', { name: /Chicken breast/ }).first()
+  await expect(row).toBeVisible()
+
+  // The buttons are in the DOM whether or not anybody swipes, because a screen reader and a keyboard
+  // cannot perform a gesture. See `SwipeRow`.
+  const remove = page.getByRole('button', { name: 'Delete' }).first()
+  await expect(remove).toBeAttached()
+
+  const box = (await row.boundingBox())!
+  await page.mouse.move(box.x + box.width - 40, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width - 180, box.y + box.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await remove.click()
+  await expect(page.getByText(/Nothing logged/).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a day can be built from what you have eaten before, without leaving the day', async ({
+  page,
+}) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder(/Search a food/).fill('chicken breast')
+  await page.getByRole('button', { name: /^Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+
+  // Only things from the diary, and each row states the amount it is about to commit rather than a
+  // per-100 g figure — it logs on one tap, so it has to say what it will write.
+  await page.getByPlaceholder(/eaten before/).fill('chicken')
+  await expect(page.getByText(/as you last had it/)).toBeVisible()
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await expect(page.getByText(/added/)).toBeVisible()
+
+  // Nothing in the diary matches is said out loud, rather than looking like a broken search.
+  await page.getByPlaceholder(/eaten before/).fill('zzzqx')
+  await expect(page.getByText(/Nothing in your diary matches/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('targets can be typed in, and they reach the day', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page)
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  await page.getByRole('button', { name: /Set the targets myself/ }).click()
+  await page.getByLabel('kcal').fill('2400')
+  await page.getByLabel('protein g').fill('180')
+  await page.getByLabel('carbs g').fill('250')
+  await page.getByLabel('fat g').fill('70')
+
+  // The macros are checked against the calorie figure but not enforced: labels round, and a plan that
+  // comes to 2,390 is not a mistake. A split that comes to 2,900 against a 2,200 target is.
+  await page.getByLabel('kcal').fill('1200')
+  await expect(page.getByText(/come to 2350 kcal, not 1200/)).toBeVisible()
+  await page.getByLabel('kcal').fill('2400')
+
+  await page.getByRole('button', { name: /Use these instead/ }).click()
+  await expect(page.getByText('2400 kcal · 180P 250C 70F')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  await expect(page.getByText('of 2400')).toBeVisible()
+  await expect(page.getByText('0 / 180g')).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a pasted recipe keeps the amounts it stated, and only asks the AI if told to', async ({
+  page,
+}) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { units: 'imperial' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByRole('button', { name: 'More ways to add' }).click()
+  await page.getByRole('button', { name: 'New recipe' }).click()
+  await page.getByRole('button', { name: 'Paste it' }).click()
+  await page
+    .getByPlaceholder(/500g beef mince/)
+    .fill('1 cup white rice\n2 tbsp olive oil\n1 pinch of saffron\nsome chopped parsley')
+  await page.getByRole('button', { name: /Convert these lines/ }).click()
+
+  // What the recipe said, because "158 g of rice" cannot be measured with cups and spoons — which is
+  // what someone on imperial units has in the kitchen. Grams stay canonical and stay on screen.
+  await expect(page.getByText(/^1 cup · /)).toBeVisible()
+  await expect(page.getByText(/^2 tbsp · /)).toBeVisible()
+
+  // A pinch is a seasoning, not a countable thing: read as countable it resolved to one *serving* of
+  // whatever it matched, which put 461 kcal of chicken biryani into a recipe from a pinch of saffron.
+  await expect(page.getByText('CHICKEN BIRYANI')).toHaveCount(0)
+
+  // The model is an offer. It used to be called automatically — half a minute and one of a small
+  // daily allowance, spent without being asked, and silence when it came back with nothing.
+  await expect(page.getByRole('button', { name: /Ask the AI to weigh/ })).toBeVisible()
+  await page.getByRole('button', { name: /Leave (it|them) uncounted/ }).click()
+  await expect(page.getByRole('button', { name: /Ask the AI to weigh/ })).toHaveCount(0)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a saved meal can be removed from the list it lives in', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder(/Search a food/).fill('chicken breast')
+  await page.getByRole('button', { name: /^Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+  await page.getByRole('button', { name: /Save this meal/ }).click()
+  await page.getByRole('button', { name: /^Save/ }).last().click()
+
+  // The gap: a bookmarked food had a filled bookmark to tap again, and a saved meal could only be
+  // deleted from a different screen in Settings — so "how do I get rid of this" had no local answer.
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByRole('button', { name: /^Saved/ }).click()
+  await expect(page.getByText('Swipe a row to remove it.')).toBeVisible()
+  const saved = page.getByRole('button', { name: /1 item/ }).first()
+  const box = (await saved.boundingBox())!
+  await page.mouse.move(box.x + box.width - 40, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width - 160, box.y + box.height / 2, { steps: 8 })
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Remove' }).first().click()
+  await expect(page.getByText(/Bookmark a food, or a whole meal/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

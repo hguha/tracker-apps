@@ -21,8 +21,9 @@ import { MEAL_SLOTS, type MealSlot, type RemindersConfig } from '@/domain/types'
 const BASE_ID = 4100
 const idFor = (meal: MealSlot): number => BASE_ID + MEAL_SLOTS.indexOf(meal)
 const END_OF_DAY_ID = BASE_ID + MEAL_SLOTS.length
+const WEIGH_IN_ID = BASE_ID + MEAL_SLOTS.length + 1
 
-const ALL_IDS = [...MEAL_SLOTS.map(idFor), END_OF_DAY_ID]
+const ALL_IDS = [...MEAL_SLOTS.map(idFor), END_OF_DAY_ID, WEIGH_IN_ID]
 
 /** Today, at a minute from local midnight. */
 function todayAt(minute: number, now: number): number {
@@ -73,11 +74,29 @@ export async function syncReminders(now = Date.now()): Promise<void> {
       })
     }
   }
+
+  // Same rule as the meals: only if it hasn't happened. A weigh-in is the one input the app can't
+  // derive from anything else — no trend means no measured expenditure, and no target after week two.
+  if (config.weighIn.enabled) {
+    const weighed = (await repo.weights()).some((row) => row.day === day)
+    const at = todayAt(config.weighIn.minute, now)
+    if (!weighed && at > now) {
+      scheduleLocalNotification({
+        id: WEIGH_IN_ID,
+        title: 'Weigh-in',
+        body: 'One number, and the week has a trend to measure your calories against.',
+        at,
+      })
+    }
+  }
 }
 
-/** What the settings screen shows when reminders have never been configured. */
+/** What the settings row shows: how many nudges a day are switched on. */
 export function describeReminders(config: RemindersConfig | null): string {
   if (!config) return 'Off'
-  const on = config.meals.filter((row) => row.enabled).length + (config.endOfDay.enabled ? 1 : 0)
+  const on =
+    config.meals.filter((row) => row.enabled).length +
+    (config.endOfDay.enabled ? 1 : 0) +
+    (config.weighIn.enabled ? 1 : 0)
   return on === 0 ? 'Off' : `${on} a day`
 }

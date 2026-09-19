@@ -13,8 +13,9 @@ import type { Food } from '@/domain/types'
  * seconds later, and for those seconds every screen said **"Nothing matched."** A confident wrong
  * answer is worse than a slow right one, and it made a working search look like a missing database.
  *
- * The local-then-remote rule lives here too, in one place: only reach for the network when the
- * cache comes up thin, and never block on it, so rows already on screen can't vanish mid-fetch.
+ * The local-then-remote rule lives here too, in one place: show the cache immediately, ask the
+ * databases once per query, and never block on either — so rows already on screen can't vanish
+ * mid-fetch and the answer to a word doesn't depend on what was searched for before it.
  */
 export interface FoodSearchState {
   results: Food[]
@@ -26,9 +27,19 @@ export interface FoodSearchState {
 
 /** Below this a query is too vague to spend a request on. */
 const MIN_REMOTE_CHARS = 3
-/** Enough local hits that the long tail isn't worth a round trip. */
-const ENOUGH_LOCAL = 5
 const DEBOUNCE_MS = 400
+
+/**
+ * Queries already sent this session, so retyping one is free.
+ *
+ * Keyed on the **query**, which is the difference between this and what it replaces. The old rule
+ * skipped the network whenever five local rows happened to match, and the local cache grows with use
+ * — so the results for a word depended on what you had searched for before it. Searching "carrot
+ * cake" returned two rows, then twenty the next time; "granola" returned the ten granola-bar rows
+ * that ship in the seed and therefore *never asked USDA at all*, which is why it only ever showed
+ * cereals. A query-keyed cache gives the same answer every time and still costs one request.
+ */
+const asked = new Set<string>()
 
 export function useFoodSearch(
   query: string,
@@ -38,12 +49,12 @@ export function useFoodSearch(
   const results = useLiveQuery(() => repo.searchFoods(trimmed, limit), [trimmed, limit], undefined)
   const [searchingFor, setSearchingFor] = useState<string | null>(null)
 
-  const enough = (results?.length ?? 0) >= ENOUGH_LOCAL
-
   useEffect(() => {
-    if (trimmed.length < MIN_REMOTE_CHARS || enough) return
+    const key = `${branded ? 'b' : 'g'}:${trimmed.toLowerCase()}`
+    if (trimmed.length < MIN_REMOTE_CHARS || asked.has(key)) return
     let cancelled = false
     const id = window.setTimeout(() => {
+      asked.add(key)
       setSearchingFor(trimmed)
       void searchRemote(trimmed, { branded }).finally(() => {
         // Guarded on the query, not just on unmount: an older search settling must not clear the
@@ -55,7 +66,7 @@ export function useFoodSearch(
       cancelled = true
       clearTimeout(id)
     }
-  }, [trimmed, enough, branded])
+  }, [trimmed, branded])
 
   const isSearching = searchingFor === trimmed && trimmed.length >= MIN_REMOTE_CHARS
 

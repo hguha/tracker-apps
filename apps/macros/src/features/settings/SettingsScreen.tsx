@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow } from '@tracker-engine/ui'
 import {
   Award,
+  Bell,
   ChefHat,
   ChevronRight,
   Database,
@@ -23,6 +24,7 @@ export type SettingsRoute =
   | 'checkin'
   | 'about'
   | 'preferences'
+  | 'reminders'
   | 'appearance'
   | 'badges'
   | 'library'
@@ -131,9 +133,17 @@ export function SettingsScreen({
         />
         <NavRow
           icon={<Utensils size={17} />}
-          label="Food, water & reminders"
+          label="Food & water"
           hint={preferencesHint(profile)}
           onClick={() => onOpen('preferences')}
+        />
+        {/* Its own row, because a notification setting is not something anyone looks for under
+            "food and water" — and the times are now free rather than five presets a meal. */}
+        <NavRow
+          icon={<Bell size={17} />}
+          label="Reminders"
+          hint={describeReminders(profile?.reminders ?? null)}
+          onClick={() => onOpen('reminders')}
         />
         <NavRow
           icon={<Palette size={17} />}
@@ -215,7 +225,6 @@ function goalHint(program: Program | undefined): string {
 function preferencesHint(profile: Profile | undefined): string {
   if (!profile) return ''
   const parts = [profile.units === 'metric' ? 'kg / cm' : 'lb / in']
-  if (profile.reminders) parts.push(`reminders ${describeReminders(profile.reminders).toLowerCase()}`)
   if (profile.eatingWindow) {
     parts.push(
       `${formatClock(profile.eatingWindow.startMinute)}–${formatClock(profile.eatingWindow.endMinute)}`,

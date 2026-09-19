@@ -23,6 +23,7 @@ import * as repo from '@/data/repository'
 import { nutrientsFor, perServing } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { MEAL_LABELS } from '@/lib/meals'
+import { amountGrams } from '@/features/shared/format'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
@@ -31,13 +32,13 @@ import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'
 import { FitsPanel } from './FitsPanel'
 import {
-  amountGrams,
   DescribeRow,
   Empty,
   FoodList,
   LibraryHits,
   MoreWaysSheet,
   RecentList,
+  SavedMeals,
 } from './browseRows'
 import { DescribePanel } from './DescribePanel'
 import { MealTimePicker } from './MealTimePicker'
@@ -420,26 +421,13 @@ function BrowsePanel({
             ) : (
               <>
                 {templates.length > 0 && (
-                  <Card className="p-0">
-                    <ul className="divide-y divide-line">
-                      {templates.map((template) => (
-                        <li key={template.id}>
-                          <button
-                            onClick={() => onOpen({ kind: 'meal', template })}
-                            className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                          >
-                            <div className="truncate text-[14px]">{template.name}</div>
-                            <div className="tabular mt-0.5 flex items-baseline gap-2">
-                              <span className="shrink-0 text-[12px] font-semibold">
-                                {template.nutrients.kcal} kcal
-                              </span>
-                              <MacroNumbers nutrients={template.nutrients} />
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </Card>
+                  <SavedMeals
+                    templates={templates}
+                    onOpen={onOpen}
+                    onRemove={(template) => {
+                      void repo.deleteMealTemplate(template.id)
+                    }}
+                  />
                 )}
                 {savedFoods.length > 0 && (
                   <FoodList
@@ -450,8 +438,14 @@ function BrowsePanel({
                     saved={savedIds}
                     lastAmounts={lastAmounts ?? new Map()}
                     emptyLabel=""
+                    isRemovable
                   />
                 )}
+                {/* Said once, at the bottom, because a gesture nobody has met needs introducing
+                    exactly as often as that. */}
+                <p className="px-1 text-center text-[11.5px] text-ink-muted">
+                  Swipe a row to remove it.
+                </p>
               </>
             ))}
 

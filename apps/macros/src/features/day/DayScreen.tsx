@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset, formatDayHeading, formatTimeOfDay } from '@tracker-engine/core'
-import { Card, ScreenHeader, useToast } from '@tracker-engine/ui'
+import { Card, ScreenHeader, SearchField, useToast } from '@tracker-engine/ui'
 import {
   Bookmark,
   ChevronDown,
@@ -14,12 +14,14 @@ import {
 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
-import { dayTotals } from '@/lib/nutrition'
+import { dayTotals, nutrientsFor } from '@/lib/nutrition'
 import { mealGroups, type DishGroup, type MealGroup } from '@/lib/dayGroups'
 import { dayTiming, formatDuration } from '@/lib/mealTiming'
-import { MEAL_LABELS } from '@/lib/meals'
+import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { amountGrams } from '@/features/shared/format'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
+import { SwipeRow } from '@/features/shared/SwipeRow'
 import { VenueChoice } from '@/features/shared/VenueChoice'
 import { SaveMealSheet } from '@/features/today/SaveMealSheet'
 import { EntrySheet } from '@/features/today/EntrySheet'
@@ -63,6 +65,8 @@ export function DayScreen({
   const [editing, setEditing] = useState<{ entry: LogEntry; siblings: LogEntry[] } | null>(null)
   const [savingMeal, setSavingMeal] = useState<LogEntry[] | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  /** What to look for in the diary — see the search field below. */
+  const [find, setFind] = useState('')
 
   const today = dayKey(Date.now())
   /**
@@ -159,67 +163,97 @@ export function DayScreen({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 pb-8">
-        <DayTotals totals={totals} target={target} meals={meals.length} />
-
-        {meals.map((group) => (
-          <MealCard
-            key={group.meal}
-            group={group}
-            foods={foods}
-            expanded={expanded}
-            onExpand={(key) => setExpanded((current) => (current === key ? null : key))}
-            onAdd={() => onAdd(day, group.meal)}
-            onSave={() => setSavingMeal(group.entries)}
-            onDetails={(entry) => setEditing({ entry, siblings: group.entries })}
-            onLogAgain={(dishId, name) => {
-              void repo.logDishAgain(dishId).then((n) => {
-                if (n > 0) toast.show(`${name} logged again`)
-              })
-            }}
-            onRemove={(dishId, name) => {
-              void repo.deleteDish(dishId).then((n) => {
-                if (n > 0) toast.show(`${name} removed`)
-              })
-            }}
-          />
-        ))}
-
         {/*
-          The meals with nothing in them, as one row of buttons rather than four empty cards. Every
-          slot stays reachable — adding to breakfast on a past day used to depend on guessing which
-          meal an unlabelled "Add food" button would pick.
+          Searching what you've already eaten, straight into this day.
+
+          Not a second copy of the add-food screen: this only finds things from the diary, which is the
+          case the day screen is the right place for. "Have this again" already re-logs a dish in one
+          tap — but only if the dish happens to be on the day you are looking at, so the useful version
+          of it was reachable by scrolling back through history to find where you last ate the thing.
         */}
-        <div className="flex gap-1.5">
-          {emptySlots.map((slot) => (
-            <button
-              key={slot}
-              onClick={() => onAdd(day, slot)}
-              className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-dashed border-line-strong py-2.5 text-[12.5px] font-medium text-ink-secondary active:bg-sunken"
-            >
-              <Plus size={13} className="shrink-0" />
-              <span className="truncate">{MEAL_LABELS[slot]}</span>
-            </button>
-          ))}
-        </div>
-
-        {meals.length === 0 && (
-          <Card className="p-5 text-center">
-            <p className="text-[13.5px] text-ink-muted">
-              Nothing logged {isToday ? 'yet today' : 'on this day'} — pick a meal above to start.
-            </p>
-          </Card>
-        )}
-
-        {!isToday && rows.length > 0 && (
-          <button
-            onClick={() => {
-              void repo.copyDay(day, today).then((n) => toast.show(`Copied ${n} items to today`))
+        <SearchField
+          value={find}
+          onChange={setFind}
+          placeholder="Something you've eaten before"
+        />
+        {find.trim().length >= 2 ? (
+          <PastItems
+            query={find}
+            onLog={(log, name) => {
+              void log().then((count) => {
+                if (count > 0) {
+                  setFind('')
+                  toast.show(`${name} added`)
+                }
+              })
             }}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-line py-2.5 text-[13.5px] font-semibold text-accent active:bg-accent-wash"
-          >
-            <Copy size={15} />
-            Copy this day to today
-          </button>
+            day={day}
+          />
+        ) : (
+          <>
+            <DayTotals totals={totals} target={target} meals={meals.length} />
+
+            {meals.map((group) => (
+              <MealCard
+                key={group.meal}
+                group={group}
+                foods={foods}
+                expanded={expanded}
+                onExpand={(key) => setExpanded((current) => (current === key ? null : key))}
+                onAdd={() => onAdd(day, group.meal)}
+                onSave={() => setSavingMeal(group.entries)}
+                onDetails={(entry) => setEditing({ entry, siblings: group.entries })}
+                onLogAgain={(dishId, name) => {
+                  void repo.logDishAgain(dishId).then((n) => {
+                    if (n > 0) toast.show(`${name} logged again`)
+                  })
+                }}
+                onRemove={(dishId, name) => {
+                  void repo.deleteDish(dishId).then((n) => {
+                    if (n > 0) toast.show(`${name} removed`)
+                  })
+                }}
+              />
+            ))}
+
+            {/*
+              The meals with nothing in them, as one row of buttons rather than four empty cards. Every
+              slot stays reachable — adding to breakfast on a past day used to depend on guessing which
+              meal an unlabelled "Add food" button would pick.
+            */}
+            <div className="flex gap-1.5">
+              {emptySlots.map((slot) => (
+                <button
+                  key={slot}
+                  onClick={() => onAdd(day, slot)}
+                  className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border border-dashed border-line-strong py-2.5 text-[12.5px] font-medium text-ink-secondary active:bg-sunken"
+                >
+                  <Plus size={13} className="shrink-0" />
+                  <span className="truncate">{MEAL_LABELS[slot]}</span>
+                </button>
+              ))}
+            </div>
+
+            {meals.length === 0 && (
+              <Card className="p-5 text-center">
+                <p className="text-[13.5px] text-ink-muted">
+                  Nothing logged {isToday ? 'yet today' : 'on this day'} — pick a meal above to start.
+                </p>
+              </Card>
+            )}
+
+            {!isToday && rows.length > 0 && (
+              <button
+                onClick={() => {
+                  void repo.copyDay(day, today).then((n) => toast.show(`Copied ${n} items to today`))
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-line py-2.5 text-[13.5px] font-semibold text-accent active:bg-accent-wash"
+              >
+                <Copy size={15} />
+                Copy this day to today
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -240,6 +274,89 @@ export function DayScreen({
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Things eaten before, matched by name, each one tap from being on this day.
+ *
+ * Logged at the amount it was last eaten in and at the time of day the day is being viewed for, which
+ * is the same contract as "Have this again" and as ticking foods on the add screen. No portion step:
+ * this list only contains things whose amount is already known, and re-picking it is what the add
+ * screen is for.
+ */
+function PastItems({
+  query,
+  day,
+  onLog,
+}: {
+  query: string
+  day: string
+  onLog: (log: () => Promise<number>, name: string) => void
+}) {
+  const items = useLiveQuery(() => repo.searchHistory(query), [query], undefined)
+
+  // The clock time now, on that date: a meal added to last Tuesday happened at *some* hour, and
+  // stamping it midnight would file it before breakfast.
+  const at = () => {
+    const now = new Date()
+    const midnight = Date.parse(`${day}T00:00:00`)
+    return Number.isFinite(midnight)
+      ? midnight + (now.getHours() * 60 + now.getMinutes()) * 60_000
+      : Date.now()
+  }
+
+  if (items === undefined) return null
+  if (items.length === 0) {
+    return (
+      <Card className="p-4 text-center text-[13px] text-ink-muted">
+        Nothing in your diary matches that.
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="p-0">
+      <ul className="divide-y divide-line">
+        {items.map((item) => {
+          const name = item.kind === 'food' ? item.food.description : item.name
+          // What the tap will write, not what the food is per 100 g: this logs blind, so the row has
+          // to state the amount it is about to commit. Same helper the add screen's tickboxes use.
+          const grams = item.kind === 'food' ? amountGrams(item.food, item.amount) : 0
+          const nutrients =
+            item.kind === 'food' ? nutrientsFor(item.food, grams) : item.nutrients
+          return (
+            <li key={item.kind === 'food' ? `f:${item.food.id}` : `d:${item.dishId}`}>
+              <button
+                onClick={() => {
+                  const when = at()
+                  const meal = mealForHour(new Date(when).getHours())
+                  onLog(
+                    item.kind === 'food'
+                      ? // Home, like every other add path: most meals are eaten at home, and this
+                        // card's venue row corrects a whole sitting in one tap.
+                        () => repo.logFoods([item.food], { meal, eatenAt: when, venue: 'home' })
+                      : () => repo.logDishAgain(item.dishId, { meal, at: when }),
+                    name,
+                  )
+                }}
+                className="w-full px-4 py-2.5 text-left active:bg-sunken"
+              >
+                <span className="block truncate text-[14px]">{name}</span>
+                <span className="tabular mt-0.5 flex items-baseline gap-2">
+                  <span className="shrink-0 text-[12px] font-semibold">{nutrients.kcal} kcal</span>
+                  <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-muted">
+                    {item.kind === 'dish'
+                      ? item.parts.join(', ')
+                      : `${Math.round(grams)} g, as you last had it`}
+                  </span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
   )
 }
 
@@ -370,28 +487,37 @@ function DishRow({
 }) {
   return (
     <li>
-      <button
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        className={cn('w-full px-3.5 py-2.5 text-left active:bg-sunken', isOpen && 'bg-sunken/60')}
+      {/* The same two actions as a single row, on the dish. Removing "3 steak tacos" by deleting six
+          rows one at a time is not a thing anyone should have to do. */}
+      <SwipeRow
+        actions={[
+          { label: 'Again', icon: Plus, onAction: onLogAgain },
+          { label: 'Delete', icon: Trash2, tone: 'critical', onAction: onRemove },
+        ]}
       >
-        <span className="flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
-            {dish.name ?? 'Dish'}
+        <button
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          className={cn('w-full px-3.5 py-2.5 text-left active:bg-sunken', isOpen && 'bg-sunken/60')}
+        >
+          <span className="flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
+              {dish.name ?? 'Dish'}
+            </span>
+            <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
+              {dish.entries.length} item{dish.entries.length === 1 ? '' : 's'}
+            </span>
+            <span className="tabular w-11 shrink-0 text-right text-[13px] font-semibold">
+              {dish.nutrients.kcal}
+            </span>
+            <ChevronDown
+              size={15}
+              className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
+            />
           </span>
-          <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
-            {dish.entries.length} item{dish.entries.length === 1 ? '' : 's'}
-          </span>
-          <span className="tabular w-11 shrink-0 text-right text-[13px] font-semibold">
-            {dish.nutrients.kcal}
-          </span>
-          <ChevronDown
-            size={15}
-            className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
-          />
-        </span>
-        <MacroNumbers nutrients={dish.nutrients} className="mt-0.5" />
-      </button>
+          <MacroNumbers nutrients={dish.nutrients} className="mt-0.5" />
+        </button>
+      </SwipeRow>
 
       {isOpen && (
         <div className="border-t border-line bg-sunken/30">
@@ -461,46 +587,67 @@ function EntryRow({
 }) {
   return (
     <li>
-      <button
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        className={cn(
-          'w-full py-2 pr-3.5 text-left active:bg-sunken',
-          inset ? 'pl-[34px]' : 'pl-3.5',
-          isOpen && 'bg-sunken/60',
-        )}
+      {/*
+        Swipe for the two things people do to a logged row: drop it, or have it again. Both were behind
+        expanding the row first, which is a tap too many for the commonest correction in the app. The
+        expanded controls stay — see `SwipeRow` for why the gesture is never the only way in.
+      */}
+      <SwipeRow
+        actions={[
+          {
+            label: 'Again',
+            icon: Copy,
+            onAction: () => void repo.relogEntries([entry], { at: Date.now() }),
+          },
+          {
+            label: 'Delete',
+            icon: Trash2,
+            tone: 'critical',
+            onAction: () => void repo.deleteEntry(entry.id),
+          },
+        ]}
       >
+        <button
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          className={cn(
+            'w-full py-2 pr-3.5 text-left active:bg-sunken',
+            inset ? 'pl-[34px]' : 'pl-3.5',
+            isOpen && 'bg-sunken/60',
+          )}
+        >
         {/*
           The same three columns as every other row, at the same widths. Grams used to appear only
           when a row had them and the chevron only on a dish, so a meal of four things had four
           different layouts and the calorie column never lined up. A quick add has no weight, so its
           slot stays empty rather than collapsing and shunting the numbers sideways.
         */}
-        <span className="flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-[13.5px]">{name}</span>
-          <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
-            {entry.grams > 0 ? `${Math.round(entry.grams)}g` : ''}
+          <span className="flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate text-[13.5px]">{name}</span>
+            <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
+              {entry.grams > 0 ? `${Math.round(entry.grams)}g` : ''}
+            </span>
+            <span className="tabular w-11 shrink-0 text-right text-[13px] font-medium">
+              {entry.nutrients.kcal}
+            </span>
+            <ChevronDown
+              size={15}
+              className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
+            />
           </span>
-          <span className="tabular w-11 shrink-0 text-right text-[13px] font-medium">
-            {entry.nutrients.kcal}
-          </span>
-          <ChevronDown
-            size={15}
-            className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
-          />
-        </span>
         {/*
           The row's own clock time, beside its macros. Grouping is by meal slot, so a snack at 2pm and
           another at 10pm share a card — and without this there was nothing on either row to tell them
           apart, or to catch one stamped at the wrong hour.
         */}
-        <span className="mt-0.5 flex items-baseline gap-2">
-          <MacroNumbers nutrients={entry.nutrients} />
-          <span className="tabular flex-1 text-right text-[11px] text-ink-muted">
-            {formatTimeOfDay(entry.eatenAt)}
+          <span className="mt-0.5 flex items-baseline gap-2">
+            <MacroNumbers nutrients={entry.nutrients} />
+            <span className="tabular flex-1 text-right text-[11px] text-ink-muted">
+              {formatTimeOfDay(entry.eatenAt)}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+      </SwipeRow>
 
       {isOpen && (
         <div

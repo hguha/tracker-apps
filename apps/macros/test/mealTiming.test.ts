@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   dayTiming,
   eatingOccasions,
+  formatClock,
   formatDuration,
+  parseClock,
   windowProgress,
   windowState,
 } from '@/lib/mealTiming'
@@ -126,5 +128,22 @@ describe('formatDuration', () => {
   it('reads as hours and minutes', () => {
     expect(formatDuration(45)).toBe('45m')
     expect(formatDuration(125)).toBe('2h 05m')
+  })
+})
+
+describe('parseClock', () => {
+  it('round-trips with formatClock, which is what the time input speaks', () => {
+    // Reminders used to offer five half-hourly presets per meal, so nobody whose lunch is at 12:15
+    // could be reminded about it. An `<input type="time">` emits exactly `formatClock`'s format.
+    for (const minute of [0, 7 * 60 + 30, 12 * 60 + 15, 23 * 60 + 59]) {
+      expect(parseClock(formatClock(minute))).toBe(minute)
+    }
+  })
+
+  it('rejects a half-typed or impossible time rather than storing a guess', () => {
+    expect(parseClock('')).toBeNull()
+    expect(parseClock('9')).toBeNull()
+    expect(parseClock('25:00')).toBeNull()
+    expect(parseClock('12:74')).toBeNull()
   })
 })

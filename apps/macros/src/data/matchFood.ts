@@ -1,6 +1,6 @@
 import * as repo from '@/data/repository'
 import { searchRemote } from '@/data/foodLookup'
-import { rankFoods } from '@/lib/foodSearch'
+import { matchesQuery, queryTerms, rankFoods } from '@/lib/foodSearch'
 import type { Food } from '@/domain/types'
 
 /**
@@ -18,28 +18,35 @@ import type { Food } from '@/domain/types'
  * all-terms rule. So the remote step now hands its candidates straight to `rankFoods`, and the
  * hand-written alias table that used to paper over this is gone.
  *
- * Three steps, cheapest first:
- *  1. Local, all terms. Free, offline, and right for anything already logged.
+ * Two steps, cheapest first:
+ *  1. Local. Free, offline, and right for anything already logged. `searchFoods` relaxes to partial
+ *     matches when nothing matches every word, so this is also the offline answer for an unfamiliar
+ *     name — a row sharing the head noun beats an unmatched line.
  *  2. Remote, ranked but not filtered — one request, whatever the database thinks is closest.
- *  3. Local, best partial overlap. The offline fallback: a row sharing the head noun beats nothing.
+ *
+ * `matchedBy` is decided here rather than taken from whichever step answered, because "the name
+ * matched as written" is a fact about the row, not about where it came from — and `searchFoods` is
+ * allowed to relax, so the first step's hit is not necessarily exact.
  */
 export async function matchIngredient(name: string): Promise<MatchedFood> {
   const query = name.trim()
   if (query.length < 2) return NO_MATCH
 
-  const [exact] = await repo.searchFoods(query, 1)
-  if (exact) return { food: exact, matchedBy: 'exact' }
+  const [local] = await repo.searchFoods(query, 1)
+  if (local) return found(local, query)
 
   // Generic sources only, and a short page: these are ingredients, Open Food Facts' packaged rows
   // are the wrong answer for "cooked spaghetti", and only the top hit is ever used — the function
   // fetches full details for everything it returns, so a shorter page is a third off the wait.
   const remote = await searchRemote(query, { branded: false, limit: INGREDIENT_CANDIDATES })
   const [best] = rankFoods(remote, query, 1)
-  if (best) return { food: best, matchedBy: 'fuzzy' }
-
-  const [loose] = await repo.searchFoodsLoose(query, 1)
-  return loose ? { food: loose, matchedBy: 'fuzzy' } : NO_MATCH
+  return best ? found(best, query) : NO_MATCH
 }
+
+const found = (food: Food, query: string): MatchedFood => ({
+  food,
+  matchedBy: matchesQuery(food, queryTerms(query)) ? 'exact' : 'fuzzy',
+})
 
 export interface MatchedFood {
   food: Food | null

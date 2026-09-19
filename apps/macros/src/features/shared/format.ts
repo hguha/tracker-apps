@@ -1,4 +1,7 @@
-import { mgToGrams } from '@/lib/nutrition'
+import type { UnitPreference } from '@tracker-engine/core'
+import { mgToGrams, portionFor } from '@/lib/nutrition'
+import { householdAmount } from '@/lib/householdAmount'
+import type { Food } from '@/domain/types'
 
 export const grams = (mg: number): string => `${Math.round(mgToGrams(mg))}g`
 export const kcal = (value: number): string => `${Math.round(value)}`
@@ -29,4 +32,57 @@ export const portionWithGrams = (portion: { label: string; grams: number }): str
   const label = portionLabel(portion)
   const weight = `${Math.round(portion.grams)} g`
   return label === weight ? weight : `${label} · ${weight}`
+}
+
+/**
+ * How much of an ingredient, in the form its reader can measure.
+ *
+ * Grams lead for someone on metric, because that is what their recipes and their scales say. For
+ * someone on imperial they are close to useless — "363 g of flour" cannot be measured with cups and
+ * spoons — so the measure leads and the weight follows it. The unit preference already existed and
+ * recipes ignored it entirely.
+ *
+ * Preference order: what the recipe actually said (`RecipeIngredient.amount`), then a volume
+ * reconstructed from the food's own USDA portions, then grams alone. Never a guess: see
+ * `lib/householdAmount`.
+ */
+export function ingredientAmount(
+  ingredient: { grams: number; amount?: string | null },
+  food: Food | undefined | null,
+  units: UnitPreference,
+): string {
+  const weight = ingredient.grams > 0 ? `${Math.round(ingredient.grams)} g` : ''
+  const measure = ingredientMeasure(ingredient, food, units)
+  if (!measure || measure === weight) return weight
+  return weight === '' ? measure : `${measure} · ${weight}`
+}
+
+/** The measure on its own, for the places that already show the weight in an input beside it. */
+export function ingredientMeasure(
+  ingredient: { grams: number; amount?: string | null },
+  food: Food | undefined | null,
+  units: UnitPreference,
+): string | null {
+  // With no weight, what the recipe said is the only amount there is — shown whatever the unit
+  // preference, because an empty cell is not an amount. "Salt, to taste" and "a pinch of saffron"
+  // have no gram figure anybody can honestly supply, and they are still part of the recipe.
+  if (!(ingredient.grams > 0)) return ingredient.amount ?? null
+  if (units.volume !== 'floz') return null
+  return ingredient.amount ?? householdAmount(ingredient.grams, food)
+}
+
+/**
+ * The grams a one-tap log will use: the amount it was last eaten in, or the food's own portion.
+ *
+ * Shared, because every one-tap path has to commit the *same* number — the tickboxes on the add
+ * screen, and searching the diary from a day. A row that logs blind has to be able to say what it is
+ * about to write, and two implementations of "how much" is how those two stop agreeing.
+ */
+export function amountGrams(
+  food: Food,
+  last: { grams: number } | null | undefined,
+): number {
+  if (last && last.grams > 0) return last.grams
+  const portion = portionFor(food, null)
+  return portion ? portion.grams : 100
 }

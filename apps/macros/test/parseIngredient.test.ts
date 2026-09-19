@@ -218,3 +218,27 @@ describe('the lasagna soup import, end to end', () => {
     expect(parsed[5]!.name).toBe('garlic')
   })
 })
+
+describe('a pinch, and other units nothing was weighed in', () => {
+  it('reads a pinch as a seasoning rather than as a countable thing', () => {
+    // "1 pinch of saffron" resolved to the *default portion* of whatever it matched, which on a live
+    // import was a 283 g serving of CHICKEN BIRYANI — 461 kcal from a pinch of saffron. A pinch is a
+    // quantity word for seasoning, not a measure anything was weighed in.
+    const line = parseIngredientLine('1 pinch of saffron')
+    expect(line.name).toBe('saffron')
+    expect(line.isToTaste).toBe(true)
+  })
+
+  it('refuses to read a named unit as one serving of the food', () => {
+    const biryani = food([['1 serving', 283]])
+    for (const raw of ['1 pinch saffron', '3 sprigs thyme', '1 bunch kale']) {
+      expect(resolveAmount(parseIngredientLine(raw), biryani).grams).toBeNull()
+    }
+  })
+
+  it('still counts a bare number against the food’s own portion', () => {
+    // "1 onion" genuinely is one portion of onion, which is the case that fallback exists for.
+    expect(resolveAmount(parseIngredientLine('2 onions'), food([['1 medium', 110]])).grams).toBe(220)
+  })
+})
+

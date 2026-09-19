@@ -23,6 +23,7 @@ import { DataScreen } from '@/features/settings/DataScreen'
 import { TargetsScreen } from '@/features/settings/TargetsScreen'
 import { AboutYouScreen } from '@/features/settings/AboutYouScreen'
 import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
+import { RemindersScreen } from '@/features/settings/RemindersScreen'
 import { AppearanceScreen } from '@/features/settings/AppearanceScreen'
 import { BadgesScreen } from '@/features/badges/BadgesScreen'
 import { LibraryScreen } from '@/features/library/LibraryScreen'
@@ -92,15 +93,23 @@ function SignedInApp() {
    * Keyed on the day's entries, so every log, edit and delete re-runs it, and on `isReady` so the
    * first run happens after the profile exists. See `data/reminders`.
    */
-  const todaysEntryCount = useLiveQuery(
-    async () => (isReady ? (await repo.entriesForDay(dayKey(Date.now()))).length : 0),
+  const todaysProgress = useLiveQuery(
+    async () => {
+      if (!isReady) return ''
+      const day = dayKey(Date.now())
+      const entries = await repo.entriesForDay(day)
+      // The weigh-in nudge is conditional on there being no weigh-in today, so recording one has to
+      // re-derive the schedule exactly as logging a meal does.
+      const weighed = (await repo.weights()).some((row) => row.day === day)
+      return `${entries.length}|${weighed}`
+    },
     [isReady],
-    0,
+    '',
   )
   useEffect(() => {
     if (!isReady) return
     void syncReminders()
-  }, [isReady, todaysEntryCount])
+  }, [isReady, todaysProgress])
 
   // Appearance lives on the profile, so it follows the same live-query path as everything else
   // and applies the moment it changes — including on another device. `onboardingVersion` rides
@@ -160,6 +169,8 @@ function SignedInApp() {
         return <AboutYouScreen onBack={toTabs} />
       case 'preferences':
         return <PreferencesScreen onBack={toTabs} />
+      case 'reminders':
+        return <RemindersScreen onBack={toTabs} />
       case 'appearance':
         return <AppearanceScreen onBack={toTabs} />
       case 'badges':

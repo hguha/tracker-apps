@@ -143,11 +143,29 @@ export async function estimateIngredients(lines: readonly string[]): Promise<Mea
   return matchDraft(await runDescribe({ mode: 'ingredients', lines }, ''))
 }
 
+/** Whether the browser believes it is offline. Absent in tests and in Node; absence is not offline. */
+const isOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false
+
 async function runDescribe(body: Record<string, unknown>, label: string): Promise<MealEstimate> {
   const client = getSupabase()
+  /**
+   * Two different problems, two different sentences.
+   *
+   * The one this replaces — "This needs a connection. Search for the foods instead" — was wrong in
+   * both halves every time it fired, because it fires when the app was *built* with no backend keys.
+   * That isn't a connection problem, nothing about waiting or reconnecting fixes it, and the food
+   * search it recommends instead is equally unavailable in that state: the database search goes
+   * through the same function. So it told someone with a perfectly good connection that their
+   * connection was the fault, and sent them to a second dead end.
+   */
   if (!client) {
     throw new EstimateUnavailable(
-      'This needs a connection. Search for the foods instead — USDA has a lot of whole dishes.',
+      'This copy of the app was built without an AI connection. Quick add and your own foods still work.',
+    )
+  }
+  if (isOffline()) {
+    throw new EstimateUnavailable(
+      "You're offline. Anything already saved still logs — this one needs the network.",
     )
   }
 
@@ -179,7 +197,9 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
   }
   if (error || !data || data.error || !Array.isArray(data.items)) {
     throw new EstimateUnavailable(
-      "Couldn't work that out just now. Try describing it in words, or search for the foods.",
+      isOffline()
+        ? "The connection dropped part-way. Nothing was logged — try again when you're back on."
+        : "Couldn't work that out just now. Try describing it in words, or search for the foods.",
     )
   }
 

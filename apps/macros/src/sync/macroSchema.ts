@@ -47,6 +47,7 @@ export const macroSyncSchema: SyncSchema = {
         ...row,
         favouriteFoodIds: row.favouriteFoodIds ?? [],
         waterTargetMl: row.waterTargetMl ?? null,
+        manualTargets: row.manualTargets ?? null,
         reminders: row.reminders ?? null,
       }
     }

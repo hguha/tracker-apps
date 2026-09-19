@@ -83,6 +83,22 @@ export function formatClock(minute: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 }
 
+/**
+ * The inverse of `formatClock`: "07:30" back to minutes from midnight.
+ *
+ * Exists so a reminder time can be an `<input type="time">` — whose value format is exactly what
+ * `formatClock` already emits — instead of a row of preset pills. The presets were the problem: five
+ * half-hourly options per meal meant nobody whose lunch is at 12:15 could be reminded about it.
+ */
+export function parseClock(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return null
+  return hours * 60 + minutes
+}
+
 export function formatDuration(minutes: number): string {
   const whole = Math.max(0, Math.round(minutes))
   const hours = Math.floor(whole / 60)

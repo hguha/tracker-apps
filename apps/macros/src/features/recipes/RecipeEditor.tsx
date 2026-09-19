@@ -5,13 +5,14 @@ import { ClipboardList, Link as LinkIcon, Sparkles, Wand2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
-import { grams } from '@/features/shared/format'
+import { grams, ingredientMeasure } from '@/features/shared/format'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
+import { useUnits } from '@/features/shared/useUnits'
 import { estimateIngredients, estimateMeal } from '@/features/log/estimate'
 import { resolveAmount } from '@/lib/resolveAmount'
-import type { ParsedIngredient } from '@/lib/parseIngredient'
-import { resolveLines } from '@/data/ingredientLines'
+import { statedAmount, type ParsedIngredient } from '@/lib/parseIngredient'
+import { resolveLines, type ResolvedLine } from '@/data/ingredientLines'
 import { importRecipeFromUrl, type ImportedRecipe } from '@/data/recipeImport'
 import { CUISINES, type CuisineKey, type Food } from '@/domain/types'
 
@@ -19,6 +20,8 @@ interface Draft {
   foodId: string | null
   label: string
   grams: number
+  /** What the recipe said — "1 cup", "2 tbsp" — kept so it survives the save. See `RecipeIngredient`. */
+  amount?: string | null
   /**
    * The line this row was read from, kept for the session.
    *
@@ -29,6 +32,13 @@ interface Draft {
    * right-looking name on it.
    */
   parsed?: ParsedIngredient
+  /**
+   * True while this row is one the local parser couldn't weigh.
+   *
+   * Marks the rows the model would replace if it's asked, so asking is a swap rather than a second
+   * copy of every line. Cleared the moment anything replaces them.
+   */
+  needsWeight?: boolean
 }
 
 /**
@@ -68,6 +78,7 @@ export function RecipeEditor({
   onBack: () => void
 }) {
   const toast = useToast()
+  const units = useUnits()
   const existing = useLiveQuery(
     () => (recipeId ? repo.getRecipe(recipeId) : Promise.resolve(undefined)),
     [recipeId],
@@ -90,6 +101,14 @@ export function RecipeEditor({
   const [mode, setMode] = useState<StartMode>('link')
   const [input, setInput] = useState('')
   const [pending, setPending] = useState<Pending | null>(null)
+  /**
+   * The lines the local parser couldn't put a weight on, waiting on a decision.
+   *
+   * Their own state, because asking the model is now the user's call: it costs most of a minute and
+   * one of a small daily allowance, and "1 handful of parsley" is a line plenty of people would rather
+   * leave uncounted than wait for.
+   */
+  const [needsWeight, setNeedsWeight] = useState<ResolvedLine[]>([])
   const [isReading, setIsReading] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
   /**
@@ -120,6 +139,7 @@ export function RecipeEditor({
         foodId: ingredient.foodId,
         label: ingredient.label,
         grams: ingredient.grams,
+        amount: ingredient.amount ?? null,
       })),
     )
   }, [existing?.id])
@@ -131,7 +151,14 @@ export function RecipeEditor({
   )
 
   const total = recipeNutrients(
-    { ingredients: items.map((item, index) => ({ ...item, id: String(index), optional: false })) },
+    {
+      ingredients: items.map((item, index) => ({
+        ...item,
+        id: String(index),
+        optional: false,
+        amount: item.amount ?? null,
+      })),
+    },
     foods ?? new Map(),
   )
   const each = scale(total, 1 / Math.max(1, Number(servings) || 1))
@@ -169,12 +196,16 @@ export function RecipeEditor({
   }
 
   /**
-   * Stage two: the amounts each line states, at the amounts it states them.
+   * Stage two: the amounts each line states, at the amounts it states them. Locally, always.
    *
-   * Read locally first (`resolveLines`), because "1/2 pound lean ground beef" is a quantity, a unit
-   * and a food — not a language problem. That takes a second, can't be rate limited, and is the same
-   * answer every time. The model is asked only for the lines the parser genuinely couldn't weigh,
-   * and if it isn't available those lines simply stay visible and uncounted.
+   * `resolveLines` does this without a model, because "1/2 pound lean ground beef" is a quantity, a
+   * unit and a food — not a language problem. It takes a second, can't be rate limited, and gives the
+   * same answer every time.
+   *
+   * **The lines it can't weigh stop here.** They used to go straight on to the model, which is a
+   * thirty-second wait and one of a handful of daily requests spent without being asked — and when
+   * the model then found nothing, nothing appeared and nothing was said. Now they land as rows at the
+   * amount written, with the model offered as a button. See `weighWithModel`.
    */
   async function convert(lines: readonly string[]) {
     if (lines.length === 0 || isConverting) return
@@ -186,7 +217,11 @@ export function RecipeEditor({
         setProgress({ done, total, isModel: false }),
       )
       const resolved = local.lines.filter((line) => line.grams !== null && line.grams > 0)
-      const unreadable = local.lines.filter((line) => line.grams === null && !line.parsed.isToTaste)
+      const unweighed = local.lines.filter((line) => line.grams === null)
+      // A seasoning is worth listing and not worth asking about. "Salt and pepper to taste" and "a
+      // pinch of saffron" have no weight anyone — model included — can honestly supply, and they used
+      // to be dropped from the list altogether, so the recipe lost a line it needs to be a recipe.
+      const unreadable = unweighed.filter((line) => !line.parsed.isToTaste)
 
       setItems((current) => [
         ...current,
@@ -195,6 +230,17 @@ export function RecipeEditor({
           label: line.food?.description ?? line.parsed.name,
           grams: line.grams!,
           parsed: line.parsed,
+          amount: statedAmount(line.parsed),
+        })),
+        // Kept at the amount written rather than dropped. A recipe is worth having as a recipe even
+        // when a line's macros aren't known, and the stated amount is the part nobody has to guess.
+        ...unweighed.map((line) => ({
+          foodId: line.food?.id ?? null,
+          label: line.food?.description ?? line.parsed.name,
+          grams: 0,
+          parsed: line.parsed,
+          amount: statedAmount(line.parsed),
+          needsWeight: !line.parsed.isToTaste,
         })),
       ])
       // Said out loud, because from outside the two paths are indistinguishable and it looked like
@@ -206,39 +252,56 @@ export function RecipeEditor({
           .join('. '),
       )
       setPending(null)
-
-      // Only the leftovers go to the model, so a nineteen-line import spends a request on the two
-      // lines that needed one — or none at all.
-      if (unreadable.length > 0) {
-        setProgress({ done: resolved.length, total: local.lines.length, isModel: true })
-        try {
-          const estimate = await estimateIngredients(unreadable.map((line) => line.parsed.raw))
-          setItems((current) => [...current, ...estimate.items.map(toDraft)])
-        } catch (cause) {
-          // Kept, with the amount the line stated, rather than dropped. A recipe is worth having as
-          // a recipe even when a line's macros aren't known — and the stated amount is the thing
-          // that makes it one, so throwing it away to leave a bare "red pepper flakes" would lose
-          // the only part of the line nobody has to guess at.
-          setItems((current) => [
-            ...current,
-            ...unreadable.map((line) => ({
-              foodId: line.food?.id ?? null,
-              label: withAmount(line.parsed),
-              grams: 0,
-              parsed: line.parsed,
-            })),
-          ])
-          setError(
-            `${cause instanceof Error ? cause.message : 'Could not weigh every line.'} ` +
-              `${unreadable.length} line${unreadable.length === 1 ? '' : 's'} kept at the amount written — pick a food on each and the weight follows.`,
-          )
-        }
-      }
+      setNeedsWeight(unreadable)
     } catch (cause) {
       setError(
         cause instanceof Error
           ? `${cause.message} The ingredient list is still here — try again.`
           : 'Could not read those lines.',
+      )
+    } finally {
+      setIsConverting(false)
+      setProgress(null)
+    }
+  }
+
+  /**
+   * The leftover lines, sent to the model because the user asked.
+   *
+   * Every outcome is reported, which is the whole point of it being a separate step: the previous
+   * version called this automatically and, when the model returned nothing usable, added nothing and
+   * said nothing — so a recipe silently came out light and there was no way to tell whether the AI had
+   * been asked at all.
+   */
+  async function weighWithModel() {
+    if (needsWeight.length === 0 || isConverting) return
+    setIsConverting(true)
+    setError(null)
+    setProgress({ done: 0, total: needsWeight.length, isModel: true })
+    try {
+      const estimate = await estimateIngredients(needsWeight.map((line) => line.parsed.raw))
+      const weighed = estimate.items.filter((item) => item.grams > 0 && item.food !== null)
+      if (estimate.items.length === 0) {
+        setError(
+          `The AI read those ${needsWeight.length} line${needsWeight.length === 1 ? '' : 's'} and couldn’t make anything of them. ` +
+            'They’re still listed at the amount written — pick a food on each and the weight follows.',
+        )
+        return
+      }
+      setItems((current) => [
+        ...current.filter((draft) => !draft.needsWeight),
+        ...estimate.items.map(toDraft),
+      ])
+      setNeedsWeight([])
+      if (weighed.length < estimate.items.length) {
+        setError(
+          `${estimate.items.length - weighed.length} of ${estimate.items.length} still have no food matched — pick one on each and the weight follows.`,
+        )
+      }
+    } catch (cause) {
+      setError(
+        `${cause instanceof Error ? cause.message : 'Could not weigh those lines.'} ` +
+          `The ${needsWeight.length} line${needsWeight.length === 1 ? '' : 's'} are still listed at the amount written.`,
       )
     } finally {
       setIsConverting(false)
@@ -462,6 +525,45 @@ export function RecipeEditor({
         </Card>
       )}
 
+      {/*
+        The AI as an offer, not a default. These lines are already on the list at the amount written —
+        this only buys them a weight, and it costs a wait and one of a small daily allowance.
+      */}
+      {needsWeight.length > 0 && (
+        <Card className="space-y-2 p-4">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
+            {needsWeight.length === 1 ? '1 line has no weight' : `${needsWeight.length} lines have no weight`}
+          </h2>
+          <ul className="space-y-0.5">
+            {needsWeight.map((line, index) => (
+              <li key={index} className="truncate text-[13px] text-ink-secondary">
+                {line.parsed.raw}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[12px] text-ink-muted">
+            “{needsWeight[0]!.parsed.name}” has no weight anyone can work out from the words.
+          </p>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={isConverting}
+            onClick={() => void weighWithModel()}
+          >
+            <Sparkles size={15} />
+            {isConverting
+              ? convertingLabel(progress)
+              : `Ask the AI to weigh ${needsWeight.length === 1 ? 'it' : 'them'}`}
+          </Button>
+          <button
+            onClick={() => setNeedsWeight([])}
+            className="w-full py-1 text-[12.5px] text-ink-muted active:opacity-60"
+          >
+            {needsWeight.length === 1 ? 'Leave it uncounted' : 'Leave them uncounted'}
+          </button>
+        </Card>
+      )}
+
       <Card className="p-0">
         <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -484,6 +586,7 @@ export function RecipeEditor({
               // moment ago is legitimately absent from the map for one render. Asserting it
               // crashed the editor every time an ingredient was added.
               const food = item.foodId === null ? undefined : foods?.get(item.foodId)
+              const measure = ingredientMeasure(item, food, units)
               return (
                 <GramsRow
                   key={index}
@@ -492,7 +595,11 @@ export function RecipeEditor({
                     // with no row (which count zero, so the total reads low) — but it also matches
                     // some of them to the *wrong* row, and there was no way to correct that but
                     // delete and search again from the bottom of the screen.
-                    editing === index || item.foodId === null ? (
+                    // Auto-opened for a row with no food, because that row counts zero and the
+                    // total reads low until it's fixed — but not for a seasoning, which is meant to
+                    // count zero and would otherwise leave two pickers open on every import.
+                    editing === index ||
+                    (item.foodId === null && item.parsed?.isToTaste !== true) ? (
                       <FoodSearchPicker
                         placeholder={
                           item.foodId === null
@@ -515,9 +622,18 @@ export function RecipeEditor({
                   title={food?.description ?? item.label}
                   subtitle={
                     item.foodId === null ? (
-                      <span style={{ color: 'var(--status-serious)' }}>no macros — match a food</span>
+                      // A seasoning is *meant* to count nothing, so it isn't a problem to fix.
+                      item.parsed?.isToTaste ? (
+                        <span className="text-ink-muted">{item.amount ?? 'to taste'} · not counted</span>
+                      ) : (
+                        <span style={{ color: 'var(--status-serious)' }}>no macros — match a food</span>
+                      )
                     ) : (
                       <span className="tabular text-ink-muted">
+                        {/* What the recipe said, for anyone whose kitchen has cups rather than a
+                            scale. The gram field is the editable one; this is the same amount in a
+                            form you can measure. */}
+                        {measure !== null && `${measure} · `}
                         {food ? `${Math.round(nutrientsFor(food, item.grams).kcal)} kcal` : '…'}
                         {' · '}
                         <button
@@ -622,18 +738,11 @@ function matchDraftTo(draft: Draft, food: Food): Draft {
   }
 }
 
-/** The food with the amount the line stated, for a row that has no grams to show instead. */
-function withAmount(parsed: ParsedIngredient): string {
-  if (parsed.quantity === null) return parsed.name
-  const rounded = Math.round(parsed.quantity * 100) / 100
-  return `${parsed.name} (${rounded}${parsed.unit && parsed.unit !== 'piece' ? ` ${parsed.unit}` : ''})`
-}
-
 /** How much of the list was read without a model, in a sentence rather than a spinner. */
-function readingNote(readLocally: number, neededModel: number): string {
+function readingNote(readLocally: number, unweighed: number): string {
   if (readLocally === 0) return ''
-  if (neededModel === 0) return `Read all ${readLocally} lines directly — no AI involved`
-  return `Read ${readLocally} of ${readLocally + neededModel} lines directly; ${neededModel} needed the AI`
+  if (unweighed === 0) return `Read all ${readLocally} lines directly — no AI involved`
+  return `Read ${readLocally} of ${readLocally + unweighed} lines directly; ${unweighed} state no weight`
 }
 
 const isPresent = (value: string | null): value is string => value !== null

@@ -10,7 +10,8 @@ import { ExternalLink, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { perServing, scale } from '@/lib/nutrition'
 import { cuisineLabel } from '@/lib/cuisine'
-import { grams } from '@/features/shared/format'
+import { grams, ingredientAmount } from '@/features/shared/format'
+import { useUnits } from '@/features/shared/useUnits'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { MealPicker } from '@/features/log/MealPicker'
 import type { Food, MealSlot } from '@/domain/types'
@@ -32,6 +33,7 @@ export function RecipeDetail({
   onEdit: () => void
 }) {
   const toast = useToast()
+  const units = useUnits()
   const recipe = useLiveQuery(() => repo.getRecipe(recipeId), [recipeId], undefined)
   const usage = useLiveQuery(() => repo.recipeUsage(), [], new Map())
 
@@ -185,8 +187,14 @@ export function RecipeDetail({
                   </span>
                 )}
               </span>
+              {/* The amount the recipe stated, for anyone measuring with cups. Grams stay canonical
+                  and are still shown — see `ingredientAmount`. */}
               <span className="tabular shrink-0 text-[13px] text-ink-muted">
-                {Math.round(ingredient.grams)}g
+                {ingredientAmount(
+                  ingredient,
+                  ingredient.foodId ? foods?.get(ingredient.foodId) : null,
+                  units,
+                )}
               </span>
             </li>
           ))}
