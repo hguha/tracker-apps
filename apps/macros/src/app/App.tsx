@@ -14,7 +14,7 @@ import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
 import { AccountScreen } from '@/features/auth/AccountScreen'
-import { OnboardingScreen, ONBOARDING_VERSION } from '@/features/onboarding/OnboardingScreen'
+import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen'
 import { TodayScreen } from '@/features/today/TodayScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { InsightsScreen } from '@/features/insights/InsightsScreen'
@@ -32,7 +32,7 @@ import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogScreen } from '@/features/log/LogScreen'
 import { DayScreen } from '@/features/day/DayScreen'
 import { mealForHour } from '@/lib/meals'
-import type { MealSlot } from '@/domain/types'
+import { ONBOARDING_VERSION, type MealSlot } from '@/domain/types'
 
 type View =
   | { kind: 'tabs' }

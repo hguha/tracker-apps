@@ -11,3 +11,5 @@ android/app/src/main/assets/public/
 android/local.properties
 .gradle/
 **/*.p8
+.vercel
+.env*

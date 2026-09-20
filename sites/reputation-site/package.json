@@ -9,10 +9,12 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "screens": "node tools/capture.mjs"
+    "screens": "node tools/capture.mjs",
+    "og": "node ../../packages/site-kit/tools/og.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.4",
+    "@tracker-engine/site-kit": "*",
     "astro": "^7.2.2",
     "tailwindcss": "^4.2.4"
   },

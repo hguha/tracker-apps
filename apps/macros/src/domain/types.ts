@@ -424,6 +424,18 @@ export type ThemePreset =
 export type ColorSchemePreference = 'system' | 'light' | 'dark'
 
 /**
+ * Bump to re-run setup for everyone. Compared against the profile's `onboardingVersion`, which
+ * syncs — so a reworked flow reaches every device once, and a second device never re-runs a version
+ * the account already finished.
+ *
+ * It lives in `domain` rather than beside the screen because two other places have to agree with it:
+ * the shell that decides whether to show setup, and the demo loader that writes a profile as though
+ * setup were done. The demo used to hardcode `1`, so loading it dropped you back into onboarding —
+ * where finishing it then overwrote the profile the demo had just written.
+ */
+export const ONBOARDING_VERSION = 3
+
+/**
  * Synced, one row per user, exactly like REPutation's. Appearance and units follow the account
  * so a second device looks right immediately; height/birthYear/sex do because the cold-start
  * estimate needs them anywhere; and `onboardingVersion` does so setup doesn't re-run per

@@ -10,11 +10,16 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
-    <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
+    <!-- The default theme's page surface, light and dark (styles/themes.css). These were REPutation's
+         off-white and near-black, so the browser chrome framed a warm sand app in a cool grey. -->
+    <meta name="theme-color" content="#fbecdf" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#130c06" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="MACROcosm" />
+    <!-- Relative hrefs so they resolve under the /app/ base path. -->
     <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="apple-touch-icon" href="icon.svg" />
     <title>MACROcosm</title>
   </head>
   <body>

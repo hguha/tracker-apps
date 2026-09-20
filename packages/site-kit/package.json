@@ -1,0 +1,21 @@
+{
+  "name": "@tracker-engine/site-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The marketing sites' shared chrome: Astro layout, nav, hero, phone mock-ups, feature grid, FAQ, plus the screenshot and OG-card tooling. Brand facts come from each site's own `@site` module.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/*": "./src/components/*",
+    "./layouts/*": "./src/layouts/*",
+    "./styles/base.css": "./styles/base.css",
+    "./tools/*": "./tools/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "astro": "^7.2.2",
+    "typescript": "^6.0.3"
+  }
+}

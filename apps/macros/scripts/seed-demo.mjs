@@ -10,7 +10,9 @@
 
 import { chromium } from 'playwright'
 
-const APP = process.env.APP_URL ?? 'http://localhost:5175/'
+// The dev server serves the app under its production subpath, so this is the same URL shape as
+// macrocosm.fitness/app rather than a second one only the scripts know about.
+const APP = process.env.APP_URL ?? 'http://localhost:5175/app/'
 const EMAIL = process.env.DEMO_EMAIL
 const PASSWORD = process.env.DEMO_PASSWORD
 

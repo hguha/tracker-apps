@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MACROcosm">
+  <!-- Maskable: keep the mark within the inner ~80% safe zone. -->
+  <rect width="512" height="512" rx="112" fill="#d2601a"/>
+  <!--
+    The day's ring around a body at its centre — the app's own calorie ring, and the reason the
+    name ends in "cosm". An arc rather than a plate of food, so the mark still means something at
+    16px, and open at the top because a day is never quite closed.
+  -->
+  <circle
+    cx="256" cy="256" r="118"
+    fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round"
+    stroke-dasharray="637 105"
+    transform="rotate(-64 256 256)"
+  />
+  <circle cx="256" cy="256" r="44" fill="#ffffff"/>
+</svg>

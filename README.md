@@ -21,23 +21,27 @@ see [`docs/architecture.md`](docs/architecture.md) for the monorepo→polyrepo p
 tracker-apps/
 ├── packages/                  npm workspaces — the shared engine
 │   ├── core/            @tracker-engine/core         cn, money
-│   └── local-first/     @tracker-engine/local-first  sync engine + Supabase backend
+│   ├── local-first/     @tracker-engine/local-first  sync engine + Supabase backend
+│   └── site-kit/        @tracker-engine/site-kit     the marketing sites' shared chrome (Astro)
 ├── apps/                      npm workspaces — the products (consume the engine)
 │   ├── reputation/      REPutation — workout tracker (the shipping app)
+│   ├── macros/          MACROcosm — calorie & macro tracker
 │   └── ledger/          Ledger — expense tracker (full app on the engine)
-├── sites/                     marketing sites — self-contained (own node_modules)
-│   └── reputation-site/ Astro static site → reputation.fitness
+├── sites/                     npm workspaces — the marketing sites (consume site-kit)
+│   ├── reputation-site/ Astro static site → reputation.fitness
+│   └── macros-site/     Astro static site → macrocosm.fitness
 ├── docs/                cross-cutting design (architecture, decisions)
 └── README.md            this handbook
 ```
 
-`packages/*` and `apps/*` are npm workspaces (they share the root `node_modules` and consume
-the engine by symlink). Marketing sites under `sites/*` are kept **self-contained** — each has
-its own `node_modules`/lockfile — because their toolchain (Astro, a different TypeScript major)
-is independent and shares nothing with the apps.
+`packages/*`, `apps/*` and `sites/*` are all npm workspaces: one `node_modules`, one lockfile,
+and the engine consumed by symlink. The sites were self-contained until they had something to
+share — `site-kit` holds the layout, nav, hero, phone mock-ups, FAQ and the screenshot/OG
+tooling, and each site provides only its own content module (aliased to `@site`) and palette.
 
-Common tasks from the repo root: `npm run dev` (REPutation) · `npm run dev:ledger` ·
-`npm run dev:site` / `build:site` (marketing site) · `npm test` / `npm run typecheck` (all
+Common tasks from the repo root: `npm run dev` (REPutation) · `npm run dev:macros` ·
+`npm run dev:ledger` · `npm run dev:site` / `build:site` (REPutation's site) ·
+`npm run dev:site:macros` / `build:site:macros` · `npm test` / `npm run typecheck` (all
 workspaces) · `npm run build` / `build:native` / `release:ios` (REPutation).
 
 ## The family (and where each piece lives today)
@@ -50,8 +54,10 @@ polyrepo endgame (see `docs/architecture.md`), not today.
 | engine (`@tracker-engine/*`) | The shared packages (all 6 extracted: core, local-first, auth, platform, ui, ai-coach) | `packages/*` | `tracker-engine` |
 | **reputation** | Workout tracker (REPutation) — the shipping app | `apps/reputation/` | `reputation` |
 | **ledger** | Expense tracker — full app (overview/log/history/insights/settings + finance coach), on the engine | `apps/ledger/` | `ledger` |
+| **macros** | MACROcosm — calorie & macro tracker, on the engine | `apps/macros/` | `macros` |
 | reputation-site | REPutation's marketing site (Astro → reputation.fitness) | `sites/reputation-site/` | `reputation-site` |
-| ledger-site, calorie, … | future | — | — |
+| macros-site | MACROcosm's marketing site (Astro → macrocosm.fitness) | `sites/macros-site/` | `macros-site` |
+| ledger-site, … | future | — | — |
 
 Each app owns only what's genuinely its own — domain model, database schema, screens, native
 shell (Capacitor + iOS/Android + Fastlane), and Vercel/PWA deploy. Everything mechanical comes
@@ -71,6 +77,7 @@ packages. Each depends only *downward*, and an app grabs a specific one — e.g.
 | `@tracker-engine/platform` | Capacitor wrappers: haptics, files, notify, status bar, native shell | **done** |
 | `@tracker-engine/ui` | Token-driven kit: Button, Card, ProgressRing, BottomSheet, PillSelect, Toast, SwipeableRow, DragList (+ base.css) | **done** |
 | `@tracker-engine/ai-coach` | Gemini tool-calling loop over a Supabase edge fn (`runToolLoop`) + wire types; app supplies tools/prompts/mock/domain types | **done** |
+| `@tracker-engine/site-kit` | Not part of the runtime engine: the marketing sites' Astro layout, sections and screenshot/OG tooling. Brand facts come from each site's `@site` module | **done** |
 
 > Note on the scope: `@tracker-engine` is the *namespace*, not a package — you always import a
 > specific one (`@tracker-engine/core`, `@tracker-engine/local-first`, …). Keeping them separate
@@ -174,7 +181,7 @@ Three layers, all runnable from the root:
   shows the recurring-subscription insight, and gets an answer from the offline coach).
 
 `npm run verify` runs typecheck + lint + all unit tests + every build (reputation web/native,
-ledger, site). `npm run test:e2e` runs Playwright. **Editing a shared package → `npm run verify`
+macros web/native, both marketing sites). `npm run test:e2e` runs Playwright. **Editing a shared package → `npm run verify`
 rebuilds and retests both apps, so a change that would break the other app fails locally.** That's
 the guarantee that keeps reputation and ledger from stepping on each other.
 

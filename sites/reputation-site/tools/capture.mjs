@@ -5,34 +5,33 @@
  * it into a real browser's IndexedDB, then drive the app and shoot each screen.
  * Nothing is mocked or mocked up — every image is the running product.
  *
- *   node tools/capture.mjs [--app ../workout-tracker] [--headed] [--only home,coach]
+ *   npm run screens -- [--app ../../apps/reputation] [--headed] [--only home,coach]
  */
 
-import { chromium } from 'playwright'
-import { spawn, execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  newPhone,
+  openBrowser,
+  parseArgs,
+  settle,
+  shooter,
+  startApp,
+} from '@tracker-engine/site-kit/tools/capture-kit.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SITE = resolve(HERE, '..')
 
-const args = process.argv.slice(2)
-const flag = (name, fallback) => {
-  const at = args.indexOf(`--${name}`)
-  return at === -1 ? fallback : args[at + 1]
-}
+const { app, only: ONLY, headed: HEADED } = parseArgs()
 
-const APP = resolve(SITE, flag('app', process.env.FITNOTE_APP_DIR ?? '../workout-tracker'))
+const APP = resolve(SITE, app ?? process.env.FITNOTE_APP_DIR ?? '../../apps/reputation')
 const OUT = resolve(SITE, 'src/assets/screens')
-const HEADED = args.includes('--headed')
-const ONLY = flag('only', null)?.split(',')
 const PORT = 5178
-const BASE = `http://localhost:${PORT}/workout-tracker/`
-
-// iPhone 15 Pro logical size; ×3 so the images stay sharp on retina displays.
-const VIEWPORT = { width: 393, height: 852 }
-const SCALE = 3
+// The app is served under its production subpath, so a capture exercises the same asset and
+// auth-redirect resolution the deploy does.
+const BASE = `http://localhost:${PORT}/app/`
 
 const DUMP = '/tmp/fitnote-demo.json'
 const SEED_TEST = resolve(APP, 'test/__demo-seed.test.ts')
@@ -40,11 +39,10 @@ const SEED_TEST = resolve(APP, 'test/__demo-seed.test.ts')
 /**
  * Which of the app's seven themes each screen is shot in.
  *
- * Deliberately mixed: the app ships seven presets and a gallery of one accent
- * would undersell that. The hero and the AI section stay on `default` so the
- * screenshots agree with the site's own blue; everything else gets a preset that
- * suits it — `mono` for the library because it is a dense list, `settings` on
- * default because it is where the swatches themselves appear.
+ * Deliberately mixed: the app ships seven presets and a gallery of one accent would undersell that.
+ * The hero and the AI section stay on `default` so the screenshots agree with the site's own blue;
+ * everything else gets a preset that suits it — `mono` for the library because it is a dense list,
+ * `settings` on default because it is where the swatches themselves appear.
  */
 const THEMES = {
   workout: 'default',
@@ -84,26 +82,6 @@ function generateDemoData() {
     rmSync(SEED_TEST, { force: true })
   }
   return readFileSync(DUMP, 'utf8')
-}
-
-function startDevServer() {
-  console.log('· starting the app dev server')
-  const child = spawn('npx', ['vite', '--mode', 'capture', '--port', String(PORT), '--strictPort'], {
-    cwd: APP,
-    env: { ...process.env, BROWSER: 'none' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  child.stderr.on('data', (b) => process.stderr.write(b))
-  return new Promise((res, rej) => {
-    const timer = setTimeout(() => rej(new Error('dev server did not start')), 60_000)
-    child.stdout.on('data', (buffer) => {
-      if (String(buffer).includes('ready in')) {
-        clearTimeout(timer)
-        res(child)
-      }
-    })
-    child.on('exit', (code) => rej(new Error(`dev server exited (${code})`)))
-  })
 }
 
 /**
@@ -163,14 +141,10 @@ async function main() {
   const onlyOnboarding = ONLY?.every((name) => name === 'onboarding') ?? false
   const json = onlyOnboarding ? '{}' : generateDemoData()
 
-  // Every screen is local, so run the dev server with the backend disabled: an
-  // unconfigured backend hides the coach's "sign in" prompt and any sync UI, and
-  // keeps the offline coach silent (no "live unavailable" toast). `.env.capture.local`
-  // wins over `.env`; removed in the finally below.
-  const captureEnv = resolve(APP, '.env.capture.local')
-  writeFileSync(captureEnv, 'VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n')
-  const server = await startDevServer()
-  const browser = await chromium.launch({ headless: !HEADED })
+  // Every screen here is local, and `startApp` runs the app with no backend configured — which
+  // hides the coach's "sign in" prompt and any sync UI, and keeps the offline coach silent.
+  const server = await startApp({ dir: APP, port: PORT })
+  const { browser, stop: closeBrowser } = await openBrowser({ headed: HEADED })
   const themes = [...new Set(Object.values(THEMES))]
 
   try {
@@ -183,16 +157,8 @@ async function main() {
         if (screens.length === 0) continue
         console.log(`· ${theme} / ${scheme} — ${screens.length} screen(s)`)
 
-        const context = await browser.newContext({
-          viewport: VIEWPORT,
-          deviceScaleFactor: SCALE,
-          isMobile: true,
-          hasTouch: true,
-          colorScheme: scheme,
-          reducedMotion: 'reduce',
-        })
-        const page = await context.newPage()
-        page.on('console', (m) => m.type() === 'error' && console.log('   !', m.text()))
+        const { context, page } = await newPhone(browser, scheme)
+        const shot = shooter(OUT, scheme)
 
         await page.goto(BASE, { waitUntil: 'networkidle' })
         // A device-only session, the same path a new user takes.
@@ -206,8 +172,7 @@ async function main() {
             .getByRole('heading', { name: /Welcome to REPutation/i })
             .waitFor({ timeout: 15_000 })
           await page.waitForTimeout(700)
-          await page.screenshot({ path: `${OUT}/onboarding-${scheme}.png` })
-          console.log(`   onboarding-${scheme}.png`)
+          await shot(page, 'onboarding')
           if (screens.length === 1) {
             await context.close()
             continue
@@ -228,19 +193,16 @@ async function main() {
 
         await page.reload({ waitUntil: 'networkidle' })
         await page.waitForTimeout(2500)
-        await shoot(page, scheme, new Set(screens))
+        await shoot(page, shot, new Set(screens))
         await context.close()
       }
     }
     console.log(`\n✓ screenshots written to ${OUT}`)
   } finally {
-    await browser.close()
-    server.kill()
-    rmSync(captureEnv, { force: true })
+    await closeBrowser()
+    server.stop()
   }
 }
-
-const settle = (page, ms = 900) => page.waitForTimeout(ms)
 
 /**
  * Runs only the navigation needed for the screens this pass wants.
@@ -248,11 +210,8 @@ const settle = (page, ms = 900) => page.waitForTimeout(ms)
  * Each step declares what it produces, so a themed pass that only needs `library`
  * does not sit through three chart renders to get there.
  */
-async function shoot(page, scheme, want) {
-  const shot = async (name) => {
-    await page.screenshot({ path: `${OUT}/${name}-${scheme}.png` })
-    console.log(`   ${name}-${scheme}.png`)
-  }
+async function shoot(page, take, want) {
+  const shot = (name) => take(page, name)
   const tab = async (name) => {
     await page.getByRole('button', { name, exact: true }).first().click()
     await settle(page)

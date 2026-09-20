@@ -31,14 +31,16 @@ export default defineConfig({
     {
       name: 'macros',
       testMatch: /macros\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/' },
+      // Served under /app/, the same subpath as production (vite.config.ts) — so the dev server
+      // and the deploy resolve assets, the auth redirect and the service-worker scope identically.
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/app/' },
     },
     {
       // Live project. Needs `npm run dev:macros` (real env) already running, and is opt-in
       // only: it spends third-party quota and depends on USDA being up.
       name: 'macros-live',
       testMatch: /macros-live\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/' },
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5175/app/' },
     },
   ],
 
@@ -65,7 +67,7 @@ export default defineConfig({
       // Empty Supabase env so the suite runs against the device-only provider and the
       // offline coach — deterministic, and it can never touch a live project.
       command: 'VITE_SUPABASE_URL= VITE_SUPABASE_ANON_KEY= npm run dev --workspace macros',
-      url: 'http://localhost:5175/',
+      url: 'http://localhost:5175/app/',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

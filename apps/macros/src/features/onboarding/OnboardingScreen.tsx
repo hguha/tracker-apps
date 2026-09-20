@@ -5,14 +5,7 @@ import { Button } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
 import { ActivityPicker } from '@/features/shared/ActivityPicker'
-import type { ActivityLevel, Goal, UnitSystem } from '@/domain/types'
-
-/**
- * Bump to re-run setup for everyone. It's compared against the profile's
- * `onboardingVersion`, which syncs, so a reworked flow reaches every device once and a second
- * device never re-runs a version the account already finished.
- */
-export const ONBOARDING_VERSION = 3
+import { ONBOARDING_VERSION, type ActivityLevel, type Goal, type UnitSystem } from '@/domain/types'
 
 const GOALS: { id: Goal; label: string; blurb: string; rate: number }[] = [
   { id: 'lose', label: 'Lose fat', blurb: 'About 0.5% of bodyweight a week.', rate: -0.5 },

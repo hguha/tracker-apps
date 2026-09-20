@@ -5,7 +5,17 @@ import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 
-const basePath = process.env.BASE_PATH ?? '/'
+/**
+ * The web app is served at `macrocosm.fitness/app` — the marketing site (sites/macros-site)
+ * rewrites `/app/*` onto this project's Vercel deployment. Asset URLs have to be relative to
+ * that subpath: with the default `/`, the browser asks for `macrocosm.fitness/assets/…`, which
+ * belongs to the site and 404s. The auth redirect (`@tracker-engine/auth` reads BASE_URL) and the
+ * service-worker scope follow from it, so both stay correct without a second setting.
+ *
+ * The native bundle is served from the app's own root:
+ *   BASE_PATH=/ npm run build:native
+ */
+const basePath = process.env.BASE_PATH ?? '/app/'
 
 // `<version>+<git-sha>`, so a client_errors row points at a commit.
 function appVersion(): string {

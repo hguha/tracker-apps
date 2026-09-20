@@ -1,0 +1,26 @@
+---
+import StoreBadges from './StoreBadges.astro'
+import Logo from './Logo.astro'
+import { site } from '@site'
+---
+
+<section class="relative isolate overflow-hidden py-16 sm:py-24">
+  <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+    <div
+      class="absolute bottom-[-16rem] left-1/2 h-[34rem] w-[62rem] -translate-x-1/2 rounded-full opacity-40 blur-[110px]"
+      style={`background: radial-gradient(closest-side, ${site.bloom}, transparent 72%)`}
+    >
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-3xl px-5 text-center sm:px-8" data-reveal>
+    <Logo size={56} class="mx-auto rounded-2xl shadow-2xl" />
+    <h2 class="headline mt-8">{site.cta.title}</h2>
+    <p class="lede mx-auto mt-5 max-w-xl">{site.cta.body}</p>
+
+    <div class="mt-10 flex flex-col items-center gap-5">
+      <StoreBadges class="justify-center" />
+      <a href={site.webAppUrl} class="btn-ghost">Open the web app</a>
+    </div>
+  </div>
+</section>

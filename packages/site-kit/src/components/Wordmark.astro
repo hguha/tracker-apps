@@ -1,0 +1,14 @@
+---
+/**
+ * The product name, with its first unit in the brand accent.
+ *
+ * Both names are puns that only land if that unit reads as its own word — REP·utation, MACRO·cosm —
+ * so it is coloured rather than left as plain type. `site.name` stays a plain string everywhere
+ * text-only markup is required (title, OG, JSON-LD, alt text); this is for visible type.
+ */
+import { site } from '@site'
+---
+
+<span class="whitespace-nowrap"
+  ><span class="text-accent-bright">{site.wordmark.lead}</span>{site.wordmark.rest}</span
+>

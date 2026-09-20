@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": []
+  },
+  /**
+   * The `.astro` components are checked where they are used — `astro check` inside a site, which
+   * is the only place the `@site` module they import actually resolves. Here it is the plain
+   * TypeScript that gets checked.
+   */
+  "include": ["src/**/*.ts"]
+}

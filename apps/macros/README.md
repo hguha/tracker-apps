@@ -175,6 +175,38 @@ npm run lint --workspace macros     # layering + calc-consistency
 storing kg canonically and COINcidence by storing minor units — a day's total has to equal
 the sum of its rows. `kcal` is an integer; sub-calorie precision is noise.
 
+## The web deploy, and the PWA
+
+Served at **`macrocosm.fitness/app`** from its own Vercel project (`macros-app`, root directory
+`apps/macros`), which the marketing site (`sites/macros-site`) rewrites onto:
+
+```
+  macrocosm.fitness/app/*  ──rewrite, prefix preserved──▶  macrocosm-app.vercel.app/app/*
+```
+
+Two projects, independent deploys: a build failure here can never take the site down, and the
+`*.vercel.app` alias is a stable one we assigned rather than the generated hostname — renaming the
+project would silently break a rewrite that pointed at the latter.
+
+Three things follow from the subpath and are easy to get wrong:
+
+- **`base: '/app/'`** in `vite.config.ts`. With the default `/`, the browser asks for
+  `macrocosm.fitness/assets/…`, which belongs to the site and 404s. `BASE_PATH=/` overrides it for
+  the native bundle, where the app *is* at the root.
+- **The auth redirect follows `BASE_URL`** (`@tracker-engine/auth`), so a magic link comes back to
+  `https://macrocosm.fitness/app/`. That URL has to be in the Supabase project's
+  **Authentication → URL Configuration → Redirect URLs**, alongside `macros://auth-callback`.
+- **The service worker's scope is `/app/`** (`platform/serviceWorker.ts`). The origin is shared with
+  the marketing site, so a root-scope worker would answer the site's requests with the app's shell.
+
+`public/sw.js` is network-first for the shell and cache-first for Vite's hashed assets, and
+registration also calls `navigator.storage.persist()` — which matters more than the caching does,
+because without it iOS can evict the IndexedDB store that holds every logged day. Registration is
+gated on `import.meta.env.PROD`, so `vite dev` never installs one.
+
+The dev server and the E2E suite both run under `/app/` too (`playwright.config.ts`), so nothing
+about the path resolution is only exercised in production.
+
 ## Native shell
 
 MACROcosm has the same Capacitor setup as REPutation — `capacitor.config.ts`, a committed

@@ -1,33 +1,14 @@
 /**
- * Resolves a screenshot name to the image Astro should optimise.
+ * The screenshots this site ships, by name.
  *
- * Captures land in `src/assets/screens` as `<name>-<scheme>.png`. Globbing them
- * eagerly means adding a screen to the gallery is a one-line content change with
- * no import to remember.
+ * The glob has to live in the site — Vite only accepts a literal path it can analyse — so the site
+ * globs and the kit does the lookup. Adding a screen to the gallery stays a one-line content change
+ * with no import to remember, and a name with no file throws at build time rather than shipping an
+ * empty phone.
  */
 
-import type { ImageMetadata } from 'astro'
+import { screenIndex } from '@tracker-engine/site-kit'
 
-const files = import.meta.glob<{ default: ImageMetadata }>(
-  '../assets/screens/*.png',
-  { eager: true },
+export const { screen, hasScreen } = screenIndex(
+  import.meta.glob('../assets/screens/*.png', { eager: true }),
 )
-
-const byName = new Map<string, ImageMetadata>(
-  Object.entries(files).map(([path, module]) => [
-    path.replace(/^.*\/(.+)\.png$/, '$1'),
-    module.default,
-  ]),
-)
-
-export type Scheme = 'light' | 'dark'
-
-export function screen(name: string, scheme: Scheme): ImageMetadata {
-  const image = byName.get(`${name}-${scheme}`)
-  // Loud on purpose: a typo would otherwise ship as a silently missing phone.
-  if (!image) throw new Error(`No screenshot "${name}-${scheme}" in src/assets/screens`)
-  return image
-}
-
-export const hasScreen = (name: string, scheme: Scheme): boolean =>
-  byName.has(`${name}-${scheme}`)

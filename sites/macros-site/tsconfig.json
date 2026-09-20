@@ -1,0 +1,14 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  /** `tools/` is a plain `.mjs` capture script, with no types to check. */
+  "include": [".astro/types.d.ts", "src/**/*"],
+  "exclude": ["dist", "tools"],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      // What the shared components read this site's facts from; mirrors the Vite alias.
+      "@site": ["src/site.ts"]
+    }
+  }
+}

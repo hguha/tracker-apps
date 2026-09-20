@@ -1,14 +1,17 @@
 # REPutation — product site
 
-The marketing site for [REPutation](https://hirshguha.com/workout-tracker), the
-local-first workout tracker. Astro + Tailwind, static output, no client framework.
+The marketing site for [REPutation](https://reputation.fitness), the local-first
+workout tracker. Astro + Tailwind, static output, no client framework. The
+layout, nav, hero, phone mock-ups and FAQ come from `@tracker-engine/site-kit`,
+shared with MACROcosm's site.
 
 ```bash
-npm install
-npm run dev      # http://localhost:4321
-npm run build    # → dist/
-npm run check    # astro check (types + templates)
+npm run dev --workspace reputation-site      # http://localhost:4321
+npm run build --workspace reputation-site    # → dist/
+npm run check --workspace reputation-site    # astro check (types + templates)
 ```
+
+It is a workspace of the monorepo, so `npm install` at the repo root installs it.
 
 ## Editing content
 
@@ -17,8 +20,11 @@ component:
 
 | File | What's in it |
 | --- | --- |
-| `data/site.ts` | Name, tagline, store links, web-app and privacy URLs, hero stats |
-| `data/features.ts` | The three spotlight sections, the feature-card grid, the gallery order, the FAQ |
+| `data/site.ts` | Name, tagline, store links, web-app and privacy URLs, nav, hero pill, CTA, hero stats |
+| `data/features.ts` | The three spotlight sections, the coach transcript, the feature-card grid, Leagues, the gallery order, the FAQ |
+
+`src/site.ts` is what the kit's components import as `@site` (aliased in
+`astro.config.mjs`); it only re-exports the above.
 
 **Store links.** `site.stores.appStore` and `.playStore` are `null` until the
 listings are live, which renders each badge as a greyed-out "Coming soon to the
@@ -31,8 +37,8 @@ Every image is a real capture of the shipping app. Nothing is a mockup, and
 there are no hand-drawn recreations to drift out of date.
 
 ```bash
-npm run screens              # regenerate all of them
-npm run screens -- --headed  # watch it happen
+npm run screens --workspace reputation-site                 # regenerate all of them
+npm run screens --workspace reputation-site -- --headed     # watch it happen
 ```
 
 The pipeline in `tools/` has three stages:
@@ -51,8 +57,10 @@ The pipeline in `tools/` has three stages:
 3. Captures land in `src/assets/screens/` so Astro's image pipeline emits WebP at
    the sizes the page renders (~200 kB PNG in, ~10–25 kB out).
 
-It expects the app repo beside this one. Override with `--app <path>` or
-`FITNOTE_APP_DIR`.
+The app is `apps/reputation` in this monorepo; override with `--app <path>` or
+`FITNOTE_APP_DIR`. The parts that aren't REPutation-specific — starting the app
+with its backend disabled, sizing a phone, writing the file — live in
+`packages/site-kit/tools/capture-kit.mjs`.
 
 Adding a screen to the gallery is one line in `data/features.ts`; `lib/screens.ts`
 globs the directory, so there is no import to remember. A name with no matching
@@ -64,14 +72,16 @@ file throws at build time rather than shipping an empty phone.
 type and screenshot:
 
 ```bash
-npm run build && node tools/og.mjs
+npm run build --workspace reputation-site && npm run og --workspace reputation-site
 ```
 
 Regenerate and commit it after a redesign.
 
 ## Deploying
 
-Static output — point any host at `dist/`. On Vercel the defaults are correct
-(build `npm run build`, output `dist`). Set the production domain in
-`astro.config.mjs` (`site`) so canonical URLs and the Open Graph image resolve
-absolutely.
+Its own Vercel project (`reputation-site`, root directory `sites/reputation-site`).
+`vercel.json` rewrites `/app` and `/app/*` onto the **app's** deployment, so
+`reputation.fitness/app` is the PWA and a build failure in one project can never
+take down the other. The app's own `vite.config.ts` builds with `base: '/app/'`
+for exactly that reason. The production domain is set in `astro.config.mjs`
+(`site`), which is what makes canonical URLs and the Open Graph image absolute.

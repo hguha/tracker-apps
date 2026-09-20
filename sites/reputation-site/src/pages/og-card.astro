@@ -1,17 +1,16 @@
 ---
 /**
  * The source of `public/og.png`, rendered at exactly 1200×630 and captured by
- * `tools/og.mjs`.
+ * `npm run og`.
  *
- * A page rather than a hand-built image so the card picks up the real
- * screenshot, the real mark, and the real type — regenerating it after a redesign
- * is one command.
+ * A page rather than a hand-built image so the card picks up the real screenshot, the real mark, and
+ * the real type — regenerating it after a redesign is one command.
  */
-import '@/styles/global.css'
-import Logo from '@/components/Logo.astro'
-import Wordmark from '@/components/Wordmark.astro'
-import Phone from '@/components/Phone.astro'
+import Logo from '@tracker-engine/site-kit/components/Logo.astro'
+import Wordmark from '@tracker-engine/site-kit/components/Wordmark.astro'
+import Phone from '@tracker-engine/site-kit/components/Phone.astro'
 import { site } from '@/data/site'
+import '@/styles/global.css'
 ---
 
 <!doctype html>
@@ -45,14 +44,13 @@ import { site } from '@/data/site'
           <Logo size={44} class="rounded-xl" />
           <span class="text-[30px] font-semibold tracking-tight"><Wordmark /></span>
         </div>
-        <h1
-          class="mt-8 text-[68px] font-semibold leading-[0.98] tracking-[-0.045em] text-balance"
-        >
+        <h1 class="mt-8 text-[68px] font-semibold leading-[0.98] tracking-[-0.045em] text-balance">
           Log it in a tap.<br />
           Build your <span class="whitespace-nowrap"
             ><span class="font-bold text-accent-bright">REP</span><span
               class="bg-gradient-to-r from-accent-bright via-[#9b7bef] to-[#e87ba4] bg-clip-text text-transparent"
-            >utation</span></span
+              >utation</span
+            ></span
           >.
         </h1>
         <p class="mt-7 max-w-lg text-[22px] leading-snug text-ink-soft">

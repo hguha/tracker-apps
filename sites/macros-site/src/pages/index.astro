@@ -1,0 +1,41 @@
+---
+import Base from '@tracker-engine/site-kit/layouts/Base.astro'
+import Hero from '@tracker-engine/site-kit/components/Hero.astro'
+import Stats from '@tracker-engine/site-kit/components/Stats.astro'
+import Spotlight from '@tracker-engine/site-kit/components/Spotlight.astro'
+import Conversation from '@tracker-engine/site-kit/components/Conversation.astro'
+import FeatureGrid from '@tracker-engine/site-kit/components/FeatureGrid.astro'
+import Gallery from '@tracker-engine/site-kit/components/Gallery.astro'
+import Faq from '@tracker-engine/site-kit/components/Faq.astro'
+import Cta from '@tracker-engine/site-kit/components/Cta.astro'
+import { spotlights } from '@/data/features'
+import '@/styles/global.css'
+---
+
+<Base>
+  <Hero>
+    <Fragment slot="headline">
+      Everything you eat,<br />
+      in one <span class="whitespace-nowrap"
+        ><span
+          class="font-bold text-accent-bright"
+          style="text-shadow: 0 0 30px rgba(242,128,63,0.55)">MACRO</span
+        ><span
+          class="shimmer bg-gradient-to-r from-accent-bright via-[#f0b52a] to-[#e35670] bg-clip-text text-transparent"
+          style="filter: drop-shadow(0 0 26px rgba(240,181,42,0.35))">cosm</span
+        ></span
+      >.
+    </Fragment>
+  </Hero>
+  <!-- The marquee sits directly under the hero as the one full-width showcase, then the numbers,
+       then the three pillars: getting it in, what the target means, and cooking. -->
+  <Gallery />
+  <Stats />
+  <Spotlight spotlight={spotlights[0]} />
+  <Spotlight spotlight={spotlights[1]} flip />
+  <Conversation />
+  <Spotlight spotlight={spotlights[2]} />
+  <FeatureGrid />
+  <Faq accent="var(--macro-protein)" />
+  <Cta />
+</Base>

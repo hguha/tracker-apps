@@ -1,0 +1,66 @@
+---
+/**
+ * The source of `public/og.png`, rendered at exactly 1200×630 and captured by `npm run og`.
+ *
+ * A page rather than a hand-built image, so the card picks up the real screenshot, the real mark and
+ * the real type — regenerating it after a redesign is one command.
+ */
+import Logo from '@tracker-engine/site-kit/components/Logo.astro'
+import Wordmark from '@tracker-engine/site-kit/components/Wordmark.astro'
+import Phone from '@tracker-engine/site-kit/components/Phone.astro'
+import { site } from '@/data/site'
+import '@/styles/global.css'
+---
+
+<!doctype html>
+<html lang="en" data-shots="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>{site.name} — social card</title>
+    <meta name="robots" content="noindex" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+  </head>
+  <body>
+    <div
+      id="og-card"
+      class="relative flex h-[630px] w-[1200px] items-center gap-16 overflow-hidden bg-page px-20"
+    >
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0">
+        <div
+          class="absolute -left-40 -top-40 size-[46rem] rounded-full opacity-45 blur-[110px]"
+          style="background: radial-gradient(closest-side, #d2601a, transparent 72%)"
+        >
+        </div>
+        <div
+          class="absolute inset-0 opacity-[0.14]"
+          style="background-image: linear-gradient(to right, #2c3040 1px, transparent 1px), linear-gradient(to bottom, #2c3040 1px, transparent 1px); background-size: 68px 68px"
+        >
+        </div>
+      </div>
+
+      <div class="relative flex-1">
+        <div class="flex items-center gap-3">
+          <Logo size={44} class="rounded-xl" />
+          <span class="text-[30px] font-semibold tracking-tight"><Wordmark /></span>
+        </div>
+        <h1 class="mt-8 text-[68px] font-semibold leading-[0.98] tracking-[-0.045em] text-balance">
+          Everything you eat,<br />
+          in one <span class="whitespace-nowrap"
+            ><span class="font-bold text-accent-bright">MACRO</span><span
+              class="bg-gradient-to-r from-accent-bright via-[#f0b52a] to-[#e35670] bg-clip-text text-transparent"
+              >cosm</span
+            ></span
+          >.
+        </h1>
+        <p class="mt-7 max-w-lg text-[22px] leading-snug text-ink-soft">
+          A fast, local-first calorie and macro tracker, with a target measured from your own weight
+          trend. Free, and offline by default.
+        </p>
+      </div>
+
+      <div class="relative shrink-0 translate-y-16 rotate-[-5deg]">
+        <Phone name="today" width={300} loading="eager" />
+      </div>
+    </div>
+  </body>
+</html>

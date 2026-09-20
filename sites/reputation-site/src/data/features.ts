@@ -5,21 +5,12 @@
  * grid underneath that covers everything else. Accents come from the app's own
  * region palette, so a card's colour means the same thing here as it does in a
  * chart.
+ *
+ * The shapes are the shared ones (`@tracker-engine/site-kit`), because the sections that render
+ * them are shared too.
  */
 
-export interface Spotlight {
-  id: string
-  eyebrow: string
-  title: string
-  body: string
-  /** The featured screen — sits at the front of the stack. */
-  screen: string
-  /** Phones offset behind the featured one, for a fuller three-up fan. */
-  secondScreen?: string
-  thirdScreen?: string
-  points: { title: string; body: string }[]
-  accent: string
-}
+import type { Card, Conversation, Faq, GalleryItem, Spotlight } from '@tracker-engine/site-kit'
 
 export const spotlights: Spotlight[] = [
   {
@@ -105,16 +96,13 @@ export const spotlights: Spotlight[] = [
  * beside the screenshots so the section demonstrates the conversation rather than
  * just claiming it.
  */
-export const coach = {
+export const conversation = {
   eyebrow: 'AI coach',
   title: 'A coach you can actually talk to.',
   body: 'Draft a plan, then refine it right in the chat — fewer days, heavier, more arms. It re-plans from your real training, and every version saves as editable templates.',
   accent: 'var(--region-triceps)',
-  shots: [
-    { screen: 'coach-plan', label: 'Programs, drafted as editable templates' },
-    { screen: 'coach', label: 'Spots what you’re neglecting' },
-    { screen: 'coach-ask', label: 'Answers from your history' },
-  ],
+  /** The phones beside the transcript: a drafted program, and an answer read out of the log. */
+  screens: ['coach-plan', 'coach-ask'],
   /**
    * Scripted exchanges — user vs coach — that rotate in the section, each showing
    * a different capability: refining a template, in-workout accessory calls, and
@@ -154,14 +142,7 @@ export const coach = {
       body: 'No name, notes, or dates leave your device. Inspect the summary before it sends.',
     },
   ],
-} as const
-
-export interface Card {
-  title: string
-  body: string
-  icon: string
-  accent: string
-}
+} as const satisfies Conversation
 
 // Six, so the grid tiles cleanly at two columns (phone) and three (desktop) with
 // no ragged spans.
@@ -243,7 +224,7 @@ export const leagues = {
 } as const
 
 /** The self-scrolling gallery under the feature grid. */
-export const gallery = [
+export const gallery: readonly GalleryItem[] = [
   { screen: 'onboarding', label: 'Welcome' },
   { screen: 'workout', label: 'Active workout' },
   { screen: 'exercise-detail', label: 'Exercise detail' },
@@ -257,7 +238,7 @@ export const gallery = [
   { screen: 'settings', label: 'Themes & settings' },
 ] as const
 
-export const faqs = [
+export const faqs: readonly Faq[] = [
   {
     q: 'Is it really free?',
     a: 'Yes — no subscription, no paywalled charts, no ads, no “pro” tier. And no account needed to start.',

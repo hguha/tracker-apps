@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+@import '@tracker-engine/site-kit/styles/base.css';
+
+/* The kit lives outside this project's tree (node_modules isn't scanned), so point Tailwind at its
+   source or the classes its components use won't be generated. */
+@source '../../../../packages/site-kit/src';
+
+/**
+ * MACROcosm's palette.
+ *
+ * The macro colours are the app's own, copied from its `tokens.css` — the dark-scheme set, because
+ * this page is dark. A card tinted "carbs blue" is therefore the same blue the app's bars use, which
+ * is the whole reason they are not re-picked here. In the app those five hues are deliberately *not*
+ * themeable: a colour means a nutrient, not a mood.
+ */
+@theme {
+  --color-accent: #e0702f;
+  --color-accent-bright: #f2803f;
+
+  --color-macro-protein: #e35670;
+  --color-macro-carbs: #4a97ec;
+  --color-macro-fat: #f0b52a;
+  --color-macro-fiber: #22c07d;
+  --color-macro-alcohol: #ad76e6;
+}
+
+/* The same palette as raw variables, so a content file can name a colour without the build needing
+   to know about it. */
+:root {
+  --macro-protein: #e35670;
+  --macro-carbs: #4a97ec;
+  --macro-fat: #f0b52a;
+  --macro-fiber: #22c07d;
+  --macro-alcohol: #ad76e6;
+}

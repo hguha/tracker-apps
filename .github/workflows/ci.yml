@@ -21,7 +21,7 @@ jobs:
       - run: npm ci
       - name: Typecheck (all workspaces)
         run: npm run typecheck
-      - name: Architecture + calc-consistency lint (reputation)
+      - name: Architecture + calc-consistency lint (every app)
         run: npm run lint
       - name: Tests (all workspaces)
         run: npm test
@@ -29,3 +29,11 @@ jobs:
         run: npm run build
       - name: Build REPutation (native bundle)
         run: npm run build:native
+      - name: Build MACROcosm (web)
+        run: npm run build:macros
+      - name: Build MACROcosm (native bundle)
+        run: npm run build:native:macros
+      # The sites build here because they import from packages/site-kit: a change to the kit can
+      # break a site without touching either site's files, which is exactly the failure CI is for.
+      - name: Build the marketing sites
+        run: npm run build:site && npm run build:site:macros

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MACROcosm — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; background: #fbecdf; color: #0c0b0a;
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 .5rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 .4rem; }
+  a { color: #b34c19; }
+  code { background: rgba(0,0,0,.06); padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  ul { padding-left: 1.25rem; }
+  li { margin: .3rem 0; }
+  em { color: inherit; opacity: .75; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #130c06; color: #fbfafa; }
+    code { background: rgba(255,255,255,.1); }
+    a { color: #f2803f; }
+  }
+</style>
+</head>
+<body><main>
+<h1>Privacy Policy</h1>
+<p><em>Last updated: 2026-09-20</em></p>
+<p>MACROcosm is a calorie and macro tracker that keeps your food diary on your device by default. This policy says what leaves the device, when, and what you can do about it.</p>
+
+<h2>What the app collects</h2>
+<p>You choose whether to sign in, and that choice decides almost everything below.</p>
+
+<h3>Device-only mode (no sign-in)</h3>
+<p>If you never sign in, <strong>your diary never leaves the device</strong>. Every entry, weigh-in, recipe, saved meal and preference lives in this browser's IndexedDB. There is no account, no sync, and no analytics.</p>
+<p>Searching for a food is the exception, and it is the one thing worth knowing: see <em>Food databases</em> below.</p>
+<p>If you clear this site's data, uninstall the browser, or switch devices, that history is gone. Settings → Data &amp; sync → Export writes a JSON backup you can keep.</p>
+
+<h3>Signed-in mode (email and password)</h3>
+<p>Signing in stores the following on our server — Supabase Postgres, with Row-Level Security scoped to your user id:</p>
+<ul>
+  <li><strong>Account:</strong> your email address and an internal user id. Passwords are handled by Supabase Auth and are never visible to this app.</li>
+  <li><strong>Profile:</strong> height, birth year, sex if you gave one, activity level, units, appearance, reminder times, water target, any free-text diet notes.</li>
+  <li><strong>Diary:</strong> every logged food, quantity, meal, time, and whether you ate it at home, out, or as takeaway. Quick-added calories. Water.</li>
+  <li><strong>Body:</strong> weigh-ins, your goal and its rate, weekly check-ins.</li>
+  <li><strong>Yours to keep:</strong> recipes (including the method text you imported or wrote), saved meals, foods you created.</li>
+  <li><strong>Sync bookkeeping:</strong> timestamps used to reconcile writes across devices.</li>
+</ul>
+<p>Row-Level Security is enforced per table at the database. Another signed-in user cannot read or write your rows.</p>
+
+<h2>What leaves the device, and where it goes</h2>
+
+<h3>Food databases</h3>
+<p>When you search for a food that isn't already on the device, <strong>the words you typed</strong> are sent to our own endpoint, which queries the U.S. Department of Agriculture's FoodData Central on your behalf (the API key stays server-side). Scanning a barcode sends <strong>the barcode number</strong> the same way, and — if that misses — to Open Food Facts, directly from your device. Nothing about you is attached to either request beyond what any web request carries, and results are cached locally so the same food is never looked up twice.</p>
+
+<h3>The AI coach, described meals, and photos</h3>
+<p>These are optional, and each one sends something specific to Google's Gemini API through our backend:</p>
+<ul>
+  <li><strong>Coach:</strong> your message, plus the figures the coach asks for by tool call — days, totals, weights, targets. The coach screen shows what it requested.</li>
+  <li><strong>Describe a meal:</strong> the sentence you wrote.</li>
+  <li><strong>Photo of the plate:</strong> <strong>the photograph itself</strong>, plus any note you added. This is the only feature that sends an image anywhere.</li>
+  <li><strong>Recipe ingredients:</strong> the ingredient lines that couldn't be weighed locally — text only.</li>
+</ul>
+<p>Google processes these requests under their API terms. No model is trained on your data. With no network, or no key configured, every one of these paths declines rather than guessing, and the rest of the app carries on working.</p>
+
+<h3>Importing a recipe from a link</h3>
+<p>The URL you paste is fetched by our own endpoint, because recipe sites don't allow a browser to read them directly. It returns text only — name, servings, cuisine, time, ingredient lines, method. <strong>No nutrition figure is ever taken from a web page.</strong></p>
+
+<h3>Apple Health (native app only)</h3>
+<p>Read-only, and weight only. The app reads weigh-ins so you don't have to type them twice. It never writes to Health, and it deliberately does not read active energy: expenditure here is measured from your own logs and already accounts for how you move.</p>
+
+<h2>What the app does not collect</h2>
+<ul>
+  <li>No third-party analytics — no Google Analytics, Mixpanel, or PostHog.</li>
+  <li>No third-party crash or error monitoring SDK.</li>
+  <li>No advertising, ad identifiers, or trackers.</li>
+  <li>No location, contacts, or calendars.</li>
+  <li>No camera or photo access beyond the one photo you choose to send.</li>
+</ul>
+
+<h2>Where your data lives</h2>
+<ul>
+  <li><strong>On your device:</strong> IndexedDB, plus an auth session in <code>localStorage</code> when signed in.</li>
+  <li><strong>On the server:</strong> Supabase (Postgres, Auth, Edge Functions). AI requests transit Google's Gemini API; food lookups transit USDA FoodData Central and Open Food Facts.</li>
+  <li><strong>Hosting:</strong> Vercel serves the app at <code>macrocosm.fitness/app</code>.</li>
+</ul>
+
+<h2>What you can do</h2>
+<ul>
+  <li><strong>Export.</strong> Settings → Data &amp; sync → Export downloads every row as JSON.</li>
+  <li><strong>Import.</strong> The same screen restores from that file.</li>
+  <li><strong>Clear this device.</strong> Removes everything in this browser. A signed-in account re-downloads; a device-only one is gone.</li>
+  <li><strong>Delete the account.</strong> Account → Delete account removes the auth user and cascades to every row you own on the server. It is not reversible.</li>
+</ul>
+
+<h2>Retention</h2>
+<p>Rows persist until you delete them, delete your account, or clear local storage.</p>
+
+<h2>Children</h2>
+<p>MACROcosm is not directed at children under 13, and calorie targets are not appropriate for them. Do not create an account for a child under 13.</p>
+
+<h2>Changes</h2>
+<p>Material changes show up in the "Last updated" date above and, where they matter, in the app.</p>
+
+<h2>Contact</h2>
+<p>Questions: <a href="https://hirshguha.com">hirshguha.com</a>.</p>
+</main></body>
+</html>

@@ -1,27 +1,41 @@
 ---
-import Base from '@/layouts/Base.astro'
-import Hero from '@/components/Hero.astro'
-import Spotlight from '@/components/Spotlight.astro'
-import AiCoach from '@/components/AiCoach.astro'
-import FeatureGrid from '@/components/FeatureGrid.astro'
+import Base from '@tracker-engine/site-kit/layouts/Base.astro'
+import Hero from '@tracker-engine/site-kit/components/Hero.astro'
+import Spotlight from '@tracker-engine/site-kit/components/Spotlight.astro'
+import Conversation from '@tracker-engine/site-kit/components/Conversation.astro'
+import FeatureGrid from '@tracker-engine/site-kit/components/FeatureGrid.astro'
+import Gallery from '@tracker-engine/site-kit/components/Gallery.astro'
+import Faq from '@tracker-engine/site-kit/components/Faq.astro'
+import Cta from '@tracker-engine/site-kit/components/Cta.astro'
 import Leagues from '@/components/Leagues.astro'
-import Gallery from '@/components/Gallery.astro'
-import Faq from '@/components/Faq.astro'
-import Cta from '@/components/Cta.astro'
 import { spotlights } from '@/data/features'
+import '@/styles/global.css'
 ---
 
 <Base>
-  <Hero />
+  <Hero>
+    <Fragment slot="headline">
+      Log it in a tap.<br />
+      Build your <span class="whitespace-nowrap"
+        ><span
+          class="font-bold text-accent-bright"
+          style="text-shadow: 0 0 30px rgba(58,135,229,0.55)">REP</span
+        ><span
+          class="shimmer bg-gradient-to-r from-accent-bright via-[#9b7bef] to-[#e87ba4] bg-clip-text text-transparent"
+          style="filter: drop-shadow(0 0 26px rgba(155,123,239,0.4))">utation</span
+        ></span
+      >.
+    </Fragment>
+  </Hero>
   <!-- The screenshot marquee sits directly under the hero as the one full-width
        showcase, then the spotlights explain the pillars; Leagues (coming) closes. -->
   <Gallery />
   <Spotlight spotlight={spotlights[0]} />
   <Spotlight spotlight={spotlights[1]} flip />
-  <AiCoach />
+  <Conversation />
   <Spotlight spotlight={spotlights[2]} />
   <FeatureGrid />
   <Leagues />
-  <Faq />
+  <Faq accent="var(--region-biceps)" />
   <Cta />
 </Base>

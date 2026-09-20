@@ -86,8 +86,14 @@ it batches version bumps + changelogs + publish. Apps pin `^1.x` and upgrade del
 + Fastlane + Vercel/PWA. `package.json` depends on pinned `@tracker-engine/*`.
 
 **A site repo** (`*-site`): Astro marketing (the `fitnote-site` pattern), its own Vercel project
-+ domain. A future `@tracker-engine/site-kit` could share Astro components/design tokens across
-sites — speculative; add only if the sites start duplicating.
++ domain, and the app served at `/app` by a rewrite onto the app's own project — so the two deploy
+independently and a broken app build can't take the site down.
+
+`@tracker-engine/site-kit` exists as of the second site (MACROcosm, 2026-09-20): the layout, nav,
+hero, phone mock-ups, feature grid, FAQ, CTA and the screenshot/OG tooling. Each site supplies only
+a content module — aliased to `@site`, which is what the kit's components import — and its own
+palette. It was deliberately *not* built for one site: the shape of the shared part was only
+knowable once a second product had to fit it.
 
 ## Migration sequence (don't skip ahead)
 
@@ -123,4 +129,5 @@ of directory moves and a publish pipeline — never a rethink.
 
 - **Registry** for Phase C: GitHub Packages (recommended) vs git-tag deps.
 - **One Supabase project per app** (recommended — clean RLS/quota isolation) vs shared.
-- **`@tracker-engine/site-kit`** for marketing sites — defer until the sites duplicate.
+- ~~**`@tracker-engine/site-kit`** for marketing sites — defer until the sites duplicate.~~
+  **Decided 2026-09-20:** built when MACROcosm's site arrived and the duplication became real.

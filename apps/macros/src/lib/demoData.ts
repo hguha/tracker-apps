@@ -1,5 +1,5 @@
 import { DAY_MS, dayKey } from '@tracker-engine/core'
-import type { MealSlot, Nutrients } from '@/domain/types'
+import type { CuisineKey, MealSlot, Nutrients, Venue } from '@/domain/types'
 
 /**
  * A plausible history, so every screen has something real to show.
@@ -16,13 +16,44 @@ import type { MealSlot, Nutrients } from '@/domain/types'
 export interface DemoDay {
   day: string
   entries: { foodQuery: string; grams: number; meal: MealSlot }[]
+  /** A recipe cooked that evening, in place of an assembled dinner. */
+  cook: { recipe: string; servings: number } | null
+  /** Where dinner was eaten. Home most nights — the rest is what makes the pattern worth charting. */
+  dinnerVenue: Venue
+  /** Water for the day, in ml. Some days short, because nobody hits it every day. */
+  waterMl: number
   weightKg: number | null
+}
+
+export interface DemoRecipe {
+  name: string
+  cuisine: CuisineKey
+  servings: number
+  totalMinutes: number
+  steps: string[]
+  /** `amount` is what the recipe says; `grams` is what gets stored. Both, because a cook reads one
+   *  and the arithmetic needs the other. */
+  ingredients: { foodQuery: string; grams: number; amount: string }[]
 }
 
 export interface DemoPlan {
   days: DemoDay[]
+  recipes: DemoRecipe[]
   program: { goal: 'lose'; ratePctPerWeek: number; proteinGPerKg: number; fatMinPctKcal: number }
   profile: { heightCm: number; birthYear: number; sex: 'male'; dietNotes: string }
+}
+
+/**
+ * When each meal happens.
+ *
+ * Every demo row used to be stamped at noon, which made the meal-timing chart a single spike at
+ * midday and the eating window meaningless — the two things on the Habits tab that are *about* time.
+ */
+export const MEAL_MINUTE: Record<MealSlot, number> = {
+  breakfast: 8 * 60 + 10,
+  lunch: 12 * 60 + 40,
+  dinner: 19 * 60 + 20,
+  snack: 16 * 60,
 }
 
 /** Deterministic noise: a demo that shuffles every reload is impossible to talk about. */
@@ -94,6 +125,71 @@ const SNACKS: { foodQuery: string; grams: number }[][] = [
   [{ foodQuery: 'Peanut butter', grams: 32 }, { foodQuery: 'Bread, whole wheat', grams: 28 }],
 ]
 
+/**
+ * Three things the demo cooks.
+ *
+ * Without them the library is empty, "what you cook" has nothing to rank, and the cuisine mix is a
+ * blank card — so a screenshot of any of those showed the empty state rather than the feature. Every
+ * food is named exactly as `db/seed/staples.ts` has it, which is why that file is hand-written.
+ */
+export const DEMO_RECIPES: DemoRecipe[] = [
+  {
+    name: 'Sunday chilli',
+    cuisine: 'mexican',
+    servings: 4,
+    totalMinutes: 55,
+    ingredients: [
+      { foodQuery: 'Ground beef, 90% lean, raw', grams: 450, amount: '1 lb' },
+      { foodQuery: 'Black beans, cooked', grams: 400, amount: '2 cups' },
+      { foodQuery: 'Tomato, raw', grams: 400, amount: '4 tomatoes' },
+      { foodQuery: 'Onion, raw', grams: 150, amount: '1 large onion' },
+      { foodQuery: 'Bell pepper, red, raw', grams: 120, amount: '1 pepper' },
+      { foodQuery: 'Olive oil', grams: 14, amount: '1 tbsp' },
+    ],
+    steps: [
+      'Soften the onion and pepper in the oil, about eight minutes.',
+      'Turn the heat up, add the beef and brown it properly.',
+      'Add the tomatoes and beans, then simmer uncovered for half an hour.',
+      'Season hard at the end. It is better the next day.',
+    ],
+  },
+  {
+    name: 'Salmon traybake',
+    cuisine: 'mediterranean',
+    servings: 2,
+    totalMinutes: 35,
+    ingredients: [
+      { foodQuery: 'Salmon, Atlantic, raw', grams: 340, amount: '2 fillets' },
+      { foodQuery: 'Potato, russet, raw', grams: 500, amount: '2 potatoes' },
+      { foodQuery: 'Broccoli, raw', grams: 200, amount: '1 small head' },
+      { foodQuery: 'Olive oil', grams: 28, amount: '2 tbsp' },
+    ],
+    steps: [
+      'Halve the potatoes, toss in half the oil, roast at 220°C for 20 minutes.',
+      'Add the broccoli and the salmon, skin down, with the rest of the oil.',
+      'Back in for 12 minutes, until the salmon just flakes.',
+    ],
+  },
+  {
+    name: 'Chicken and rice bowls',
+    cuisine: 'korean',
+    servings: 4,
+    totalMinutes: 30,
+    ingredients: [
+      { foodQuery: 'Chicken thigh, skinless, raw', grams: 600, amount: '1.3 lb' },
+      { foodQuery: 'Rice, white, long-grain, cooked', grams: 700, amount: '4 cups cooked' },
+      { foodQuery: 'Broccoli, raw', grams: 250, amount: '1 head' },
+      { foodQuery: 'Carrot, raw', grams: 120, amount: '2 carrots' },
+      { foodQuery: 'Olive oil', grams: 14, amount: '1 tbsp' },
+    ],
+    steps: [
+      'Cut the thigh into strips and fry hard in the oil until the edges catch.',
+      'Steam the broccoli and carrot for four minutes, no longer.',
+      'Build the bowls over the rice, and keep the pan juices.',
+    ],
+  },
+]
+
 export const DEMO_DAYS = 35
 
 export function buildDemoPlan(now = Date.now(), seed = 7): DemoPlan {
@@ -116,22 +212,46 @@ export function buildDemoPlan(now = Date.now(), seed = 7): DemoPlan {
     const trend = startKg + perDay * index
     const weightKg = skipWeighIn ? null : Math.round((trend + (random() - 0.5) * 1.2) * 10) / 10
 
+    // Roughly every fourth evening is cooked from a recipe rather than assembled from parts, which
+    // is also the only way the log has dishes in it.
+    const cook =
+      !skipLogging && index % 4 === 1
+        ? { recipe: DEMO_RECIPES[Math.floor(index / 4) % DEMO_RECIPES.length]!.name, servings: 1 }
+        : null
+
     const entries = skipLogging
       ? []
       : [
           ...pick(BREAKFASTS, random).map((e) => ({ ...e, meal: 'breakfast' as MealSlot })),
           ...pick(LUNCHES, random).map((e) => ({ ...e, meal: 'lunch' as MealSlot })),
-          ...pick(DINNERS, random).map((e) => ({ ...e, meal: 'dinner' as MealSlot })),
+          ...(cook
+            ? []
+            : pick(DINNERS, random).map((e) => ({ ...e, meal: 'dinner' as MealSlot }))),
           ...(random() < 0.7
             ? pick(SNACKS, random).map((e) => ({ ...e, meal: 'snack' as MealSlot }))
             : []),
         ]
 
-    days.push({ day: dayKey(at), entries, weightKg })
+    // Four nights out and two takeaways across five weeks. A diary where every meal is "home" can't
+    // show whether eating out is what moves the week.
+    const dinnerVenue: Venue = cook
+      ? 'home'
+      : index % 9 === 4
+        ? 'restaurant'
+        : index % 11 === 7
+          ? 'takeaway'
+          : 'home'
+
+    // Roughly two litres, give or take a bottle, and nothing at all on the two unlogged days —
+    // otherwise the water card and its chart are empty on every screen that shows them.
+    const waterMl = skipLogging ? 0 : 1200 + Math.round(random() * 4) * 250
+
+    days.push({ day: dayKey(at), entries, cook, dinnerVenue, waterMl, weightKg })
   }
 
   return {
     days,
+    recipes: DEMO_RECIPES,
     program: { goal: 'lose', ratePctPerWeek: -0.5, proteinGPerKg: 1.8, fatMinPctKcal: 25 },
     profile: {
       heightCm: 180,
