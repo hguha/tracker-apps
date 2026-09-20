@@ -16,6 +16,7 @@
     "@tailwindcss/vite": "^4.2.4",
     "@tracker-engine/site-kit": "*",
     "astro": "^7.2.2",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
