@@ -23,12 +23,19 @@ const { title = `${site.name} — ${site.tagline}`, description = site.seoDescri
 
 const canonical = new URL(Astro.url.pathname, Astro.site ?? site.origin)
 
+// Derived from the badges rather than stated twice: Android belongs here when there is a Play
+// listing to point at, and claiming it in structured data while refusing to link it is the same
+// claim made where nobody can check it.
+const operatingSystem = ['iOS', 'playStore' in site.stores ? 'Android' : null, 'Web']
+  .filter(Boolean)
+  .join(', ')
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: site.name,
   applicationCategory: site.applicationCategory,
-  operatingSystem: 'iOS, Android, Web',
+  operatingSystem,
   description: site.seoDescription,
   author: { '@type': 'Person', name: site.author.name, url: site.author.url },
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

@@ -2,20 +2,26 @@
 /**
  * App Store / Play Store badges.
  *
- * A store link that does not exist yet renders as a disabled "coming soon" badge rather than a live
- * link to a 404 — filling in `site.stores` is the only change needed at launch.
+ * Only the stores `site.stores` mentions are rendered. A URL links the badge, `null` renders it as a
+ * disabled "coming soon" rather than a live link to a 404, and a store the site leaves out doesn't
+ * appear — so shipping, or deciding not to, is a one-line content change either way.
  */
 import { site } from '@site'
+import type { StoreKey } from '@tracker-engine/site-kit'
 
 interface Props {
   class?: string
 }
 const { class: className } = Astro.props
 
-const badges = [
-  { key: 'appStore', href: site.stores.appStore, store: 'App Store', prefix: 'Download on the' },
-  { key: 'playStore', href: site.stores.playStore, store: 'Google Play', prefix: 'Get it on' },
-] as const
+const STORES: Record<StoreKey, { store: string; prefix: string }> = {
+  appStore: { store: 'App Store', prefix: 'Download on the' },
+  playStore: { store: 'Google Play', prefix: 'Get it on' },
+}
+
+const badges = (Object.keys(STORES) as StoreKey[])
+  .filter((key) => key in site.stores)
+  .map((key) => ({ key, href: site.stores[key] ?? null, ...STORES[key] }))
 ---
 
 <div class:list={['flex flex-wrap items-center gap-3', className]}>

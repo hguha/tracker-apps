@@ -27,10 +27,12 @@ export interface SiteConfig {
   privacyUrl: string
   author: { name: string; url: string }
   /**
-   * Store listings. `null` renders the badge as "coming soon" and unclickable — a dead link to a
-   * page that does not exist yet is worse than no link, and this way launching is a one-line change.
+   * Store listings, keyed by store. Three states, and the difference between the last two is the
+   * point: a URL links the badge, `null` renders it as an unclickable "coming soon", and a key that
+   * is **absent** isn't mentioned at all. A dead link to a page that doesn't exist is worse than no
+   * link; promising a store nobody is building for is worse than saying nothing.
    */
-  stores: { appStore: string | null; playStore: string | null }
+  stores: Partial<Record<StoreKey, string | null>>
   /**
    * The name, split so its first unit can carry the accent: `REP|utation`, `MACRO|cosm`. Both puns
    * only land if that unit reads as its own word.
@@ -53,6 +55,9 @@ export interface NavLink {
   href: string
   label: string
 }
+
+/** The stores a site can badge. Order here is the order they render in. */
+export type StoreKey = 'appStore' | 'playStore'
 
 /** A proof point under the hero. Each should be something a skeptic could check. */
 export interface Stat {

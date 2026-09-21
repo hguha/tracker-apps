@@ -215,7 +215,7 @@ export const faqs: readonly Faq[] = [
     a: 'It doesn’t have to. Expenditure is measured from your own weight trend and intake, so the training you did is already in the number. Adding a watch’s active energy on top would count it twice.',
   },
   {
-    q: 'iOS, Android, or web?',
-    a: 'All three, one app. Install it natively or open the web app — it works offline and installs to your home screen.',
+    q: 'iPhone, Android, or web?',
+    a: 'One app. The iPhone build is on its way to the App Store; on Android and the desktop, open the web app and install it to your home screen. Same build, offline either way.',
   },
 ] as const

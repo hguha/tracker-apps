@@ -17,7 +17,7 @@ export const site = {
     'Tick four foods and they log at the amounts you actually eat. Your calorie target comes from what your weight and your intake have done — not from a formula about someone your size.',
 
   seoDescription:
-    'MACROcosm is a fast, local-first calorie and macro tracker for iOS, Android and the web. 1,500 foods offline, USDA search, recipes you can cook from, and a calorie target measured from your own weight trend. Free, offline, no account, no ads.',
+    'MACROcosm is a fast, local-first calorie and macro tracker for iPhone and the web. 1,500 foods offline, USDA search, recipes you can cook from, and a calorie target measured from your own weight trend. Free, offline, no account, no ads.',
 
   origin: 'https://macrocosm.fitness',
   heroBadge: 'Free · No account · Works offline',
@@ -47,13 +47,12 @@ export const site = {
   },
 
   /**
-   * Store listings. `null` renders the badge as "coming soon" and unclickable — a dead link to a
-   * store page that does not exist yet is worse than no link, and this way shipping is a one-line
-   * change rather than a template edit.
+   * `null` is a listing that is coming — the iPhone build is real, the App Store record isn't yet.
+   * There is no `playStore` key at all, because there is no Android build to promise: Android
+   * installs the web app, which is what the FAQ says.
    */
   stores: {
     appStore: null as string | null,
-    playStore: null as string | null,
   },
 } satisfies SiteConfig
 

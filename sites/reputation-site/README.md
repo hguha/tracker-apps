@@ -26,10 +26,12 @@ component:
 `src/site.ts` is what the kit's components import as `@site` (aliased in
 `astro.config.mjs`); it only re-exports the above.
 
-**Store links.** `site.stores.appStore` and `.playStore` are `null` until the
-listings are live, which renders each badge as a greyed-out "Coming soon to the
-App Store". Paste the URLs in and they become real links — that is the whole
-launch-day change.
+**Store links.** `site.stores` has one key per store worth mentioning, and three
+states: a URL links the badge, `null` renders a greyed-out "Coming soon to the
+App Store", and a **missing key renders nothing at all**. `appStore` is live;
+there is no `playStore` key, because there is no Android build and a "coming
+soon" badge would promise one. Adding Android later is one line here, and the
+JSON-LD `operatingSystem` follows from the same keys.
 
 ## Screenshots
 

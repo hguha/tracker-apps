@@ -256,7 +256,7 @@ export const faqs: readonly Faq[] = [
     a: 'The one thing coming rather than shipping: your solo record, made multiplayer — opt-in, without exposing your actual workouts.',
   },
   {
-    q: 'iOS, Android, or web?',
-    a: 'All three, one app. Install natively or open the web app — it works offline and installs to your home screen.',
+    q: 'iPhone, Android, or web?',
+    a: 'On the App Store for iPhone and iPad. On Android, and on the desktop, open the web app and install it to your home screen — it is the same build, works offline either way, and there is no Play listing yet.',
   },
 ] as const

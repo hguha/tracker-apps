@@ -17,7 +17,7 @@ export const site = {
     'Type a set and it saves instantly, even offline. You get real analytics and a coach that actually reads your training.',
 
   seoDescription:
-    'REPutation is a fast, local-first workout tracker for iOS, Android and the web. Log a set in one tap, watch PRs light up, and get 22 analytics charts plus a conversational AI coach. Free, offline, no account, no ads.',
+    'REPutation is a fast, local-first workout tracker for iPhone and the web. Log a set in one tap, watch PRs light up, and get 22 analytics charts plus a conversational AI coach. Free, offline, no account, no ads.',
 
   origin: 'https://reputation.fitness',
   heroBadge: 'Free · No account · Works offline',
@@ -47,13 +47,12 @@ export const site = {
   },
 
   /**
-   * Store listings. `null` renders the badge as "coming soon" and unclickable — a dead link to a
-   * store page that does not exist yet is worse than no link, and this way shipping is a one-line
-   * change rather than a template edit.
+   * On the App Store since 1.0.1. No `playStore` key at all rather than a `null` one: there is no
+   * Android build, so "coming soon to Google Play" would be a promise nobody is keeping. Android
+   * users install the web app, which is what the FAQ says.
    */
   stores: {
-    appStore: null as string | null,
-    playStore: null as string | null,
+    appStore: 'https://apps.apple.com/us/app/reputation-fitness-tracker/id6804464473',
   },
 } satisfies SiteConfig
 
