@@ -2,7 +2,7 @@ import * as repo from '@/data/repository'
 import { nutrientsFor, perServing, scale } from '@/lib/nutrition'
 import { portionWithGrams } from '@/features/shared/format'
 import { EMPTY_NUTRIENTS, type Food, type MealTemplate, type Nutrients, type Recipe } from '@/domain/types'
-import type { RecentDish } from '@/data/repository'
+import type { RecentDish, RecentQuick } from '@/data/repository'
 import type { LogTarget } from './target'
 
 /**
@@ -15,13 +15,14 @@ import type { LogTarget } from './target'
  * learning the app meant learning three.
  *
  * They differ in exactly two respects: what the unit is called, and how the write happens. So that's
- * what this describes, and one screen renders all four.
+ * what this describes, and one screen renders all five.
  */
 export type Loggable =
   | { kind: 'food'; food: Food }
   | { kind: 'recipe'; recipe: Recipe }
   | { kind: 'meal'; template: MealTemplate }
   | { kind: 'dish'; dish: RecentDish }
+  | { kind: 'quick'; quick: RecentQuick }
 
 /**
  * One way of counting a subject: servings, slices, copies, grams.
@@ -74,6 +75,8 @@ export function describeLoggable(loggable: Loggable): AddSubject {
       return mealSubject(loggable.template)
     case 'dish':
       return dishSubject(loggable.dish)
+    case 'quick':
+      return quickSubject(loggable.quick)
   }
 }
 
@@ -196,6 +199,29 @@ function dishSubject(dish: RecentDish): AddSubject {
   }
 }
 
+function quickSubject(quick: RecentQuick): AddSubject {
+  const unit: AddUnit = {
+    id: 'copy',
+    label: 'of this',
+    nutrientsAt: (count) => scale(quick.nutrients, count),
+    gramsAt: () => null,
+    summaryAt: (count) => (count === 1 ? 'as logged before' : `${count} of them`),
+    step: 0.5,
+    min: 0.5,
+  }
+  return {
+    title: quick.name,
+    subtitle: `${quick.nutrients.kcal} kcal · calories and macros only`,
+    units: [unit],
+    initialUnitId: unit.id,
+    isComposite: false,
+    log: (unit_, count, target) =>
+      repo
+        .logQuickAdd(unit_.nutrientsAt(count), target.meal, quick.name, target.at, target.venue)
+        .then(() => 1),
+  }
+}
+
 export interface LoggablePart {
   label: string
   /** For one of the subject's units, scaled by the panel. */
@@ -211,7 +237,7 @@ export interface LoggablePart {
  * *names* for its subtitle, and this screen wants each part's macros too.
  */
 export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
-  if (loggable.kind === 'food') return []
+  if (loggable.kind === 'food' || loggable.kind === 'quick') return []
 
   if (loggable.kind === 'recipe') {
     const { recipe } = loggable

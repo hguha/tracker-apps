@@ -63,15 +63,57 @@ export function MoreWaysSheet({
   )
 }
 
-const keyOf = (hit: LibraryHit): string =>
-  hit.kind === 'recipe' ? `r:${hit.recipe.id}` : hit.kind === 'meal' ? `m:${hit.template.id}` : `d:${hit.dish.dishId}`
+const keyOf = (hit: LibraryHit): string => {
+  switch (hit.kind) {
+    case 'recipe':
+      return `r:${hit.recipe.id}`
+    case 'meal':
+      return `m:${hit.template.id}`
+    case 'dish':
+      return `d:${hit.dish.dishId}`
+    case 'quick':
+      return `q:${hit.quick.name}`
+  }
+}
 
-const loggableOf = (hit: LibraryHit): Loggable =>
-  hit.kind === 'recipe'
-    ? { kind: 'recipe', recipe: hit.recipe }
-    : hit.kind === 'meal'
-      ? { kind: 'meal', template: hit.template }
-      : { kind: 'dish', dish: hit.dish }
+const loggableOf = (hit: LibraryHit): Loggable => {
+  switch (hit.kind) {
+    case 'recipe':
+      return { kind: 'recipe', recipe: hit.recipe }
+    case 'meal':
+      return { kind: 'meal', template: hit.template }
+    case 'dish':
+      return { kind: 'dish', dish: hit.dish }
+    case 'quick':
+      return { kind: 'quick', quick: hit.quick }
+  }
+}
+
+const nutrientsOfHit = (hit: LibraryHit) => {
+  switch (hit.kind) {
+    case 'recipe':
+      return perServing(hit.recipe)
+    case 'meal':
+      return hit.template.nutrients
+    case 'dish':
+      return hit.dish.nutrients
+    case 'quick':
+      return hit.quick.nutrients
+  }
+}
+
+const detailOfHit = (hit: LibraryHit): string => {
+  switch (hit.kind) {
+    case 'recipe':
+      return 'a serving'
+    case 'meal':
+      return 'saved'
+    case 'dish':
+      return withTimes(hit.dish.parts.join(', '), hit.dish.times)
+    case 'quick':
+      return withTimes('calories only', hit.quick.times)
+  }
+}
 
 /** Your own recipes, saved meals and past dishes, above the database — because you named them. */
 export function LibraryHits({
@@ -90,20 +132,8 @@ export function LibraryHits({
             <Row
               onClick={() => onOpen(loggableOf(hit))}
               title={hit.name}
-              nutrients={
-                hit.kind === 'recipe'
-                  ? perServing(hit.recipe)
-                  : hit.kind === 'meal'
-                    ? hit.template.nutrients
-                    : hit.dish.nutrients
-              }
-              detail={
-                hit.kind === 'recipe'
-                  ? 'a serving'
-                  : hit.kind === 'meal'
-                    ? 'saved'
-                    : withTimes(hit.dish.parts.join(', '), hit.dish.times)
-              }
+              nutrients={nutrientsOfHit(hit)}
+              detail={detailOfHit(hit)}
             />
           </li>
         ))}
@@ -134,7 +164,7 @@ export function RecentList({
     <Card className="p-0">
       <ul className="divide-y divide-line">
         {items.map((item) => (
-          <li key={item.kind === 'food' ? `f:${item.food.id}` : `d:${item.dishId}`}>
+          <li key={recentKey(item)}>
             {item.kind === 'food' ? (
               <Row
                 onClick={() => onOpen({ kind: 'food', food: item.food })}
@@ -142,12 +172,19 @@ export function RecentList({
                 nutrients={nutrientsFor(item.food, amountGrams(item.food, item.amount))}
                 detail={withTimes(describeAmount(item.food, item.amount), item.times)}
               />
-            ) : (
+            ) : item.kind === 'dish' ? (
               <Row
                 onClick={() => onOpen({ kind: 'dish', dish: item })}
                 title={item.name}
                 nutrients={item.nutrients}
                 detail={withTimes(item.parts.join(', '), item.times)}
+              />
+            ) : (
+              <Row
+                onClick={() => onOpen({ kind: 'quick', quick: item })}
+                title={item.name}
+                nutrients={item.nutrients}
+                detail={withTimes('calories only', item.times)}
               />
             )}
           </li>
@@ -156,6 +193,9 @@ export function RecentList({
     </Card>
   )
 }
+
+const recentKey = (item: RecentItem): string =>
+  item.kind === 'food' ? `f:${item.food.id}` : item.kind === 'dish' ? `d:${item.dishId}` : `q:${item.name}`
 
 /**
  * How often it's been eaten, said in words.
@@ -399,7 +439,7 @@ export function DescribeRow({ text, onOpen }: { text: string; onOpen: () => void
     >
       <Sparkles size={16} className="shrink-0 text-accent" />
       <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-accent">
-        Work out “{text}” from its ingredients
+        Ask AI about “{text}”
       </span>
     </button>
   )

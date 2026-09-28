@@ -2,7 +2,14 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
-import { matchDraft, totalOf, type EstimatedItem, type MealEstimate } from '@/features/log/estimate'
+import {
+  matchDraft,
+  readEstimate,
+  totalOf,
+  type EstimatedItem,
+  type MealEstimate,
+} from '@/features/log/estimate'
+import { gramsToMg, nutrientsFor, per100FromServing } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
 
 /**
@@ -32,8 +39,105 @@ function draft(...queries: string[]): MealEstimate {
     matchedBy: 'unmatched',
     isMatching: true,
   }))
-  return { items, assumptions: '', nutrients: { ...EMPTY_NUTRIENTS }, label: 'test' }
+  return { items, assumptions: '', nutrients: { ...EMPTY_NUTRIENTS }, label: 'test', product: null }
 }
+
+const CHICKEN_BAKE = {
+  name: 'Chicken bake',
+  brand: 'Costco',
+  servingLabel: '1 chicken bake',
+  servingGrams: 325,
+  kcal: 770,
+  proteinG: 57,
+  carbsG: 79,
+  fatG: 25,
+  sodiumMg: 1600,
+  confidence: 'high',
+  source: "Costco's published nutrition panel",
+}
+
+describe('readEstimate', () => {
+  it('keeps a named product whole instead of inventing ingredients for it', async () => {
+    const read = readEstimate({ kind: 'item', item: CHICKEN_BAKE, assumptions: '' }, 'chicken bake')
+
+    expect(read.items).toEqual([])
+    expect(read.product?.name).toBe('Chicken bake')
+    expect(read.product?.brand).toBe('Costco')
+    expect(read.product?.kcal).toBe(770)
+    expect(read.product?.servingGrams).toBe(325)
+    expect(read.label).toBe('Chicken bake')
+  })
+
+  it('says where the figures came from, and when they are a guess', () => {
+    const panel = readEstimate({ kind: 'item', item: CHICKEN_BAKE, assumptions: '' }, '')
+    expect(panel.product?.note).toContain("Costco's published nutrition panel")
+
+    const guessed = readEstimate(
+      { kind: 'item', item: { ...CHICKEN_BAKE, confidence: 'low' }, assumptions: '' },
+      '',
+    )
+    expect(guessed.product?.note).toMatch(/guess/i)
+  })
+
+  it('refuses a product it could not turn into a food', () => {
+    for (const broken of [
+      { ...CHICKEN_BAKE, servingGrams: 0 },
+      { ...CHICKEN_BAKE, kcal: 0 },
+      { ...CHICKEN_BAKE, name: '  ' },
+    ]) {
+      expect(readEstimate({ kind: 'item', item: broken, assumptions: '' }, 'x').product).toBeNull()
+    }
+  })
+
+  it('ignores an item on a components answer, and components on an item one', () => {
+    const components = readEstimate(
+      {
+        kind: 'components',
+        items: [{ query: 'banana', grams: 120, confidence: 'high' }],
+        item: CHICKEN_BAKE,
+        assumptions: '',
+      },
+      'a banana',
+    )
+    expect(components.product).toBeNull()
+    expect(components.items).toHaveLength(1)
+    expect(components.label).toBe('a banana')
+  })
+
+  it('carries the panel through to a food that logs at the stated calories', async () => {
+    const { product } = readEstimate(
+      { kind: 'item', item: CHICKEN_BAKE, assumptions: '' },
+      'chicken bake',
+    )
+    const id = await repo.saveCustomFood({
+      description: product!.name,
+      brand: product!.brand,
+      barcode: null,
+      servingGrams: product!.servingGrams,
+      servingLabel: product!.servingLabel,
+      per100: {
+        ...EMPTY_NUTRIENTS,
+        kcal: Math.round(per100FromServing(product!.kcal, product!.servingGrams)),
+        proteinMg: gramsToMg(per100FromServing(product!.proteinG, product!.servingGrams)),
+        carbsMg: gramsToMg(per100FromServing(product!.carbsG, product!.servingGrams)),
+        fatMg: gramsToMg(per100FromServing(product!.fatG, product!.servingGrams)),
+      },
+    })
+
+    const food = await repo.getFood(id)
+    const portion = food!.portions[0]!
+    expect(portion.label).toBe('1 chicken bake')
+    expect(portion.grams).toBe(325)
+
+    const one = nutrientsFor(food!, portion.grams)
+    expect(one.kcal).toBeCloseTo(770, -1)
+    expect(one.proteinMg).toBeCloseTo(gramsToMg(57), -2)
+
+    expect(await repo.searchFoods('chicken bake', 10)).toContainEqual(
+      expect.objectContaining({ id }),
+    )
+  })
+})
 
 describe('matchDraft', () => {
   it('reports each row as it lands, so the screen can fill in', async () => {

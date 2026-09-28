@@ -21,6 +21,9 @@ const MG_PER_G = 1000
 export const gramsToMg = (g: number): number => Math.round(g * MG_PER_G)
 export const mgToGrams = (mg: number): number => mg / MG_PER_G
 
+export const per100FromServing = (value: number, servingGrams: number): number =>
+  (value * 100) / Math.max(1, servingGrams)
+
 export function portionFor(food: Food, portionId: string | null): FoodPortion | null {
   if (portionId) return food.portions.find((p) => p.id === portionId) ?? null
   return food.portions.find((p) => p.isDefault) ?? food.portions[0] ?? null

@@ -520,6 +520,14 @@ describe('searchLibrary', () => {
     expect(await repo.searchLibrary('chicken')).toEqual([])
   })
 
+  it('finds a calories-only entry by the name it was logged under', async () => {
+    await repo.logQuickAdd({ ...EMPTY_NUTRIENTS, kcal: 480 }, 'lunch', 'Airport chicken wrap')
+    const hits = await repo.searchLibrary('chicken wrap')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]!.kind).toBe('quick')
+    expect(hits[0]!.name).toBe('Airport chicken wrap')
+  })
+
   it('leaves a deleted recipe out', async () => {
     const food = await chicken()
     const id = await repo.saveRecipe({
@@ -660,6 +668,23 @@ describe('recentItems', () => {
     const row = items.find((item) => item.kind === 'food')
     expect(row).toMatchObject({ times: 2 })
     expect(row?.kind === 'food' ? row.amount?.grams : null).toBe(180)
+  })
+
+  it('offers a calories-only entry again, under the name it was given', async () => {
+    const day = dayKey(Date.now())
+    const stirFry = { ...EMPTY_NUTRIENTS, kcal: 620, proteinMg: 31_000 }
+    await repo.logQuickAdd(stirFry, 'lunch', 'Cafeteria stir fry', Date.parse(`${day}T12:30:00`))
+    await repo.logQuickAdd(stirFry, 'lunch', 'Cafeteria stir fry', Date.parse(`${day}T12:35:00`))
+
+    const quick = (await repo.recentItems()).filter((item) => item.kind === 'quick')
+    expect(quick).toHaveLength(1)
+    expect(quick[0]).toMatchObject({ name: 'Cafeteria stir fry', times: 2 })
+    expect(quick[0]?.kind === 'quick' ? quick[0].nutrients.kcal : 0).toBe(620)
+  })
+
+  it('leaves an unnamed quick add out, having nothing to offer it as', async () => {
+    await repo.logQuickAdd({ ...EMPTY_NUTRIENTS, kcal: 200 }, 'snack', '   ')
+    expect(await repo.recentItems()).toEqual([])
   })
 })
 

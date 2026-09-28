@@ -6,9 +6,10 @@ import { seedFoods } from '@/db/seed'
 import { describeLoggable, partsOf, GRAMS } from '@/features/log/loggable'
 import { nutrientsFor } from '@/lib/nutrition'
 import { givenFoods, testFood } from './fixtures'
+import { EMPTY_NUTRIENTS } from '@/domain/types'
 
 /**
- * The four things that can be added to a day, through the one screen that adds them.
+ * The five things that can be added to a day, through the one screen that adds them.
  *
  * They used to be three separate controls with three separate arithmetics, which is exactly the sort
  * of divergence that produces two different answers to "what did that cost me". These assert that the
@@ -162,5 +163,29 @@ describe('a repeated dish', () => {
     expect(written).toBeGreaterThan(0)
     const dinner = (await repo.entriesForDay(today())).filter((row) => row.meal === 'dinner')
     expect(dinner.reduce((total, row) => total + row.grams, 0)).toBe(200)
+  })
+})
+
+describe('a calories-only entry', () => {
+  it('scales what was logged, through the same screen as everything else', async () => {
+    await repo.logQuickAdd(
+      { ...EMPTY_NUTRIENTS, kcal: 620, proteinMg: 30_000 },
+      'lunch',
+      'Cafeteria stir fry',
+    )
+    const quick = (await repo.recentItems()).find((item) => item.kind === 'quick')!
+    if (quick.kind !== 'quick') throw new Error('expected a quick add')
+
+    const subject = describeLoggable({ kind: 'quick', quick })
+    const unit = subject.units[0]!
+    expect(unit.nutrientsAt(0.5).kcal).toBe(310)
+    expect(unit.gramsAt(1)).toBeNull()
+    expect(await partsOf({ kind: 'quick', quick })).toEqual([])
+
+    await subject.log(unit, 2, { meal: 'dinner', at: Date.now(), venue: 'home' })
+    const dinner = (await repo.entriesForDay(today())).filter((row) => row.meal === 'dinner')
+    expect(dinner).toHaveLength(1)
+    expect(dinner[0]!.nutrients.kcal).toBe(1240)
+    expect(dinner[0]!.note).toBe('Cafeteria stir fry')
   })
 })

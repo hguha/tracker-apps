@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from './target'
-import { describeMeal } from './estimate'
+import { describeMeal, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 
 /**
@@ -19,15 +19,18 @@ export function DescribePanel({
   target,
   initialText = '',
   onDone,
+  onProduct,
 }: {
   target: LogTarget
   /** Carried over from the search box, so describing a meal never means retyping it. */
   initialText?: string
   onDone: () => void
+  onProduct: (product: FoodDraft) => void
 }) {
   const [text, setText] = useState(initialText)
   const { estimate, setEstimate, phase, error, run } = useEstimate()
   const isBusy = phase === 'reading' || phase === 'matching'
+  const ask = (extra = '') => void run(() => describeMeal(text, extra), onProduct)
 
   return (
     <div className="flex max-h-full flex-col">
@@ -40,24 +43,24 @@ export function DescribePanel({
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
-              void run(() => describeMeal(text))
+              ask()
             }
           }}
-          placeholder="3 steak tacos, or a turkey sandwich and an apple"
+          placeholder="A Costco chicken bake, or 3 steak tacos and a beer"
           className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
         />
 
         <Button
           className="w-full"
           disabled={text.trim().length < 3 || isBusy}
-          onClick={() => void run(() => describeMeal(text))}
+          onClick={() => ask()}
         >
           <Sparkles size={16} />
           {phase === 'reading'
             ? 'Reading it…'
             : phase === 'matching'
               ? 'Finding the foods…'
-              : 'Break it down'}
+              : 'Work it out'}
         </Button>
 
         {error && (
@@ -81,7 +84,7 @@ export function DescribePanel({
             onChange={setEstimate}
             onDone={onDone}
             // Re-asks with the correction appended, rather than making the user retype the meal.
-            onRefine={(extra) => void run(() => describeMeal(text, extra))}
+            onRefine={(extra) => ask(extra)}
             isRefining={isBusy}
           />
         )}

@@ -1,12 +1,25 @@
 /**
  * Barcode scanning from the camera.
  *
- * Uses the platform `BarcodeDetector` where it exists. It is absent on iOS Safari, which is
- * the single most important target here, so `isBarcodeScanningAvailable()` must be checked
- * before offering the button — a scan option that silently does nothing is worse than none.
- * The native shell will use @capacitor-mlkit/barcode-scanning instead, and typing a barcode
- * remains the universal fallback.
+ * Two decoders behind one call. `BarcodeDetector` is used where the platform has it (Android
+ * Chrome, desktop Chrome); everywhere else a WebAssembly build of ZXing reads the frames. The
+ * fallback is not a nicety: no version of WebKit implements `BarcodeDetector`, so on iOS — Safari,
+ * an installed PWA and the App Store build alike — the feature was simply absent, which is the one
+ * platform where scanning a wrapper instead of typing its name matters most.
+ *
+ * So availability now means "there is a camera", and typing the digits remains the universal
+ * fallback for a scuffed label or a refused permission.
  */
+
+import type { ReaderOptions } from 'zxing-wasm/reader'
+
+const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'itf']
+
+const ZXING_FORMATS: ReaderOptions['formats'] = ['EAN13', 'EAN8', 'UPCA', 'UPCE', 'Code128', 'ITF']
+
+const DECODE_INTERVAL_MS = 120
+
+const DECODE_WIDTH = 720
 
 interface DetectedBarcode {
   rawValue: string
@@ -18,19 +31,52 @@ interface BarcodeDetectorLike {
 
 type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDetectorLike
 
-const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128']
-
 function detectorCtor(): BarcodeDetectorCtor | null {
   const ctor = (globalThis as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
   return ctor ?? null
 }
 
 export function isBarcodeScanningAvailable(): boolean {
-  return detectorCtor() !== null && typeof navigator?.mediaDevices?.getUserMedia === 'function'
+  return typeof navigator?.mediaDevices?.getUserMedia === 'function'
 }
 
 export interface ScanHandle {
   stop(): void
+}
+
+type Decoder = (video: HTMLVideoElement) => Promise<string | null>
+
+function nativeDecoder(): Decoder | null {
+  const Ctor = detectorCtor()
+  if (!Ctor) return null
+  const detector = new Ctor({ formats: FORMATS })
+  return async (video) => (await detector.detect(video))[0]?.rawValue ?? null
+}
+
+async function wasmDecoder(): Promise<Decoder> {
+  const [{ prepareZXingModule, readBarcodes }, { default: wasmUrl }] = await Promise.all([
+    import('zxing-wasm/reader'),
+    import('zxing-wasm/reader/zxing_reader.wasm?url'),
+  ])
+  prepareZXingModule({ overrides: { locateFile: () => wasmUrl } })
+
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) throw new Error('This browser cannot read the camera frames.')
+
+  return async (video) => {
+    if (video.videoWidth === 0) return null
+    const scale = Math.min(1, DECODE_WIDTH / video.videoWidth)
+    canvas.width = Math.round(video.videoWidth * scale)
+    canvas.height = Math.round(video.videoHeight * scale)
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    const found = await readBarcodes(context.getImageData(0, 0, canvas.width, canvas.height), {
+      formats: ZXING_FORMATS,
+      maxNumberOfSymbols: 1,
+    })
+    return found.find((result) => result.isValid && result.text)?.text ?? null
+  }
 }
 
 /**
@@ -41,11 +87,12 @@ export interface ScanHandle {
 export async function startScanning(
   video: HTMLVideoElement,
   onFound: (barcode: string) => void,
+  onUnreadable: (message: string) => void = () => {},
 ): Promise<ScanHandle> {
-  const Ctor = detectorCtor()
-  if (!Ctor) throw new Error('Barcode scanning is not available on this device')
+  if (!isBarcodeScanningAvailable()) {
+    throw new Error('This device has no camera available to the app.')
+  }
 
-  const detector = new Ctor({ formats: FORMATS })
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'environment' },
   })
@@ -54,27 +101,35 @@ export async function startScanning(
   await video.play()
 
   let stopped = false
-  const tick = async () => {
-    if (stopped) return
-    try {
-      const found = await detector.detect(video)
-      const first = found[0]?.rawValue
-      if (first) {
-        onFound(first)
-        return
-      }
-    } catch {
-      // A transient decode failure is normal between frames; keep looking.
-    }
-    if (!stopped) requestAnimationFrame(() => void tick())
+  const release = () => {
+    stopped = true
+    for (const track of stream.getTracks()) track.stop()
+    video.srcObject = null
   }
-  void tick()
 
-  return {
-    stop() {
-      stopped = true
-      for (const track of stream.getTracks()) track.stop()
-      video.srcObject = null
-    },
-  }
+  void (async () => {
+    let decode: Decoder
+    try {
+      decode = nativeDecoder() ?? (await wasmDecoder())
+    } catch {
+      release()
+      onUnreadable('Could not start the barcode reader on this device.')
+      return
+    }
+
+    while (!stopped) {
+      try {
+        const found = await decode(video)
+        if (found) {
+          onFound(found)
+          return
+        }
+      } catch {
+        // A transient decode failure is normal between frames; keep looking.
+      }
+      await new Promise((resolve) => setTimeout(resolve, DECODE_INTERVAL_MS))
+    }
+  })()
+
+  return { stop: release }
 }

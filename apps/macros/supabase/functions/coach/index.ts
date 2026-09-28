@@ -71,6 +71,7 @@ interface Body {
   tools?: { name: string; description: string; parameters: unknown }[]
   /** For `estimate`: a meal in the user's own words, e.g. "turkey sandwich and an apple". */
   description?: string
+  components?: boolean
   /** Diets, allergies and dislikes. Changes what a vague description should be read as. */
   dietNotes?: string
   /** For `photo`: base64 image bytes (no data: prefix) and its mime type. */
@@ -81,16 +82,21 @@ interface Body {
 }
 
 /**
- * Breaking a described meal into weighed components.
+ * Breaking a described meal into weighed components, or reading one named product's panel.
  *
- * The model returns ingredient NAMES AND GRAMS ONLY — never nutrients. The client matches each
- * name against the food database and computes the macros from the matched row, so a wrong guess
- * shows up as a wrong ingredient the user can fix, never as a plausible calorie count that came
- * from nowhere.
+ * For `components` the model returns ingredient NAMES AND GRAMS ONLY — never nutrients. The client
+ * matches each name against the food database and computes the macros from the matched row, so a
+ * wrong guess shows up as a wrong ingredient the user can fix, never as a plausible calorie count
+ * that came from nowhere.
+ *
+ * For `item` — one named branded or restaurant product — the published panel is the measurement,
+ * and decomposing it invents ingredients that aren't in it. The client saves it as the user's own
+ * food with every figure editable first.
  */
 const ESTIMATE_SCHEMA = {
   type: 'object',
   properties: {
+    kind: { type: 'string', enum: ['components', 'item'] },
     items: {
       type: 'array',
       items: {
@@ -104,30 +110,69 @@ const ESTIMATE_SCHEMA = {
         required: ['query', 'grams', 'confidence'],
       },
     },
+    item: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        brand: { type: 'string' },
+        servingLabel: { type: 'string' },
+        servingGrams: { type: 'number' },
+        kcal: { type: 'number' },
+        proteinG: { type: 'number' },
+        carbsG: { type: 'number' },
+        fatG: { type: 'number' },
+        fiberG: { type: 'number' },
+        sodiumMg: { type: 'number' },
+        confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        source: { type: 'string' },
+      },
+      required: ['name', 'servingLabel', 'servingGrams', 'kcal', 'proteinG', 'carbsG', 'fatG', 'confidence', 'source'],
+    },
     /** What had to be assumed, so the user corrects the assumption rather than the number. */
     assumptions: { type: 'string' },
   },
-  required: ['items', 'assumptions'],
+  required: ['kind', 'assumptions'],
 }
 
-const ESTIMATE_SYSTEM = `Break a described meal into its weighed components.
+const ESTIMATE_SYSTEM = `Read what somebody ate. Decide first which of two things it is.
 
-Return ONLY generic, searchable ingredient names and a weight in grams for each. Never return
-calories or macros — the app computes those from its own food database, and a number from you
-would be a fabrication.
+kind:"item" — the text names ONE specific product or restaurant menu item that has a published
+nutrition panel: "Costco chicken bake", "Chipotle chicken burrito bowl", "Big Mac", "Clif bar,
+chocolate chip", "Trader Joe's mandarin orange chicken". Fill "item" and leave "items" empty.
+- The numbers are for ONE item as sold, not per 100 g, and not per 100 % of anything else.
+- servingGrams is what one of them weighs. Give your best figure even when the panel doesn't
+  state one, and drop confidence to "medium" when you had to judge it.
+- servingLabel is what one is called: "1 chicken bake", "1 bowl", "1 bar".
+- brand is the chain or company on its own ("Costco", "Chipotle"); name is the item without it.
+- source says in a few words where the figures come from: "Costco's published nutrition panel".
+- confidence: "high" only when recalling a specific published panel; "medium" when you know the
+  item but are reconstructing its figures; "low" when reasoning across from similar items.
+- Do NOT break such an item into ingredients. A chicken bake decomposed into "pizza crust" and
+  "chicken parmesan" is two invented weights of foods that are not in it.
 
-Rules:
+kind:"components" — anything else: a home-cooked meal, a plate of several things, a description
+rather than a name. Fill "items" and leave "item" out. Return ONLY generic, searchable
+ingredient names and a weight in grams for each. Never return calories or macros on this path —
+the app computes those from its own food database, and a number from you would be a fabrication.
 - Use plain generic names a food database would hold: "whole wheat bread", "roasted turkey
   breast", "mayonnaise", "cheddar cheese". Not brands, not adjectives.
 - Use ordinary portions when the user doesn't say: a sandwich is 2 slices of bread (~56 g), a
   slice of deli meat ~28 g, a teaspoon of mayo ~5 g, a medium apple ~180 g.
 - Mark confidence low for any component the user did not mention and you are guessing at.
-- State every assumption in one short sentence, so the user corrects the assumption rather than
-  the arithmetic.
-- If the description is already one recognisable dish, you may return it as a single item with
-  its typical total weight.`
+- One recognisable dish may be a single component with its typical total weight.
+
+Either way: state every assumption in one short sentence, so the user corrects the assumption
+rather than the arithmetic.`
+
+const COMPONENTS_ONLY = `
+
+Always kind:"components" on this request. The caller is filling rows into a meal it already has,
+and has nowhere to put a product panel — so a named product is still a component here, at the
+weight one of them comes to.`
 
 const INGREDIENTS_SYSTEM = `Convert a recipe's ingredient lines into weighed components.
+
+Always kind:"components". A recipe line is an ingredient, never a packaged product's panel.
 
 Each input line is one ingredient, written the way a recipe writes it. Return ONLY a generic,
 searchable food name and a weight in grams for each. Never return calories or macros — the app
@@ -149,7 +194,11 @@ Rules:
 const PHOTO_SYSTEM = `
 
 You are looking at a photo. Additional rules for that:
-- Name only what you can actually see. Do not add the side dish you would expect to be there.
+- A photo of one packaged product — a wrapper, a box, a menu board item — is kind:"item", and a
+  panel you can actually read in the frame is the best source there is. Transcribe it rather than
+  recalling it, and say in source that you read it off the label.
+- Otherwise name only what you can actually see. Do not add the side dish you would expect to be
+  there.
 - Judge portions against the plate, cutlery or hand in frame; say in your assumptions what you
   used for scale, and mark confidence low when there is nothing to scale against.
 - A photo cannot show oil, butter, sugar or sauce worked into a dish. Say so in the assumptions
@@ -175,7 +224,13 @@ Deno.serve(async (request) => {
   const body = (await request.json().catch(() => ({}))) as Body
 
   if (body.mode === 'estimate') {
-    return estimate(key, body.description ?? '', body.dietNotes ?? '')
+    return estimate(
+      key,
+      body.description ?? '',
+      body.dietNotes ?? '',
+      undefined,
+      body.components === true ? ESTIMATE_SYSTEM + COMPONENTS_ONLY : undefined,
+    )
   }
 
   if (body.mode === 'ingredients') {
@@ -295,9 +350,16 @@ do not assume an ingredient they have ruled out.`
   }
   const text_ = payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
   try {
-    const parsed = JSON.parse(text_) as { items?: unknown; assumptions?: unknown }
+    const parsed = JSON.parse(text_) as {
+      kind?: unknown
+      items?: unknown
+      item?: unknown
+      assumptions?: unknown
+    }
     return json({
+      kind: parsed.kind === 'item' ? 'item' : 'components',
       items: Array.isArray(parsed.items) ? parsed.items : [],
+      item: parsed.kind === 'item' && parsed.item ? parsed.item : null,
       assumptions: typeof parsed.assumptions === 'string' ? parsed.assumptions : '',
     })
   } catch {

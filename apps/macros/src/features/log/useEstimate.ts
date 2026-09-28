@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { matchDraft, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
+import { matchDraft, totalOf, type EstimatedItem, type FoodDraft, type MealEstimate } from './estimate'
 
 /**
  * Running a breakdown in two visible phases.
@@ -21,7 +21,10 @@ export interface EstimateRun {
   phase: EstimatePhase
   error: string | null
   /** Given phase one; phase two follows automatically. */
-  run: (describe: () => Promise<MealEstimate>) => Promise<void>
+  run: (
+    describe: () => Promise<MealEstimate>,
+    onProduct?: (product: FoodDraft) => void,
+  ) => Promise<void>
   reset: () => void
 }
 
@@ -30,12 +33,20 @@ export function useEstimate(): EstimateRun {
   const [phase, setPhase] = useState<EstimatePhase>('idle')
   const [error, setError] = useState<string | null>(null)
 
-  async function run(describe: () => Promise<MealEstimate>): Promise<void> {
+  async function run(
+    describe: () => Promise<MealEstimate>,
+    onProduct?: (product: FoodDraft) => void,
+  ): Promise<void> {
     if (phase === 'reading' || phase === 'matching') return
     setPhase('reading')
     setError(null)
     try {
       const draft = await describe()
+      if (draft.product && onProduct) {
+        setPhase('idle')
+        onProduct(draft.product)
+        return
+      }
       setEstimate(draft)
       setPhase('matching')
       const matched = await matchDraft(draft, (item) => setEstimate((current) => patch(current, item)))

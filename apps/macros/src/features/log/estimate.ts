@@ -5,11 +5,13 @@ import { nutrientsFor, sum } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food, type Nutrients } from '@/domain/types'
 
 /**
- * Turning "turkey sandwich" into weighed, matched components.
+ * Turning "turkey sandwich" into weighed, matched components — or "Costco chicken bake" into one
+ * product with its own panel.
  *
- * The model contributes names and grams; every nutrient here comes from a matched food row. A
- * bad guess therefore shows up as a wrong *ingredient* the user can fix, not as a plausible
- * calorie count with no source — which is the difference between an estimate and a fabrication.
+ * For components the model contributes names and grams only; every nutrient comes from a matched
+ * food row, so a bad guess shows up as a wrong *ingredient* the user can fix rather than a plausible
+ * calorie count with no source. For a named product the panel is the source, it arrives as a
+ * `FoodDraft` for the user to check, and nothing is logged until they save it as a food of theirs.
  */
 
 export interface EstimatedItem {
@@ -32,6 +34,20 @@ export interface EstimatedItem {
   isMatching: boolean
 }
 
+export interface FoodDraft {
+  name: string
+  brand: string
+  servingGrams: number
+  servingLabel: string
+  kcal: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  fiberG: number | null
+  sodiumMg: number | null
+  note: string
+}
+
 export interface MealEstimate {
   items: EstimatedItem[]
   assumptions: string
@@ -44,6 +60,7 @@ export interface MealEstimate {
    * "I had another one" had nothing to tap. See `LogEntry.dishId`.
    */
   label: string
+  product: FoodDraft | null
 }
 
 export class EstimateUnavailable extends Error {}
@@ -74,7 +91,7 @@ export function modelCooldownSeconds(): number {
  * again" for everything, including a daily cap. Waiting a few seconds then changes nothing, which
  * from outside is indistinguishable from the app being broken.
  */
-function quotaMessage(body: { reason?: string; quota?: string | null; kind?: string }): string {
+function quotaMessage(body: { reason?: string; quota?: string | null; kind?: unknown }): string {
   const seconds = modelCooldownSeconds()
   const wait =
     seconds > 90
@@ -99,6 +116,79 @@ interface RawItem {
   confidence?: unknown
 }
 
+interface RawProduct {
+  name?: unknown
+  brand?: unknown
+  servingLabel?: unknown
+  servingGrams?: unknown
+  kcal?: unknown
+  proteinG?: unknown
+  carbsG?: unknown
+  fatG?: unknown
+  fiberG?: unknown
+  sodiumMg?: unknown
+  confidence?: unknown
+  source?: unknown
+}
+
+export interface RawEstimate {
+  kind?: unknown
+  items?: RawItem[]
+  item?: RawProduct | null
+  assumptions?: unknown
+}
+
+const TRUST: Record<'high' | 'medium' | 'low', string> = {
+  high: 'check it against the label',
+  medium: 'reconstructed, not read off a label — check it',
+  low: 'a rough guess from similar items — check it',
+}
+
+export function readEstimate(data: RawEstimate, label: string): MealEstimate {
+  const product = data.kind === 'item' ? toProduct(data.item ?? null) : null
+  const items = product ? [] : (data.items ?? []).map(toItem)
+  return {
+    items,
+    assumptions: typeof data.assumptions === 'string' ? data.assumptions : '',
+    nutrients: totalOf(items),
+    label: product ? product.name : label,
+    product,
+  }
+}
+
+function toProduct(raw: RawProduct | null): FoodDraft | null {
+  if (!raw) return null
+  const name = String(raw.name ?? '').trim()
+  const kcal = positive(raw.kcal)
+  const servingGrams = positive(raw.servingGrams)
+  if (!name || kcal === 0 || servingGrams === 0) return null
+
+  const confidence =
+    raw.confidence === 'high' || raw.confidence === 'medium' ? raw.confidence : 'low'
+  const source = String(raw.source ?? '').trim()
+
+  return {
+    name,
+    brand: String(raw.brand ?? '').trim(),
+    servingGrams: Math.round(servingGrams),
+    servingLabel: String(raw.servingLabel ?? '').trim() || '1 serving',
+    kcal: Math.round(kcal),
+    proteinG: round1(raw.proteinG),
+    carbsG: round1(raw.carbsG),
+    fatG: round1(raw.fatG),
+    fiberG: raw.fiberG === undefined || raw.fiberG === null ? null : round1(raw.fiberG),
+    sodiumMg: raw.sodiumMg === undefined || raw.sodiumMg === null ? null : Math.round(positive(raw.sodiumMg)),
+    note: [source, TRUST[confidence]].filter(Boolean).join(' · '),
+  }
+}
+
+function positive(value: unknown): number {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : 0
+}
+
+const round1 = (value: unknown): number => Math.round(positive(value) * 10) / 10
+
 /**
  * Phase one: what the model read, with nothing looked up yet.
  *
@@ -111,9 +201,21 @@ export async function describeMeal(description: string, extra = ''): Promise<Mea
   return runDescribe({ mode: 'estimate', description: text }, description.trim())
 }
 
-/** Both phases, for callers that have nothing to show in between. */
+/** Both phases, for callers that have nothing to show in between. Components only. */
 export async function estimateMeal(description: string): Promise<MealEstimate> {
-  return matchDraft(await describeMeal(description))
+  const draft = await runDescribe(
+    { mode: 'estimate', description: description.trim(), components: true },
+    description.trim(),
+  )
+  return matchDraft(draft.product === null ? draft : asComponent(draft, draft.product))
+}
+
+function asComponent(draft: MealEstimate, product: FoodDraft): MealEstimate {
+  const item = toItem(
+    { query: `${product.brand} ${product.name}`.trim(), grams: product.servingGrams },
+    0,
+  )
+  return { ...draft, items: [item], product: null }
 }
 
 /**
@@ -176,16 +278,15 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
   // Preferences go along: "a sandwich" means something different to someone who wrote down
   // "vegetarian", and guessing turkey would be worse than asking.
   const { dietNotes } = await repo.getProfile()
-  const { data, error } = await client.functions.invoke<{
-    items?: RawItem[]
-    assumptions?: string
-    error?: string
-    busy?: boolean
-    kind?: 'quota' | 'overloaded'
-    reason?: string
-    quota?: string | null
-    retryAfterSeconds?: number
-  }>('coach', { body: { ...body, dietNotes } })
+  const { data, error } = await client.functions.invoke<
+    RawEstimate & {
+      error?: string
+      busy?: boolean
+      reason?: string
+      quota?: string | null
+      retryAfterSeconds?: number
+    }
+  >('coach', { body: { ...body, dietNotes } })
 
   // A quota wall, an overloaded model and an unreadable meal are three different problems with
   // three different answers. Reporting them all as "couldn't work that out" made a spent
@@ -203,8 +304,7 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
     )
   }
 
-  const items = data.items.map(toItem)
-  return { items, assumptions: data.assumptions ?? '', nutrients: totalOf(items), label }
+  return readEstimate(data, label)
 }
 
 function toItem(raw: RawItem, index: number): EstimatedItem {

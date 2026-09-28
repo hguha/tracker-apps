@@ -326,7 +326,7 @@ function PastItems({
           const nutrients =
             item.kind === 'food' ? nutrientsFor(item.food, grams) : item.nutrients
           return (
-            <li key={item.kind === 'food' ? `f:${item.food.id}` : `d:${item.dishId}`}>
+            <li key={`${item.kind}:${item.kind === 'food' ? item.food.id : item.name}`}>
               <button
                 onClick={() => {
                   const when = at()
@@ -336,7 +336,12 @@ function PastItems({
                       ? // Home, like every other add path: most meals are eaten at home, and this
                         // card's venue row corrects a whole sitting in one tap.
                         () => repo.logFoods([item.food], { meal, eatenAt: when, venue: 'home' })
-                      : () => repo.logDishAgain(item.dishId, { meal, at: when }),
+                      : item.kind === 'dish'
+                        ? () => repo.logDishAgain(item.dishId, { meal, at: when })
+                        : () =>
+                            repo
+                              .logQuickAdd(item.nutrients, meal, item.name, when, 'home')
+                              .then(() => 1),
                     name,
                   )
                 }}
@@ -348,7 +353,9 @@ function PastItems({
                   <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-muted">
                     {item.kind === 'dish'
                       ? item.parts.join(', ')
-                      : `${Math.round(grams)} g, as you last had it`}
+                      : item.kind === 'quick'
+                        ? 'calories only, as you logged it'
+                        : `${Math.round(grams)} g, as you last had it`}
                   </span>
                 </span>
               </button>

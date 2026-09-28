@@ -338,11 +338,14 @@ export async function searchLibrary(query: string, limit = 8): Promise<LibraryHi
   // Dropped where a recipe or saved meal already answers by that name — logging a recipe copies its
   // name onto every row, so the two would otherwise be the same answer twice.
   const named = new Set(saved.map((hit) => hit.name.toLowerCase()))
-  const dishes = (await searchHistory(query, { limit }))
-    .filter((item): item is RecentDish => item.kind === 'dish' && !named.has(item.name.toLowerCase()))
-    .map((dish) => ({ kind: 'dish' as const, dish, name: dish.name }))
+  const fromDiary = (await searchHistory(query, { limit })).flatMap((item): LibraryHit[] => {
+    if (item.kind === 'food' || named.has(item.name.toLowerCase())) return []
+    return item.kind === 'dish'
+      ? [{ kind: 'dish' as const, dish: item, name: item.name }]
+      : [{ kind: 'quick' as const, quick: item, name: item.name }]
+  })
 
-  return [...saved, ...dishes]
+  return [...saved, ...fromDiary]
     // A name that *starts* with what was typed first, then alphabetically: with a handful of saved
     // things any stable order will do, and "starts with" is the one that feels like a search.
     .sort((a, b) => {
@@ -356,6 +359,7 @@ export type LibraryHit =
   | { kind: 'recipe'; recipe: Recipe; name: string }
   | { kind: 'meal'; template: MealTemplate; name: string }
   | { kind: 'dish'; dish: RecentDish; name: string }
+  | { kind: 'quick'; quick: RecentQuick; name: string }
 
 /**
  * Things you have actually eaten, matched by name, going much further back than Recent shows.
@@ -388,6 +392,7 @@ export async function searchHistory(
   // One group per dish *name*, holding every sitting of it.
   const byName = new Map<string, Map<string, LogEntry[]>>()
   const byFood = new Map<string, { entry: LogEntry; times: number }>()
+  const byQuick = new Map<string, { entry: LogEntry; times: number }>()
   for (const entry of entries) {
     if (entry.dishId !== null && entry.dishName !== null) {
       if (!hits(entry.dishName)) continue
@@ -399,7 +404,18 @@ export async function searchHistory(
     }
     // A food that only ever arrived inside a dish is left out for the same reason it is in
     // `recentItems`: "Cheese, ricotta" is not something anybody logged, it came with the lasagna.
-    if (entry.dishId !== null || entry.foodId === null) continue
+    if (entry.dishId !== null) continue
+    if (entry.foodId === null) {
+      const key = quickKey(entry)
+      if (key === null || !hits(entry.note ?? '')) continue
+      const current = byQuick.get(key)
+      if (!current) byQuick.set(key, { entry, times: 1 })
+      else {
+        current.times += 1
+        if (entry.eatenAt > current.entry.eatenAt) current.entry = entry
+      }
+      continue
+    }
     const food = foods.get(entry.foodId)
     if (!food || !hits(food.description)) continue
     const current = byFood.get(entry.foodId)
@@ -441,6 +457,10 @@ export async function searchHistory(
           ? { grams: entry.grams, portionId: entry.portionId, portionCount: entry.portionCount }
           : null,
     })
+  }
+  for (const { entry, times } of byQuick.values()) {
+    const quick = asQuick(entry, times)
+    if (quick) items.push(quick)
   }
 
   return items.sort((a, b) => b.lastAt - a.lastAt).slice(0, limit)
@@ -1390,7 +1410,31 @@ export interface RecentDish {
   parts: string[]
 }
 
-export type RecentItem = RecentFood | RecentDish
+export interface RecentQuick {
+  kind: 'quick'
+  name: string
+  lastAt: number
+  times: number
+  nutrients: Nutrients
+}
+
+export type RecentItem = RecentFood | RecentDish | RecentQuick
+
+const quickKey = (entry: LogEntry): string | null =>
+  entry.quickAdd !== null && (entry.note ?? '').trim() !== ''
+    ? `quick:${entry.note!.trim().toLowerCase()}`
+    : null
+
+function asQuick(entry: LogEntry, times: number): RecentQuick | null {
+  if (quickKey(entry) === null) return null
+  return {
+    kind: 'quick',
+    name: entry.note!.trim(),
+    lastAt: entry.eatenAt,
+    times,
+    nutrients: entry.nutrients,
+  }
+}
 
 export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> {
   const from = dayKey(Date.now() - days * DAY_MS)
@@ -1447,10 +1491,10 @@ export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> 
     }
   })
 
-  // Loose foods, one row each. `quickAdd` rows are included: a quick add is a thing you ate.
   const byFood = new Map<string, { entry: LogEntry; times: number }>()
   for (const entry of loose) {
-    const key = entry.foodId ?? `note:${entry.note}`
+    const key = entry.foodId ?? quickKey(entry)
+    if (key === null) continue
     const current = byFood.get(key)
     if (!current) byFood.set(key, { entry, times: 1 })
     else {
@@ -1462,7 +1506,11 @@ export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> 
   const items: RecentItem[] = [...dishes]
   for (const { entry, times } of byFood.values()) {
     const food = entry.foodId ? foods.get(entry.foodId) : undefined
-    if (!food) continue
+    if (!food) {
+      const quick = asQuick(entry, times)
+      if (quick) items.push(quick)
+      continue
+    }
     items.push({
       kind: 'food',
       food,

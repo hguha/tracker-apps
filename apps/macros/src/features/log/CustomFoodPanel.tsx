@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Button, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { gramsToMg } from '@/lib/nutrition'
+import { gramsToMg, per100FromServing } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food } from '@/domain/types'
+import type { FoodDraft } from './estimate'
 
 /**
  * Creating a food the databases don't have.
@@ -32,26 +33,28 @@ const MACROS = [
 export function CustomFoodPanel({
   initialName = '',
   initialBarcode = null,
+  draft = null,
   onSaved,
 }: {
   initialName?: string
   initialBarcode?: string | null
+  draft?: FoodDraft | null
   /** Handed the saved food so the caller can go straight to the amount step. */
   onSaved: (food: Food) => void
 }) {
   const toast = useToast()
-  const [name, setName] = useState(initialName)
-  const [brand, setBrand] = useState('')
+  const [name, setName] = useState(draft?.name ?? initialName)
+  const [brand, setBrand] = useState(draft?.brand ?? '')
   const [basis, setBasis] = useState<Basis>('serving')
-  const [serving, setServing] = useState('')
-  const [servingLabel, setServingLabel] = useState('')
+  const [serving, setServing] = useState(text(draft?.servingGrams))
+  const [servingLabel, setServingLabel] = useState(draft?.servingLabel ?? '')
   const [fields, setFields] = useState({
-    kcal: '',
-    protein: '',
-    carbs: '',
-    fat: '',
-    fiber: '',
-    sodium: '',
+    kcal: text(draft?.kcal),
+    protein: text(draft?.proteinG),
+    carbs: text(draft?.carbsG),
+    fat: text(draft?.fatG),
+    fiber: text(draft?.fiberG),
+    sodium: text(draft?.sodiumMg),
   })
   const [isSaving, setIsSaving] = useState(false)
 
@@ -64,7 +67,7 @@ export function CustomFoodPanel({
   /** Everything typed, scaled to the 100 g basis the app stores. */
   const per100 = (value: string): number => {
     const typed = Number(value) || 0
-    return basis === 'hundred' ? typed : (typed * 100) / Math.max(1, servingGrams)
+    return basis === 'hundred' ? typed : per100FromServing(typed, servingGrams)
   }
 
   async function save() {
@@ -98,10 +101,13 @@ export function CustomFoodPanel({
 
   return (
     <div className="space-y-3 px-4 py-3">
-      <h2 className="text-[16px] font-semibold tracking-tight">Create a food</h2>
+      <h2 className="text-[16px] font-semibold tracking-tight">
+        {draft ? 'Check these numbers' : 'Create a food'}
+      </h2>
+      {draft?.note && <p className="text-[12.5px] text-ink-secondary">{draft.note}</p>}
 
       <input
-        autoFocus
+        autoFocus={draft === null}
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Name"
@@ -179,6 +185,9 @@ export function CustomFoodPanel({
     </div>
   )
 }
+
+const text = (value: number | null | undefined): string =>
+  value === null || value === undefined ? '' : String(value)
 
 /** A number with its unit in the label, so the box holds only the number. */
 function Field({

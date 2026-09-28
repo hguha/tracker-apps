@@ -235,6 +235,8 @@ function subjectKey(loggable: Loggable): string {
       return `meal:${loggable.template.id}`
     case 'dish':
       return `dish:${loggable.dish.dishId}`
+    case 'quick':
+      return `quick:${loggable.quick.name}`
   }
 }
 

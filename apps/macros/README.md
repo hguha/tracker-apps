@@ -13,7 +13,7 @@ Design and roadmap: `docs/design-macros-app.md` at the repo root.
 - **A day** — its own screen, reached from Today or from History: totals against that day's target,
   meals as cards, amounts editable in place, and one "Revert" for everything changed while open.
 - **Log** — offline search over seeded foods, portions, servings-or-grams, quick add, barcode,
-  photo, described meals, and where it was eaten.
+  photo, described meals, named branded items, and where it was eaten.
 - **Recipes** — imported from a link, pasted, or described; a detail screen with the method and
   a serving stepper; cuisine, filters, and a ranked "what should I cook".
 - **History** — totals against the target that was in force *then*, filtered by meal and venue.
@@ -92,6 +92,32 @@ next model is tried immediately. A 503 gets one retry before moving on.
 to USDA. It exists because **"80/20 ground beef" returned nothing at all** — not a bad ranking, zero
 rows — while "ground beef 80" returns the exact entry. A search that silently returns nothing is the
 worst failure this app can have: it is indistinguishable from the food not existing.
+
+### A named product is not an ingredient list
+
+The one place a figure from the model becomes a figure in the app, and it exists because the
+alternative was worse. "Costco chicken bake" is in neither database — USDA has the packaged
+Kirkland range, not the food court — so the AI path was asked for it and, being told to return
+generic ingredient names only, produced a *pizza crust* and a *chicken parmesan*: two invented
+weights of foods that are not in it. Wrong, and unfixable by the user, because the rows were wrong
+rather than the amounts.
+
+So `coach`'s estimate schema has two shapes and the model picks: `components` for a described meal
+(names and grams only, every nutrient still computed from a matched food row), or `item` for one
+named product with a published panel. An `item` never logs anything by itself — it fills in
+**`CustomFoodPanel`** with every figure editable, says where the numbers came from and how far to
+trust them, and saving makes it a food of the user's own. The next one is found locally, offline,
+with no model involved. `estimateMeal` sends `components: true`, because a caller filling rows into
+an existing draft or recipe has nowhere to put a panel.
+
+### Barcodes on iOS
+
+`BarcodeDetector` is not implemented in any version of WebKit, so gating the scan button on it
+removed the feature entirely from Safari, the installed PWA and the App Store build — the platforms
+where scanning beats typing by the widest margin. `platform/barcode.ts` keeps `BarcodeDetector` as
+the fast path and falls back to a lazily-imported WebAssembly ZXing reader, so availability now
+means "there is a camera". The wasm is a content-hashed asset, which makes it cache-first in the
+service worker after first use.
 
 ### The seed
 

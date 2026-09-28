@@ -22,6 +22,7 @@ import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
 import { nutrientsFor, perServing } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
+import { matchesQuery, queryTerms } from '@/lib/foodSearch'
 import { MEAL_LABELS } from '@/lib/meals'
 import { amountGrams } from '@/features/shared/format'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
@@ -47,6 +48,7 @@ import { PhotoPanel } from './PhotoPanel'
 import { QuickAddPanel } from './QuickAddPanel'
 import { ScanPanel } from './ScanPanel'
 import { RecipeEditor } from '@/features/recipes/RecipeEditor'
+import type { FoodDraft } from './estimate'
 import type { Loggable } from './loggable'
 import type { LogTarget } from './target'
 
@@ -57,7 +59,7 @@ type Panel =
   | { kind: 'scan' }
   | { kind: 'photo' }
   | { kind: 'quick' }
-  | { kind: 'custom'; name: string; barcode?: string }
+  | { kind: 'custom'; name: string; barcode?: string; draft?: FoodDraft }
   | { kind: 'recipe' }
   | { kind: 'fits' }
 
@@ -122,6 +124,8 @@ export function LogScreen({
     setQuery('')
     setPanel({ kind: 'browse' })
   }
+  const onProduct = (draft: FoodDraft) =>
+    setPanel({ kind: 'custom', name: draft.name, draft })
 
   // The recipe editor owns the whole screen: it has its own header, and a recipe is a different
   // job from logging today's food even though both start at the same "+".
@@ -168,14 +172,22 @@ export function LogScreen({
           <FitsPanel onOpen={(loggable) => setPanel({ kind: 'add', loggable })} />
         )}
         {panel.kind === 'describe' && (
-          <DescribePanel target={target} initialText={query} onDone={onLogged} />
+          <DescribePanel
+            target={target}
+            initialText={query}
+            onDone={onLogged}
+            onProduct={onProduct}
+          />
         )}
         {panel.kind === 'quick' && <QuickAddPanel target={target} onDone={onLogged} />}
-        {panel.kind === 'photo' && <PhotoPanel target={target} onDone={onLogged} />}
+        {panel.kind === 'photo' && (
+          <PhotoPanel target={target} onDone={onLogged} onProduct={onProduct} />
+        )}
         {panel.kind === 'custom' && (
           <CustomFoodPanel
             initialName={panel.name}
             initialBarcode={panel.barcode ?? null}
+            draft={panel.draft ?? null}
             onSaved={(food) => setPanel({ kind: 'add', loggable: { kind: 'food', food } })}
           />
         )}
@@ -276,9 +288,11 @@ function BrowsePanel({
     trimmed.length >= 3 ? (
       <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} />
     ) : null
-  // Only lead with the breakdown once the search has actually finished coming up thin — and never
-  // when something the user saved themselves already matches the name.
-  const describeLeads = !isSearching && results.length < 3 && (libraryHits ?? []).length === 0
+  const terms = queryTerms(trimmed)
+  const describeLeads =
+    !isSearching &&
+    (libraryHits ?? []).length === 0 &&
+    !results.some((food) => matchesQuery(food, terms))
 
   const savedCount = (templates ?? []).length + (savedFoods ?? []).length
 

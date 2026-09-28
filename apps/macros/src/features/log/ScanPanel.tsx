@@ -40,11 +40,17 @@ export function ScanPanel({
     const video = videoRef.current
     if (!video) return
 
-    void startScanning(video, (barcode) => {
-      if (cancelled) return
-      handleRef.current?.stop()
-      void resolve(barcode)
-    })
+    void startScanning(
+      video,
+      (barcode) => {
+        if (cancelled) return
+        handleRef.current?.stop()
+        void resolve(barcode)
+      },
+      (message) => {
+        if (!cancelled) setState({ kind: 'failed', message })
+      },
+    )
       .then((handle) => {
         if (cancelled) handle.stop()
         else handleRef.current = handle
