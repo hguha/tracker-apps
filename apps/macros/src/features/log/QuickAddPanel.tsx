@@ -3,7 +3,7 @@ import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { gramsToMg } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
-import type { LogTarget } from './target'
+import type { LogTarget } from '@/features/shared/target'
 
 /** For a label in your hand and no database row — the escape hatch that stops someone
  *  abandoning the log entirely. */

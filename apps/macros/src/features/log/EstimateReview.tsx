@@ -9,7 +9,7 @@ import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
 import type { EntrySource, Food } from '@/domain/types'
 import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
-import type { LogTarget } from './target'
+import type { LogTarget } from '@/features/shared/target'
 
 /**
  * A draft estimate, editable, with the totals it currently implies.

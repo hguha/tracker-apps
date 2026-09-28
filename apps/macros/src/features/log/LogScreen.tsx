@@ -32,15 +32,9 @@ import type { LastAmount } from '@/data/repository'
 import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'
 import { FitsPanel } from './FitsPanel'
-import {
-  DescribeRow,
-  Empty,
-  FoodList,
-  LibraryHits,
-  MoreWaysSheet,
-  RecentList,
-  SavedMeals,
-} from './browseRows'
+import { DescribeRow, Empty, FoodList, MoreWaysSheet, SavedMeals } from './browseRows'
+import { LoggableList } from '@/features/shared/LoggableList'
+import { fromLibrary, fromRecent } from '@/features/shared/loggable'
 import { DescribePanel } from './DescribePanel'
 import { MealTimePicker } from './MealTimePicker'
 import { CustomFoodPanel } from './CustomFoodPanel'
@@ -49,8 +43,8 @@ import { QuickAddPanel } from './QuickAddPanel'
 import { ScanPanel } from './ScanPanel'
 import { RecipeEditor } from '@/features/recipes/RecipeEditor'
 import type { FoodDraft } from './estimate'
-import type { Loggable } from './loggable'
-import type { LogTarget } from './target'
+import type { Loggable } from '@/features/shared/loggable'
+import type { LogTarget } from '@/features/shared/target'
 
 type Panel =
   | { kind: 'browse' }
@@ -376,7 +370,11 @@ function BrowsePanel({
         <>
           {describeLeads && describeRow}
           {(libraryHits ?? []).length > 0 && (
-            <LibraryHits hits={libraryHits ?? []} onOpen={onOpen} />
+            <LoggableList
+              heading="Yours"
+              items={(libraryHits ?? []).map(fromLibrary)}
+              onPick={(hit) => onOpen(hit.loggable)}
+            />
           )}
           <FoodList
             foods={results}
@@ -421,7 +419,7 @@ function BrowsePanel({
             (recents === undefined ? null : recents.length === 0 ? (
               <Empty>Everything you log turns up here.</Empty>
             ) : (
-              <RecentList items={recents} onOpen={onOpen} />
+              <LoggableList items={recents.map(fromRecent)} onPick={(row) => onOpen(row.loggable)} />
             ))}
 
           {/*

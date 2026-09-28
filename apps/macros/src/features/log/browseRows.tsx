@@ -2,13 +2,13 @@ import { BottomSheet, Card } from '@tracker-engine/ui'
 import { Bookmark, Camera, ChefHat, Check, PencilLine, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import * as repo from '@/data/repository'
-import { nutrientsFor, perServing, portionFor } from '@/lib/nutrition'
-import { amountGrams, portionLabel, portionWithGrams } from '@/features/shared/format'
-import { MacroNumbers } from '@/features/shared/MacroNumbers'
-import { SwipeRow, type SwipeAction } from '@/features/shared/SwipeRow'
-import type { LastAmount, LibraryHit, RecentItem } from '@/data/repository'
+import { nutrientsFor } from '@/lib/nutrition'
+import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
+import { SwipeRow } from '@/features/shared/SwipeRow'
+import { LoggableList } from '@/features/shared/LoggableList'
+import type { LastAmount } from '@/data/repository'
 import type { Food, MealTemplate } from '@/domain/types'
-import type { Loggable } from './loggable'
+import type { Loggable } from '@/features/shared/loggable'
 
 /**
  * The rows and sheets the browse panel is made of.
@@ -63,181 +63,6 @@ export function MoreWaysSheet({
   )
 }
 
-const keyOf = (hit: LibraryHit): string => {
-  switch (hit.kind) {
-    case 'recipe':
-      return `r:${hit.recipe.id}`
-    case 'meal':
-      return `m:${hit.template.id}`
-    case 'dish':
-      return `d:${hit.dish.dishId}`
-    case 'quick':
-      return `q:${hit.quick.name}`
-  }
-}
-
-const loggableOf = (hit: LibraryHit): Loggable => {
-  switch (hit.kind) {
-    case 'recipe':
-      return { kind: 'recipe', recipe: hit.recipe }
-    case 'meal':
-      return { kind: 'meal', template: hit.template }
-    case 'dish':
-      return { kind: 'dish', dish: hit.dish }
-    case 'quick':
-      return { kind: 'quick', quick: hit.quick }
-  }
-}
-
-const nutrientsOfHit = (hit: LibraryHit) => {
-  switch (hit.kind) {
-    case 'recipe':
-      return perServing(hit.recipe)
-    case 'meal':
-      return hit.template.nutrients
-    case 'dish':
-      return hit.dish.nutrients
-    case 'quick':
-      return hit.quick.nutrients
-  }
-}
-
-const detailOfHit = (hit: LibraryHit): string => {
-  switch (hit.kind) {
-    case 'recipe':
-      return 'a serving'
-    case 'meal':
-      return 'saved'
-    case 'dish':
-      return withTimes(hit.dish.parts.join(', '), hit.dish.times)
-    case 'quick':
-      return withTimes('calories only', hit.quick.times)
-  }
-}
-
-/** Your own recipes, saved meals and past dishes, above the database — because you named them. */
-export function LibraryHits({
-  hits,
-  onOpen,
-}: {
-  hits: readonly LibraryHit[]
-  onOpen: (loggable: Loggable) => void
-}) {
-  return (
-    <Card className="p-0">
-      <Heading>Yours</Heading>
-      <ul className="divide-y divide-line">
-        {hits.map((hit) => (
-          <li key={keyOf(hit)}>
-            <Row
-              onClick={() => onOpen(loggableOf(hit))}
-              title={hit.name}
-              nutrients={nutrientsOfHit(hit)}
-              detail={detailOfHit(hit)}
-            />
-          </li>
-        ))}
-      </ul>
-    </Card>
-  )
-}
-
-/**
- * What you have eaten lately: dishes and foods in one list, newest first.
- *
- * A dish is one row with the name you gave it and the foods it contains as its detail line, so "3
- * steak tacos" is recognisable and re-loggable in a tap. This replaced a list of `day|meal` groups
- * labelled "Lunch · Tuesday", which named no food at all and grew a row every time you ate the
- * same lunch.
- *
- * Tapping either kind opens the same add screen. A dish used to log straight from a "Log" button on
- * the row — six rows written on one tap with nothing to confirm and nothing to say how much.
- */
-export function RecentList({
-  items,
-  onOpen,
-}: {
-  items: readonly RecentItem[]
-  onOpen: (loggable: Loggable) => void
-}) {
-  return (
-    <Card className="p-0">
-      <ul className="divide-y divide-line">
-        {items.map((item) => (
-          <li key={recentKey(item)}>
-            {item.kind === 'food' ? (
-              <Row
-                onClick={() => onOpen({ kind: 'food', food: item.food })}
-                title={item.food.description}
-                nutrients={nutrientsFor(item.food, amountGrams(item.food, item.amount))}
-                detail={withTimes(describeAmount(item.food, item.amount), item.times)}
-              />
-            ) : item.kind === 'dish' ? (
-              <Row
-                onClick={() => onOpen({ kind: 'dish', dish: item })}
-                title={item.name}
-                nutrients={item.nutrients}
-                detail={withTimes(item.parts.join(', '), item.times)}
-              />
-            ) : (
-              <Row
-                onClick={() => onOpen({ kind: 'quick', quick: item })}
-                title={item.name}
-                nutrients={item.nutrients}
-                detail={withTimes('calories only', item.times)}
-              />
-            )}
-          </li>
-        ))}
-      </ul>
-    </Card>
-  )
-}
-
-const recentKey = (item: RecentItem): string =>
-  item.kind === 'food' ? `f:${item.food.id}` : item.kind === 'dish' ? `d:${item.dishId}` : `q:${item.name}`
-
-/**
- * How often it's been eaten, said in words.
- *
- * It was a bare "2×" floating at the end of the row, which states a number without its unit: two
- * portions? twice today? Folded into the detail line, where the sentence can carry the window.
- */
-function withTimes(detail: string, times: number): string {
-  if (times < 2) return detail
-  return [detail, `${times} times this month`].filter(Boolean).join(' · ')
-}
-
-/** One tappable thing: what it is, what it costs, and one line of detail. Nothing else. */
-function Row({
-  onClick,
-  title,
-  nutrients,
-  detail,
-  actions,
-}: {
-  onClick: () => void
-  title: string
-  nutrients: Parameters<typeof MacroNumbers>[0]['nutrients']
-  detail: string
-  /** Revealed by a swipe. See `SwipeRow`; omitted where there is nothing to do but log it. */
-  actions?: readonly SwipeAction[]
-}) {
-  const body = (
-    <button onClick={onClick} className="w-full px-4 py-2.5 text-left active:bg-sunken">
-      <span className="block truncate text-[14px]">{title}</span>
-      <span className="tabular mt-0.5 flex items-baseline gap-2">
-        <span className="shrink-0 text-[12px] font-semibold">{nutrients.kcal} kcal</span>
-        <MacroNumbers nutrients={nutrients} />
-      </span>
-      {detail !== '' && (
-        <span className="block truncate text-[11.5px] text-ink-muted">{detail}</span>
-      )}
-    </button>
-  )
-  return actions && actions.length > 0 ? <SwipeRow actions={actions}>{body}</SwipeRow> : body
-}
-
 /**
  * The meals you kept, with a way to stop keeping them.
  *
@@ -254,29 +79,28 @@ export function SavedMeals({
   onOpen: (loggable: Loggable) => void
   onRemove: (template: MealTemplate) => void
 }) {
+  const items = templates.map((template) => ({
+    key: `m:${template.id}`,
+    title: template.name,
+    nutrients: template.nutrients,
+    detail: `${template.items.length} item${template.items.length === 1 ? '' : 's'}`,
+    loggable: { kind: 'meal' as const, template },
+  }))
+  const byKey = new Map(templates.map((template) => [`m:${template.id}`, template]))
+
   return (
-    <Card className="p-0">
-      <ul className="divide-y divide-line">
-        {templates.map((template) => (
-          <li key={template.id}>
-            <Row
-              onClick={() => onOpen({ kind: 'meal', template })}
-              title={template.name}
-              nutrients={template.nutrients}
-              detail={`${template.items.length} item${template.items.length === 1 ? '' : 's'}`}
-              actions={[
-                {
-                  label: 'Remove',
-                  icon: Trash2,
-                  tone: 'critical',
-                  onAction: () => onRemove(template),
-                },
-              ]}
-            />
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <LoggableList
+      items={items}
+      onPick={(suggestion) => onOpen(suggestion.loggable)}
+      actionsFor={(suggestion) => [
+        {
+          label: 'Remove',
+          icon: Trash2,
+          tone: 'critical',
+          onAction: () => onRemove(byKey.get(suggestion.key)!),
+        },
+      ]}
+    />
   )
 }
 
@@ -290,15 +114,6 @@ function Heading({ children }: { children: React.ReactNode }) {
 
 export function Empty({ children }: { children: React.ReactNode }) {
   return <Card className="p-4 text-center text-[13px] text-ink-muted">{children}</Card>
-}
-
-function describeAmount(food: Food, last: LastAmount | null | undefined): string {
-  const grams = amountGrams(food, last)
-  const portion = last?.portionId ? portionFor(food, last.portionId) : null
-  const count = last?.portionCount ?? 1
-  return portion
-    ? `${count} × ${portionLabel(portion)} · ${Math.round(grams)} g`
-    : `${Math.round(grams)} g`
 }
 
 export function FoodList({

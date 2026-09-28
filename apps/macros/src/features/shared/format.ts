@@ -1,6 +1,7 @@
 import type { UnitPreference } from '@tracker-engine/core'
 import { mgToGrams, portionFor } from '@/lib/nutrition'
 import { householdAmount } from '@/lib/householdAmount'
+import type { LastAmount } from '@/data/repository'
 import type { Food } from '@/domain/types'
 
 export const grams = (mg: number): string => `${Math.round(mgToGrams(mg))}g`
@@ -85,4 +86,13 @@ export function amountGrams(
   if (last && last.grams > 0) return last.grams
   const portion = portionFor(food, null)
   return portion ? portion.grams : 100
+}
+
+export function describeAmount(food: Food, last: LastAmount | null | undefined): string {
+  const grams = amountGrams(food, last)
+  const portion = last?.portionId ? portionFor(food, last.portionId) : null
+  const count = last?.portionCount ?? 1
+  return portion
+    ? `${count} × ${portionLabel(portion)} · ${Math.round(grams)} g`
+    : `${Math.round(grams)} g`
 }

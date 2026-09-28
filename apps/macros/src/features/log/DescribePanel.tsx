@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
-import type { LogTarget } from './target'
+import type { LogTarget } from '@/features/shared/target'
 import { describeMeal, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 

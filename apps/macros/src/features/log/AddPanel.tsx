@@ -8,8 +8,8 @@ import { cn } from '@/lib/cn'
 import { dayTotals, mgToGrams, scale, sum } from '@/lib/nutrition'
 import { MACRO_BARS } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
-import { describeLoggable, partsOf, GRAMS, type Loggable, type LoggablePart } from './loggable'
-import type { LogTarget } from './target'
+import { describeLoggable, partsOf, GRAMS, type Loggable, type LoggablePart } from '@/features/shared/loggable'
+import type { LogTarget } from '@/features/shared/target'
 
 /**
  * How much of it, and what that does to the day. **One screen for everything loggable.**

@@ -1,9 +1,9 @@
 import * as repo from '@/data/repository'
 import { nutrientsFor, perServing, scale } from '@/lib/nutrition'
-import { portionWithGrams } from '@/features/shared/format'
+import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
 import { EMPTY_NUTRIENTS, type Food, type MealTemplate, type Nutrients, type Recipe } from '@/domain/types'
-import type { RecentDish, RecentQuick } from '@/data/repository'
-import type { LogTarget } from './target'
+import type { LibraryHit, RecentDish, RecentItem, RecentQuick } from '@/data/repository'
+import type { LogTarget } from '@/features/shared/target'
 
 /**
  * Everything that can be added to a day, behind one shape.
@@ -220,6 +220,96 @@ function quickSubject(quick: RecentQuick): AddSubject {
         .logQuickAdd(unit_.nutrientsAt(count), target.meal, quick.name, target.at, target.venue)
         .then(() => 1),
   }
+}
+
+export interface Suggestion {
+  key: string
+  title: string
+  nutrients: Nutrients
+  detail: string
+  loggable: Loggable
+}
+
+export interface Repeatable extends Suggestion {
+  logAgain: (target: LogTarget) => Promise<number>
+}
+
+export function fromRecent(item: RecentItem): Repeatable {
+  switch (item.kind) {
+    case 'food': {
+      const grams = amountGrams(item.food, item.amount)
+      return {
+        key: `f:${item.food.id}`,
+        title: item.food.description,
+        nutrients: nutrientsFor(item.food, grams),
+        detail: withTimes(describeAmount(item.food, item.amount), item.times),
+        loggable: { kind: 'food', food: item.food },
+        logAgain: (target) =>
+          repo.logFoods([item.food], {
+            meal: target.meal,
+            eatenAt: target.at,
+            venue: target.venue,
+          }),
+      }
+    }
+    case 'dish':
+      return {
+        key: `d:${item.dishId}`,
+        title: item.name,
+        nutrients: item.nutrients,
+        detail: withTimes(item.parts.join(', '), item.times),
+        loggable: { kind: 'dish', dish: item },
+        logAgain: (target) => repo.logDishAgain(item.dishId, { meal: target.meal, at: target.at }),
+      }
+    case 'quick':
+      return {
+        key: `q:${item.name}`,
+        title: item.name,
+        nutrients: item.nutrients,
+        detail: withTimes('calories only', item.times),
+        loggable: { kind: 'quick', quick: item },
+        logAgain: (target) =>
+          repo
+            .logQuickAdd(item.nutrients, target.meal, item.name, target.at, target.venue)
+            .then(() => 1),
+      }
+  }
+}
+
+export function fromLibrary(hit: LibraryHit): Suggestion {
+  switch (hit.kind) {
+    case 'recipe':
+      return {
+        key: `r:${hit.recipe.id}`,
+        title: hit.name,
+        nutrients: perServing(hit.recipe),
+        detail: 'a serving',
+        loggable: { kind: 'recipe', recipe: hit.recipe },
+      }
+    case 'meal':
+      return {
+        key: `m:${hit.template.id}`,
+        title: hit.name,
+        nutrients: hit.template.nutrients,
+        detail: 'saved',
+        loggable: { kind: 'meal', template: hit.template },
+      }
+    case 'dish':
+      return fromRecent(hit.dish)
+    case 'quick':
+      return fromRecent(hit.quick)
+  }
+}
+
+/**
+ * How often it's been eaten, said in words.
+ *
+ * It was a bare "2×" floating at the end of the row, which states a number without its unit: two
+ * portions? twice today? Folded into the detail line, where the sentence can carry the window.
+ */
+export function withTimes(detail: string, times: number): string {
+  if (times < 2) return detail
+  return [detail, `${times} times this month`].filter(Boolean).join(' · ')
 }
 
 export interface LoggablePart {

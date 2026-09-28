@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Camera, RotateCcw } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
-import type { LogTarget } from './target'
+import type { LogTarget } from '@/features/shared/target'
 import { describePhoto, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 

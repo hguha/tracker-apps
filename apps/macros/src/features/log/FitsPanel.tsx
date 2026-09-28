@@ -6,10 +6,10 @@ import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, perServing, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
 import { recommendRecipes } from '@/lib/recommend'
-import { MacroNumbers } from '@/features/shared/MacroNumbers'
+import { LoggableList } from '@/features/shared/LoggableList'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import { Empty } from './browseRows'
-import type { Loggable } from './loggable'
+import type { Loggable, Suggestion } from '@/features/shared/loggable'
 
 /**
  * What still fits today, from every source that can answer.
@@ -30,14 +30,7 @@ const SOURCES: SegmentedTab<Source>[] = [
   { key: 'foods', label: 'Foods' },
 ]
 
-interface Suggestion {
-  key: string
-  title: string
-  nutrients: Nutrients
-  why: string
-  loggable: Loggable
-  source: Exclude<Source, 'all'>
-}
+type Fit = Suggestion & { source: Exclude<Source, 'all'> }
 
 export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) {
   const today = dayKey(Date.now())
@@ -71,9 +64,9 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
   const isLoaded = targets !== undefined && todayEntries !== undefined
   const left = targets ? remaining(dayTotals(todayEntries ?? []), targets) : null
 
-  const suggestions = useMemo((): Suggestion[] => {
+  const suggestions = useMemo((): Fit[] => {
     if (!left) return []
-    const fromRecipes: Suggestion[] = recommendRecipes({
+    const fromRecipes: Fit[] = recommendRecipes({
       remainingKcal: left.kcal,
       remainingProteinMg: left.proteinMg,
       recipes: recipes ?? [],
@@ -84,21 +77,21 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
       key: `r:${recipe.id}`,
       title: recipe.name,
       nutrients: perServing(recipe),
-      why,
+      detail: why,
       loggable: { kind: 'recipe', recipe },
       source: 'recipes',
     }))
 
-    const fromFoods: Suggestion[] = suggestFoods(left, candidates ?? []).map((suggestion) => ({
+    const fromFoods: Fit[] = suggestFoods(left, candidates ?? []).map((suggestion) => ({
       key: `f:${suggestion.food.id}`,
       title: suggestion.food.description,
       nutrients: suggestion.nutrients,
-      why: suggestion.why,
+      detail: suggestion.why,
       loggable: { kind: 'food', food: suggestion.food },
       source: 'foods',
     }))
 
-    const fromSaved: Suggestion[] = (templates ?? []).flatMap((template) => {
+    const fromSaved: Fit[] = (templates ?? []).flatMap((template) => {
       const why = fitNote(template.nutrients, left)
       return why === null
         ? []
@@ -107,7 +100,7 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
               key: `m:${template.id}`,
               title: template.name,
               nutrients: template.nutrients,
-              why,
+              detail: why,
               loggable: { kind: 'meal' as const, template },
               source: 'saved' as const,
             },
@@ -142,31 +135,7 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
 
       {left !== null && <SegmentedTabs tabs={SOURCES} active={source} onSelect={setSource} />}
 
-      {shown.length > 0 && (
-        <Card className="p-0">
-          <ul className="divide-y divide-line">
-            {shown.map((suggestion) => (
-              <li key={suggestion.key}>
-                <button
-                  onClick={() => onOpen(suggestion.loggable)}
-                  className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                >
-                  <span className="block truncate text-[14px]">{suggestion.title}</span>
-                  <span className="tabular mt-0.5 flex items-baseline gap-2">
-                    <span className="shrink-0 text-[12px] font-semibold">
-                      {suggestion.nutrients.kcal} kcal
-                    </span>
-                    <MacroNumbers nutrients={suggestion.nutrients} />
-                  </span>
-                  <span className="tabular block truncate text-[11.5px] text-ink-muted">
-                    {suggestion.why}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {shown.length > 0 && <LoggableList items={shown} onPick={(fit) => onOpen(fit.loggable)} />}
 
       {isLoaded && left !== null && shown.length === 0 && (
         <Empty>Nothing here fits what&rsquo;s left. Try a search.</Empty>

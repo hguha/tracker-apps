@@ -14,13 +14,14 @@ import {
 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@/lib/cn'
-import { dayTotals, nutrientsFor } from '@/lib/nutrition'
+import { dayTotals } from '@/lib/nutrition'
 import { mealGroups, type DishGroup, type MealGroup } from '@/lib/dayGroups'
 import { dayTiming, formatDuration } from '@/lib/mealTiming'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
-import { amountGrams } from '@/features/shared/format'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
+import { LoggableList } from '@/features/shared/LoggableList'
+import { fromRecent } from '@/features/shared/loggable'
 import { SwipeRow } from '@/features/shared/SwipeRow'
 import { VenueChoice } from '@/features/shared/VenueChoice'
 import { SaveMealSheet } from '@/features/today/SaveMealSheet'
@@ -316,54 +317,22 @@ function PastItems({
   }
 
   return (
-    <Card className="p-0">
-      <ul className="divide-y divide-line">
-        {items.map((item) => {
-          const name = item.kind === 'food' ? item.food.description : item.name
-          // What the tap will write, not what the food is per 100 g: this logs blind, so the row has
-          // to state the amount it is about to commit. Same helper the add screen's tickboxes use.
-          const grams = item.kind === 'food' ? amountGrams(item.food, item.amount) : 0
-          const nutrients =
-            item.kind === 'food' ? nutrientsFor(item.food, grams) : item.nutrients
-          return (
-            <li key={`${item.kind}:${item.kind === 'food' ? item.food.id : item.name}`}>
-              <button
-                onClick={() => {
-                  const when = at()
-                  const meal = mealForHour(new Date(when).getHours())
-                  onLog(
-                    item.kind === 'food'
-                      ? // Home, like every other add path: most meals are eaten at home, and this
-                        // card's venue row corrects a whole sitting in one tap.
-                        () => repo.logFoods([item.food], { meal, eatenAt: when, venue: 'home' })
-                      : item.kind === 'dish'
-                        ? () => repo.logDishAgain(item.dishId, { meal, at: when })
-                        : () =>
-                            repo
-                              .logQuickAdd(item.nutrients, meal, item.name, when, 'home')
-                              .then(() => 1),
-                    name,
-                  )
-                }}
-                className="w-full px-4 py-2.5 text-left active:bg-sunken"
-              >
-                <span className="block truncate text-[14px]">{name}</span>
-                <span className="tabular mt-0.5 flex items-baseline gap-2">
-                  <span className="shrink-0 text-[12px] font-semibold">{nutrients.kcal} kcal</span>
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-muted">
-                    {item.kind === 'dish'
-                      ? item.parts.join(', ')
-                      : item.kind === 'quick'
-                        ? 'calories only, as you logged it'
-                        : `${Math.round(grams)} g, as you last had it`}
-                  </span>
-                </span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </Card>
+    <LoggableList
+      heading="One tap, as you last had it"
+      items={items.map(fromRecent)}
+      onPick={(repeat) => {
+        const when = at()
+        onLog(
+          () =>
+            repeat.logAgain({
+              meal: mealForHour(new Date(when).getHours()),
+              at: when,
+              venue: 'home',
+            }),
+          repeat.title,
+        )
+      }}
+    />
   )
 }
 
