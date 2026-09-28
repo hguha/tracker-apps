@@ -118,7 +118,7 @@ export const haystackOf = (food: Food): string =>
  * The same test against an already-lowercased string.
  *
  * Exists because `searchFoods` runs on every keystroke over the whole cache: rebuilding and
- * lowercasing 1,500 strings per keystroke is work the index can do once and never repeat.
+ * lowercasing a couple of thousand strings per keystroke is work the index can do once and never repeat.
  */
 export function matchesHaystack(haystack: string, terms: readonly string[]): boolean {
   return terms.every((term) => haystack.includes(term))

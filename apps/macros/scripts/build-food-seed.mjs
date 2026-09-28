@@ -158,8 +158,10 @@ const foods = [...byId.values()]
 const withPortions = foods.filter((food) => food.portions.length > 0).length
 const generic = foods.filter((food) => (food.dataType ?? '').toLowerCase() !== 'branded').length
 
+// `per100` appears exactly once per food. `id` does not — every portion carries one too, which is
+// how this guard first read 1,463 foods as 5,356 and refused a perfectly good run.
 const existing = (readFileSync(new URL('../src/db/seed/foods.ts', import.meta.url), 'utf8').match(
-  /"id":/g,
+  /"per100":/g,
 ) ?? []).length
 if (foods.length < existing && !process.argv.includes('--force')) {
   console.error(

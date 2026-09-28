@@ -200,7 +200,7 @@ export const faqs: readonly Faq[] = [
   },
   {
     q: 'Where do the numbers come from?',
-    a: 'USDA FoodData Central, and Open Food Facts for barcodes. Roughly 1,500 generic and composite rows ship with the app, so search works with no signal at all — and they carry portions and micronutrients, which crowd-sourced entries usually don’t.',
+    a: 'USDA FoodData Central, and Open Food Facts for barcodes. Over 2,200 generic and composite rows ship with the app, so search works with no signal at all — and they carry portions and micronutrients, which crowd-sourced entries usually don’t.',
   },
   {
     q: 'What happens with no signal?',

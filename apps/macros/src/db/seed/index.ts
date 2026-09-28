@@ -20,7 +20,7 @@ import * as repo from '@/data/repository'
  * Bump when the seed is regenerated.
  *
  * `bulkPut` on every launch is what ships a corrected row to an existing install, and that mattered
- * more than the cost when the seed was 46 hand-written foods. At 1,462 it is a megabyte of parse on
+ * more than the cost when the seed was 46 hand-written foods. At two thousand it is megabytes of parse on
  * every open to usually change nothing — so the version is compared instead, and the payload is only
  * fetched when it has actually moved.
  *
@@ -28,8 +28,11 @@ import * as repo from '@/data/repository'
  * fibre, and being short clean descriptions they *outrank* the fuller USDA rows for the queries people
  * type most — so the app's most-logged foods were its least complete, and a day built from them
  * reported six of seven nutrients as unrecorded.
+ *
+ * v5 widens the generated seed from 1,463 foods to 2,166: 404 queries rather than 260, aimed at the
+ * gaps a month of logging finds.
  */
-const SEED_VERSION = 4
+const SEED_VERSION = 5
 const VERSION_KEY = 'macros.seed.version'
 
 export async function seedFoods(): Promise<number> {

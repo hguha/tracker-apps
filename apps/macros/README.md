@@ -121,7 +121,7 @@ service worker after first use.
 
 ### The seed
 
-`scripts/build-food-seed.mjs` generates `src/db/seed/foods.ts` from ~260 everyday queries through
+`scripts/build-food-seed.mjs` generates `src/db/seed/foods.ts` from ~400 everyday queries through
 our own `foods` function — so the mapping, the generic-first ranking, the portion labelling and the
 zero-energy filter are the ones the app already uses, rather than a second copy of those decisions.
 Roughly 1,400 foods, nearly all of them generic or composite (Foundation, SR Legacy, FNDDS), so they

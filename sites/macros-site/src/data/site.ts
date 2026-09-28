@@ -17,7 +17,7 @@ export const site = {
     'Tick four foods and they log at the amounts you actually eat. Your calorie target comes from what your weight and your intake have done — not from a formula about someone your size.',
 
   seoDescription:
-    'MACROcosm is a fast, local-first calorie and macro tracker for iPhone and the web. 1,500 foods offline, USDA search, recipes you can cook from, and a calorie target measured from your own weight trend. Free, offline, no account, no ads.',
+    'MACROcosm is a fast, local-first calorie and macro tracker for iPhone and the web. 2,200 foods offline, USDA search, recipes you can cook from, and a calorie target measured from your own weight trend. Free, offline, no account, no ads.',
 
   origin: 'https://macrocosm.fitness',
   heroBadge: 'Free · No account · Works offline',
@@ -65,7 +65,7 @@ export const site = {
  */
 export const stats = [
   {
-    value: 1509,
+    value: 2212,
     label: 'foods, offline',
     suffix: '',
     hint: 'Portions and micronutrients included — plus all of USDA when you have signal',
