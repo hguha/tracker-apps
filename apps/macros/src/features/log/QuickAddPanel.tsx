@@ -33,7 +33,7 @@ export function QuickAddPanel({
       await repo.logQuickAdd(
         { ...EMPTY_NUTRIENTS, ...numbers },
         target.meal,
-        label.trim() || 'Quick add',
+        label.trim() || 'Calories only',
         target.at,
         target.venue,
       )
@@ -47,7 +47,7 @@ export function QuickAddPanel({
   return (
     <div className="space-y-3 px-4 py-3">
       <div>
-        <h2 className="text-[16px] font-semibold tracking-tight">Quick add</h2>
+        <h2 className="text-[16px] font-semibold tracking-tight">Calories only</h2>
         <p className="text-[12.5px] text-ink-muted">
           Straight from a label. No micronutrients, so these days count for calories and macros
           only.

@@ -68,7 +68,7 @@ export async function exportToCsv(): Promise<string> {
     entry.day,
     new Date(entry.eatenAt).toTimeString().slice(0, 5),
     entry.meal,
-    (entry.foodId ? foods.get(entry.foodId) : null) ?? (entry.note || 'Quick add'),
+    (entry.foodId ? foods.get(entry.foodId) : null) ?? (entry.note || 'Calories only'),
     round(entry.grams),
     entry.nutrients.kcal,
     grams(entry.nutrients.proteinMg),

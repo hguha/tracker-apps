@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from '@/features/shared/target'
+import { ProductReview } from './ProductReview'
 import { describeMeal, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 
@@ -19,18 +20,19 @@ export function DescribePanel({
   target,
   initialText = '',
   onDone,
-  onProduct,
+  onEdit,
 }: {
   target: LogTarget
   /** Carried over from the search box, so describing a meal never means retyping it. */
   initialText?: string
   onDone: () => void
-  onProduct: (product: FoodDraft) => void
+  /** "Change the numbers" on a named product: the same draft, in the create-a-food form. */
+  onEdit: (product: FoodDraft) => void
 }) {
   const [text, setText] = useState(initialText)
   const { estimate, setEstimate, phase, error, run } = useEstimate()
   const isBusy = phase === 'reading' || phase === 'matching'
-  const ask = (extra = '') => void run(() => describeMeal(text, extra), onProduct)
+  const ask = (extra = '') => void run(() => describeMeal(text, extra))
 
   return (
     <div className="flex max-h-full flex-col">
@@ -76,7 +78,16 @@ export function DescribePanel({
           </p>
         )}
 
-        {estimate && (
+        {estimate?.product ? (
+          <ProductReview
+            product={estimate.product}
+            target={target}
+            onDone={onDone}
+            onEdit={() => onEdit(estimate.product!)}
+            onRefine={(extra) => ask(extra)}
+            isRefining={isBusy}
+          />
+        ) : estimate ? (
           <EstimateReview
             estimate={estimate}
             target={target}
@@ -87,7 +98,7 @@ export function DescribePanel({
             onRefine={(extra) => ask(extra)}
             isRefining={isBusy}
           />
-        )}
+        ) : null}
       </div>
     </div>
   )

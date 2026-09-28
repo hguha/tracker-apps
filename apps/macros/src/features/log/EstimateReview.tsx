@@ -7,6 +7,7 @@ import { parseQuantity } from '@/lib/parseQuantity'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { GramsRow } from '@/features/shared/GramsRow'
+import { Refine } from './Refine'
 import type { EntrySource, Food } from '@/domain/types'
 import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
 import type { LogTarget } from '@/features/shared/target'
@@ -394,45 +395,6 @@ function SaveForNextTime({ items, label }: { items: readonly EstimatedItem[]; la
             {isSaving ? 'Saving…' : `Save ${quantity ? `1 ${quantity.unit}` : savedName}`}
           </>
         )}
-      </button>
-    </div>
-  )
-}
-
-/**
- * Asking again with the missing detail.
- *
- * "Zucchini muffins" coming back as a plain muffin is the model missing a word, and the only recourse
- * was retyping the whole meal and hoping. This appends the correction to the original description —
- * one short box, because the correction is always short.
- */
-function Refine({
-  onRefine,
-  isBusy,
-}: {
-  onRefine: (extra: string) => void
-  isBusy: boolean
-}) {
-  const [extra, setExtra] = useState('')
-
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        value={extra}
-        onChange={(event) => setExtra(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && extra.trim()) onRefine(extra)
-        }}
-        placeholder="Missed something? e.g. zucchini, not plain"
-        className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2 text-[13.5px] outline-none"
-      />
-      <button
-        onClick={() => extra.trim() && onRefine(extra)}
-        disabled={isBusy || extra.trim().length === 0}
-        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-wash text-accent disabled:opacity-40 active:opacity-60"
-        aria-label="Ask again with this detail"
-      >
-        <Sparkles size={16} />
       </button>
     </div>
   )

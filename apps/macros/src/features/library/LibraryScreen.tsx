@@ -168,7 +168,7 @@ function MealRow({
             {template.items.map((item) => (
               <li key={item.id} className="flex items-baseline gap-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate text-[13px]">
-                  {(item.foodId ? foods?.get(item.foodId)?.description : null) ?? 'Quick add'}
+                  {(item.foodId ? foods?.get(item.foodId)?.description : null) ?? 'Calories only'}
                 </span>
                 {item.grams > 0 && (
                   <span className="tabular shrink-0 text-[11.5px] text-ink-muted">

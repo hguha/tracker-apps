@@ -24,6 +24,38 @@ export const mgToGrams = (mg: number): number => mg / MG_PER_G
 export const per100FromServing = (value: number, servingGrams: number): number =>
   (value * 100) / Math.max(1, servingGrams)
 
+/**
+ * A label's per-serving figures, on the per-100 g basis everything else scales from.
+ *
+ * Pass `servingGrams: 100` for figures already stated per 100 g. Optional fields stay null rather
+ * than becoming zero, so "unknown" survives the conversion.
+ */
+export interface ServingPanel {
+  kcal: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  fiberG?: number | null
+  sodiumMg?: number | null
+}
+
+export function per100FromPanel(panel: ServingPanel, servingGrams: number): Nutrients {
+  const per100 = (value: number) => per100FromServing(value, servingGrams)
+  return {
+    ...EMPTY_NUTRIENTS,
+    kcal: Math.round(per100(panel.kcal)),
+    proteinMg: gramsToMg(per100(panel.proteinG)),
+    carbsMg: gramsToMg(per100(panel.carbsG)),
+    fatMg: gramsToMg(per100(panel.fatG)),
+    fiberMg:
+      panel.fiberG === null || panel.fiberG === undefined ? null : gramsToMg(per100(panel.fiberG)),
+    sodiumMg:
+      panel.sodiumMg === null || panel.sodiumMg === undefined
+        ? null
+        : Math.round(per100(panel.sodiumMg)),
+  }
+}
+
 export function portionFor(food: Food, portionId: string | null): FoodPortion | null {
   if (portionId) return food.portions.find((p) => p.id === portionId) ?? null
   return food.portions.find((p) => p.isDefault) ?? food.portions[0] ?? null

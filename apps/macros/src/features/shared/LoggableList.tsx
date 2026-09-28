@@ -4,7 +4,7 @@ import { SwipeRow, type SwipeAction } from '@/features/shared/SwipeRow'
 import type { Suggestion } from './loggable'
 
 /** What it is, what it costs, and one line of detail. Nothing else. */
-export function LoggableRow<T extends Suggestion>({
+function LoggableRow<T extends Suggestion>({
   suggestion,
   onPick,
   actions,

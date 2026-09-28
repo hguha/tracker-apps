@@ -104,7 +104,7 @@ function quotaMessage(body: { reason?: string; quota?: string | null; kind?: unk
     const limit = /limit (\d+)/.exec(body.quota ?? '')?.[1]
     return (
       `The AI's free daily allowance is used up${limit ? ` — ${limit} requests a day` : ''}. ` +
-      `${wait} Everything else works: search for the foods, or use Quick add.`
+      `${wait} Everything else works: search for the foods, or enter the calories.`
     )
   }
   return `The model is overloaded, not confused. ${wait}`
@@ -262,7 +262,7 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
    */
   if (!client) {
     throw new EstimateUnavailable(
-      'This copy of the app was built without an AI connection. Quick add and your own foods still work.',
+      'This copy of the app was built without an AI connection. Your own foods and calorie entries still work.',
     )
   }
   if (isOffline()) {

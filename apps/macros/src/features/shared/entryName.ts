@@ -9,7 +9,7 @@ import type { Food, LogEntry } from '@/domain/types'
  */
 export function entryName(entry: LogEntry, foods: ReadonlyMap<string, Food>): string {
   if (entry.foodId) return foods.get(entry.foodId)?.description ?? (entry.note || 'Food')
-  return entry.note || 'Quick add'
+  return entry.note || 'Calories only'
 }
 
 /**

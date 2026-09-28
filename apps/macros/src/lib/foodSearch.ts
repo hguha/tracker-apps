@@ -50,6 +50,15 @@ const MEANING_CHANGING = [
   'decaffeinated',
 ]
 
+/**
+ * Things USDA routinely says a *canonical* row is free of. Negating one of these does not make a
+ * different food — "Spaghetti, cooked, enriched, without added salt" is simply spaghetti.
+ */
+const ADDITIVES = ['salt', 'sodium', 'sugar', 'syrup', 'oil', 'water', 'preservative', 'seasoning', 'msg']
+
+/** "no cheese", "without skin", "free of gluten" — in the qualifiers, where USDA puts them. */
+const NEGATION_RE = /\b(?:no|without|w\/o|free of)\s+(?:added\s+)?([a-z][a-z-]*)/g
+
 export function scoreFood(food: Food, query: string): number {
   const q = query.trim().toLowerCase()
   const haystack = `${food.description} ${food.brand ?? ''}`.toLowerCase()
@@ -65,6 +74,16 @@ export function scoreFood(food: Food, query: string): number {
 
   const terms = queryTerms(q).map(stem)
 
+  /**
+   * A query that names a brand is asking for that brand.
+   *
+   * Everything else here is tuned for a generic query, and rightly — "chicken breast" wants the
+   * ingredient, which is why a branded row starts at zero. The result was that "kirkland protein bar"
+   * and "clif bar chocolate chip" ranked below the generic bar. +7 clears `DATA_TYPE_SCORE`'s gap
+   * between branded and Foundation (6) plus the portion bonus, which is what has to be overcome, and
+   * it can only fire on a word the user actually typed. Four letters or more, so a brand called "Bar"
+   * or "Value" can't win on a word typed for another reason.
+   */
   const namesTheBrand = (food.brand ?? '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -80,6 +99,24 @@ export function scoreFood(food: Food, query: string): number {
   const extraInHead = head.filter((word) => !terms.includes(word)).length
   if (head.length > 0 && extraInHead === 0) score += 3
   score -= 2 * extraInHead
+
+  /**
+   * A row that removes a component is a different food.
+   *
+   * Searching "pizza" returned **"Pizza, no cheese"** first, ahead of "Pizza, cheese, stuffed crust",
+   * and the margin was 0.2 — the length penalty, because nothing else here distinguished a qualified
+   * row from a canonical one. So among equally-matching rows the *shortest* won, and a negation is
+   * short. Restricted to the qualifiers after the head, so a food actually called "No-bake
+   * cheesecake" keeps its name, and skipped for the additives a canonical row often notes.
+   */
+  const tail = food.description.slice(food.description.indexOf(',') + 1).toLowerCase()
+  const asked = new Set([...q.matchAll(NEGATION_RE)].map(([, word]) => word))
+  for (const [, negated] of tail.matchAll(NEGATION_RE)) {
+    if (!negated || ADDITIVES.includes(negated)) continue
+    // Symmetric: "pizza no cheese" is asking for exactly the row a bare "pizza" should rank last.
+    score += asked.has(negated) ? 4 : -4
+    break
+  }
 
   // ALL-CAPS is the signature of a branded label dump; it reads badly in a list and is
   // usually the less useful match for a generic query.

@@ -139,8 +139,11 @@ for (const [index, query] of QUERIES.entries()) {
     }
     const { foods = [] } = await response.json()
     // The function already ranks generic before branded, so taking from the top biases the seed
-    // toward Foundation and FNDDS rows — the ones with portions and micronutrients.
-    for (const food of foods.slice(0, PER_QUERY)) {
+    // toward Foundation and FNDDS rows — the ones with portions and micronutrients. Within that,
+    // the row whose *head* is the query comes first: USDA's own relevance put "Pizza rolls",
+    // "Dessert pizza" and "Mexican pizza" in the six kept for 'pizza' and left out plain
+    // "Pizza, cheese, regular crust", so the offline index had no pizza in it.
+    for (const food of foods.sort((a, b) => headRank(a, query) - headRank(b, query)).slice(0, PER_QUERY)) {
       if (!byId.has(food.id)) byId.set(food.id, food)
     }
   } catch {
@@ -148,6 +151,15 @@ for (const [index, query] of QUERIES.entries()) {
   }
 }
 process.stdout.write('\n')
+
+/** 0 when the food's head *is* the query, 1 when it starts with it, 2 otherwise. A stable sort
+ *  keeps USDA's relevance inside each tier. */
+function headRank(food, query) {
+  const head = (food.description ?? '').split(',')[0].trim().toLowerCase()
+  const q = query.trim().toLowerCase()
+  if (head === q) return 0
+  return head.startsWith(q) ? 1 : 2
+}
 
 const foods = [...byId.values()]
   .sort((a, b) => a.description.localeCompare(b.description))

@@ -3,6 +3,7 @@ import { Camera, RotateCcw } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from '@/features/shared/target'
+import { ProductReview } from './ProductReview'
 import { describePhoto, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 
@@ -24,11 +25,11 @@ const JPEG_QUALITY = 0.8
 export function PhotoPanel({
   target,
   onDone,
-  onProduct,
+  onEdit,
 }: {
   target: LogTarget
   onDone: () => void
-  onProduct: (product: FoodDraft) => void
+  onEdit: (product: FoodDraft) => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -44,7 +45,7 @@ export function PhotoPanel({
     try {
       const shrunk = await downscale(file)
       setPreview(shrunk.dataUrl)
-      await run(() => describePhoto(shrunk.base64, 'image/jpeg', note), onProduct)
+      await run(() => describePhoto(shrunk.base64, 'image/jpeg', note))
     } catch (cause) {
       setShrinkError(cause instanceof Error ? cause.message : 'Could not read that photo.')
     }
@@ -102,7 +103,19 @@ export function PhotoPanel({
         </p>
       )}
 
-      {estimate && (
+      {estimate?.product ? (
+        <ProductReview
+          product={estimate.product}
+          target={target}
+          onDone={onDone}
+          onEdit={() => onEdit(estimate.product!)}
+          onRefine={(extra) => {
+            setNote(extra)
+            fileRef.current?.click()
+          }}
+          isRefining={isBusy}
+        />
+      ) : estimate ? (
         <EstimateReview
           estimate={estimate}
           target={target}
@@ -115,7 +128,7 @@ export function PhotoPanel({
           }}
           isRefining={isBusy}
         />
-      )}
+      ) : null}
     </div>
   )
 }

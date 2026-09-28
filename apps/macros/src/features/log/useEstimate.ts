@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { matchDraft, totalOf, type EstimatedItem, type FoodDraft, type MealEstimate } from './estimate'
+import { matchDraft, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
 
 /**
  * Running a breakdown in two visible phases.
@@ -20,11 +20,8 @@ export interface EstimateRun {
   setEstimate: (estimate: MealEstimate) => void
   phase: EstimatePhase
   error: string | null
-  /** Given phase one; phase two follows automatically. */
-  run: (
-    describe: () => Promise<MealEstimate>,
-    onProduct?: (product: FoodDraft) => void,
-  ) => Promise<void>
+  /** Given phase one; phase two follows automatically, unless phase one read one named product. */
+  run: (describe: () => Promise<MealEstimate>) => Promise<void>
   reset: () => void
 }
 
@@ -33,21 +30,19 @@ export function useEstimate(): EstimateRun {
   const [phase, setPhase] = useState<EstimatePhase>('idle')
   const [error, setError] = useState<string | null>(null)
 
-  async function run(
-    describe: () => Promise<MealEstimate>,
-    onProduct?: (product: FoodDraft) => void,
-  ): Promise<void> {
+  async function run(describe: () => Promise<MealEstimate>): Promise<void> {
     if (phase === 'reading' || phase === 'matching') return
     setPhase('reading')
     setError(null)
     try {
       const draft = await describe()
-      if (draft.product && onProduct) {
-        setPhase('idle')
-        onProduct(draft.product)
+      setEstimate(draft)
+      // A named product has no ingredients to look up: its panel *is* the answer, and the review
+      // card shows it straight away.
+      if (draft.product) {
+        setPhase('done')
         return
       }
-      setEstimate(draft)
       setPhase('matching')
       const matched = await matchDraft(draft, (item) => setEstimate((current) => patch(current, item)))
       setEstimate(matched)

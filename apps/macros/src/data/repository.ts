@@ -767,7 +767,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
 export async function logQuickAdd(
   nutrients: Nutrients,
   meal: MealSlot,
-  label = 'Quick add',
+  label = 'Calories only',
   eatenAt = Date.now(),
   venue: Venue | null = null,
 ): Promise<string> {
@@ -842,7 +842,7 @@ export async function updateQuickAdd(
   await patch('logEntries', id, {
     quickAdd: next,
     nutrients: next,
-    ...(label === undefined ? {} : { note: label.trim() || 'Quick add' }),
+    ...(label === undefined ? {} : { note: label.trim() || 'Calories only' }),
   })
 }
 

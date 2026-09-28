@@ -353,7 +353,7 @@ export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
       template.items.map((row) => row.foodId).filter((id): id is string => id !== null),
     )
     return template.items.map((item) => ({
-      label: (item.foodId ? foods.get(item.foodId)?.description : null) ?? 'Quick add',
+      label: (item.foodId ? foods.get(item.foodId)?.description : null) ?? 'Calories only',
       grams: item.grams,
       nutrients: item.nutrients,
     }))

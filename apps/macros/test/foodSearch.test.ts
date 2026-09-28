@@ -178,6 +178,42 @@ describe('head-noun matching (USDA names foods "head, qualifier")', () => {
     expect(ranked[0]!.description).toMatch(/^Sauce, pasta/)
   })
 
+  it('puts a cheese pizza above a no-cheese one for a bare "pizza"', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'Pizza, no cheese, thick crust', dataType: 'Survey (FNDDS)' }),
+        food({ description: 'Pizza, cheese, stuffed crust', dataType: 'Survey (FNDDS)' }),
+      ],
+      'pizza',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Pizza, cheese, stuffed crust')
+  })
+
+  it('still returns the no-cheese row when that is what was asked for', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'Pizza, cheese, stuffed crust', dataType: 'Survey (FNDDS)' }),
+        food({ description: 'Pizza, no cheese, thick crust', dataType: 'Survey (FNDDS)' }),
+      ],
+      'pizza no cheese',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Pizza, no cheese, thick crust')
+  })
+
+  it('does not treat "without added salt" as a food removed', () => {
+    const ranked = rankFoods(
+      [
+        food({ description: 'Peanut butter, smooth, vitamin and mineral fortified', dataType: 'SR Legacy' }),
+        food({ description: 'Peanut butter, smooth, without added salt', dataType: 'SR Legacy' }),
+      ],
+      'peanut butter',
+      2,
+    )
+    expect(ranked[0]!.description).toBe('Peanut butter, smooth, without added salt')
+  })
+
   it('treats a plural head as the same food', () => {
     const ranked = rankFoods(
       [

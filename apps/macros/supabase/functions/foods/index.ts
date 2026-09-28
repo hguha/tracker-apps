@@ -325,6 +325,22 @@ async function withPortions(key: string, foods: FdcFood[]) {
   }
 }
 
+/**
+ * Open Food Facts text search, from the server — and it has to be from the server.
+ *
+ * Three reasons, each of them something a browser cannot do. The endpoint the client used,
+ * `cgi/search.pl`, is being retired and answers 503 to roughly two requests in three, which the
+ * client turned into a *minute* of no Open Food Facts at all through a failure cooldown. Its
+ * replacement, search.openfoodfacts.org, is healthy and returns nutriments inline (no second detail
+ * call) but sends no `Access-Control-Allow-Origin`. And Open Food Facts asks callers to identify
+ * themselves by User-Agent, which `fetch` forbids setting. So moving this back into the client would
+ * silently break it again.
+ *
+ * Products come back in the API's own shape, not mapped: which fields to trust, what "absent" means
+ * and the rule that an Open Food Facts row is never marked verified all stay in the client's
+ * `lib/openFoodFacts.ts`, shared with the barcode path. `brands` is normalised because this endpoint
+ * returns an array where the rest of the API returns a comma-separated string.
+ */
 const OFF_SEARCH = 'https://search.openfoodfacts.org/search'
 const OFF_FIELDS =
   'code,product_name,brands,categories,serving_quantity,serving_size,nutriments'
@@ -351,7 +367,9 @@ async function searchOpenFoodFacts(query: string, limit: number): Promise<OffHit
     })
     if (!response.ok) return []
     const body = (await response.json()) as { hits?: OffHit[] }
-    return (body.hits ?? []).map((hit) => ({ ...hit, brands: flatten(hit.brands) }))
+    return (body.hits ?? [])
+      .map((hit) => ({ ...hit, brands: flatten(hit.brands) }))
+      .filter((hit) => mentions(hit, query))
   } catch {
     return []
   }
@@ -359,6 +377,23 @@ async function searchOpenFoodFacts(query: string, limit: number): Promise<OffHit
 
 const flatten = (value: string[] | string | undefined): string =>
   Array.isArray(value) ? value.join(', ') : (value ?? '')
+
+/**
+ * Drops hits that share no word with the query.
+ *
+ * This search always answers: "costco chicken bake" came back as five Dutch chicken products from a
+ * supermarket called Jumbo, none of which contains a query word. They would rank below everything
+ * locally, but the client *caches* what it is sent, so a query the database cannot answer was
+ * permanently seeding the offline index with schnitzel.
+ */
+function mentions(hit: OffHit, query: string): boolean {
+  const haystack = `${hit.product_name ?? ''} ${flatten(hit.brands)}`.toLowerCase()
+  const words = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 3)
+  return words.length === 0 || words.some((word) => haystack.includes(word))
+}
 
 async function details(key: string, fdcIds: string[]): Promise<FdcFood[]> {
   const response = await fetch(`${USDA}/foods?api_key=${encodeURIComponent(key)}`, {

@@ -118,7 +118,7 @@ export function LogScreen({
     setQuery('')
     setPanel({ kind: 'browse' })
   }
-  const onProduct = (draft: FoodDraft) =>
+  const onEditProduct = (draft: FoodDraft) =>
     setPanel({ kind: 'custom', name: draft.name, draft })
 
   // The recipe editor owns the whole screen: it has its own header, and a recipe is a different
@@ -170,12 +170,12 @@ export function LogScreen({
             target={target}
             initialText={query}
             onDone={onLogged}
-            onProduct={onProduct}
+            onEdit={onEditProduct}
           />
         )}
         {panel.kind === 'quick' && <QuickAddPanel target={target} onDone={onLogged} />}
         {panel.kind === 'photo' && (
-          <PhotoPanel target={target} onDone={onLogged} onProduct={onProduct} />
+          <PhotoPanel target={target} onDone={onLogged} onEdit={onEditProduct} />
         )}
         {panel.kind === 'custom' && (
           <CustomFoodPanel
@@ -376,16 +376,23 @@ function BrowsePanel({
               onPick={(hit) => onOpen(hit.loggable)}
             />
           )}
-          <FoodList
-            foods={results}
-            onSelect={(food) => onOpen({ kind: 'food', food })}
-            picked={picked}
-            onToggle={toggle}
-            saved={savedIds}
-            lastAmounts={lastAmounts ?? new Map()}
-            emptyLabel="Nothing matched."
-            footer={isSearching ? <SearchingRow /> : null}
-          />
+          {/*
+            No "Nothing matched." card. When the databases have nothing, the two rows either side of
+            this — ask the AI, or create the food — *are* the answer, and a card between them saying
+            so only pushed them apart.
+          */}
+          {(results.length > 0 || isSearching) && (
+            <FoodList
+              foods={results}
+              onSelect={(food) => onOpen({ kind: 'food', food })}
+              picked={picked}
+              onToggle={toggle}
+              saved={savedIds}
+              lastAmounts={lastAmounts ?? new Map()}
+              emptyLabel=""
+              footer={isSearching ? <SearchingRow /> : null}
+            />
+          )}
           {!describeLeads && describeRow}
           <button
             onClick={() => onPanel({ kind: 'custom', name: trimmed })}

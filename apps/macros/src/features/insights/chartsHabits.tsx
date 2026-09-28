@@ -182,7 +182,7 @@ const SOURCE_LABELS: Record<string, string> = {
   search: 'Searched',
   barcode: 'Scanned',
   describe: 'Described',
-  quick: 'Quick add',
+  quick: 'Calories only',
   copy: 'Repeated',
   template: 'Saved meal',
   recipe: 'Recipe',

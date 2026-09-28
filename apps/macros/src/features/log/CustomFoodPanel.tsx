@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Button, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { gramsToMg, per100FromServing } from '@/lib/nutrition'
-import { EMPTY_NUTRIENTS, type Food } from '@/domain/types'
+import { per100FromPanel, per100FromServing } from '@/lib/nutrition'
+import type { Food } from '@/domain/types'
 import type { FoodDraft } from './estimate'
 
 /**
@@ -64,11 +64,10 @@ export function CustomFoodPanel({
   const needsServing = basis === 'serving'
   const canSave = name.trim().length > 1 && kcal > 0 && (!needsServing || servingGrams > 0)
 
-  /** Everything typed, scaled to the 100 g basis the app stores. */
-  const per100 = (value: string): number => {
-    const typed = Number(value) || 0
-    return basis === 'hundred' ? typed : per100FromServing(typed, servingGrams)
-  }
+  const number = (value: string): number => Number(value) || 0
+  /** The live "kcal per 100 g" hint under the fields. */
+  const per100 = (value: string): number =>
+    basis === 'hundred' ? number(value) : per100FromServing(number(value), servingGrams)
 
   async function save() {
     if (isSaving || !canSave) return
@@ -80,16 +79,19 @@ export function CustomFoodPanel({
         barcode: initialBarcode,
         servingGrams: servingGrams > 0 ? servingGrams : null,
         servingLabel,
-        per100: {
-          ...EMPTY_NUTRIENTS,
-          kcal: Math.round(per100(fields.kcal)),
-          proteinMg: gramsToMg(per100(fields.protein)),
-          carbsMg: gramsToMg(per100(fields.carbs)),
-          fatMg: gramsToMg(per100(fields.fat)),
-          // Optional: left null rather than zero, so "unknown" stays distinguishable.
-          fiberMg: fields.fiber ? gramsToMg(per100(fields.fiber)) : null,
-          sodiumMg: fields.sodium ? Math.round(per100(fields.sodium)) : null,
-        },
+        // One conversion, shared with the AI product card: per-100 g entry is the same call with a
+        // 100 g serving. Optional fields stay null rather than zero, so "unknown" survives.
+        per100: per100FromPanel(
+          {
+            kcal: number(fields.kcal),
+            proteinG: number(fields.protein),
+            carbsG: number(fields.carbs),
+            fatG: number(fields.fat),
+            fiberG: fields.fiber ? number(fields.fiber) : null,
+            sodiumMg: fields.sodium ? number(fields.sodium) : null,
+          },
+          basis === 'hundred' ? 100 : servingGrams,
+        ),
       })
       const saved = await repo.getFood(id)
       toast.show(`Saved ${name.trim()}`)
