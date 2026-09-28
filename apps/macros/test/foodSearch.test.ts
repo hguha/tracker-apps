@@ -190,3 +190,28 @@ describe('head-noun matching (USDA names foods "head, qualifier")', () => {
     expect(ranked[0]!.description).toBe('Meatballs, beef, cooked')
   })
 })
+
+describe('a query that names a brand', () => {
+  it('ranks that brand above the generic row', () => {
+    const generic = food({ id: 'g', description: 'Protein bar', dataType: 'SR Legacy' })
+    const kirkland = food({
+      id: 'k',
+      description: 'Protein bar, chocolate chunk',
+      dataType: 'branded',
+      brand: 'Kirkland Signature',
+    })
+    const ranked = rankFoods([generic, kirkland], 'kirkland protein bar', 5)
+    expect(ranked[0]!.id).toBe('k')
+  })
+
+  it('leaves a generic query alone', () => {
+    const generic = food({ id: 'g', description: 'Protein bar', dataType: 'SR Legacy' })
+    const kirkland = food({
+      id: 'k',
+      description: 'Protein bar, chocolate chunk',
+      dataType: 'branded',
+      brand: 'Kirkland Signature',
+    })
+    expect(rankFoods([kirkland, generic], 'protein bar', 5)[0]!.id).toBe('g')
+  })
+})

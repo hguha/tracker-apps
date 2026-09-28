@@ -63,12 +63,19 @@ export function scoreFood(food: Food, query: string): number {
   if (haystack.startsWith(q)) score += 4
   else if (food.description.toLowerCase().startsWith(q)) score += 3
 
+  const terms = queryTerms(q).map(stem)
+
+  const namesTheBrand = (food.brand ?? '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .some((word) => word.length >= 4 && terms.includes(stem(word)))
+  if (namesTheBrand) score += 7
+
   // USDA names a food as `head, qualifier, qualifier`: everything before the first comma is what
   // the food *is*, and the rest is how it was prepared. So an extra word in the head is a
   // different food ("Spaghetti squash, cooked" for "cooked spaghetti"), while extra words after
   // it are only detail ("Spaghetti, cooked, enriched, without added salt" — the right answer,
   // and the longer string, which is why a length penalty alone ranked the squash first).
-  const terms = queryTerms(q).map(stem)
   const head = queryTerms(food.description.split(',')[0] ?? '').map(stem)
   const extraInHead = head.filter((word) => !terms.includes(word)).length
   if (head.length > 0 && extraInHead === 0) score += 3

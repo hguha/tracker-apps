@@ -211,10 +211,8 @@ Deno.serve(async (request) => {
      * of them for results that were then discarded client-side.
      */
     generic?: boolean
+    off?: boolean
   }
-
-  // No key configured: say so with empty results, so the client falls back rather than errors.
-  if (!key) return json(body.op === 'barcode' ? { food: null } : { foods: [] })
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
@@ -223,6 +221,9 @@ Deno.serve(async (request) => {
 
   try {
     if (body.op === 'barcode' && body.code) {
+      // No USDA key configured: the client's own Open Food Facts lookup is the fallback, so this
+      // answers "not found" rather than failing.
+      if (!key) return json({ food: null })
       // Branded only, and more than one hit: FDC's search matches a barcode loosely, so the
       // exact gtinUpc has to be picked out of several results rather than assumed to be first.
       const found = await search(key, body.code, 10, ['Branded'])
@@ -235,18 +236,29 @@ Deno.serve(async (request) => {
     }
 
     if (body.op === 'search' && body.q) {
-      const found = await searchGenericFirst(
-        key,
-        body.q,
-        Math.min(50, body.limit ?? 25),
-        body.generic === true,
-      )
-      const rows = (await withPortions(key, found)).filter(hasEnergy)
-      if (rows.length > 0) await admin.from('foods').upsert(rows)
-      return json({ foods: rows.map(toClient) })
+      const limit = Math.min(50, body.limit ?? 25)
+      const wantsBranded = body.generic !== true
+      const wantsOff = wantsBranded && body.off !== false
+      const [usda, products] = await Promise.all([
+        key
+          ? searchGenericFirst(key, body.q, limit, !wantsBranded)
+              .then((found) => withPortions(key, found))
+              .then((rows) => rows.filter(hasEnergy))
+              .catch(() => [])
+          : Promise.resolve([]),
+        wantsOff ? searchOpenFoodFacts(body.q, limit) : Promise.resolve([]),
+      ])
+      if (usda.length > 0) await admin.from('foods').upsert(usda)
+
+      const known = new Set(usda.map((row) => row.barcode).filter(Boolean))
+      return json({
+        foods: usda.map(toClient),
+        products: products.filter((product) => !known.has(product.code)),
+      })
     }
 
     if (body.op === 'get' && body.id) {
+      if (!key) return json({ food: null })
       const fdcId = body.id.replace(/^usda:/, '')
       const [detail] = await details(key, [fdcId])
       if (!detail) return json({ food: null })
@@ -312,6 +324,41 @@ async function withPortions(key: string, foods: FdcFood[]) {
     return foods.map(mapFood)
   }
 }
+
+const OFF_SEARCH = 'https://search.openfoodfacts.org/search'
+const OFF_FIELDS =
+  'code,product_name,brands,categories,serving_quantity,serving_size,nutriments'
+const OFF_TIMEOUT_MS = 4_000
+
+interface OffHit {
+  code?: string
+  product_name?: string
+  brands?: string[] | string
+  categories?: string[] | string
+  serving_quantity?: number | string
+  serving_size?: string
+  nutriments?: Record<string, unknown>
+}
+
+async function searchOpenFoodFacts(query: string, limit: number): Promise<OffHit[]> {
+  const url =
+    `${OFF_SEARCH}?q=${encodeURIComponent(query)}` +
+    `&page_size=${Math.min(25, limit)}&fields=${OFF_FIELDS}`
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': 'MACROcosm/1.0 (macrocosm.fitness)' },
+      signal: AbortSignal.timeout(OFF_TIMEOUT_MS),
+    })
+    if (!response.ok) return []
+    const body = (await response.json()) as { hits?: OffHit[] }
+    return (body.hits ?? []).map((hit) => ({ ...hit, brands: flatten(hit.brands) }))
+  } catch {
+    return []
+  }
+}
+
+const flatten = (value: string[] | string | undefined): string =>
+  Array.isArray(value) ? value.join(', ') : (value ?? '')
 
 async function details(key: string, fdcIds: string[]): Promise<FdcFood[]> {
   const response = await fetch(`${USDA}/foods?api_key=${encodeURIComponent(key)}`, {

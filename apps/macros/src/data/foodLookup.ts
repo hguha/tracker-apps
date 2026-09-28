@@ -1,11 +1,6 @@
 import { syncStamp } from '@tracker-engine/local-first'
 import { getSupabase } from '@/backend/supabaseClient'
-import {
-  mapOffProduct,
-  mapOffSearch,
-  OFF_SEARCH_FIELDS,
-  type OffProduct,
-} from '@/lib/openFoodFacts'
+import { mapOffProduct, mapOffSearch, type OffProduct } from '@/lib/openFoodFacts'
 import * as repo from '@/data/repository'
 import { normalizeQuery } from '@/lib/foodSearch'
 import type { Food } from '@/domain/types'
@@ -34,15 +29,6 @@ export async function lookupBarcode(barcode: string): Promise<Food | null> {
   return viaOff ? cache(viaOff) : null
 }
 
-/** Open Food Facts' text search is slow and flaky under load; a browser will wait far longer
- *  than a person will. Past this the request is abandoned and USDA's results stand alone. */
-const OFF_TIMEOUT_MS = 2_500
-
-/** How long a failed OFF search is remembered, so a run of ingredients doesn't hammer a
- *  service that's already returning 503s. */
-const OFF_COOLDOWN_MS = 60_000
-let offUnavailableUntil = 0
-
 export interface SearchOptions {
   /**
    * Whether to include Open Food Facts. Off for ingredient lookups: breaking down a meal fires one
@@ -62,12 +48,14 @@ export interface SearchOptions {
 }
 
 /**
- * Remote search over both sources, for the long tail the seeded subset doesn't cover.
+ * Remote search over both databases, for the long tail the seeded subset doesn't cover.
  *
- * Two databases because they cover different things: USDA has generic and composite foods with
- * full micronutrients ("turkey sandwich on wheat"), Open Food Facts has the packaged products in
- * someone's cupboard by name rather than only by barcode. Queried in parallel and merged, so a
- * slow or down source costs nothing beyond its own results.
+ * Two sources because they cover different things: USDA has generic and composite foods with full
+ * micronutrients ("turkey sandwich on wheat"), Open Food Facts has the packaged products in
+ * someone's cupboard by name rather than only by barcode. Both are queried by the `foods` function
+ * in one round trip — see its `searchOpenFoodFacts` for why Open Food Facts can no longer be
+ * reached from a browser at all — and it drops the Open Food Facts rows whose barcode USDA already
+ * answered with a better one.
  */
 export async function searchRemote(
   query: string,
@@ -78,64 +66,30 @@ export async function searchRemote(
   const q = normalizeQuery(query)
   if (q.length < 2) return []
 
-  // Each source is cached the moment *it* answers, rather than after both do. The screen reads
-  // these rows through a live query, so waiting to merge meant USDA's results — the good ones,
-  // with portions and micronutrients — sat invisible for however long Open Food Facts took to
-  // fail. With OFF down that was an extra 2.5s of "Nothing matched." on every single search.
-  const both = await Promise.all([
-    // `branded` governs both sources: an ingredient lookup wants neither Open Food Facts' packaged
-    // rows nor USDA's, and telling the function so halves the requests it makes upstream.
-    searchBackend(q, !branded, limit).then(cacheAll),
-    branded ? searchOpenFoodFacts(q).then(cacheAll) : Promise.resolve([]),
-  ])
-  return both.flat()
+  const client = getSupabase()
+  if (!client) return []
+  try {
+    const { data, error } = await client.functions.invoke<{
+      foods?: Food[]
+      products?: OffProduct[]
+    }>('foods', { body: { op: 'search', q, limit, generic: !branded } })
+    if (error) return []
+
+    const stamp = syncStamp()
+    const found = [
+      ...(data?.foods ?? []),
+      ...mapOffSearch(data?.products ?? []).map((food) => ({ ...food, ...stamp }) as Food),
+    ]
+    return cacheAll(found)
+  } catch {
+    // Offline, or the function isn't deployed: the local index has already answered.
+    return []
+  }
 }
 
 async function cacheAll(foods: Food[]): Promise<Food[]> {
   if (foods.length > 0) await repo.putFoods(foods)
   return foods
-}
-
-async function searchBackend(query: string, genericOnly: boolean, limit: number): Promise<Food[]> {
-  const client = getSupabase()
-  if (!client) return []
-  try {
-    const { data, error } = await client.functions.invoke<{ foods: Food[] }>('foods', {
-      body: { op: 'search', q: query, limit, generic: genericOnly },
-    })
-    return error ? [] : (data?.foods ?? [])
-  } catch {
-    // Offline or the function isn't deployed: the other source stands on its own.
-    return []
-  }
-}
-
-/** Text search against Open Food Facts. No key, CORS-enabled, and often the only source that
- *  has a supermarket own-brand product. */
-async function searchOpenFoodFacts(query: string): Promise<Food[]> {
-  if (Date.now() < offUnavailableUntil) return []
-
-  const url =
-    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
-    `&search_simple=1&action=process&json=1&page_size=20&fields=${OFF_SEARCH_FIELDS}`
-  try {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(OFF_TIMEOUT_MS),
-    })
-    if (!response.ok) {
-      // 5xx means the service is struggling, not that this query has no answer. Backing off for a
-      // minute keeps the next five ingredient lookups fast instead of each waiting for a timeout.
-      if (response.status >= 500) offUnavailableUntil = Date.now() + OFF_COOLDOWN_MS
-      return []
-    }
-    const body = (await response.json()) as { products?: OffProduct[] }
-    const stamp = syncStamp()
-    return mapOffSearch(body.products ?? []).map((food) => ({ ...food, ...stamp }) as Food)
-  } catch {
-    offUnavailableUntil = Date.now() + OFF_COOLDOWN_MS
-    return []
-  }
 }
 
 async function fromBackend(barcode: string): Promise<Omit<Food, keyof SyncCols> | null> {

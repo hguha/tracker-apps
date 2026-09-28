@@ -77,6 +77,30 @@ const QUERIES = [
   'sports drink', 'protein shake', 'beer', 'wine', 'whiskey', 'vodka', 'chocolate',
   'dark chocolate', 'cookie',
   'brownie', 'cake', 'donut', 'muffin', 'croissant', 'cheesecake', 'protein bar', 'granola bar',
+  'espresso', 'mocha', 'hot chocolate', 'lemonade', 'iced tea', 'smoothie', 'milkshake',
+  'frozen yogurt', 'pudding', 'jello', 'gummy candy', 'marshmallow', 'energy drink', 'kombucha',
+  'hard cider', 'champagne', 'rum', 'gin', 'tequila', 'margarita',
+  'apple pie', 'pumpkin pie', 'cinnamon roll', 'scone', 'biscuit', 'cornbread', 'banana bread',
+  'pop tart', 'rice krispie treat',
+  'beef jerky', 'chorizo', 'prosciutto', 'deli turkey', 'canned chicken', 'canned salmon',
+  'crab', 'lobster', 'scallops', 'mussels', 'calamari', 'anchovies', 'duck', 'brisket',
+  'pulled pork', 'pork ribs', 'meatloaf', 'chicken tenders', 'buffalo wings', 'fish sticks',
+  'string cheese', 'halloumi', 'paneer', 'kefir', 'skyr', 'mascarpone', 'condensed milk',
+  'evaporated milk', 'coconut milk', 'casein protein',
+  'wild rice', 'farro', 'bulgur', 'rice noodles', 'soba noodles', 'udon noodles', 'gnocchi',
+  'polenta', 'grits', 'breadcrumbs', 'panko', 'almond flour', 'rice cake', 'brioche',
+  'rye bread', 'multigrain bread',
+  'black eyed peas', 'lima beans', 'split peas', 'tahini', 'macadamia nuts', 'hazelnuts',
+  'pumpkin seeds', 'flax seeds', 'hemp seeds', 'trail mix', 'seitan',
+  'bok choy', 'snap peas', 'artichoke', 'leek', 'turnip', 'radish', 'sauerkraut', 'kimchi',
+  'seaweed', 'okra', 'parsnip', 'butternut squash', 'papaya', 'pomegranate', 'grapefruit',
+  'clementine', 'nectarine', 'figs', 'prunes', 'cranberries',
+  'chicken parmesan', 'philly cheesesteak', 'reuben sandwich', 'blt sandwich', 'tuna salad',
+  'chicken salad', 'egg salad', 'deviled eggs', 'nachos', 'poutine', 'corn dog', 'pot roast',
+  'kebab', 'souvlaki', 'tabbouleh', 'baba ganoush', 'tzatziki', 'dumplings', 'spring roll',
+  'samosa', 'pierogi', 'empanada', 'pho', 'banh mi', 'bibimbap', 'chicken katsu',
+  'teriyaki chicken', 'orange chicken', 'sweet and sour chicken', 'paella', 'risotto',
+  'carbonara', 'moussaka', 'shakshuka', 'cobb salad',
 ]
 
 /** Per query. Enough to cover the obvious variants without three near-identical branded rows. */
@@ -107,7 +131,7 @@ for (const [index, query] of QUERIES.entries()) {
     const response = await fetch(`${URL_BASE}/functions/v1/foods`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'search', q: query, limit: PER_QUERY * 3 }),
+      body: JSON.stringify({ op: 'search', q: query, limit: PER_QUERY * 3, off: false }),
     })
     if (!response.ok) {
       failed += 1
@@ -133,6 +157,18 @@ const foods = [...byId.values()]
 
 const withPortions = foods.filter((food) => food.portions.length > 0).length
 const generic = foods.filter((food) => (food.dataType ?? '').toLowerCase() !== 'branded').length
+
+const existing = (readFileSync(new URL('../src/db/seed/foods.ts', import.meta.url), 'utf8').match(
+  /"id":/g,
+) ?? []).length
+if (foods.length < existing && !process.argv.includes('--force')) {
+  console.error(
+    `Refusing to write: ${foods.length} foods collected, ${existing} already in the seed` +
+      (failed > 0 ? ` (${failed} queries failed)` : '') +
+      '. Re-run when the rate limit resets, or pass --force.',
+  )
+  process.exit(1)
+}
 
 writeFileSync(
   new URL('../src/db/seed/foods.ts', import.meta.url),
