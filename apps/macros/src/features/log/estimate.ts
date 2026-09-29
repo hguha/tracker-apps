@@ -77,7 +77,7 @@ let unavailableUntil = 0
 let lastReason = ''
 
 /** Named so `npm run lint` doesn't read a seconds-to-milliseconds multiply as a mg conversion. */
-const SECOND_MS = 1_000
+export const SECOND_MS = 1_000
 
 /** Seconds until the model is worth asking again, or 0. Drives the countdown in the UI. */
 export function modelCooldownSeconds(): number {

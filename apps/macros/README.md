@@ -86,6 +86,33 @@ Quota errors still report themselves properly: `classify()` reads Google's `Quot
 cooldown. A quota 429 is **not** retried on the same model — Google's own hint is 30s+ — but the
 next model is tried immediately. A 503 gets one retry before moving on.
 
+### Why it used to take two minutes
+
+Three compounding causes, each measured on the same prompt rather than guessed at.
+
+**Nothing was bounded.** Every fetch to Gemini was unbounded and the chain is six models with a retry
+each, so one slow model could spend the whole request. Three runs of "sushi bake": 8.5s, 126.6s, and a
+**504 at 150s** — Supabase's own wall, which arrives with no body, so the app could only say "couldn't
+work that out". There is now a 10s cap per attempt and a 100s cap on the call, and a timed-out model is
+abandoned rather than retried: the next model's capacity is unrelated.
+
+**Thinking bought nothing here.** The schema does the structuring, so `thinkingConfig.thinkingBudget: 0`
+on the estimate paths took "sushi bake" from 57s to 7.7s and a recipe's seven ingredient lines to 2.3s
+with every conversion still correct. It is deliberately **not** set on the chat path, where reasoning is
+the point. Some models in the chain reject the field with a bare `400 "Request contains an invalid
+argument"` — no field name — and a 400 stops the fallback, so one unsupported model at the head of the
+queue failed the whole call. `rejectsThinking` learns which, once per model per instance.
+
+**The capable models are usually spent.** With the day's allowance gone on 3.8 through 3.5-flash, every
+request is served by `gemini-3.5-flash-lite` in about 2s — and a *cold* instance pays roughly 10s
+rediscovering that, because `blockedUntil` is module state. Median 2s warm, ~12s cold, and the response
+carries which model answered so this stays measurable.
+
+The UI reports the stage and a **ticking count of seconds**, with a line after eight of them saying it
+is still going and that nothing is logged until you confirm. That is the difference between a slow
+request and an apparently hung one, and it is why there is no background queue: at two to twelve
+seconds the honest fix was to make the wait legible, not to hide it.
+
 ## Searching for food
 
 `normalizeQuery` in `lib/foodSearch.ts` is applied before both the local match and the string sent

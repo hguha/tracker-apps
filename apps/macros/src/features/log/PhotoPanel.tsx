@@ -4,6 +4,7 @@ import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from '@/features/shared/target'
 import { ProductReview } from './ProductReview'
+import { Working } from './Working'
 import { describePhoto, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 
@@ -34,7 +35,7 @@ export function PhotoPanel({
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [note, setNote] = useState('')
-  const { estimate, setEstimate, phase, error, run, reset } = useEstimate()
+  const { estimate, setEstimate, phase, elapsed, error, run, reset } = useEstimate()
   const [shrinkError, setShrinkError] = useState<string | null>(null)
   const isBusy = phase === 'reading' || phase === 'matching'
 
@@ -81,14 +82,10 @@ export function PhotoPanel({
 
       <Button className="w-full" disabled={isBusy} onClick={() => fileRef.current?.click()}>
         {preview ? <RotateCcw size={16} /> : <Camera size={16} />}
-        {phase === 'reading'
-          ? 'Looking at it…'
-          : phase === 'matching'
-            ? 'Finding the foods…'
-            : preview
-              ? 'Take another'
-              : 'Take a photo'}
+        {isBusy ? 'Working…' : preview ? 'Take another' : 'Take a photo'}
       </Button>
+
+      {isBusy && <Working phase={phase === 'reading' ? 'reading' : 'matching'} elapsed={elapsed} />}
 
       {(error ?? shrinkError) !== null && (
         <p

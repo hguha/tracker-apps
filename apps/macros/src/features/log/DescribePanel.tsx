@@ -4,6 +4,7 @@ import { Button } from '@tracker-engine/ui'
 import { EstimateReview } from './EstimateReview'
 import type { LogTarget } from '@/features/shared/target'
 import { ProductReview } from './ProductReview'
+import { Working } from './Working'
 import { describeMeal, type FoodDraft } from './estimate'
 import { useEstimate } from './useEstimate'
 
@@ -30,7 +31,7 @@ export function DescribePanel({
   onEdit: (product: FoodDraft) => void
 }) {
   const [text, setText] = useState(initialText)
-  const { estimate, setEstimate, phase, error, run } = useEstimate()
+  const { estimate, setEstimate, phase, elapsed, error, run } = useEstimate()
   const isBusy = phase === 'reading' || phase === 'matching'
   const ask = (extra = '') => void run(() => describeMeal(text, extra))
 
@@ -58,12 +59,10 @@ export function DescribePanel({
           onClick={() => ask()}
         >
           <Sparkles size={16} />
-          {phase === 'reading'
-            ? 'Reading it…'
-            : phase === 'matching'
-              ? 'Finding the foods…'
-              : 'Work it out'}
+          {isBusy ? 'Working…' : 'Work it out'}
         </Button>
+
+        {isBusy && <Working phase={phase === 'reading' ? 'reading' : 'matching'} elapsed={elapsed} />}
 
         {error && (
           <p

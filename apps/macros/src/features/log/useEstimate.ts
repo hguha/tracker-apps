@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { matchDraft, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
+import { useEffect, useRef, useState } from 'react'
+import { matchDraft, SECOND_MS, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
 
 /**
  * Running a breakdown in two visible phases.
@@ -19,6 +19,14 @@ export interface EstimateRun {
   estimate: MealEstimate | null
   setEstimate: (estimate: MealEstimate) => void
   phase: EstimatePhase
+  /**
+   * Seconds since this run started, while it is running.
+   *
+   * The whole answer to "is it stalling or is it just slow". The model is 2s warm and 12s cold, and a
+   * spinner that says the same thing at 2s and at 40s leaves the user with no way to tell a working
+   * request from a hung one — so they wait, or they leave and lose the request.
+   */
+  elapsed: number
   error: string | null
   /** Given phase one; phase two follows automatically, unless phase one read one named product. */
   run: (describe: () => Promise<MealEstimate>) => Promise<void>
@@ -29,9 +37,23 @@ export function useEstimate(): EstimateRun {
   const [estimate, setEstimate] = useState<MealEstimate | null>(null)
   const [phase, setPhase] = useState<EstimatePhase>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const startedAt = useRef(0)
+
+  const isBusy = phase === 'reading' || phase === 'matching'
+  useEffect(() => {
+    if (!isBusy) return
+    const id = window.setInterval(
+      () => setElapsed(Math.round((Date.now() - startedAt.current) / SECOND_MS)),
+      SECOND_MS,
+    )
+    return () => window.clearInterval(id)
+  }, [isBusy])
 
   async function run(describe: () => Promise<MealEstimate>): Promise<void> {
     if (phase === 'reading' || phase === 'matching') return
+    startedAt.current = Date.now()
+    setElapsed(0)
     setPhase('reading')
     setError(null)
     try {
@@ -57,12 +79,14 @@ export function useEstimate(): EstimateRun {
     estimate,
     setEstimate,
     phase,
+    elapsed,
     error,
     run,
     reset: () => {
       setEstimate(null)
       setPhase('idle')
       setError(null)
+      setElapsed(0)
     },
   }
 }

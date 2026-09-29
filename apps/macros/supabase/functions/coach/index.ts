@@ -42,6 +42,48 @@ const endpointFor = (model: string): string =>
  */
 const blockedUntil = new Map<string, number>()
 
+/**
+ * How long one model gets before the next one is tried, and how long the whole call gets.
+ *
+ * Neither existed, and the absence was the single worst thing about this feature. Every fetch here
+ * was unbounded, and the chain is up to six models with a retry each — so one slow model could eat
+ * the whole request. Measured on "sushi bake", three attempts at the same prompt: 8.5s, 126.6s, and
+ * a **504 at 150s**, which is Supabase's own wall and arrives with no body, so the app could only say
+ * "couldn't work that out". With thinking off a successful extraction takes 2–8s, so a model that has
+ * not answered in ten is not the fast path — and the next model's capacity is separate and usually
+ * idle. A timed-out attempt is not retried on the same model: that only spends the budget learning
+ * the same thing twice.
+ *
+ * The budget stops short of the platform's 150s so that a hopeless call still returns JSON the client
+ * can explain, rather than a gateway error it can't.
+ */
+const ATTEMPT_MS = 10_000
+const BUDGET_MS = 100_000
+
+/**
+ * Models that reject `thinkingConfig`, learned rather than listed.
+ *
+ * Turning thinking off is the difference between 57s and 7s on this workload — the schema does the
+ * structuring, so the reasoning budget buys almost nothing — but the chain is a mix of generations and
+ * only some of them accept the field. The ones that don't answer `400 "Request contains an invalid
+ * argument"`, with no field name in it, and a 400 is treated as *this request's* fault and stops the
+ * fallback: so one unsupported model at the head of the queue failed the whole call. Discovering it
+ * costs one request per model per instance, and never the same one twice.
+ */
+const rejectsThinking = new Set<string>()
+
+/** The same body with the thinking budget removed, for a model that won't take it. */
+function withoutThinking(body: unknown): unknown {
+  const typed = body as { generationConfig?: Record<string, unknown> }
+  if (!typed.generationConfig?.thinkingConfig) return body
+  const { thinkingConfig: _dropped, ...rest } = typed.generationConfig
+  return { ...typed, generationConfig: rest }
+}
+
+const asksToThink = (body: unknown): boolean =>
+  (body as { generationConfig?: Record<string, unknown> }).generationConfig?.thinkingConfig !==
+  undefined
+
 const SYSTEM = `You are the coach inside MACROcosm, a calorie and macro tracker.
 
 How this app works, and you must not contradict it:
@@ -250,7 +292,7 @@ Deno.serve(async (request) => {
     return json({ error: 'contents is required' }, 400)
   }
 
-  const { response, raw, model } = await callGemini(key, {
+  const { response, raw, model, timedOut } = await callGemini(key, {
     contents: body.contents,
     systemInstruction: {
       parts: [
@@ -262,6 +304,7 @@ Deno.serve(async (request) => {
     generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
   })
 
+  if (timedOut) return json(slow(model))
   if (!response.ok) {
     // Quota and overload reach the client as a 200 body: the app has an offline coach to fall back
     // to, and it needs to know *why* to say something true about when it'll be back.
@@ -307,7 +350,7 @@ async function estimate(
 do not assume an ingredient they have ruled out.`
     : ''
 
-  const { response, raw, model } = await callGemini(key, {
+  const { response, raw, model, timedOut } = await callGemini(key, {
     contents: [
       {
         role: 'user',
@@ -330,11 +373,13 @@ do not assume an ingredient they have ruled out.`
       // 800 the JSON was being truncated intermittently — which surfaced as a parse failure
       // on roughly every other "turkey sandwich".
       maxOutputTokens: 2048,
+      thinkingConfig: { thinkingBudget: 0 },
       responseMimeType: 'application/json',
       responseSchema: ESTIMATE_SCHEMA,
     },
   })
 
+  if (timedOut) return json(slow(model))
   if (!response.ok) {
     // A queue is not a server error, and it has to reach the client as a *body*: supabase-js
     // discards the payload of a non-2xx response, so a 502 here would arrive as a bare
@@ -357,6 +402,7 @@ do not assume an ingredient they have ruled out.`
       assumptions?: unknown
     }
     return json({
+      model,
       kind: parsed.kind === 'item' ? 'item' : 'components',
       items: Array.isArray(parsed.items) ? parsed.items : [],
       item: parsed.kind === 'item' && parsed.item ? parsed.item : null,
@@ -367,6 +413,19 @@ do not assume an ingredient they have ruled out.`
     return json({ error: `Could not read the estimate: ${text_.slice(0, 200)}` }, 502)
   }
 }
+
+/**
+ * Every model ran out of time. A 200 body, so the client can say something true rather than meeting
+ * a gateway error: this is the same shape a 503 produces, because from the user's side it is the
+ * same situation.
+ */
+const slow = (model: string) => ({
+  busy: true,
+  kind: 'overloaded' as const,
+  reason: `No model answered within ${Math.round(BUDGET_MS / 1000)}s`,
+  retryAfterSeconds: 15,
+  model,
+})
 
 /**
  * Why a call couldn't be served, in enough detail to be actionable.
@@ -468,28 +527,48 @@ function classify(status: number, raw: string): Unavailable {
 async function callGemini(
   key: string,
   body: unknown,
-): Promise<{ response: Response; raw: string; model: string }> {
+): Promise<{ response: Response; raw: string; model: string; timedOut: boolean }> {
   const now = Date.now()
+  const deadline = now + BUDGET_MS
   const usable = MODELS.filter((model) => (blockedUntil.get(model) ?? 0) <= now)
   // Everything is blocked: report the nearest one's wall rather than pretending to try.
   const queue = usable.length > 0 ? usable : MODELS.slice(0, 1)
 
-  let last = { response: new Response(null, { status: 500 }), raw: '', model: queue[0]! }
+  let last = { response: new Response(null, { status: 500 }), raw: '', model: queue[0]!, timedOut: false }
   for (const model of queue) {
     // One retry for an overloaded model before moving on: a 503 is transient by Google's own
     // description, and switching model on the first blip would silently downgrade quality.
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await fetch(`${endpointFor(model)}?key=${encodeURIComponent(key)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (response.ok) return { response, raw: '', model }
+      if (Date.now() >= deadline) return { ...last, timedOut: true }
+      const left = Math.min(ATTEMPT_MS, deadline - Date.now())
+      const payload = rejectsThinking.has(model) ? withoutThinking(body) : body
+      let response: Response
+      try {
+        response = await fetch(`${endpointFor(model)}?key=${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(left),
+        })
+      } catch {
+        // Out of time on this model, not wrong: the next one's capacity is unrelated, and retrying
+        // the same slow model would spend the budget discovering that twice.
+        last = { ...last, model, timedOut: true }
+        break
+      }
+      if (response.ok) return { response, raw: '', model, timedOut: false }
 
       const raw = await response.text()
-      last = { response, raw, model }
+      last = { response, raw, model, timedOut: false }
 
-      // Anything that isn't capacity is this request's fault, and the next model would say the
+      // A model that won't take the thinking budget says so as a bare 400. Remember it and give this
+      // model its second attempt without the field, rather than failing a call it could have served.
+      if (response.status === 400 && asksToThink(payload)) {
+        rejectsThinking.add(model)
+        continue
+      }
+
+      // Anything else that isn't capacity is this request's fault, and the next model would say the
       // same: a malformed body or an unreadable image doesn't improve on a second opinion.
       if (response.status !== 503 && response.status !== 429) return last
 
