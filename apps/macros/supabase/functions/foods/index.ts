@@ -47,6 +47,13 @@ interface FdcNutrient {
   amount?: number
 }
 
+interface FdcInputFood {
+  foodDescription?: string
+  ingredientDescription?: string
+  ingredientWeight?: number
+  gramWeight?: number
+}
+
 interface FdcFood {
   fdcId: number
   description?: string
@@ -68,6 +75,10 @@ interface FdcFood {
   }[]
   servingSize?: number
   servingSizeUnit?: string
+  /** FNDDS composite dishes: what the survey built the dish from, with real gram weights. */
+  inputFoods?: FdcInputFood[]
+  /** Branded rows: the label's ingredient list, as one string and in shouting capitals. */
+  ingredients?: string
 }
 
 function mapFood(food: FdcFood) {
@@ -255,6 +266,21 @@ Deno.serve(async (request) => {
         foods: usda.map(toClient),
         products: products.filter((product) => !known.has(product.code)),
       })
+    }
+
+    if (body.op === 'parts' && body.id) {
+      if (!key) return json({ parts: [], text: null })
+      const [detail] = await details(key, [body.id.replace(/^usda:/, '')])
+      if (!detail) return json({ parts: [], text: null })
+
+      const parts = (detail.inputFoods ?? [])
+        .map((row) => ({
+          label: (row.foodDescription ?? row.ingredientDescription ?? '').trim(),
+          grams: row.ingredientWeight ?? row.gramWeight ?? 0,
+        }))
+        .filter((row) => row.label !== '' && row.grams > 0)
+
+      return json({ parts, text: detail.ingredients?.trim() || null })
     }
 
     if (body.op === 'get' && body.id) {

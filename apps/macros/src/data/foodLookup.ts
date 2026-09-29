@@ -87,6 +87,48 @@ export async function searchRemote(
   }
 }
 
+/**
+ * What a composite food is made of.
+ *
+ * USDA's survey dishes carry their own recipe — "Broccoli casserole with noodles" is 552 g broccoli,
+ * 320 g egg noodles, 120 g cream sauce, 54 g breadcrumbs, 14 g butter and 0.4 g salt — and branded
+ * rows carry the label's ingredient list. Neither ever reached the app, so a row like "Zucchini
+ * casserole" was a calorie figure with nothing behind it and no way to judge whether it was the same
+ * dish you ate.
+ *
+ * Shares rather than absolute grams, because the weights are the recipe's *inputs* and the nutrients
+ * are for the finished dish: cooking loss makes 552 g of broccoli an honest 52% and a dishonest 552.
+ */
+export interface FoodParts {
+  parts: { label: string; grams: number }[]
+  /** A branded label's ingredient list, when that is all there is. */
+  text: string | null
+}
+
+const partsById = new Map<string, FoodParts | null>()
+
+export async function fetchFoodParts(foodId: string): Promise<FoodParts | null> {
+  if (!foodId.startsWith('usda:')) return null
+  const cached = partsById.get(foodId)
+  if (cached !== undefined) return cached
+
+  const client = getSupabase()
+  if (!client) return null
+  try {
+    const { data, error } = await client.functions.invoke<FoodParts>('foods', {
+      body: { op: 'parts', id: foodId },
+    })
+    const found =
+      error || !data || ((data.parts ?? []).length === 0 && !data.text)
+        ? null
+        : { parts: data.parts ?? [], text: data.text ?? null }
+    partsById.set(foodId, found)
+    return found
+  } catch {
+    return null
+  }
+}
+
 async function cacheAll(foods: Food[]): Promise<Food[]> {
   if (foods.length > 0) await repo.putFoods(foods)
   return foods

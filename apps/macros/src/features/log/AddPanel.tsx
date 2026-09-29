@@ -4,6 +4,7 @@ import { dayKey } from '@tracker-engine/core'
 import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
 import { Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { cn } from '@/lib/cn'
 import { dayTotals, mgToGrams, scale, sum } from '@/lib/nutrition'
 import { MACRO_BARS } from '@/features/shared/MacroBar'
@@ -48,6 +49,21 @@ export function AddPanel({
     [key],
     undefined,
   )
+
+  // What the database says is in it, for a composite USDA row. Fetched here rather than with the
+  // search results: it is one request per food and only worth making for the one being opened.
+  const [madeOf, setMadeOf] = useState<FoodParts | null>(null)
+  useEffect(() => {
+    setMadeOf(null)
+    if (loggable.kind !== 'food') return
+    let cancelled = false
+    void fetchFoodParts(loggable.food.id).then((found) => {
+      if (!cancelled) setMadeOf(found)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [key, loggable])
 
   const [unitId, setUnitId] = useState(subject.initialUnitId)
   const [amount, setAmount] = useState(() => String(subject.initialUnitId === GRAMS ? 100 : 1))
@@ -217,6 +233,8 @@ export function AddPanel({
         </div>
       )}
 
+      {madeOf && <MadeOf madeOf={madeOf} />}
+
       <Button className="w-full" disabled={count === 0 || isSaving} onClick={() => void log()}>
         {isSaving ? 'Logging…' : `Log it · ${adding?.kcal ?? 0} kcal`}
       </Button>
@@ -239,6 +257,44 @@ function subjectKey(loggable: Loggable): string {
       return `quick:${loggable.quick.name}`
   }
 }
+
+/**
+ * What the database itself says is in a dish, by share of weight.
+ *
+ * The answer to looking up "zucchini bake" and having no idea what is in it. Shares, not grams: the
+ * weights are what the recipe went in with and the calories are what came out, so 52% is true where
+ * 552 g would imply a precision that cooking loss has already spent.
+ */
+function MadeOf({ madeOf }: { madeOf: FoodParts }) {
+  const total = madeOf.parts.reduce((sum_, part) => sum_ + part.grams, 0)
+  const shares = [...madeOf.parts].sort((a, b) => b.grams - a.grams).slice(0, 8)
+
+  return (
+    <div className="rounded-xl bg-sunken/60 px-3 py-2">
+      <p className="pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+        What&rsquo;s in it
+      </p>
+      {total > 0 ? (
+        <ul>
+          {shares.map((part) => (
+            <li key={part.label} className="flex items-baseline gap-2 py-0.5">
+              <span className="min-w-0 flex-1 truncate text-[12.5px]">{part.label}</span>
+              <span className="tabular shrink-0 text-[11.5px] text-ink-muted">
+                {Math.round((part.grams / total) * 100)}%
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[12.5px] text-ink-secondary">{sentence(madeOf.text ?? '')}</p>
+      )}
+    </div>
+  )
+}
+
+/** A label's ingredient list, which USDA stores shouting. */
+const sentence = (text: string): string =>
+  text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
 
 function PartRow({ part, count }: { part: LoggablePart; count: number }) {
   const scaled = scale(part.nutrients, count)
