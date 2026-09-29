@@ -65,7 +65,7 @@ export const site = {
  */
 export const stats = [
   {
-    value: 2212,
+    value: 2271,
     label: 'foods, offline',
     suffix: '',
     hint: 'Portions and micronutrients included — plus all of USDA when you have signal',

@@ -93,6 +93,26 @@ to USDA. It exists because **"80/20 ground beef" returned nothing at all** — n
 rows — while "ground beef 80" returns the exact entry. A search that silently returns nothing is the
 worst failure this app can have: it is indistinguishable from the food not existing.
 
+### Where food comes from, and the gap no key can fill
+
+Four sources, and the order is deliberate: the seeded index (offline, instant), then
+USDA FoodData Central for generic and composite foods, then Open Food Facts for
+packaged products, then the user's own foods. Barcodes hit USDA then Open Food Facts
+directly, because that path has to work in a build with no backend at all.
+
+**No free database has restaurant food-court items.** Measured, not assumed: Open Food
+Facts answers "costco chicken bake" with Dutch supermarket chicken, USDA has generic
+"Fast Food, Pizza Chain" rows but nothing brand-specific of that kind, and the two
+databases that *do* have them — Nutritionix and FatSecret — both require a key
+(`401`/`411` without one), with FatSecret additionally requiring IP allowlisting that
+edge functions can't satisfy. Wiring either is ~50 lines in the `foods` function
+behind a secret; nothing is committed for them because an untestable code path is
+worse than none.
+
+So a named chain item is answered by the model reading its published panel, saved as
+one of the user's own foods on first log. The second one is local, offline and free —
+which is the property that makes this acceptable rather than a workaround.
+
 ### A named product is not an ingredient list
 
 The one place a figure from the model becomes a figure in the app, and it exists because the

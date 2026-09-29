@@ -105,6 +105,14 @@ const QUERIES = [
 
 /** Per query. Enough to cover the obvious variants without three near-identical branded rows. */
 const PER_QUERY = 6
+
+/**
+ * How many to ask for before keeping `PER_QUERY`. The function's ceiling, because ranking can only
+ * choose from what it is shown: at 18 candidates the canonical "Pizza, cheese, stuffed crust" — 28th
+ * in FDC's own relevance for 'pizza' — never reached the sort, so the offline index held pizza rolls
+ * and two no-cheese rows. Costs no extra upstream requests; the details call is already bulk.
+ */
+const CANDIDATES = 50
 /** A ceiling on the asset. Past this the parse cost on first launch starts to show. */
 const MAX_FOODS = 2500
 
@@ -131,7 +139,7 @@ for (const [index, query] of QUERIES.entries()) {
     const response = await fetch(`${URL_BASE}/functions/v1/foods`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ op: 'search', q: query, limit: PER_QUERY * 3, off: false }),
+      body: JSON.stringify({ op: 'search', q: query, limit: CANDIDATES, off: false }),
     })
     if (!response.ok) {
       failed += 1
@@ -143,7 +151,7 @@ for (const [index, query] of QUERIES.entries()) {
     // the row whose *head* is the query comes first: USDA's own relevance put "Pizza rolls",
     // "Dessert pizza" and "Mexican pizza" in the six kept for 'pizza' and left out plain
     // "Pizza, cheese, regular crust", so the offline index had no pizza in it.
-    for (const food of foods.sort((a, b) => headRank(a, query) - headRank(b, query)).slice(0, PER_QUERY)) {
+    for (const food of foods.sort((a, b) => rank(a, query) - rank(b, query)).slice(0, PER_QUERY)) {
       if (!byId.has(food.id)) byId.set(food.id, food)
     }
   } catch {
@@ -152,13 +160,21 @@ for (const [index, query] of QUERIES.entries()) {
 }
 process.stdout.write('\n')
 
-/** 0 when the food's head *is* the query, 1 when it starts with it, 2 otherwise. A stable sort
- *  keeps USDA's relevance inside each tier. */
-function headRank(food, query) {
+/**
+ * Generic first, and within that the row whose *head* is the query.
+ *
+ * Both halves matter and the first one is load-bearing. Ranking on the head alone promoted branded
+ * rows whose entire description is the query — ten rows literally named "PIZZA", six named "MILK",
+ * none with a portion — and the seed came back 46% branded with no cheese pizza in it at all. USDA's
+ * generic and composite rows are the ones carrying portions and micronutrients, so they keep their
+ * place and the head match only reorders within them.
+ */
+function rank(food, query) {
   const head = (food.description ?? '').split(',')[0].trim().toLowerCase()
   const q = query.trim().toLowerCase()
-  if (head === q) return 0
-  return head.startsWith(q) ? 1 : 2
+  const branded = (food.dataType ?? '').toLowerCase() === 'branded' ? 10 : 0
+  if (head === q) return branded
+  return branded + (head.startsWith(q) ? 1 : 2)
 }
 
 const foods = [...byId.values()]

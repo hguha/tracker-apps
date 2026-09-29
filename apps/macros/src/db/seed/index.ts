@@ -29,8 +29,9 @@ import * as repo from '@/data/repository'
  * type most — so the app's most-logged foods were its least complete, and a day built from them
  * reported six of seven nutrients as unrecorded.
  *
- * v5 widens the generated seed from 1,463 foods to 2,166: 404 queries rather than 260, aimed at the
- * gaps a month of logging finds.
+ * v5 widens the generated seed from 1,463 generated foods to 2,225: 404 queries rather than 260, aimed
+ * at the gaps a month of logging finds, and ranked so the canonical row for a one-word query is
+ * actually among the six kept.
  */
 const SEED_VERSION = 5
 const VERSION_KEY = 'macros.seed.version'

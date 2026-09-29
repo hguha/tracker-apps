@@ -31,7 +31,7 @@ until the listing exists; there is no `playStore` key, because there is no
 Android build and a "coming soon" badge would promise one. The JSON-LD
 `operatingSystem` follows from the same keys.
 
-**The numbers in `stats` are countable.** 2,212 seeded foods
+**The numbers in `stats` are countable.** 2,271 seeded foods
 (`apps/macros/src/db/seed/`), 17 charts across the Insights tabs. Recount them
 before changing either, rather than rounding.
 
