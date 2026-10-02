@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset, groupBy } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend, type TrendPoint } from '@tracker-engine/body'
@@ -97,37 +98,41 @@ export function useInsightsData(windowDays: number): InsightsData {
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], undefined)
 
-  const byDay = groupBy(entries ?? [], (entry) => entry.day)
-  const dayKeys = [...byDay.keys()].sort()
+  const byDay = useMemo(() => groupBy(entries ?? [], (entry) => entry.day), [entries])
+  const dayKeys = useMemo(() => [...byDay.keys()].sort(), [byDay])
   const targetsByDay = useLiveQuery(
     () => repo.targetsByDay(dayKeys),
     [dayKeys.join(',')],
     new Map<string, MacroTargets | null>(),
   )
 
-  const days: InsightsDay[] = dayKeys.map((day) => {
-    const rows = byDay.get(day) ?? []
-    const occasions = eatingOccasions(rows)
-    const target = targetsByDay?.get(day) ?? null
-    // Covered, not strict: one taco ingredient with no fibre figure used to drop the entire day
-    // off the fibre chart. See `sumCovered`.
-    const { totals, coverage } = sumCovered(rows.map((row) => row.nutrients))
-    return {
-      day,
-      kcal: totals.kcal,
-      protein: mgToGrams(totals.proteinMg),
-      carbs: mgToGrams(totals.carbsMg),
-      fat: mgToGrams(totals.fatMg),
-      fiber: totals.fiberMg === null ? null : mgToGrams(totals.fiberMg),
-      fiberCoverage: coverage.fiberMg,
-      targetKcal: target?.kcal ?? null,
-      targetProtein: target ? mgToGrams(target.proteinMg) : null,
-      occasions: occasions.length,
-      firstMinute: occasions.length > 0 ? minutesIntoDay(occasions[0]!.startAt) : null,
-      lastMinute:
-        occasions.length > 0 ? minutesIntoDay(occasions[occasions.length - 1]!.endAt) : null,
-    }
-  })
+  const days = useMemo(
+    (): InsightsDay[] =>
+      dayKeys.map((day) => {
+        const rows = byDay.get(day) ?? []
+        const occasions = eatingOccasions(rows)
+        const target = targetsByDay?.get(day) ?? null
+        // Covered, not strict: one taco ingredient with no fibre figure used to drop the entire day
+        // off the fibre chart. See `sumCovered`.
+        const { totals, coverage } = sumCovered(rows.map((row) => row.nutrients))
+        return {
+          day,
+          kcal: totals.kcal,
+          protein: mgToGrams(totals.proteinMg),
+          carbs: mgToGrams(totals.carbsMg),
+          fat: mgToGrams(totals.fatMg),
+          fiber: totals.fiberMg === null ? null : mgToGrams(totals.fiberMg),
+          fiberCoverage: coverage.fiberMg,
+          targetKcal: target?.kcal ?? null,
+          targetProtein: target ? mgToGrams(target.proteinMg) : null,
+          occasions: occasions.length,
+          firstMinute: occasions.length > 0 ? minutesIntoDay(occasions[0]!.startAt) : null,
+          lastMinute:
+            occasions.length > 0 ? minutesIntoDay(occasions[occasions.length - 1]!.endAt) : null,
+        }
+      }),
+    [byDay, dayKeys, targetsByDay],
+  )
 
   // Smoothed once over the whole history, then sliced by week: smoothing inside a week re-seeds
   // the EWMA and destroys the signal, which understated expenditure by ~400 kcal/day.
