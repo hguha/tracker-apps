@@ -277,7 +277,6 @@ test('every tab and the coach render without errors', async ({ page }) => {
   // Settings is a list of destinations; each one has to be reachable and come back.
   for (const route of [
     'Targets & goal',
-    'Weekly check-in',
     'About you',
     'Food & water',
     'Reminders',
@@ -367,9 +366,7 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   )
   await page.getByRole('button', { name: 'Back' }).click()
 
-  // And it shows up in the library card — as a link to that recipe, not to the list. It used to
-  // carry a "Log 1" button that wrote a serving into the day from home with nothing to check.
-  await expect(page.getByText('Your library')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /Log one serving of Test bowl/ })).toHaveCount(0)
 
   // With a day logged, the two patterns cards render — and the cuisine came from the recipe.

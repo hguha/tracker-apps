@@ -982,3 +982,29 @@ describe('a scanned food', () => {
     expect(await repo.customFoods()).toHaveLength(0)
   })
 })
+
+describe('currentStreak', () => {
+  const now = Date.parse('2026-09-10T09:00:00')
+  const logOn = async (day: string) =>
+    repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100, day })
+
+  it('counts back from today and agrees with dayStreaks', async () => {
+    for (const day of ['2026-09-10', '2026-09-10', '2026-09-09', '2026-09-08', '2026-09-05']) {
+      await logOn(day)
+    }
+    expect(await repo.currentStreak(now)).toBe(3)
+  })
+
+  it('does not break on an unlogged today', async () => {
+    await logOn('2026-09-09')
+    await logOn('2026-09-08')
+    expect(await repo.currentStreak(now)).toBe(2)
+  })
+
+  it('ignores deleted rows and stops at a gap', async () => {
+    const id = await logOn('2026-09-09')
+    await logOn('2026-09-07')
+    await repo.deleteEntry(id)
+    expect(await repo.currentStreak(now)).toBe(0)
+  })
+})

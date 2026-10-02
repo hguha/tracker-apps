@@ -385,7 +385,7 @@ export async function searchHistory(
   const terms = queryTerms(query)
   if (terms.length === 0) return []
 
-  const from = dayKey(Date.now() - days * DAY_MS)
+  const from = dayKeyOffset(Date.now(), days)
   const entries = await entriesBetween(from, dayKey(Date.now()))
   const foods = await foodsByIds(entries.map((entry) => entry.foodId).filter(isPresent))
   const hits = (text: string) => {
@@ -579,6 +579,31 @@ export async function entriesBetween(fromDay: string, toDay: string): Promise<Lo
 }
 
 /** Every day with at least one entry, for streaks and consistency charts. */
+export async function currentStreak(now = Date.now()): Promise<number> {
+  const today = dayKey(now)
+  let expected = today
+  let count = 0
+  let broken = false
+  await db.logEntries
+    .where('day')
+    .belowOrEqual(today)
+    .reverse()
+    .filter(alive)
+    .until(() => broken)
+    .each((entry) => {
+      if (count > 0 && entry.day === dayKeyOffset(noonOf(expected), -1)) return
+      if (entry.day === expected || (count === 0 && entry.day === dayKeyOffset(now, 1))) {
+        count += 1
+        expected = dayKeyOffset(noonOf(entry.day), 1)
+        return
+      }
+      broken = true
+    })
+  return count
+}
+
+const noonOf = (day: string): number => Date.parse(`${day}T12:00:00`)
+
 export async function loggedDays(): Promise<string[]> {
   const days = new Set<string>()
   await db.logEntries.filter(alive).each((entry) => days.add(entry.day))
@@ -684,10 +709,10 @@ export async function lastAmountFor(foodId: string): Promise<LastAmount | null> 
 export async function lastAmountsFor(
   foodIds: readonly string[],
 ): Promise<Map<string, LastAmount>> {
-  const wanted = new Set(foodIds)
   const best = new Map<string, LogEntry>()
-  await db.logEntries.filter(alive).each((entry) => {
-    if (!entry.foodId || !wanted.has(entry.foodId) || entry.grams <= 0) return
+  if (foodIds.length === 0) return new Map()
+  await db.logEntries.where('foodId').anyOf([...foodIds]).filter(alive).each((entry) => {
+    if (!entry.foodId || entry.grams <= 0) return
     const current = best.get(entry.foodId)
     if (!current || isLater(entry, current)) best.set(entry.foodId, entry)
   })
@@ -1461,7 +1486,7 @@ function asQuick(entry: LogEntry, times: number): RecentQuick | null {
 }
 
 export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> {
-  const from = dayKey(Date.now() - days * DAY_MS)
+  const from = dayKeyOffset(Date.now(), days)
   /**
    * Oldest first, so "the latest one wins" is decided by position.
    *
@@ -1910,7 +1935,7 @@ async function draftCheckIn(
     profile: await getProfile(),
     weights: await weights(),
     // Eight weeks: enough for the filter to settle, short enough to stay cheap.
-    intake: await intakeByDay(dayKey(now - 56 * DAY_MS), dayKey(now)),
+    intake: await intakeByDay(dayKeyOffset(now, 56), dayKey(now)),
     prior:
       all
         .filter((c) => c.status === 'applied' && c.weekStart < week)

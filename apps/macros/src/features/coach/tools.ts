@@ -1,5 +1,5 @@
 import type { ToolDeclaration } from '@tracker-engine/ai-coach'
-import { DAY_MS, bodyWeightFromKg, convertWeight, dayKey, unitsFor } from '@tracker-engine/core'
+import { bodyWeightFromKg, convertWeight, dayKey, dayKeyOffset, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale } from '@/lib/nutrition'
@@ -186,7 +186,7 @@ export async function executeRetrievalTool(
 
     case 'getRecentDays': {
       const days = Math.min(30, Math.max(1, Number(args.days) || 7))
-      const from = dayKey(Date.now() - days * DAY_MS)
+      const from = dayKeyOffset(Date.now(), days)
       const entries = await repo.entriesBetween(from, dayKey(Date.now()))
       const byDay = new Map<string, typeof entries>()
       for (const entry of entries) {
@@ -212,7 +212,7 @@ export async function executeRetrievalTool(
 
     case 'getEatingPatterns': {
       const days = Math.min(180, Math.max(7, Number(args.days) || 28))
-      const from = dayKey(Date.now() - days * DAY_MS)
+      const from = dayKeyOffset(Date.now(), days)
       const entries = await repo.entriesBetween(from, dayKey(Date.now()))
       const dayKeys = [...new Set(entries.map((entry) => entry.day))]
       const targets = await repo.targetsByDay(dayKeys)

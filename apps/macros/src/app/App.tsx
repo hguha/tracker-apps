@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
 import { ToastProvider, useColorScheme } from '@tracker-engine/ui'
@@ -13,39 +13,59 @@ import { useSync } from '@/sync/useSync'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
-import { AccountScreen } from '@/features/auth/AccountScreen'
-import { OnboardingScreen } from '@/features/onboarding/OnboardingScreen'
 import { TodayScreen } from '@/features/today/TodayScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
-import { InsightsScreen } from '@/features/insights/InsightsScreen'
 import { SettingsScreen, type SettingsRoute } from '@/features/settings/SettingsScreen'
-import { DataScreen } from '@/features/settings/DataScreen'
 import { TargetsScreen } from '@/features/settings/TargetsScreen'
 import { AboutYouScreen } from '@/features/settings/AboutYouScreen'
 import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
-import { RemindersScreen } from '@/features/settings/RemindersScreen'
-import { AppearanceScreen } from '@/features/settings/AppearanceScreen'
-import { BadgesScreen } from '@/features/badges/BadgesScreen'
-import { LibraryScreen } from '@/features/library/LibraryScreen'
-import { CheckInScreen } from '@/features/checkin/CheckInScreen'
-import { CoachScreen } from '@/features/coach/CoachScreen'
 import { LogScreen } from '@/features/log/LogScreen'
 import { DayScreen } from '@/features/day/DayScreen'
 import { mealForHour } from '@/lib/meals'
 import { ONBOARDING_VERSION, type MealSlot } from '@/domain/types'
 
+const OnboardingScreen = lazy(() =>
+  import('@/features/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
+)
+const InsightsScreen = lazy(() =>
+  import('@/features/insights/InsightsScreen').then((m) => ({ default: m.InsightsScreen })),
+)
+const DataScreen = lazy(() =>
+  import('@/features/settings/DataScreen').then((m) => ({ default: m.DataScreen })),
+)
+const BadgesScreen = lazy(() =>
+  import('@/features/badges/BadgesScreen').then((m) => ({ default: m.BadgesScreen })),
+)
+const LibraryScreen = lazy(() =>
+  import('@/features/library/LibraryScreen').then((m) => ({ default: m.LibraryScreen })),
+)
+const CoachScreen = lazy(() =>
+  import('@/features/coach/CoachScreen').then((m) => ({ default: m.CoachScreen })),
+)
+const AccountScreen = lazy(() =>
+  import('@/features/auth/AccountScreen').then((m) => ({ default: m.AccountScreen })),
+)
+const RemindersScreen = lazy(() =>
+  import('@/features/settings/RemindersScreen').then((m) => ({ default: m.RemindersScreen })),
+)
+const AppearanceScreen = lazy(() =>
+  import('@/features/settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })),
+)
+
 type View =
   | { kind: 'tabs' }
   | { kind: 'log'; meal: MealSlot; day?: string; back?: View }
   | { kind: 'day'; day: string }
-  | { kind: 'settings'; route: SettingsRoute; recipeId?: string }
+  | { kind: 'settings'; route: SettingsRoute }
   | { kind: 'connect' }
 
 export function App() {
   return (
     <AuthProviderScope>
       <ToastProvider>
-        <AuthGate />
+        <Suspense fallback={<div className="h-full bg-page" />}>
+          <AuthGate />
+        </Suspense>
       </ToastProvider>
     </AuthProviderScope>
   )
@@ -177,13 +197,7 @@ function SignedInApp() {
       case 'badges':
         return <BadgesScreen onBack={toTabs} />
       case 'library':
-        return <LibraryScreen initialRecipeId={view.recipeId ?? null} onBack={toTabs} />
-      case 'meals':
-        return <LibraryScreen initialTab="meals" onBack={toTabs} />
-      case 'foods':
-        return <LibraryScreen initialTab="foods" onBack={toTabs} />
-      case 'checkin':
-        return <CheckInScreen onBack={toTabs} />
+        return <LibraryScreen onBack={toTabs} />
       case 'coach':
         return <CoachScreen onBack={toTabs} />
       case 'data':
@@ -204,11 +218,7 @@ function SignedInApp() {
             onOpenTargets={() => setView({ kind: 'settings', route: 'targets' })}
             onOpenCoach={() => setView({ kind: 'settings', route: 'coach' })}
             onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
-            onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}
             onOpenRecipes={() => setView({ kind: 'settings', route: 'library' })}
-            onOpenRecipe={(recipeId) =>
-              setView({ kind: 'settings', route: 'library', recipeId })
-            }
             onAdd={(day, meal) =>
               setView({ kind: 'log', meal, day, back: { kind: 'tabs' } })
             }
@@ -217,12 +227,13 @@ function SignedInApp() {
         {tab === 'history' && (
           <HistoryScreen onOpenDay={(day) => setView({ kind: 'day', day })} />
         )}
-        {tab === 'insights' && <InsightsScreen />}
+        {tab === 'insights' && (
+          <Suspense fallback={null}>
+            <InsightsScreen />
+          </Suspense>
+        )}
         {tab === 'settings' && (
-          <SettingsScreen
-            onOpen={(route) => setView({ kind: 'settings', route })}
-            onConnect={() => setView({ kind: 'connect' })}
-          />
+          <SettingsScreen onOpen={(route) => setView({ kind: 'settings', route })} />
         )}
       </main>
 

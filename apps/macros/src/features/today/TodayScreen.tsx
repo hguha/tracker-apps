@@ -1,14 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, dayStreaks, formatDayHeading } from '@tracker-engine/core'
-import { Flame, Sparkles } from 'lucide-react'
+import { dayKey, dayKeyOffset, formatDayHeading } from '@tracker-engine/core'
+import { ChefHat, Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverageCovered, dayTotals, remaining } from '@/lib/nutrition'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { foodIdsOf } from '@/features/shared/entryName'
-import { BadgeStrip } from '@/features/badges/BadgeStrip'
 import type { BodyWeightRow, Food, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
-import { LibraryCard } from './LibraryCard'
 import { GoalCard } from './GoalCard'
 import { NutritionCard } from './NutritionCard'
 import { TodayMeals } from './TodayMeals'
@@ -21,18 +19,14 @@ const NUTRITION_DAYS = 7
 export function TodayScreen({
   onOpenCoach,
   onOpenAbout,
-  onOpenBadges,
   onOpenRecipes,
-  onOpenRecipe,
   onOpenDay,
   onOpenTargets,
   onAdd,
 }: {
   onOpenCoach: () => void
   onOpenAbout: () => void
-  onOpenBadges: () => void
   onOpenRecipes: () => void
-  onOpenRecipe: (recipeId: string) => void
   onOpenDay: (day: string) => void
   onOpenTargets: () => void
   onAdd: (day: string, meal: MealSlot) => void
@@ -59,11 +53,10 @@ export function TodayScreen({
     [today],
     [],
   )
-  const loggedDays = useLiveQuery(() => repo.loggedDays(), [], [])
+  const streak = useLiveQuery(() => repo.currentStreak(), [today], 0)
 
   const totals = dayTotals(entries)
   const left = targets ? remaining(totals, targets) : null
-  const streak = dayStreaks(loggedDays ?? [])
   const weekDayCount = new Set((week ?? []).map((entry) => entry.day)).size
 
   return (
@@ -72,10 +65,10 @@ export function TodayScreen({
         <h1 className="text-[17px] font-semibold tracking-tight">
           {formatDayHeading(Date.now())}
         </h1>
-        {streak.current > 1 && (
+        {streak > 1 && (
           <span className="flex items-center gap-1 text-[12.5px] font-semibold text-accent">
             <Flame size={14} />
-            {streak.current} day streak
+            {streak} day streak
           </span>
         )}
       </div>
@@ -114,20 +107,31 @@ export function TodayScreen({
         />
       )}
 
-      <BadgeStrip onOpen={onOpenBadges} />
-
-      <LibraryCard onOpenRecipes={onOpenRecipes} onOpenRecipe={onOpenRecipe} />
-
-      <button
-        onClick={onOpenCoach}
-        className="flex w-full items-center gap-2 rounded-2xl bg-surface px-4 py-3 text-left ring-1 ring-line active:bg-sunken"
-      >
-        <Sparkles size={18} className="shrink-0 text-accent" />
-        <span className="flex-1 text-[14px] font-medium">Ask the coach</span>
-        <span className="text-[12.5px] text-ink-muted">about your numbers</span>
-      </button>
-
+      <div className="grid grid-cols-2 gap-3">
+        <Shortcut icon={<ChefHat size={18} />} label="Library" onClick={onOpenRecipes} />
+        <Shortcut icon={<Sparkles size={18} />} label="Coach" onClick={onOpenCoach} />
+      </div>
     </div>
+  )
+}
+
+function Shortcut({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-2xl bg-surface px-4 py-3 text-left ring-1 ring-line active:bg-sunken"
+    >
+      <span className="shrink-0 text-accent">{icon}</span>
+      <span className="text-[14px] font-medium">{label}</span>
+    </button>
   )
 }
 

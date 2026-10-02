@@ -163,29 +163,41 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
           </p>
         </Card>
 
+        {import.meta.env.DEV && (
+          <Card className="p-4">
+            <h2 className="text-[15px] font-semibold tracking-tight">Demo data</h2>
+            <p className="mt-1 text-[12.5px] text-ink-muted">
+              Five weeks of logs and weigh-ins with a real deficit, gaps included, so every screen
+              has something to show. Written through the normal paths, so it syncs and is editable
+              like anything else.
+            </p>
+            <Button
+              variant="secondary"
+              className="mt-2 w-full"
+              disabled={isBusy}
+              onClick={() => {
+                setIsBusy(true)
+                void loadDemoData()
+                  .then(({ days, entries }) => {
+                    toast.show(`Loaded ${entries} entries across ${days} days`)
+                    window.location.reload()
+                  })
+                  .catch(() => toast.show('Could not load the demo data'))
+                  .finally(() => setIsBusy(false))
+              }}
+            >
+              {isBusy ? 'Loading…' : 'Load demo data'}
+            </Button>
+          </Card>
+        )}
+
         <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Demo data</h2>
-          <p className="mt-1 text-[12.5px] text-ink-muted">
-            Five weeks of logs and weigh-ins with a real deficit, gaps included, so every screen
-            has something to show. Written through the normal paths, so it syncs and is editable
-            like anything else.
-          </p>
           <Button
             variant="secondary"
-            className="mt-2 w-full"
-            disabled={isBusy}
-            onClick={() => {
-              setIsBusy(true)
-              void loadDemoData()
-                .then(({ days, entries }) => {
-                  toast.show(`Loaded ${entries} entries across ${days} days`)
-                  window.location.reload()
-                })
-                .catch(() => toast.show('Could not load the demo data'))
-                .finally(() => setIsBusy(false))
-            }}
+            className="w-full"
+            onClick={() => void repo.saveProfile({ onboardingVersion: 0 })}
           >
-            {isBusy ? 'Loading…' : 'Load demo data'}
+            Replay setup
           </Button>
         </Card>
 

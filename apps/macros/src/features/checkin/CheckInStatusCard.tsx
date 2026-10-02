@@ -1,24 +1,15 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Button, Card, Screen, useToast } from '@tracker-engine/ui'
+import { Button, Card, useToast } from '@tracker-engine/ui'
 import { RefreshCw } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { CheckInHistory } from '@/features/insights/CheckInHistory'
 import { Numbers } from './CheckInCard'
 
 /** The week needs this much before an expenditure estimate means anything. */
 const MIN_DAYS = 4
 const MIN_WEIGH_INS = 3
 
-/**
- * What the weekly check-in is, where it currently stands, and a button to run it now.
- *
- * The forced run exists because the process was invisible: targets changed on their own, or
- * didn't, with nothing on screen to say which week was measured or what it was missing. Forcing
- * is safe — a check-in's id is derived from (user, week), so a re-run overwrites that week
- * instead of adding a second, contradictory one.
- */
-export function CheckInScreen({ onBack }: { onBack: () => void }) {
+export function CheckInStatusCard() {
   const toast = useToast()
   const [isRunning, setIsRunning] = useState(false)
   const status = useLiveQuery(() => repo.checkInStatus(), [], undefined)
@@ -28,28 +19,11 @@ export function CheckInScreen({ onBack }: { onBack: () => void }) {
   const canRun = enoughDays && enoughWeighIns
 
   return (
-    <Screen title="Weekly check-in" onBack={onBack}>
       <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">How it works</h2>
-        <p className="mt-1 text-[13px] text-ink-secondary">
-          Once a week the app compares what you ate against what your weight trend actually did,
-          and works backwards to what you burned:{' '}
-          <span className="tabular">expenditure = mean intake − energy change ÷ days</span>. Your
-          calorie target is then set from that measurement, not from a formula — which is why it
-          keeps working when your metabolism adapts, and why it needs both halves of the data.
+        <h2 className="text-[15px] font-semibold tracking-tight">Weekly check-in</h2>
+        <p className="mt-0.5 text-[12.5px] text-ink-muted">
+          Week of {status?.weekStart ?? '—'} · moves at most 150 kcal a week
         </p>
-        <p className="mt-2 text-[13px] text-ink-secondary">
-          Targets move gradually, at most 150 kcal a week, so one noisy week can&rsquo;t whipsaw
-          you. In <strong>Coached</strong> mode the new target applies itself; in{' '}
-          <strong>Ask me</strong> it waits for a tap on Today; in <strong>Manual</strong> nothing
-          changes unless you run it here.
-        </p>
-      </Card>
-
-      <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">
-          Week of {status?.weekStart ?? '—'}
-        </h2>
         <dl className="mt-2 space-y-1.5 text-[13.5px]">
           <Row label="Days logged" ok={enoughDays}>
             {status?.daysLogged ?? '—'} of {MIN_DAYS} needed
@@ -108,16 +82,7 @@ export function CheckInScreen({ onBack }: { onBack: () => void }) {
           <RefreshCw size={16} />
           {isRunning ? 'Working it out…' : 'Run the check-in now'}
         </Button>
-        {!canRun && (
-          <p className="mt-2 text-[12px] text-ink-muted">
-            Log the missing days and weigh-ins for that week first — back-dating them from the Add
-            food screen counts.
-          </p>
-        )}
       </Card>
-
-      <CheckInHistory />
-    </Screen>
   )
 }
 

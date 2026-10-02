@@ -23,17 +23,8 @@ type Tab = 'recipes' | 'meals' | 'foods'
  * Recipes lead because they're the only one you go looking for deliberately; the other two are
  * mostly byproducts of logging and are visited to prune.
  */
-export function LibraryScreen({
-  initialTab = 'recipes',
-  initialRecipeId = null,
-  onBack,
-}: {
-  initialTab?: Tab
-  /** Opens straight onto one recipe, for a link from Today that names it. */
-  initialRecipeId?: string | null
-  onBack: () => void
-}) {
-  const [tab, setTab] = useState<Tab>(initialTab)
+export function LibraryScreen({ onBack }: { onBack: () => void }) {
+  const [tab, setTab] = useState<Tab>('recipes')
   const [isAddingFood, setIsAddingFood] = useState(false)
 
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
@@ -55,7 +46,6 @@ export function LibraryScreen({
     return (
       <RecipesScreen
         onBack={onBack}
-        initialRecipeId={initialRecipeId}
         header={<SegmentedTabs tabs={tabs} active={tab} onSelect={setTab} />}
       />
     )

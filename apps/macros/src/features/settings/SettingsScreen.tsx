@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Database,
   Palette,
-  Ruler,
+  UserRound,
   Sparkles,
   Target,
   Utensils,
@@ -21,15 +21,12 @@ import type { Profile, Program } from '@/domain/types'
 
 export type SettingsRoute =
   | 'targets'
-  | 'checkin'
   | 'about'
   | 'preferences'
   | 'reminders'
   | 'appearance'
   | 'badges'
   | 'library'
-  | 'meals'
-  | 'foods'
   | 'account'
   | 'data'
   | 'coach'
@@ -41,10 +38,8 @@ export type SettingsRoute =
  */
 export function SettingsScreen({
   onOpen,
-  onConnect,
 }: {
   onOpen: (route: SettingsRoute) => void
-  onConnect: () => void
 }) {
   const { session } = useAuth()
   const sync = useSync()
@@ -53,7 +48,6 @@ export function SettingsScreen({
   const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
   const myFoods = useLiveQuery(() => repo.customFoods(), [], [])
-  const lastCheckIn = useLiveQuery(() => repo.latestCheckIn(), [], undefined)
 
   const missing = missingFacts(profile)
 
@@ -111,17 +105,7 @@ export function SettingsScreen({
           onClick={() => onOpen('targets')}
         />
         <NavRow
-          icon={<Ruler size={17} />}
-          label="Weekly check-in"
-          hint={
-            lastCheckIn
-              ? `Last run for the week of ${lastCheckIn.weekStart}`
-              : 'Not enough data for one yet'
-          }
-          onClick={() => onOpen('checkin')}
-        />
-        <NavRow
-          icon={<Ruler size={17} />}
+          icon={<UserRound size={17} />}
           label="About you"
           hint={
             missing.length > 0
@@ -163,33 +147,6 @@ export function SettingsScreen({
         />
       </NavList>
 
-      {!sync.enabled && (
-        <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Sync across devices</h2>
-          <p className="mt-1 text-[12.5px] text-ink-muted">
-            Everything you have logged here moves onto the account — nothing is replaced.
-          </p>
-          <button
-            onClick={onConnect}
-            className="mt-2 w-full rounded-xl bg-sunken py-2.5 text-[14px] font-semibold text-accent active:opacity-60"
-          >
-            Connect an account
-          </button>
-        </Card>
-      )}
-
-      <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">Getting started</h2>
-        <p className="mt-1 text-[12.5px] text-ink-muted">
-          Nothing you&rsquo;ve logged is affected.
-        </p>
-        <button
-          onClick={() => void repo.saveProfile({ onboardingVersion: 0 })}
-          className="mt-2 w-full rounded-xl border border-line py-2.5 text-[14px] font-semibold text-accent active:bg-accent-wash"
-        >
-          Replay setup
-        </button>
-      </Card>
     </div>
   )
 }
