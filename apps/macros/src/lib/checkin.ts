@@ -169,25 +169,6 @@ function explain(
 }
 
 /**
- * A starting target before any week qualifies, from the cold-start formula.
- *
- * Deliberately *not* stored as a check-in: it's a guess, and recording it as one would let a
- * later week treat it as measured evidence. Returns null without the profile facts the
- * formula needs, in which case the app says it has no target yet rather than inventing one.
- */
-export function initialTargets(
-  program: Program,
-  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex' | 'activity'>,
-  weights: readonly BodyWeight[],
-  now = Date.now(),
-): MacroTargets | null {
-  const trend = weightTrend(weights)
-  const trendKg = trend[trend.length - 1]?.trendKg
-  if (trendKg === undefined) return null
-  return initialTargetsFromTrend(program, profile, trendKg, now)
-}
-
-/**
  * The same cold start, from a trend figure already computed.
  *
  * Exists for callers that need it per day: smoothing the whole weight history inside a loop over

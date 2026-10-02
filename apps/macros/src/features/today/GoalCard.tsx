@@ -1,11 +1,16 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { DAY_MS, bodyWeightFromKg, convertWeight, formatRelativeDay } from '@tracker-engine/core'
+import {
+  bodyWeightFromKg,
+  cn,
+  convertWeight,
+  DAY_MS,
+  formatRelativeDay,
+} from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
 import { ChevronDown, PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
 import { goalProgress } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
 

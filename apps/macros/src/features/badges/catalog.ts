@@ -6,6 +6,7 @@ import {
   type Badge as EngineBadge,
   type BadgeState as EngineBadgeState,
 } from '@tracker-engine/badges'
+import type { NutritionStats } from '@/domain/types'
 
 /**
  * What MACROcosm rewards, and deliberately what it doesn't.
@@ -15,25 +16,6 @@ import {
  * are for *logging honestly and hitting the plan*: days recorded, protein met, weight measured,
  * the diet varied. Losing weight faster earns nothing.
  */
-
-export interface NutritionStats {
-  daysLogged: number
-  currentDayStreak: number
-  bestDayStreak: number
-  entriesLogged: number
-  distinctFoods: number
-  weighInDays: number
-  bestWeighInStreak: number
-  daysProteinMet: number
-  daysWithinTarget: number
-  daysFiberMet: number
-  checkInsEarned: number
-  savedMeals: number
-  barcodesScanned: number
-  describedMeals: number
-  /** Weeks with at least four days logged — the bar an expenditure estimate needs. */
-  completeWeeks: number
-}
 
 export type BadgeGroup = 'Consistency' | 'Logging' | 'Nutrition' | 'Measurement' | 'Craft'
 

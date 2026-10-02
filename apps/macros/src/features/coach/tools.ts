@@ -1,5 +1,12 @@
 import type { ToolDeclaration } from '@tracker-engine/ai-coach'
-import { bodyWeightFromKg, convertWeight, dayKey, dayKeyOffset, unitsFor } from '@tracker-engine/core'
+import {
+  bodyWeightFromKg,
+  convertWeight,
+  dayKey,
+  dayKeyOffset,
+  groupBy,
+  unitsFor,
+} from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale } from '@/lib/nutrition'
@@ -188,10 +195,7 @@ export async function executeRetrievalTool(
       const days = Math.min(30, Math.max(1, Number(args.days) || 7))
       const from = dayKeyOffset(Date.now(), days)
       const entries = await repo.entriesBetween(from, dayKey(Date.now()))
-      const byDay = new Map<string, typeof entries>()
-      for (const entry of entries) {
-        byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry])
-      }
+      const byDay = groupBy(entries, (entry) => entry.day)
       return [...byDay.entries()]
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([day, rows]) => {

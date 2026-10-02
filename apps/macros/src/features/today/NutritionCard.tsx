@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Card } from '@tracker-engine/ui'
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 import {
   coverageNote,
   dietQuality,

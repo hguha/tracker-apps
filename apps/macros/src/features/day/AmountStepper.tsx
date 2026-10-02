@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { NumberInput } from '@/features/shared/NumberInput'
 import { gramsToMg, mgToGrams, portionFor } from '@/lib/nutrition'
 import { portionLabel } from '@/features/shared/format'
 import type { LogEntry } from '@/domain/types'
@@ -102,13 +102,6 @@ function QuickAddFields({ entry }: { entry: LogEntry }) {
   )
 }
 
-/**
- * A number field that lets you finish typing.
- *
- * Bound straight to the row, "12" on the way to "120" would be written and re-rendered as 12, and
- * clearing the field to retype would write 0. So the draft is local and only committed on a valid
- * number, and re-synced when the row changes underneath.
- */
 function Field({
   label,
   value,
@@ -120,24 +113,16 @@ function Field({
   onChange: (value: number) => void
   color?: string
 }) {
-  const [draft, setDraft] = useState(String(value))
-  useEffect(() => setDraft(String(value)), [value])
-
   return (
     <label className="min-w-0 rounded-lg bg-page px-1.5 py-1">
       <span className="flex items-center gap-1 text-[10px] text-ink-muted">
         {color && <span className="size-1.5 rounded-full" style={{ background: color }} aria-hidden />}
         {label}
       </span>
-      <input
-        type="number"
+      <NumberInput
         inputMode="numeric"
-        value={draft}
-        onChange={(event) => {
-          setDraft(event.target.value)
-          const next = Number(event.target.value)
-          if (event.target.value !== '' && Number.isFinite(next) && next >= 0) onChange(next)
-        }}
+        value={value}
+        onValue={onChange}
         aria-label={label}
         className="tabular w-full bg-transparent text-[13px] outline-none"
       />
@@ -156,9 +141,6 @@ function Stepper({
   step?: number
   onChange: (value: number) => void
 }) {
-  const [draft, setDraft] = useState(String(value))
-  useEffect(() => setDraft(String(value)), [value])
-
   return (
     <span className="flex shrink-0 items-center gap-1 rounded-lg bg-page p-0.5">
       <button
@@ -168,15 +150,11 @@ function Stepper({
       >
         <Minus size={14} />
       </button>
-      <input
-        type="number"
+      <NumberInput
         inputMode="numeric"
-        value={draft}
-        onChange={(event) => {
-          setDraft(event.target.value)
-          const next = Number(event.target.value)
-          if (Number.isFinite(next) && next > 0) onChange(next)
-        }}
+        value={value}
+        onValue={onChange}
+        allowZero={false}
         aria-label={`Amount of ${label}`}
         className="tabular w-12 bg-transparent text-center text-[13px] outline-none"
       />

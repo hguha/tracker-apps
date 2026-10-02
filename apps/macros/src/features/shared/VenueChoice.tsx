@@ -1,5 +1,5 @@
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 import { VENUE_ICONS, VENUE_LABELS } from '@/features/shared/venue'
 import { VENUES, type LogEntry, type Venue } from '@/domain/types'
 

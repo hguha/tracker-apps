@@ -5,7 +5,6 @@ import type { LastAmount } from '@/data/repository'
 import type { Food } from '@/domain/types'
 
 export const grams = (mg: number): string => `${Math.round(mgToGrams(mg))}g`
-export const kcal = (value: number): string => `${Math.round(value)}`
 
 /**
  * A portion's label, made safe to show.

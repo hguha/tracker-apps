@@ -1,4 +1,3 @@
-import { dayKey } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { buildDemoPlan, DEMO_DAYS, MEAL_MINUTE, type DemoRecipe } from '@/lib/demoData'
 import { runCheckInsForHistory } from '@/data/backfill'
@@ -123,5 +122,3 @@ async function saveRecipes(recipes: readonly DemoRecipe[]): Promise<Map<string, 
   return ids
 }
 
-export const isDemoLoaded = async (): Promise<boolean> =>
-  (await repo.entriesForDay(dayKey(Date.now()))).length > 0

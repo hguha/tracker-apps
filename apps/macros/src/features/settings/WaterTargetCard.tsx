@@ -1,8 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { formatVolume } from '@tracker-engine/core'
+import { cn, formatVolume } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
 import { useUnits } from '@/features/shared/useUnits'
 
 /** Round numbers in both systems, so neither reads as a converted approximation of the other. */

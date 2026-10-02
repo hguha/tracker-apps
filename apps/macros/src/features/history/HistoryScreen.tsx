@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, formatRelativeDay } from '@tracker-engine/core'
+import { dayKey, dayKeyOffset, formatRelativeDay, groupBy } from '@tracker-engine/core'
 import {
   Card,
   FilterChipButton,
@@ -97,10 +97,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
     })
   }, [entries, foods, meals, venues, query])
 
-  const byDay = new Map<string, LogEntry[]>()
-  for (const entry of matching) {
-    byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry])
-  }
+  const byDay = groupBy(matching, (entry) => entry.day)
 
   const days = [...byDay.keys()].sort((a, b) =>
     sort === 'newest' ? b.localeCompare(a) : a.localeCompare(b),

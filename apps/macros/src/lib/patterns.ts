@@ -1,3 +1,4 @@
+import { groupBy } from '@tracker-engine/core'
 import { eatingOccasions } from '@/lib/mealTiming'
 import type { CuisineKey, LogEntry, MacroTargets, Venue } from '@/domain/types'
 
@@ -47,10 +48,7 @@ export function venueSummary(
   entries: readonly LogEntry[],
   targetsByDay: ReadonlyMap<string, MacroTargets | null>,
 ): VenueSummary {
-  const byDay = new Map<string, LogEntry[]>()
-  for (const entry of entries) {
-    byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry])
-  }
+  const byDay = groupBy(entries, (entry) => entry.day)
 
   const tally = new Map<string, { occasions: number; kcal: number }>()
   const outDayKeys: string[] = []

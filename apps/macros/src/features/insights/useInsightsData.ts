@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset } from '@tracker-engine/core'
+import { dayKey, dayKeyOffset, groupBy } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend, type TrendPoint } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import {
@@ -16,7 +16,6 @@ import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import type {
   CheckIn,
   CuisineKey,
-  LogEntry,
   MacroTargets,
   Profile,
   Program,
@@ -98,10 +97,7 @@ export function useInsightsData(windowDays: number): InsightsData {
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], undefined)
 
-  const byDay = new Map<string, LogEntry[]>()
-  for (const entry of entries ?? []) {
-    byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry])
-  }
+  const byDay = groupBy(entries ?? [], (entry) => entry.day)
   const dayKeys = [...byDay.keys()].sort()
   const targetsByDay = useLiveQuery(
     () => repo.targetsByDay(dayKeys),

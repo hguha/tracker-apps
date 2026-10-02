@@ -541,7 +541,7 @@ export async function keepAsOwnFood(food: Food): Promise<Food> {
   const existing = await db.customFoods.where('barcode').equals(barcode).filter(alive).first()
   if (existing) return existing
 
-  const portion = food.portions.find((row) => row.isDefault) ?? food.portions[0] ?? null
+  const portion = portionFor(food, null)
   const id = await saveCustomFood({
     description: food.description,
     brand: food.brand,

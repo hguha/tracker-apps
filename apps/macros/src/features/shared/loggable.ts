@@ -1,5 +1,5 @@
 import * as repo from '@/data/repository'
-import { nutrientsFor, perServing, scale } from '@/lib/nutrition'
+import { nutrientsFor, perServing, portionFor, scale } from '@/lib/nutrition'
 import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
 import { EMPTY_NUTRIENTS, type Food, type MealTemplate, type Nutrients, type Recipe } from '@/domain/types'
 import type { LibraryHit, RecentDish, RecentItem, RecentQuick } from '@/data/repository'
@@ -110,7 +110,7 @@ function foodSubject(food: Food): AddSubject {
     units,
     // A food with no portions — most branded rows, any own food with no stated serving — opens in
     // grams, so it never opens on an empty box with a disabled button.
-    initialUnitId: (food.portions.find((row) => row.isDefault) ?? food.portions[0])?.id ?? GRAMS,
+    initialUnitId: portionFor(food, null)?.id ?? GRAMS,
     isComposite: false,
     log: (unit, count, target) =>
       repo

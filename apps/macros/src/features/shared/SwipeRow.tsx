@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 
 /**
  * A row you can swipe left to reveal what you can do to it.

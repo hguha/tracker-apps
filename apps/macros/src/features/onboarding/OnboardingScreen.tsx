@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Activity, Apple, ArrowLeft, Ruler, Scale, Target, Utensils } from 'lucide-react'
-import { lengthFromCm, lengthToCm, unitsFor, weightToKg } from '@tracker-engine/core'
+import { cn, lengthFromCm, lengthToCm, unitsFor, weightToKg } from '@tracker-engine/core'
 import { Button } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
 import { ActivityPicker } from '@/features/shared/ActivityPicker'
 import { ONBOARDING_VERSION, type ActivityLevel, type Goal, type UnitSystem } from '@/domain/types'
 

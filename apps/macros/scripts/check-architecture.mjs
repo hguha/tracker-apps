@@ -54,8 +54,8 @@ for (const file of walk(SRC)) {
   const layer = layerOf(rel)
   const source = readFileSync(file, 'utf8')
 
-  if (rel !== 'lib/dates.ts' && MS_LITERAL_RE.test(source)) {
-    violations.push(`${rel}: raw ms literal — use DAY_MS / WEEK_MS from @/lib/dates`)
+  if (MS_LITERAL_RE.test(source)) {
+    violations.push(`${rel}: raw ms literal — use DAY_MS / WEEK_MS from @tracker-engine/core`)
   }
 
   if (rel !== 'lib/nutrition.ts' && MACRO_MATH_RE.test(source)) {

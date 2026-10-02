@@ -538,3 +538,20 @@ export interface EatingWindow {
   endMinute: number
 }
 
+export interface NutritionStats {
+  daysLogged: number
+  currentDayStreak: number
+  bestDayStreak: number
+  entriesLogged: number
+  distinctFoods: number
+  weighInDays: number
+  bestWeighInStreak: number
+  daysProteinMet: number
+  daysWithinTarget: number
+  daysFiberMet: number
+  checkInsEarned: number
+  savedMeals: number
+  barcodesScanned: number
+  describedMeals: number
+  completeWeeks: number
+}

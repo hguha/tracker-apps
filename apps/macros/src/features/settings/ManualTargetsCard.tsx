@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card } from '@tracker-engine/ui'
 import { ChevronDown } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 import { gramsToMg, mgToGrams } from '@/lib/nutrition'
 import type { MacroTargets } from '@/domain/types'
 

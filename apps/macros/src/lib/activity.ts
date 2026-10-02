@@ -1,4 +1,3 @@
-import { ACTIVITY_FACTORS } from '@/lib/expenditure'
 import type { ActivityLevel } from '@/domain/types'
 
 /**
@@ -24,12 +23,3 @@ export const ACTIVITY_DETAILS: Record<ActivityLevel, string> = {
   athlete: 'Twice-daily training, or heavy manual work',
 }
 
-/**
- * How much this choice moves the starting estimate, against the assumption it replaces.
- *
- * Worth stating precisely, because the honest answer to "does this matter?" is "for two weeks" — and
- * a percentage makes both halves of that credible in a way a reassuring sentence doesn't.
- */
-export function activityShiftPct(level: ActivityLevel): number {
-  return Math.round((ACTIVITY_FACTORS[level] / ACTIVITY_FACTORS.moderate - 1) * 100)
-}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { portionWithGrams } from '@/features/shared/format'
+import { NumberInput } from '@/features/shared/NumberInput'
 import type { Food } from '@/domain/types'
 
 const GRAMS = '__grams'
@@ -17,8 +18,6 @@ function unitsFor(food: Food | null | undefined): Unit[] {
     .map((portion) => ({ id: portion.id, label: portionWithGrams(portion), grams: portion.grams }))
   return [{ id: GRAMS, label: 'grams', grams: 1 }, ...portions]
 }
-
-const show = (value: number): string => String(Math.round(value * 100) / 100)
 
 function readableUnit(grams: number, units: readonly Unit[]): string {
   if (grams <= 0) return GRAMS
@@ -64,13 +63,9 @@ export function AmountRow({
           <div className="truncate text-[13.5px]">{title}</div>
           {subtitle !== undefined && <div className="text-[11.5px]">{subtitle}</div>}
         </div>
-        <input
-          type="number"
-          inputMode="decimal"
-          value={show(grams / unit.grams)}
-          onChange={(event) =>
-            onGrams(Math.max(0, Math.round((Number(event.target.value) || 0) * unit.grams)))
-          }
+        <NumberInput
+          value={grams / unit.grams}
+          onValue={(value) => onGrams(Math.round(value * unit.grams))}
           aria-label={`Amount of ${title}`}
           className="tabular w-16 shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-right text-[13.5px] outline-none"
         />

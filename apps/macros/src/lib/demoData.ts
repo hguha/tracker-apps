@@ -266,9 +266,4 @@ function pick<T>(options: T[][], random: () => number): T[] {
   return options[Math.floor(random() * options.length)] ?? []
 }
 
-/** Total kcal of a demo day, for asserting the fixture is in a sane range. */
-export function demoDayKcal(day: DemoDay, kcalPerGram: (query: string) => number): number {
-  return Math.round(day.entries.reduce((sum, e) => sum + kcalPerGram(e.foodQuery) * e.grams, 0))
-}
-
 export type { Nutrients }

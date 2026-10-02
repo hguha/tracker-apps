@@ -1,4 +1,4 @@
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 import { ACTIVITY_DETAILS, ACTIVITY_LABELS } from '@/lib/activity'
 import { ACTIVITY_LEVELS, type ActivityLevel } from '@/domain/types'
 

@@ -1,3 +1,4 @@
+import { groupBy } from '@tracker-engine/core'
 import { sum } from '@/lib/nutrition'
 import { MEAL_SLOTS, type LogEntry, type MealSlot, type Nutrients } from '@/domain/types'
 
@@ -40,10 +41,7 @@ export interface MealGroup {
 }
 
 export function mealGroups(entries: readonly LogEntry[]): MealGroup[] {
-  const bySlot = new Map<MealSlot, LogEntry[]>()
-  for (const entry of entries) {
-    bySlot.set(entry.meal, [...(bySlot.get(entry.meal) ?? []), entry])
-  }
+  const bySlot = groupBy(entries, (entry) => entry.meal)
 
   return MEAL_SLOTS.flatMap((meal) => {
     const rows = bySlot.get(meal)

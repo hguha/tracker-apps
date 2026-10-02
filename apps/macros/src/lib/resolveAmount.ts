@@ -1,5 +1,6 @@
 import { ML_PER, type AmountUnit, type ParsedIngredient } from '@/lib/parseIngredient'
 import type { Food } from '@/domain/types'
+import { portionFor } from '@/lib/nutrition'
 
 /**
  * Turning "2 cups" into grams, using the food it refers to.
@@ -80,7 +81,7 @@ export function resolveAmount(parsed: ParsedIngredient, food: Food | null): Reso
   // a serving of thyme, and a row the user can see is uncounted beats a number from nowhere.
   if (ml === undefined) {
     if (unit !== 'piece') return { grams: null, basis: 'unresolved' }
-    const fallback = food.portions.find((row) => row.isDefault) ?? food.portions[0]
+    const fallback = portionFor(food, null)
     if (fallback) return { grams: Math.round(quantity * fallback.grams), basis: 'portion' }
     return { grams: null, basis: 'unresolved' }
   }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, formatDayHeading, formatTimeOfDay } from '@tracker-engine/core'
+import { cn, dayKey, dayKeyOffset, formatDayHeading, formatTimeOfDay } from '@tracker-engine/core'
 import { Card, ScreenHeader, SearchField, useToast } from '@tracker-engine/ui'
 import {
   Bookmark,
@@ -13,12 +13,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
 import { dayTotals } from '@/lib/nutrition'
 import { mealGroups, type DishGroup, type MealGroup } from '@/lib/dayGroups'
 import { dayTiming, formatDuration } from '@/lib/mealTiming'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { useDebouncedValue } from '@/features/shared/useDebouncedValue'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { LoggableList } from '@/features/shared/LoggableList'
 import { fromRecent } from '@/features/shared/loggable'
@@ -295,7 +295,8 @@ function PastItems({
   day: string
   onLog: (log: () => Promise<number>, name: string) => void
 }) {
-  const items = useLiveQuery(() => repo.searchHistory(query), [query], undefined)
+  const settled = useDebouncedValue(query)
+  const items = useLiveQuery(() => repo.searchHistory(settled), [settled], undefined)
 
   // The clock time now, on that date: a meal added to last Tuesday happened at *some* hour, and
   // stamping it midnight would file it before breakfast.

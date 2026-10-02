@@ -1,9 +1,9 @@
-import { dayKey, dayStreaks } from '@tracker-engine/core'
+import { dayKey, dayStreaks, groupBy } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { dayTotals } from '@/lib/nutrition'
 import { groupByWeek } from '@/lib/checkin'
 import { nutrientTargets } from '@/lib/micronutrients'
-import type { LogEntry } from '@/domain/types'
+import type { LogEntry, NutritionStats } from '@/domain/types'
 
 /**
  * Lifetime counts for the badge catalog.
@@ -13,28 +13,10 @@ import type { LogEntry } from '@/domain/types'
  * revoke badges, which is exactly the bug the History screen had.
  */
 
-export interface NutritionStatsShape {
-  daysLogged: number
-  currentDayStreak: number
-  bestDayStreak: number
-  entriesLogged: number
-  distinctFoods: number
-  weighInDays: number
-  bestWeighInStreak: number
-  daysProteinMet: number
-  daysWithinTarget: number
-  daysFiberMet: number
-  checkInsEarned: number
-  savedMeals: number
-  barcodesScanned: number
-  describedMeals: number
-  completeWeeks: number
-}
-
 /** Within this fraction of the calorie target counts as on plan. */
 const TARGET_TOLERANCE = 0.1
 
-export async function nutritionStats(): Promise<NutritionStatsShape> {
+export async function nutritionStats(): Promise<NutritionStats> {
   const entries = await repo.allEntries()
   const weights = await repo.weights()
   const checkIns = await repo.checkIns()
@@ -43,10 +25,7 @@ export async function nutritionStats(): Promise<NutritionStatsShape> {
     nutrientTargets((await repo.getProfile()).sex).find((target) => target.key === 'fiberMg')
       ?.reference ?? 28_000
 
-  const byDay = new Map<string, LogEntry[]>()
-  for (const entry of entries) {
-    byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry])
-  }
+  const byDay = groupBy(entries, (entry) => entry.day)
   const days = [...byDay.keys()].sort()
   const targets = await repo.targetsByDay(days)
 

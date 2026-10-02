@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { formatRelativeDay, formatTimeOfDay } from '@tracker-engine/core'
+import { cn, formatRelativeDay, formatTimeOfDay } from '@tracker-engine/core'
 import {
   Card,
   ScreenHeader,
@@ -17,7 +17,6 @@ import {
   ScanLine,
   Utensils,
 } from 'lucide-react'
-import { cn } from '@/lib/cn'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
 import { nutrientsFor, perServing } from '@/lib/nutrition'
@@ -28,6 +27,7 @@ import { amountGrams } from '@/features/shared/format'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
+import { useDebouncedValue } from '@/features/shared/useDebouncedValue'
 import type { LastAmount } from '@/data/repository'
 import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'
@@ -238,7 +238,8 @@ function BrowsePanel({
     )
 
   const { results, isSearching } = useFoodSearch(query)
-  const libraryHits = useLiveQuery(() => repo.searchLibrary(trimmed), [trimmed], undefined)
+  const settled = useDebouncedValue(trimmed)
+  const libraryHits = useLiveQuery(() => repo.searchLibrary(settled), [settled], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const savedIds = profile?.favouriteFoodIds ?? []
   /**

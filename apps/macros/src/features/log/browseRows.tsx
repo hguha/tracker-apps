@@ -1,6 +1,6 @@
 import { BottomSheet, Card } from '@tracker-engine/ui'
 import { Bookmark, Camera, ChefHat, Check, PencilLine, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { nutrientsFor } from '@/lib/nutrition'
 import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'

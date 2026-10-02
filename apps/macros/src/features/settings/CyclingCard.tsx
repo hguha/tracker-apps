@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { cn } from '@/lib/cn'
+import { cn } from '@tracker-engine/core'
 import { DAY_NAMES, highDaysOf, multipliersForHighDays } from '@/lib/cycling'
 
 /**

@@ -1,4 +1,5 @@
 export * from './cn'
+export * from './collections'
 export * from './color'
 export * from './dates'
 export * from './money'
