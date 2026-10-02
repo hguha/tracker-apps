@@ -6,7 +6,7 @@ import { portionFor } from '@/lib/nutrition'
 import { parseQuantity } from '@/lib/parseQuantity'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
-import { GramsRow } from '@/features/shared/GramsRow'
+import { AmountRow } from '@/features/shared/AmountRow'
 import { Refine } from './Refine'
 import type { EntrySource, Food } from '@/domain/types'
 import { estimateMeal, totalOf, type EstimatedItem, type MealEstimate } from './estimate'
@@ -95,8 +95,9 @@ export function EstimateReview({
 
       <ul className="divide-y divide-line">
         {ordered.map((item) => (
-          <GramsRow
+          <AmountRow
             key={item.id}
+            food={item.food}
             title={item.food?.description ?? item.query}
             subtitle={
               <ItemNote

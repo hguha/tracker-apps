@@ -56,9 +56,20 @@ export function per100FromPanel(panel: ServingPanel, servingGrams: number): Nutr
   }
 }
 
+/**
+ * FNDDS carries condiment guidelines as portions — "Guideline amount per sandwich", "Guideline amount
+ * per fl oz of beverage" — and they are first in FDC's order, which is where `isDefault` is set. So 42
+ * of the seeded foods opened the amount screen on one: almond butter measured per sandwich, almond
+ * milk per fluid ounce of *something else*. They are real weights and a poor thing to open on, so they
+ * stay available and lose their claim to being the default.
+ */
+const GUIDELINE = /^guideline amount/i
+
 export function portionFor(food: Food, portionId: string | null): FoodPortion | null {
   if (portionId) return food.portions.find((p) => p.id === portionId) ?? null
-  return food.portions.find((p) => p.isDefault) ?? food.portions[0] ?? null
+  const measures = food.portions.filter((p) => !GUIDELINE.test(p.label))
+  const pool = measures.length > 0 ? measures : food.portions
+  return pool.find((p) => p.isDefault) ?? pool[0] ?? null
 }
 
 /** Scales by a factor. Nullable nutrients stay null: unknown × 2 is still unknown. */

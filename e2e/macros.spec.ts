@@ -325,8 +325,10 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await page.locator('select').first().selectOption('italian')
   await page.getByPlaceholder('Add an ingredient').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  // Grams is the only editable number, because grams is what gets stored.
-  await expect(page.locator('input[aria-label^="Grams of"]').first()).toBeVisible()
+  // The amount is editable in the food's own measures — "1 breast" for chicken — and grams is always
+  // one of them, because grams is what gets stored.
+  await expect(page.locator('input[aria-label^="Amount of"]').first()).toBeVisible()
+  await expect(page.locator('select[aria-label^="Unit for"]').first()).toBeVisible()
   await page.getByPlaceholder(/One step per line/).fill('Cook it.\nEat it.')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
@@ -716,6 +718,13 @@ test('the day screen shows what each food contributes, and what the day comes to
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { weight: '85' })
 
+  // Home lists only the meals with food in them: four rows of em-dashes was most of the card saying
+  // nothing, every morning. Asserted on an empty day, because asserting the *absence* of a named meal
+  // after logging was unsound twice over — it passed whenever it ran before the row rendered, and
+  // which meal appears depends on the clock, so "no Breakfast" was simply false before 11am.
+  const mealRows = page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ })
+  await expect(mealRows).toHaveCount(0)
+
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
@@ -726,9 +735,8 @@ test('the day screen shows what each food contributes, and what the day comes to
   await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
 
-  // Home lists only the meals with food in them. Four rows of em-dashes was most of the card saying
-  // nothing, every morning.
-  await expect(page.getByRole('button', { name: /^Breakfast/ })).toHaveCount(0)
+  // One meal now has food in it, whichever one the clock says.
+  await expect(mealRows).toHaveCount(1)
   // And the card that navigates says so, rather than needing a sentence to explain itself.
   await expect(page.getByText("Today's food")).toBeVisible()
 
@@ -991,10 +999,12 @@ test('a pasted recipe keeps the amounts it stated, and only asks the AI if told 
     .fill('1 cup white rice\n2 tbsp olive oil\n1 pinch of saffron\nsome chopped parsley')
   await page.getByRole('button', { name: /Convert these lines/ }).click()
 
-  // What the recipe said, because "158 g of rice" cannot be measured with cups and spoons — which is
-  // what someone on imperial units has in the kitchen. Grams stay canonical and stay on screen.
-  await expect(page.getByText(/^1 cup · /)).toBeVisible()
-  await expect(page.getByText(/^2 tbsp · /)).toBeVisible()
+  // Editable in the unit the recipe stated, because "158 g of rice" cannot be measured with cups and
+  // spoons. Grams stay canonical underneath: the row converts and stores them.
+  await expect(page.getByLabel(/^Unit for Rice/)).toHaveValue(/p\d+-\d+/)
+  await expect(page.getByLabel(/^Amount of Rice/)).toHaveValue('1')
+  await expect(page.getByLabel(/^Amount of Olive oil/)).toHaveValue('2')
+  await expect(page.getByLabel(/^Unit for Olive oil/)).toHaveValue(/p\d+-\d+|seed/)
 
   // A pinch is a seasoning, not a countable thing: read as countable it resolved to one *serving* of
   // whatever it matched, which put 461 kcal of chicken biryani into a recipe from a pinch of saffron.

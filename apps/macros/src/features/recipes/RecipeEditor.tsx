@@ -5,10 +5,9 @@ import { ClipboardList, Link as LinkIcon, Sparkles, Wand2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
-import { grams, ingredientMeasure } from '@/features/shared/format'
+import { grams } from '@/features/shared/format'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
-import { GramsRow } from '@/features/shared/GramsRow'
-import { useUnits } from '@/features/shared/useUnits'
+import { AmountRow } from '@/features/shared/AmountRow'
 import { estimateIngredients, estimateMeal } from '@/features/log/estimate'
 import { resolveAmount } from '@/lib/resolveAmount'
 import { statedAmount, type ParsedIngredient } from '@/lib/parseIngredient'
@@ -78,7 +77,6 @@ export function RecipeEditor({
   onBack: () => void
 }) {
   const toast = useToast()
-  const units = useUnits()
   const existing = useLiveQuery(
     () => (recipeId ? repo.getRecipe(recipeId) : Promise.resolve(undefined)),
     [recipeId],
@@ -586,10 +584,10 @@ export function RecipeEditor({
               // moment ago is legitimately absent from the map for one render. Asserting it
               // crashed the editor every time an ingredient was added.
               const food = item.foodId === null ? undefined : foods?.get(item.foodId)
-              const measure = ingredientMeasure(item, food, units)
               return (
-                <GramsRow
+                <AmountRow
                   key={index}
+                  food={food}
                   after={
                     // Every row, not only the unmatched ones. An import always leaves a few lines
                     // with no row (which count zero, so the total reads low) — but it also matches
@@ -630,10 +628,9 @@ export function RecipeEditor({
                       )
                     ) : (
                       <span className="tabular text-ink-muted">
-                        {/* What the recipe said, for anyone whose kitchen has cups rather than a
-                            scale. The gram field is the editable one; this is the same amount in a
-                            form you can measure. */}
-                        {measure !== null && `${measure} · `}
+                        {/* The amount itself is editable in the food's own measures now, so repeating
+                            what the recipe said here only gave it a second chance to be stale: edit
+                            the grams and "1 cup" stayed on screen beside two of them. */}
                         {food ? `${Math.round(nutrientsFor(food, item.grams).kcal)} kcal` : '…'}
                         {' · '}
                         <button

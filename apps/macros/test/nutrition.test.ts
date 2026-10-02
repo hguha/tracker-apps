@@ -11,6 +11,7 @@ import {
   sum,
   sumCovered,
   dailyAverageCovered,
+  portionFor,
 } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food, type Nutrients } from '@/domain/types'
 
@@ -203,5 +204,42 @@ describe('macroSharePct', () => {
 
   it('is zero rather than NaN with nothing logged', () => {
     expect(macroSharePct(EMPTY_NUTRIENTS)).toEqual({ proteinMg: 0, carbsMg: 0, fatMg: 0 })
+  })
+})
+
+describe('the portion a food opens on', () => {
+  const withPortions = (...labels: string[]) =>
+    food({
+      portions: labels.map((label, index) => ({
+        id: `p${index}`,
+        label,
+        grams: 100 + index,
+        isDefault: index === 0,
+      })),
+    })
+
+  it('skips a condiment guideline in favour of a measure anyone owns', () => {
+    const food = withPortions('Guideline amount per fl oz of beverage', '1 cup')
+    expect(portionFor(food, null)?.label).toBe('1 cup')
+  })
+
+  it('still offers the guideline when asked for by id', () => {
+    const food = withPortions('Guideline amount per sandwich', '1 tbsp')
+    expect(portionFor(food, 'p0')?.label).toBe('Guideline amount per sandwich')
+  })
+
+  it('falls back to a guideline when that is all there is', () => {
+    const food = withPortions('Guideline amount on regular sandwich')
+    expect(portionFor(food, null)?.label).toBe('Guideline amount on regular sandwich')
+  })
+
+  it('respects an explicit default among ordinary measures', () => {
+    const row = food({
+      portions: [
+        { id: 'a', label: '1 slice', grams: 30, isDefault: false },
+        { id: 'b', label: '1 cup', grams: 240, isDefault: true },
+      ],
+    })
+    expect(portionFor(row, null)?.label).toBe('1 cup')
   })
 })
