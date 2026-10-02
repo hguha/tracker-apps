@@ -88,8 +88,7 @@ export function AccountScreen({
           <Card className="p-4">
             <h2 className="text-[15px] font-semibold tracking-tight">This device only</h2>
             <p className="mt-1 text-[12.5px] text-ink-muted">
-              Everything you&rsquo;ve logged lives in this browser. Connect an account to sync it
-              across devices and back it up — nothing is replaced.
+              Saved on this device only. Connect to sync and back up.
             </p>
             {onConnect && (
               <Button variant="secondary" className="mt-2 w-full" onClick={onConnect}>

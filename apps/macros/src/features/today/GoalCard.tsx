@@ -60,21 +60,13 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
             : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week measured`}
         </p>
         {program.goal !== 'maintain' && (
-          <>
-            <p className="mt-2 text-[12.5px] text-ink-secondary">
-              Without one there&rsquo;s nothing to arrive at: &ldquo;
-              {program.ratePctPerWeek < 0 ? 'lose' : 'gain'}{' '}
-              {Math.abs(program.ratePctPerWeek)}% a week&rdquo; is never finished. A goal weight adds
-              a progress bar and a date worked out from your own measured rate.
-            </p>
-            <button
-              onClick={onOpenTargets}
-              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-[13.5px] font-semibold text-accent-contrast active:brightness-90"
-            >
-              <Target size={15} />
-              Set a goal weight
-            </button>
-          </>
+          <button
+            onClick={onOpenTargets}
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-[13.5px] font-semibold text-accent-contrast active:brightness-90"
+          >
+            <Target size={15} />
+            Set a goal weight
+          </button>
         )}
       </Card>
     )
@@ -106,10 +98,6 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
               Math.round(convertWeight(program.startKg - latest.trendKg, units.weight) * 10) / 10,
             )} ${units.weight}`}
           .
-        </p>
-        <p className="mt-2 text-[12.5px] text-ink-secondary">
-          Holding here means eating at your measured expenditure rather than under it. The check-in
-          will find that number for you — switching to maintain is the whole change.
         </p>
         <div className="mt-3 flex gap-2">
           <button
@@ -222,11 +210,6 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
                 : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week`
             }
           />
-          <p className="pt-1 text-[12px] text-ink-muted">
-            The date comes from what you are actually doing, not from the plan — a projection off the
-            intended rate only tells you what would happen if the plan were working. Weigh in most
-            mornings and it sharpens; the weekly check-in adjusts your calories to close any gap.
-          </p>
           <button
             onClick={onOpenTargets}
             className="w-full rounded-xl bg-sunken py-2 text-[13px] font-semibold text-accent active:opacity-60"

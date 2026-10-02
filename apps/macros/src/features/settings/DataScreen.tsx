@@ -134,8 +134,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
             onChange={(event) => void handleImport(event.target.files?.[0])}
           />
           <p className="mt-2 text-[12.5px] text-ink-muted">
-            A JSON copy of your logs, weigh-ins, recipes and check-ins. Foods aren't included —
-            they're reference data the app can re-fetch.
+            Logs, weigh-ins, recipes and check-ins as JSON.
           </p>
 
           <Button
@@ -158,8 +157,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
             Export a spreadsheet (CSV)
           </Button>
           <p className="mt-1.5 text-[12px] text-ink-muted">
-            One row per item with names, grams and macros — for reading, not restoring. The JSON
-            export is the one that can be imported back.
+            One row per item, for reading. Only JSON can be imported.
           </p>
         </Card>
 
@@ -167,9 +165,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
           <Card className="p-4">
             <h2 className="text-[15px] font-semibold tracking-tight">Demo data</h2>
             <p className="mt-1 text-[12.5px] text-ink-muted">
-              Five weeks of logs and weigh-ins with a real deficit, gaps included, so every screen
-              has something to show. Written through the normal paths, so it syncs and is editable
-              like anything else.
+              Five weeks of sample logs and weigh-ins.
             </p>
             <Button
               variant="secondary"

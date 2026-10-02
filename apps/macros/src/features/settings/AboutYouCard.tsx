@@ -19,8 +19,7 @@ export function AboutYouCard() {
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">About you</h2>
       <p className="mt-1 text-[12.5px] text-ink-muted">
-        Only used for your starting target. After a week of logs and weigh-ins the app measures your
-        expenditure instead.
+        Sets your starting target. After a week, your logs take over.
       </p>
 
       <div className="mt-2 grid grid-cols-3 gap-2">

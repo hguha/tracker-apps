@@ -243,8 +243,7 @@ export function RecipeDetail({
           Delete this recipe
         </button>
         <p className="mt-2 text-[12px] text-ink-muted">
-          Servings you have already logged stay exactly as they are — a log entry keeps the
-          nutrients it was written with.
+          Servings already logged don&rsquo;t change.
         </p>
       </Card>
     </Screen>

@@ -114,8 +114,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
               Ask about your own numbers
             </h2>
             <p className="mt-1 text-[13px] text-ink-secondary">
-              The coach reads your logs and weigh-ins to answer. Anything it suggests logging
-              comes back as a card you confirm — it never writes to your diary on its own.
+              Answers from your logs and weigh-ins. Nothing is logged until you confirm.
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {SUGGESTIONS.map((suggestion) => (

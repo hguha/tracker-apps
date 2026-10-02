@@ -132,8 +132,7 @@ function Editor({
       )}
 
       <p className="text-[12px] text-ink-muted">
-        From today onward. Days already logged keep the target they were scored against, and the
-        measured one carries on being worked out underneath.
+        Applies from today. Past days keep their targets.
       </p>
     </div>
   )

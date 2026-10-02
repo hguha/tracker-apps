@@ -34,8 +34,7 @@ export function CyclingCard() {
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">Calorie cycling</h2>
       <p className="mt-1 text-[12.5px] text-ink-muted">
-        Optional. Tap the days you want more on — the rest come down to match, so your weekly total
-        and your rate of loss are exactly the same. Protein stays put on every day.
+        Tap the days to eat more on. The others come down so the week totals the same.
       </p>
 
       <div className="mt-2.5 flex gap-1">

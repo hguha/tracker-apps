@@ -105,8 +105,7 @@ export function CuisineMixCard({ cuisines }: { cuisines: CuisineShare[] }) {
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">What you cook</h2>
         <p className="mt-1 text-[12.5px] text-ink-muted">
-          Log a serving of one of your recipes and this fills in. Only recipes carry a cuisine — a
-          food row doesn&rsquo;t, and guessing one from its name would be inventing the answer.
+          Log one of your recipes to fill this in.
         </p>
       </Card>
     )

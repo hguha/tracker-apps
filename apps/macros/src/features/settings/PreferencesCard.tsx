@@ -46,8 +46,7 @@ export function PreferencesCard() {
       <label className="mt-3 block">
         <span className="text-[13px] font-medium">Food preferences</span>
         <p className="text-[12px] text-ink-muted">
-          Anything the coach should know — diets, allergies, foods you won&rsquo;t eat. It reads
-          this before suggesting a meal.
+          Diets, allergies, foods you won&rsquo;t eat — the coach reads this.
         </p>
         <textarea
           rows={3}

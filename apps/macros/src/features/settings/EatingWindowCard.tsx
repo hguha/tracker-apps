@@ -27,9 +27,7 @@ export function EatingWindowCard() {
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">Eating window</h2>
       <p className="mt-1 text-[12.5px] text-ink-muted">
-        Optional. Your targets don&rsquo;t change — a day&rsquo;s calories are its calories — but
-        the app can then show a fasting timer, tell you whether you&rsquo;re ahead or behind for
-        the time of day, and stop the coach suggesting meals outside your window.
+        Shows a fasting timer and whether you&rsquo;re inside your window. Targets don&rsquo;t change.
       </p>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">

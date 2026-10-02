@@ -99,8 +99,7 @@ export function RemindersScreen({ onBack }: { onBack: () => void }) {
 
           {!isNativePlatform() && (
             <p className="px-1 text-[12px] text-ink-muted">
-              These arrive on the installed app. A browser tab has nothing to deliver them, so
-              they&rsquo;re saved and start once MACROcosm is on your phone.
+              Reminders arrive on the installed app, not in a browser tab.
             </p>
           )}
         </>

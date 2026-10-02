@@ -19,8 +19,7 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
           <span className="text-[13px] font-medium text-ink-muted"> of {all.length} earned</span>
         </p>
         <p className="mt-1 text-[12.5px] text-ink-muted">
-          All of these are for logging honestly and hitting your plan. None of them reward eating
-          less than your target — a streak worth chasing shouldn&rsquo;t teach you to under-eat.
+          Earned by logging and hitting your plan — never by eating less.
         </p>
       </Card>
 

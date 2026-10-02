@@ -182,13 +182,6 @@ export function RecipesScreen({
 
           <SegmentedTabs tabs={SORTS} active={sort} onSelect={setSort} />
 
-          {sort === 'suggested' && left === null && (
-            <p className="px-1 text-[12px] text-ink-muted">
-              Without a calorie target the order can only weigh what you cook and how recently —
-              add your height, age and sex in Settings and it will fit tonight&rsquo;s budget too.
-            </p>
-          )}
-
           {order.length === 0 ? (
             <Card className="p-4 text-center text-[13.5px] text-ink-muted">
               Nothing matches these filters.

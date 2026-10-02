@@ -63,10 +63,7 @@ export function HealthCard() {
         Apple Health
       </h2>
       <p className="mt-1 text-[12.5px] text-ink-muted">
-        Imports your weigh-ins, so a smart scale feeds the trend without you typing anything. It
-        reads <strong>weight only</strong> — never workouts or calories burned, because your
-        expenditure here is measured from your own data and already includes training. Adding
-        exercise calories on top would count them twice.
+        Imports weigh-ins only, so a smart scale feeds your trend.
       </p>
 
       {isOn ? (
@@ -98,9 +95,7 @@ export function HealthCard() {
             </button>
           </div>
           <p className="mt-1 text-[12px] text-ink-muted">
-            A day you weighed in here is never overwritten, and where Health has several readings
-            for a day the earliest is used — weight climbs through the day, so a consistent time
-            matters more than which one.
+            Weigh-ins entered here are never overwritten. Health&rsquo;s earliest reading of the day is used.
           </p>
         </>
       ) : (

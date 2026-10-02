@@ -20,8 +20,7 @@ export function WaterTargetCard() {
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">Water target</h2>
       <p className="mt-1 text-[12.5px] text-ink-muted">
-        Optional. Without one the glass on Today still counts what you drink — it just fills against a
-        two-litre day rather than against a goal.
+        Without one, Today fills against two litres.
       </p>
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         <Pill isActive={current === null} onClick={() => void repo.setWaterTarget(null)}>

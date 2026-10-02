@@ -46,13 +46,7 @@ export function QuickAddPanel({
 
   return (
     <div className="space-y-3 px-4 py-3">
-      <div>
-        <h2 className="text-[16px] font-semibold tracking-tight">Calories only</h2>
-        <p className="text-[12.5px] text-ink-muted">
-          Straight from a label. No micronutrients, so these days count for calories and macros
-          only.
-        </p>
-      </div>
+      <h2 className="text-[16px] font-semibold tracking-tight">Calories only</h2>
 
       <label className="block">
         <span className="text-[11px] text-ink-muted">What was it?</span>
