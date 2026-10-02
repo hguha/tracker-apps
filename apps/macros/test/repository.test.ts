@@ -7,7 +7,8 @@ import { dayKey } from '@tracker-engine/core'
 import { dayTotals, nutrientsFor } from '@/lib/nutrition'
 import { lastCompleteWeekKey } from '@/lib/checkin'
 import { multipliersForHighDays } from '@/lib/cycling'
-import { EMPTY_NUTRIENTS } from '@/domain/types'
+import { EMPTY_NUTRIENTS, type Food } from '@/domain/types'
+import { matchIngredient } from '@/data/matchFood'
 
 // Once per file. `foods` is reference data nobody owns, so re-seeding 1,400 rows between tests is
 // pure cost — and with a generated seed that cost grew enough to time them out.
@@ -919,5 +920,67 @@ describe('manual targets', () => {
     await repo.setManualTargets(null)
     expect((await repo.getProfile()).manualTargets).toBeNull()
     expect((await repo.currentTargets())?.kcal).not.toBe(2400)
+  })
+})
+
+describe('a scanned food', () => {
+  const scanned = (over: Partial<Food> = {}): Food =>
+    testFood({
+      id: 'off:4902201746014',
+      source: 'off',
+      description: 'Matcha powder, ceremonial',
+      brand: 'Ippodo',
+      barcode: '4902201746014',
+      dataType: 'off',
+      portions: [{ id: 'off-serving', label: '1 tsp', grams: 2, isDefault: true }],
+      ...over,
+    })
+
+  it('becomes one of your foods, carrying its barcode and its numbers', async () => {
+    const own = await repo.keepAsOwnFood(scanned())
+
+    expect(own.id.startsWith('custom:')).toBe(true)
+    expect(own.barcode).toBe('4902201746014')
+    expect(own.description).toBe('Matcha powder, ceremonial')
+    expect(own.brand).toBe('Ippodo')
+    expect(own.per100).toEqual(scanned().per100)
+    expect(own.portions[0]).toMatchObject({ label: '1 tsp', grams: 2 })
+    expect(await repo.customFoods()).toHaveLength(1)
+  })
+
+  it('is not duplicated by scanning the same thing twice', async () => {
+    const first = await repo.keepAsOwnFood(scanned())
+    const again = await repo.keepAsOwnFood(scanned())
+    expect(again.id).toBe(first.id)
+    expect(await repo.customFoods()).toHaveLength(1)
+  })
+
+  it('is what the barcode resolves to next time, with no network', async () => {
+    const own = await repo.keepAsOwnFood(scanned())
+    await repo.putFoods([scanned()])
+    expect((await repo.findByBarcode('4902201746014'))?.id).toBe(own.id)
+  })
+
+  it('appears once in search — yours, not the row it came from', async () => {
+    await repo.putFoods([scanned()])
+    const own = await repo.keepAsOwnFood(scanned())
+
+    // The seed relaxes to partial matches, so "powder" brings other rows — the claim is that the
+    // Open Food Facts row this was copied from is not one of them.
+    const hits = await repo.searchFoods('matcha powder', 10)
+    expect(hits[0]!.id).toBe(own.id)
+    expect(hits.map((hit) => hit.id)).not.toContain('off:4902201746014')
+  })
+
+  it('is the row an ingredient name matches, so a recipe and the AI both find it', async () => {
+    const own = await repo.keepAsOwnFood(scanned())
+    const matched = await matchIngredient('matcha powder')
+    expect(matched.food?.id).toBe(own.id)
+  })
+
+  it('leaves a food with no barcode alone', async () => {
+    const generic = testFood({ barcode: null })
+    expect(await repo.keepAsOwnFood(generic)).toBe(generic)
+    expect(await repo.customFoods()).toHaveLength(0)
   })
 })

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@tracker-engine/ui'
 import { startScanning, type ScanHandle } from '@/platform/barcode'
+import * as repo from '@/data/repository'
 import { lookupBarcode } from '@/data/foodLookup'
 import type { Food } from '@/domain/types'
 
@@ -29,7 +30,10 @@ export function ScanPanel({
     setState({ kind: 'looking-up', barcode })
     const food = await lookupBarcode(barcode)
     if (food) {
-      onFound(food)
+      // Kept as one of yours on the way through: a thing in your cupboard is a thing you own, and
+      // that is what makes it usable in a recipe, findable by the AI, and present on your other
+      // device. See `repo.keepAsOwnFood`.
+      onFound(await repo.keepAsOwnFood(food))
       return
     }
     setState({ kind: 'not-found', barcode })
@@ -110,6 +114,10 @@ export function ScanPanel({
             </button>
           </div>
         )}
+
+        <p className="mt-2 text-[12px] text-ink-muted">
+          Anything you scan is saved to your foods, ready for a recipe.
+        </p>
 
         <div className="mt-3 flex items-center gap-2">
           <input
