@@ -1,6 +1,6 @@
 import { BottomSheet, Card } from '@tracker-engine/ui'
 import { Bookmark, Camera, ChefHat, Check, PencilLine, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { cn } from '@tracker-engine/core'
+import { cn, plural } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { nutrientsFor } from '@/lib/nutrition'
 import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
@@ -83,7 +83,7 @@ export function SavedMeals({
     key: `m:${template.id}`,
     title: template.name,
     nutrients: template.nutrients,
-    detail: `${template.items.length} item${template.items.length === 1 ? '' : 's'}`,
+    detail: plural(template.items.length, 'item'),
     loggable: { kind: 'meal' as const, template },
   }))
   const byKey = new Map(templates.map((template) => [`m:${template.id}`, template]))

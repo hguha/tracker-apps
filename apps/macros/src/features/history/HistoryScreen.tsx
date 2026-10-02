@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, formatRelativeDay, groupBy } from '@tracker-engine/core'
+import {
+  dayKey,
+  dayKeyOffset,
+  dayNoon,
+  formatRelativeDay,
+  groupBy,
+  plural,
+} from '@tracker-engine/core'
 import {
   Card,
   FilterChipButton,
@@ -269,7 +276,7 @@ function DayCard({
         >
           <div className="flex items-baseline gap-2">
             <h2 className="flex-1 truncate text-[15px] font-semibold tracking-tight">
-              {formatRelativeDay(Date.parse(`${day}T12:00:00`))}
+              {formatRelativeDay(dayNoon(day))}
             </h2>
             <span className="tabular text-[14px] font-semibold">{totals.kcal}</span>
             <ChevronRight size={16} className="shrink-0 text-ink-muted" />
@@ -300,7 +307,7 @@ function DayCard({
           <span className="min-w-0 flex-1 truncate">
             {isPartial
               ? matchedNames(entries, foods)
-              : `${meals} meal${meals === 1 ? '' : 's'}`}
+              : plural(meals, 'meal')}
           </span>
           <VenueSummary counts={venues} />
         </p>

@@ -1,3 +1,4 @@
+import { dayKey } from '@tracker-engine/core'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, Download, RefreshCw, Upload } from 'lucide-react'
@@ -108,7 +109,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               onClick={() => {
                 void exportToJson()
                   .then((json) =>
-                    exportBackup(json, `macrocosm-${new Date().toISOString().slice(0, 10)}.json`),
+                    exportBackup(json, `macrocosm-${dayKey(Date.now())}.json`),
                   )
                   .then((shared) => shared && toast.show('Backup saved'))
               }}
@@ -146,7 +147,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                 .then((csv) =>
                   exportBackup(
                     csv,
-                    `macrocosm-log-${new Date().toISOString().slice(0, 10)}.csv`,
+                    `macrocosm-log-${dayKey(Date.now())}.csv`,
                     'Food log',
                   ),
                 )

@@ -1,4 +1,4 @@
-import { dayKey, dayKeyOffset } from '@tracker-engine/core'
+import { dayKey, dayKeyOffset, dayNoon } from '@tracker-engine/core'
 import { syncStamp, touch } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
@@ -12,7 +12,7 @@ import {
 } from '@/domain/types'
 import { nutrientsFor, portionFor, scale as scaleNutrients } from '@/lib/nutrition'
 import { getFood } from './foods'
-import { activeUserId, alive, byRecency, isLater, nextSortIndex, noonOf } from './internal'
+import { activeUserId, alive, byRecency, isLater, nextSortIndex } from './internal'
 
 /** Every surviving entry. Only for lifetime aggregates — screens read a window. */
 export function allEntries(): Promise<LogEntry[]> {
@@ -40,10 +40,10 @@ export async function currentStreak(now = Date.now()): Promise<number> {
     .filter(alive)
     .until(() => broken)
     .each((entry) => {
-      if (count > 0 && entry.day === dayKeyOffset(noonOf(expected), -1)) return
+      if (count > 0 && entry.day === dayKeyOffset(dayNoon(expected), -1)) return
       if (entry.day === expected || (count === 0 && entry.day === dayKeyOffset(now, 1))) {
         count += 1
-        expected = dayKeyOffset(noonOf(entry.day), 1)
+        expected = dayKeyOffset(dayNoon(entry.day), 1)
         return
       }
       broken = true

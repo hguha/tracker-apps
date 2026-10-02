@@ -65,7 +65,7 @@ export function dayStreaks(days: Iterable<string>, now = Date.now()): DayStreaks
   let run = 0
   let previous: string | null = null
   for (const day of sorted) {
-    run = previous !== null && dayKeyOffset(Date.parse(`${day}T12:00:00`), 1) === previous ? run + 1 : 1
+    run = previous !== null && dayKeyOffset(dayNoon(day), 1) === previous ? run + 1 : 1
     if (run > best) best = run
     previous = day
   }
@@ -75,7 +75,7 @@ export function dayStreaks(days: Iterable<string>, now = Date.now()): DayStreaks
   let current = 0
   while (present.has(cursor)) {
     current += 1
-    cursor = dayKeyOffset(Date.parse(`${cursor}T12:00:00`), 1)
+    cursor = dayKeyOffset(dayNoon(cursor), 1)
   }
 
   return { current, best }
@@ -132,3 +132,5 @@ export function toDateTimeInputValue(ts: number): string {
 export function fromDateTimeInputValue(value: string): number {
   return new Date(value).getTime()
 }
+
+export const dayNoon = (day: string): number => Date.parse(`${day}T12:00:00`)

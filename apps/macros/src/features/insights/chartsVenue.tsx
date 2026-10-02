@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { Card } from '@tracker-engine/ui'
@@ -75,7 +76,7 @@ function subtitle(venues: VenueSummary, total: number): string | undefined {
   if (venues.recordedPct < THIN) {
     return `Only ${Math.round(venues.recordedPct)}% of meals say where — too few to read much into.`
   }
-  const parts = [`${total} recorded meal${total === 1 ? '' : 's'}`]
+  const parts = [plural(total, 'recorded meal')]
   const out = venues.outDays.meanOverTarget
   const home = venues.homeDays.meanOverTarget
   if (out !== null && home !== null) {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, formatRelativeDay } from '@tracker-engine/core'
+import { dayKey, dayNoon, formatRelativeDay } from '@tracker-engine/core'
 import {
   Button,
   Card,
@@ -214,7 +214,7 @@ export function RecipesScreen({
                         <span className="block text-[11.5px] text-ink-muted">
                           makes {recipe.servings}
                           {cooked?.lastCookedDay
-                            ? ` · last cooked ${formatRelativeDay(Date.parse(`${cooked.lastCookedDay}T12:00:00`)).toLowerCase()}`
+                            ? ` · last cooked ${formatRelativeDay(dayNoon(cooked.lastCookedDay)).toLowerCase()}`
                             : ' · never logged'}
                         </span>
                       </button>

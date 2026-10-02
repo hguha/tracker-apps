@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { parseIngredientLine, type ParsedIngredient } from '@/lib/parseIngredient'
 import { isConfident, resolveAmount, type ResolvedAmount } from '@/lib/resolveAmount'
 import { matchIngredient } from '@/data/matchFood'
@@ -95,7 +96,7 @@ function describe(lines: readonly ResolvedLine[]): string {
 
   if (assumed.length > 0) {
     parts.push(
-      `Converted ${assumed.length} volume${assumed.length === 1 ? '' : 's'} at water's density (${assumed
+      `Converted ${plural(assumed.length, 'volume')} at water's density (${assumed
         .map((line) => line.parsed.name)
         .join(', ')}) — check those weights`,
     )

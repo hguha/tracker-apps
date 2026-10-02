@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import {
@@ -79,7 +80,7 @@ export function AdequacyChart({
       subtitle={
         known.length === 0
           ? undefined
-          : `Daily average over ${dayCount} logged day${dayCount === 1 ? '' : 's'}` +
+          : `Daily average over ${plural(dayCount, 'logged day')}` +
             (unknown > 0 ? ` · ${unknown} too patchily recorded to judge` : '')
       }
       isEmpty={known.length === 0}

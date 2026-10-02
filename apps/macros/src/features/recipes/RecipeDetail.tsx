@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, Screen, useToast } from '@tracker-engine/ui'
 import {
+  dayNoon,
   formatRelativeDay,
   fromDateTimeInputValue,
   toDateTimeInputValue,
@@ -118,7 +119,7 @@ export function RecipeDetail({
             recipe.totalMinutes !== null && `${recipe.totalMinutes} min`,
             cooked ? `cooked ${cooked.timesCooked}×` : 'never logged',
             cooked?.lastCookedDay &&
-              `last ${formatRelativeDay(Date.parse(`${cooked.lastCookedDay}T12:00:00`)).toLowerCase()}`,
+              `last ${formatRelativeDay(dayNoon(cooked.lastCookedDay)).toLowerCase()}`,
           ]
             .filter(Boolean)
             .join(' · ')}

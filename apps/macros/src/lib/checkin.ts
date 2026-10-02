@@ -1,4 +1,4 @@
-import { weekKey, weekStart, type WeekStart } from '@tracker-engine/core'
+import { dayNoon, weekKey, weekStart, type WeekStart } from '@tracker-engine/core'
 import { weightTrend, type BodyWeight } from '@tracker-engine/body'
 import {
   estimateInitialExpenditure,
@@ -48,7 +48,7 @@ export type CheckInOutcome =
 export function groupByWeek<T>(items: readonly T[], dayOf: (item: T) => string) {
   const weeks = new Map<string, T[]>()
   for (const item of items) {
-    const key = weekKey(Date.parse(`${dayOf(item)}T12:00:00`), WEEK_STARTS_ON)
+    const key = weekKey(dayNoon(dayOf(item)), WEEK_STARTS_ON)
     weeks.set(key, [...(weeks.get(key) ?? []), item])
   }
   return weeks
@@ -60,7 +60,7 @@ export function currentWeekKey(now: number): string {
 
 /** The week a `yyyy-MM-dd` day belongs to. Midday, so no timezone can shift the day. */
 export function weekKeyForDay(day: string): string {
-  return weekKey(Date.parse(`${day}T12:00:00`), WEEK_STARTS_ON)
+  return weekKey(dayNoon(day), WEEK_STARTS_ON)
 }
 
 /** The week that just ended — the one a check-in is about. */

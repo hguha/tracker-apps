@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cn, dayKey, dayKeyOffset, formatDayHeading, formatTimeOfDay } from '@tracker-engine/core'
+import {
+  cn,
+  dayKey,
+  dayKeyOffset,
+  dayNoon,
+  formatDayHeading,
+  formatTimeOfDay,
+} from '@tracker-engine/core'
 import { Card, ScreenHeader, SearchField, useToast } from '@tracker-engine/ui'
 import {
   Bookmark,
@@ -115,7 +122,7 @@ export function DayScreen({
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader
-        title={formatDayHeading(Date.parse(`${day}T12:00:00`))}
+        title={formatDayHeading(dayNoon(day))}
         onBack={onClose}
         action={
           isDirty ? (
@@ -138,7 +145,7 @@ export function DayScreen({
 
       <div className="flex items-center gap-1 border-b border-line bg-surface px-2 py-1.5">
         <button
-          onClick={() => setDay(dayKeyOffset(Date.parse(`${day}T12:00:00`), 1))}
+          onClick={() => setDay(dayKeyOffset(dayNoon(day), 1))}
           aria-label="Previous day"
           className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
         >
@@ -154,7 +161,7 @@ export function DayScreen({
               : `${formatTimeOfDay(timing.firstAt)}–${formatTimeOfDay(timing.lastAt!)} · ${formatDuration(timing.spanMinutes)}`}
         </span>
         <button
-          onClick={() => setDay(dayKeyOffset(Date.parse(`${day}T12:00:00`), -1))}
+          onClick={() => setDay(dayKeyOffset(dayNoon(day), -1))}
           disabled={day >= today}
           aria-label="Next day"
           className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary disabled:opacity-30 active:bg-sunken"

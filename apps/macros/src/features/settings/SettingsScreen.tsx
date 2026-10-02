@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow } from '@tracker-engine/ui'
 import {
@@ -165,9 +166,9 @@ export function missingFacts(profile: Profile | undefined): string[] {
 /** Counts, so the row says what's in there rather than only what it's called. */
 function libraryHint(recipes: number, meals: number, foods: number): string {
   const parts = [
-    recipes > 0 && `${recipes} recipe${recipes === 1 ? '' : 's'}`,
-    meals > 0 && `${meals} meal${meals === 1 ? '' : 's'}`,
-    foods > 0 && `${foods} own food${foods === 1 ? '' : 's'}`,
+    recipes > 0 && plural(recipes, 'recipe'),
+    meals > 0 && plural(meals, 'meal'),
+    foods > 0 && plural(foods, 'own food'),
   ].filter((part): part is string => typeof part === 'string')
   return parts.length === 0 ? 'Recipes, saved meals and your own foods' : parts.join(' · ')
 }
@@ -192,10 +193,10 @@ function preferencesHint(profile: Profile | undefined): string {
 
 function dataHint(sync: { deadLettered: number; pending: number; enabled: boolean }): string {
   if (sync.deadLettered > 0) {
-    return `${sync.deadLettered} change${sync.deadLettered === 1 ? '' : 's'} failed to sync`
+    return `${plural(sync.deadLettered, 'change')} failed to sync`
   }
   if (sync.pending > 0) {
-    return `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
+    return `${plural(sync.pending, 'change')} waiting to upload`
   }
   return sync.enabled ? 'Backup, restore, and reset' : 'This device only'
 }

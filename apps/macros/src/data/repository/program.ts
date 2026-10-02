@@ -1,4 +1,4 @@
-import { DAY_MS, dayKey, dayKeyOffset } from '@tracker-engine/core'
+import { DAY_MS, dayKey, dayKeyOffset, dayNoon } from '@tracker-engine/core'
 import { syncStamp } from '@tracker-engine/local-first'
 import { weightTrend, type TrendPoint } from '@tracker-engine/body'
 import { db } from '@/db'
@@ -207,7 +207,7 @@ export async function targetsByDay(
       cycled(
         day,
         program && trendKg !== null
-          ? initialTargetsFromTrend(program, profile, trendKg, Date.parse(`${day}T12:00:00`))
+          ? initialTargetsFromTrend(program, profile, trendKg, dayNoon(day))
           : null,
       ),
     )
@@ -317,7 +317,7 @@ export interface CheckInStatus {
 export async function checkInStatus(now = Date.now()): Promise<CheckInStatus> {
   const week = lastCompleteWeekKey(now)
   const from = week
-  const to = dayKey(Date.parse(`${week}T12:00:00`) + 6 * DAY_MS)
+  const to = dayKey(dayNoon(week) + 6 * DAY_MS)
   const program = await activeProgram()
 
   return {

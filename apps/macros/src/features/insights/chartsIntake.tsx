@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { shortDay, useChartTokens } from './chartTokens'
@@ -128,7 +129,7 @@ export function AdherenceChart({ days }: { days: InsightsDay[] }) {
   return (
     <ChartCard
       title="How close to target"
-      subtitle={`${scored.length} day${scored.length === 1 ? '' : 's'} with a target in force`}
+      subtitle={`${plural(scored.length, 'day')} with a target in force`}
       isEmpty={scored.length === 0}
       emptyMessage="No days with a target yet."
       table={{

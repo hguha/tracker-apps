@@ -26,8 +26,6 @@ export function nextSortIndex(eatenAt: number): number {
   return eatenAt + sortSequence
 }
 
-export const noonOf = (day: string): number => Date.parse(`${day}T12:00:00`)
-
 /**
  * Oldest first. A total order, which is the point.
  *

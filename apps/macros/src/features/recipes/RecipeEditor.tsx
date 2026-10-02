@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, Screen, SegmentedTabs, useToast } from '@tracker-engine/ui'
@@ -281,7 +282,7 @@ export function RecipeEditor({
       const weighed = estimate.items.filter((item) => item.grams > 0 && item.food !== null)
       if (estimate.items.length === 0) {
         setError(
-          `The AI read those ${needsWeight.length} line${needsWeight.length === 1 ? '' : 's'} and couldn’t make anything of them. ` +
+          `The AI read those ${plural(needsWeight.length, 'line')} and couldn’t make anything of them. ` +
             'They’re still listed at the amount written — pick a food on each and the weight follows.',
         )
         return
@@ -299,7 +300,7 @@ export function RecipeEditor({
     } catch (cause) {
       setError(
         `${cause instanceof Error ? cause.message : 'Could not weigh those lines.'} ` +
-          `The ${needsWeight.length} line${needsWeight.length === 1 ? '' : 's'} are still listed at the amount written.`,
+          `The ${plural(needsWeight.length, 'line')} are still listed at the amount written.`,
       )
     } finally {
       setIsConverting(false)

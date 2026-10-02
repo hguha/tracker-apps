@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { Apple } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { SignInScreen as BaseSignInScreen } from '@tracker-engine/auth/react'
@@ -22,7 +23,7 @@ export function SignInScreen({ onCancel }: { onCancel?: () => void } = {}) {
       privacyUrl="https://reputation.fitness/app/privacy.html"
       onCancel={onCancel}
       localSummary={
-        days === undefined ? undefined : `Your ${days} day${days === 1 ? '' : 's'} of meals`
+        days === undefined ? undefined : `Your ${plural(days, 'day')} of meals`
       }
     />
   )

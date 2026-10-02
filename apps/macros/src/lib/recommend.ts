@@ -1,4 +1,4 @@
-import { DAY_MS } from '@tracker-engine/core'
+import { DAY_MS, dayNoon } from '@tracker-engine/core'
 import {
   CUISINES,
   type CuisineKey,
@@ -151,7 +151,7 @@ function countCuisines(recent: readonly (CuisineKey | null)[]): Map<string, numb
 
 /** Whole days between two `yyyy-MM-dd` keys. Midday, so no DST shift can move the count. */
 function daysBetween(from: string, to: string): number {
-  const ms = Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)
+  const ms = dayNoon(to) - dayNoon(from)
   return Math.max(0, Math.round(ms / DAY_MS))
 }
 
