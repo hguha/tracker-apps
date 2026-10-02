@@ -19,16 +19,8 @@ export interface EstimateRun {
   estimate: MealEstimate | null
   setEstimate: (estimate: MealEstimate) => void
   phase: EstimatePhase
-  /**
-   * Seconds since this run started, while it is running.
-   *
-   * The whole answer to "is it stalling or is it just slow". The model is 2s warm and 12s cold, and a
-   * spinner that says the same thing at 2s and at 40s leaves the user with no way to tell a working
-   * request from a hung one — so they wait, or they leave and lose the request.
-   */
   elapsed: number
   error: string | null
-  /** Given phase one; phase two follows automatically, unless phase one read one named product. */
   run: (describe: () => Promise<MealEstimate>) => Promise<void>
   reset: () => void
 }
@@ -59,8 +51,6 @@ export function useEstimate(): EstimateRun {
     try {
       const draft = await describe()
       setEstimate(draft)
-      // A named product has no ingredients to look up: its panel *is* the answer, and the review
-      // card shows it straight away.
       if (draft.product) {
         setPhase('done')
         return

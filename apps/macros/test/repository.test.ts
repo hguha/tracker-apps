@@ -965,8 +965,6 @@ describe('a scanned food', () => {
     await repo.putFoods([scanned()])
     const own = await repo.keepAsOwnFood(scanned())
 
-    // The seed relaxes to partial matches, so "powder" brings other rows — the claim is that the
-    // Open Food Facts row this was copied from is not one of them.
     const hits = await repo.searchFoods('matcha powder', 10)
     expect(hits[0]!.id).toBe(own.id)
     expect(hits.map((hit) => hit.id)).not.toContain('off:4902201746014')

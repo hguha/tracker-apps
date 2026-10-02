@@ -58,7 +58,6 @@ export function ingredientAmount(
   return weight === '' ? measure : `${measure} · ${weight}`
 }
 
-/** The measure on its own. Private: the editor shows the amount in the food's own units now. */
 function ingredientMeasure(
   ingredient: { grams: number; amount?: string | null },
   food: Food | undefined | null,

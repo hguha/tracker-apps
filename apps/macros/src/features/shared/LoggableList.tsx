@@ -3,7 +3,6 @@ import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { SwipeRow, type SwipeAction } from '@/features/shared/SwipeRow'
 import type { Suggestion } from './loggable'
 
-/** What it is, what it costs, and one line of detail. Nothing else. */
 function LoggableRow<T extends Suggestion>({
   suggestion,
   onPick,
@@ -11,7 +10,6 @@ function LoggableRow<T extends Suggestion>({
 }: {
   suggestion: T
   onPick: (suggestion: T) => void
-  /** Revealed by a swipe. See `SwipeRow`; omitted where there is nothing to do but log it. */
   actions?: readonly SwipeAction[]
 }) {
   const body = (

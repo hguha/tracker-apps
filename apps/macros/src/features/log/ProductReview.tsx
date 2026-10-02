@@ -83,7 +83,6 @@ export function ProductReview({
   )
 }
 
-/** The draft as one of the user's own foods, on the per-100 g basis the app stores. */
 const asFood = (product: FoodDraft): repo.CustomFoodInput => ({
   description: product.name,
   brand: product.brand,

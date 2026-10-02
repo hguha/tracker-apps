@@ -75,13 +75,6 @@ function SignedInApp() {
 
   // Writes belong in an effect, not a live query: Dexie refuses a readwrite transaction inside
   // a liveQuery context, and a querier that writes would also re-fire on its own writes.
-  //
-  // Two chains, because only one of them is the user waiting. The splash used to sit behind
-  // `seedFoods`, which parses a multi-megabyte asset and writes every row in it — and when the seed
-  // grew to 2,212 foods that became seconds of "Setting up…" before anything could be tapped, and an
-  // e2e run timed out waiting for the log screen to exist at all. Nothing on the profile chain reads
-  // a food row, so the app opens as soon as the profile does and the reference data lands behind it.
-  // Search re-queries when it arrives: `putFoods` invalidates the index the one place that owns it.
   useEffect(() => {
     void seedFoods()
     void repo

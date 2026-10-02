@@ -75,9 +75,7 @@ interface FdcFood {
   }[]
   servingSize?: number
   servingSizeUnit?: string
-  /** FNDDS composite dishes: what the survey built the dish from, with real gram weights. */
   inputFoods?: FdcInputFood[]
-  /** Branded rows: the label's ingredient list, as one string and in shouting capitals. */
   ingredients?: string
 }
 
@@ -232,8 +230,6 @@ Deno.serve(async (request) => {
 
   try {
     if (body.op === 'barcode' && body.code) {
-      // No USDA key configured: the client's own Open Food Facts lookup is the fallback, so this
-      // answers "not found" rather than failing.
       if (!key) return json({ food: null })
       // Branded only, and more than one hit: FDC's search matches a barcode loosely, so the
       // exact gtinUpc has to be picked out of several results rather than assumed to be first.
@@ -404,14 +400,6 @@ async function searchOpenFoodFacts(query: string, limit: number): Promise<OffHit
 const flatten = (value: string[] | string | undefined): string =>
   Array.isArray(value) ? value.join(', ') : (value ?? '')
 
-/**
- * Drops hits that share no word with the query.
- *
- * This search always answers: "costco chicken bake" came back as five Dutch chicken products from a
- * supermarket called Jumbo, none of which contains a query word. They would rank below everything
- * locally, but the client *caches* what it is sent, so a query the database cannot answer was
- * permanently seeding the offline index with schnitzel.
- */
 function mentions(hit: OffHit, query: string): boolean {
   const haystack = `${hit.product_name ?? ''} ${flatten(hit.brands)}`.toLowerCase()
   const words = query

@@ -27,7 +27,6 @@ export function DescribePanel({
   /** Carried over from the search box, so describing a meal never means retyping it. */
   initialText?: string
   onDone: () => void
-  /** "Change the numbers" on a named product: the same draft, in the create-a-food form. */
   onEdit: (product: FoodDraft) => void
 }) {
   const [text, setText] = useState(initialText)

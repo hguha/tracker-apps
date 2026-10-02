@@ -42,37 +42,11 @@ const endpointFor = (model: string): string =>
  */
 const blockedUntil = new Map<string, number>()
 
-/**
- * How long one model gets before the next one is tried, and how long the whole call gets.
- *
- * Neither existed, and the absence was the single worst thing about this feature. Every fetch here
- * was unbounded, and the chain is up to six models with a retry each — so one slow model could eat
- * the whole request. Measured on "sushi bake", three attempts at the same prompt: 8.5s, 126.6s, and
- * a **504 at 150s**, which is Supabase's own wall and arrives with no body, so the app could only say
- * "couldn't work that out". With thinking off a successful extraction takes 2–8s, so a model that has
- * not answered in ten is not the fast path — and the next model's capacity is separate and usually
- * idle. A timed-out attempt is not retried on the same model: that only spends the budget learning
- * the same thing twice.
- *
- * The budget stops short of the platform's 150s so that a hopeless call still returns JSON the client
- * can explain, rather than a gateway error it can't.
- */
 const ATTEMPT_MS = 10_000
 const BUDGET_MS = 100_000
 
-/**
- * Models that reject `thinkingConfig`, learned rather than listed.
- *
- * Turning thinking off is the difference between 57s and 7s on this workload — the schema does the
- * structuring, so the reasoning budget buys almost nothing — but the chain is a mix of generations and
- * only some of them accept the field. The ones that don't answer `400 "Request contains an invalid
- * argument"`, with no field name in it, and a 400 is treated as *this request's* fault and stops the
- * fallback: so one unsupported model at the head of the queue failed the whole call. Discovering it
- * costs one request per model per instance, and never the same one twice.
- */
 const rejectsThinking = new Set<string>()
 
-/** The same body with the thinking budget removed, for a model that won't take it. */
 function withoutThinking(body: unknown): unknown {
   const typed = body as { generationConfig?: Record<string, unknown> }
   if (!typed.generationConfig?.thinkingConfig) return body
@@ -414,11 +388,6 @@ do not assume an ingredient they have ruled out.`
   }
 }
 
-/**
- * Every model ran out of time. A 200 body, so the client can say something true rather than meeting
- * a gateway error: this is the same shape a 503 produces, because from the user's side it is the
- * same situation.
- */
 const slow = (model: string) => ({
   busy: true,
   kind: 'overloaded' as const,
@@ -551,8 +520,6 @@ async function callGemini(
           signal: AbortSignal.timeout(left),
         })
       } catch {
-        // Out of time on this model, not wrong: the next one's capacity is unrelated, and retrying
-        // the same slow model would spend the budget discovering that twice.
         last = { ...last, model, timedOut: true }
         break
       }
@@ -561,14 +528,11 @@ async function callGemini(
       const raw = await response.text()
       last = { response, raw, model, timedOut: false }
 
-      // A model that won't take the thinking budget says so as a bare 400. Remember it and give this
-      // model its second attempt without the field, rather than failing a call it could have served.
       if (response.status === 400 && asksToThink(payload)) {
         rejectsThinking.add(model)
         continue
       }
 
-      // Anything else that isn't capacity is this request's fault, and the next model would say the
       // same: a malformed body or an unreadable image doesn't improve on a second opinion.
       if (response.status !== 503 && response.status !== 429) return last
 

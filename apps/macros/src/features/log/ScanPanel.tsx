@@ -30,9 +30,6 @@ export function ScanPanel({
     setState({ kind: 'looking-up', barcode })
     const food = await lookupBarcode(barcode)
     if (food) {
-      // Kept as one of yours on the way through: a thing in your cupboard is a thing you own, and
-      // that is what makes it usable in a recipe, findable by the AI, and present on your other
-      // device. See `repo.keepAsOwnFood`.
       onFound(await repo.keepAsOwnFood(food))
       return
     }

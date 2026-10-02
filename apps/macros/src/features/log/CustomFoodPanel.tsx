@@ -65,7 +65,6 @@ export function CustomFoodPanel({
   const canSave = name.trim().length > 1 && kcal > 0 && (!needsServing || servingGrams > 0)
 
   const number = (value: string): number => Number(value) || 0
-  /** The live "kcal per 100 g" hint under the fields. */
   const per100 = (value: string): number =>
     basis === 'hundred' ? number(value) : per100FromServing(number(value), servingGrams)
 
@@ -79,8 +78,6 @@ export function CustomFoodPanel({
         barcode: initialBarcode,
         servingGrams: servingGrams > 0 ? servingGrams : null,
         servingLabel,
-        // One conversion, shared with the AI product card: per-100 g entry is the same call with a
-        // 100 g serving. Optional fields stay null rather than zero, so "unknown" survives.
         per100: per100FromPanel(
           {
             kcal: number(fields.kcal),

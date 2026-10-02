@@ -201,7 +201,6 @@ export async function describeMeal(description: string, extra = ''): Promise<Mea
   return runDescribe({ mode: 'estimate', description: text }, description.trim())
 }
 
-/** Both phases, for callers that have nothing to show in between. Components only. */
 export async function estimateMeal(description: string): Promise<MealEstimate> {
   const draft = await runDescribe(
     { mode: 'estimate', description: description.trim(), components: true },

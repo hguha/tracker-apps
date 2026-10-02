@@ -1,13 +1,6 @@
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 
-/**
- * Asking again with the missing detail.
- *
- * "Zucchini muffins" coming back as a plain muffin is the model missing a word, and the only recourse
- * was retyping the whole meal and hoping. This appends the correction to the original description —
- * one short box, because the correction is always short.
- */
 export function Refine({
   onRefine,
   isBusy,

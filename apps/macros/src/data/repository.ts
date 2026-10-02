@@ -243,9 +243,6 @@ async function allCachedFoods(): Promise<IndexedFood[]> {
     db.foods.toArray(),
     db.customFoods.filter(alive).toArray(),
   ])
-  // Your copy wins. A scanned food is kept as one of yours *and* stays in the reference cache, so
-  // without this the same tin of matcha appears twice in every search — once as yours, once as the
-  // Open Food Facts row it came from.
   const claimed = new Set(custom.map((food) => food.barcode).filter(isPresent))
   foodIndex = {
     rows: [...reference.filter((food) => !claimed.has(food.barcode ?? '')), ...custom].map((food) => ({
@@ -536,18 +533,6 @@ export async function saveCustomFood(
   return row.id
 }
 
-/**
- * A food you scanned, kept as one of yours.
- *
- * A barcode lookup already cached its result, but `foods` is the *reference* cache: device-local,
- * never synced, and invisible in the one place that lists what you own. So scanning the matcha powder
- * in your cupboard made it loggable today, on that phone, and nowhere else — not in your foods, not on
- * the laptop, and not reliably the row a recipe or the AI matched later.
- *
- * Copying it into `custom_foods` fixes all of that at once: owner-only, synced, listed in the Library,
- * and found *first* by `findByBarcode`, so the second scan of the same tin needs no network at all.
- * Idempotent on the barcode — scanning something twice does not give you two of it.
- */
 export async function keepAsOwnFood(food: Food): Promise<Food> {
   if (food.source === 'custom') return food
   const barcode = food.barcode?.trim() || null

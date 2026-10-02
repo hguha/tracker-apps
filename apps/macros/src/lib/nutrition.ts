@@ -24,12 +24,6 @@ export const mgToGrams = (mg: number): number => mg / MG_PER_G
 export const per100FromServing = (value: number, servingGrams: number): number =>
   (value * 100) / Math.max(1, servingGrams)
 
-/**
- * A label's per-serving figures, on the per-100 g basis everything else scales from.
- *
- * Pass `servingGrams: 100` for figures already stated per 100 g. Optional fields stay null rather
- * than becoming zero, so "unknown" survives the conversion.
- */
 export interface ServingPanel {
   kcal: number
   proteinG: number
@@ -56,13 +50,6 @@ export function per100FromPanel(panel: ServingPanel, servingGrams: number): Nutr
   }
 }
 
-/**
- * FNDDS carries condiment guidelines as portions — "Guideline amount per sandwich", "Guideline amount
- * per fl oz of beverage" — and they are first in FDC's order, which is where `isDefault` is set. So 42
- * of the seeded foods opened the amount screen on one: almond butter measured per sandwich, almond
- * milk per fluid ounce of *something else*. They are real weights and a poor thing to open on, so they
- * stay available and lose their claim to being the default.
- */
 const GUIDELINE = /^guideline amount/i
 
 export function portionFor(food: Food, portionId: string | null): FoodPortion | null {

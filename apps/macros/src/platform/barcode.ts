@@ -125,7 +125,6 @@ export async function startScanning(
           return
         }
       } catch {
-        // A transient decode failure is normal between frames; keep looking.
       }
       await new Promise((resolve) => setTimeout(resolve, DECODE_INTERVAL_MS))
     }

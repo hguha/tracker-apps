@@ -50,8 +50,6 @@ export function AddPanel({
     undefined,
   )
 
-  // What the database says is in it, for a composite USDA row. Fetched here rather than with the
-  // search results: it is one request per food and only worth making for the one being opened.
   const [madeOf, setMadeOf] = useState<FoodParts | null>(null)
   useEffect(() => {
     setMadeOf(null)
@@ -258,13 +256,6 @@ function subjectKey(loggable: Loggable): string {
   }
 }
 
-/**
- * What the database itself says is in a dish, by share of weight.
- *
- * The answer to looking up "zucchini bake" and having no idea what is in it. Shares, not grams: the
- * weights are what the recipe went in with and the calories are what came out, so 52% is true where
- * 552 g would imply a precision that cooking loss has already spent.
- */
 function MadeOf({ madeOf }: { madeOf: FoodParts }) {
   const total = madeOf.parts.reduce((sum_, part) => sum_ + part.grams, 0)
   const shares = [...madeOf.parts].sort((a, b) => b.grams - a.grams).slice(0, 8)
@@ -292,7 +283,6 @@ function MadeOf({ madeOf }: { madeOf: FoodParts }) {
   )
 }
 
-/** A label's ingredient list, which USDA stores shouting. */
 const sentence = (text: string): string =>
   text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
 
