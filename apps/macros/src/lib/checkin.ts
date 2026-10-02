@@ -1,4 +1,4 @@
-import { dayNoon, weekKey, weekStart, type WeekStart } from '@tracker-engine/core'
+import { dayNoon, signed, weekKey, weekStart, type WeekStart } from '@tracker-engine/core'
 import { weightTrend, type BodyWeight } from '@tracker-engine/body'
 import {
   estimateInitialExpenditure,
@@ -165,7 +165,7 @@ function explain(
     trendChangeKgPerWeek > 0.05 ? 'rising' : trendChangeKgPerWeek < -0.05 ? 'falling' : 'flat'
   const goalWord =
     program.goal === 'lose' ? 'losing' : program.goal === 'gain' ? 'gaining' : 'holding'
-  return `Weight ${direction} at ${trendChangeKgPerWeek >= 0 ? '+' : ''}${trendChangeKgPerWeek.toFixed(2)} kg/week; expenditure measured at ${expenditure.kcal} ± ${expenditure.se} kcal/day. Target set for ${goalWord}.`
+  return `Weight ${direction} at ${signed(trendChangeKgPerWeek, 2)} kg/week; expenditure measured at ${expenditure.kcal} ± ${expenditure.se} kcal/day. Target set for ${goalWord}.`
 }
 
 /**

@@ -1,4 +1,4 @@
-import { plural } from '@tracker-engine/core'
+import { plural, signed } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { Card } from '@tracker-engine/ui'
@@ -89,7 +89,6 @@ function subtitle(venues: VenueSummary, total: number): string | undefined {
   return parts.join(' · ')
 }
 
-const signed = (value: number): string => `${value >= 0 ? '+' : ''}${value}`
 
 /**
  * What you cook, by cuisine.

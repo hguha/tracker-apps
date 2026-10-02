@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card } from '@tracker-engine/ui'
-import { convertWeight } from '@tracker-engine/core'
+import { convertWeight, signed } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { useUnits } from '@/features/shared/useUnits'
 
@@ -25,8 +25,8 @@ export function CheckInHistory() {
             <div className="min-w-0">
               <div className="tabular text-[13.5px]">{week.weekStart}</div>
               <div className="tabular text-[12px] text-ink-muted">
-                {week.daysLogged}/7 days · {week.trendChangeKgPerWeek >= 0 ? '+' : ''}
-                {convertWeight(week.trendChangeKgPerWeek, units.weight).toFixed(2)} {units.weight}/wk
+                {week.daysLogged}/7 days ·{' '}
+                {signed(convertWeight(week.trendChangeKgPerWeek, units.weight), 2)} {units.weight}/wk
               </div>
             </div>
             <div className="shrink-0 text-right">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { bodyWeightFromKg, cn, convertWeight, weightToKg } from '@tracker-engine/core'
+import { bodyWeightFromKg, cn, convertWeight, signed, weightToKg } from '@tracker-engine/core'
 import { ChevronDown } from 'lucide-react'
 import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
@@ -65,7 +65,7 @@ export function TargetsCard() {
   const perWeek = (pct: number): string | null => {
     if (latestKg === null) return null
     const value = convertWeight((pct / 100) * latestKg, units.weight)
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)} ${units.weight} a week`
+    return `${signed(value, 2)} ${units.weight} a week`
   }
 
   return (

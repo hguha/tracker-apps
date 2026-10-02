@@ -1,4 +1,4 @@
-import { dayKey } from '@tracker-engine/core'
+import { dayKey, signed } from '@tracker-engine/core'
 import { bodyWeightFromKg, convertWeight, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
@@ -69,7 +69,7 @@ async function weightAnswer(): Promise<string> {
   return `Trend is ${bodyWeightFromKg(latest.trendKg, weight)} ${weight} and ${direction}${
     rate === null
       ? ''
-      : ` at ${rate >= 0 ? '+' : ''}${convertWeight(rate, weight).toFixed(2)} ${weight}/week`
+      : ` at ${signed(convertWeight(rate, weight), 2)} ${weight}/week`
   }. Last reading was ${bodyWeightFromKg(latest.kg, weight)} ${weight} — the trend is what to judge by; a single morning swings on water alone.`
 }
 

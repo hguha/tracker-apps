@@ -1,5 +1,5 @@
 import { Card } from '@tracker-engine/ui'
-import { convertWeight } from '@tracker-engine/core'
+import { convertWeight, signed } from '@tracker-engine/core'
 import { grams } from '@/features/shared/format'
 import { useUnits } from '@/features/shared/useUnits'
 import type { InsightsData } from './useInsightsData'
@@ -25,7 +25,7 @@ export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLab
         <Stat label="Weight change">
           {data.weightChangeKg === null
             ? '—'
-            : `${data.weightChangeKg >= 0 ? '+' : ''}${convertWeight(data.weightChangeKg, units.weight).toFixed(1)} ${units.weight}`}
+            : `${signed(convertWeight(data.weightChangeKg, units.weight), 1)} ${units.weight}`}
         </Stat>
         <Stat label="Expenditure">
           {data.expenditureKcal === null

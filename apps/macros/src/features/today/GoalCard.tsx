@@ -6,6 +6,7 @@ import {
   convertWeight,
   DAY_MS,
   formatRelativeDay,
+  signed,
 } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
@@ -57,7 +58,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
         <p className="tabular mt-1 text-[12.5px] text-ink-muted">
           {rate === null
             ? 'Weigh in a few more times to measure your rate.'
-            : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week measured`}
+            : `${signed(convertWeight(rate, units.weight), 2)} ${units.weight}/week measured`}
         </p>
         {program.goal !== 'maintain' && (
           <button
@@ -200,14 +201,14 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
           <Row label="Goal" value={`${show(program.targetKg)} ${units.weight}`} />
           <Row
             label="Aiming for"
-            value={`${signed(weeklyTarget)} ${units.weight}/week`}
+            value={`${signed(weeklyTarget, 2)} ${units.weight}/week`}
           />
           <Row
             label="Actually doing"
             value={
               rate === null
                 ? 'not enough weigh-ins'
-                : `${signed(convertWeight(rate, units.weight))} ${units.weight}/week`
+                : `${signed(convertWeight(rate, units.weight), 2)} ${units.weight}/week`
             }
           />
           <button
@@ -238,4 +239,3 @@ function Header({ goal }: { goal: string }) {
 }
 
 /** A rate reads as a rate only with its sign: "+0.24", "-0.55". */
-const signed = (value: number): string => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`
