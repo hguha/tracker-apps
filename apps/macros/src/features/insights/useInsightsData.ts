@@ -14,6 +14,7 @@ import { filterExpenditure, kcalPerKg, windowEstimate, type ExpenditureWindow } 
 import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
 import { cuisineMix, venueSummary, type CuisineShare, type VenueSummary } from '@/lib/patterns'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import type { GoalForecast } from '@/lib/goal'
 import type {
   CheckIn,
   CuisineKey,
@@ -65,6 +66,7 @@ export interface InsightsData {
   expenditureSe: number | null
   checkIns: CheckIn[]
   program: Program | undefined
+  forecast: GoalForecast | null
   profile: Profile | undefined
   targets: MacroTargets | null
   /** Per-day average over the window, with per-nutrient coverage — see `sumCovered`. */
@@ -94,6 +96,7 @@ export function useInsightsData(windowDays: number): InsightsData {
   const weights = useLiveQuery(() => repo.weights(), [], undefined)
   const checkIns = useLiveQuery(() => repo.checkIns(), [], [])
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
+  const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], undefined)
@@ -209,6 +212,7 @@ export function useInsightsData(windowDays: number): InsightsData {
     expenditureSe: expenditure?.se ?? null,
     checkIns: checkIns ?? [],
     program,
+    forecast: forecast ?? null,
     profile,
     targets,
     nutrition: dailyAverageCovered(entries ?? []),

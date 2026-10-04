@@ -99,7 +99,7 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
 
   const priorState: ExpenditureState | null = prior
     ? { kcal: prior.expenditureKcal, se: prior.expenditureSe }
-    : coldStart(inputs, trend[trend.length - 1]!.trendKg)
+    : coldStartExpenditure(inputs.profile, trend[trend.length - 1]!.trendKg, inputs.now)
 
   // The week being checked in must itself qualify. A cold-start prior seeds the filter; it
   // must never stand in as a result, or the app would record a formula's guess as a
@@ -115,8 +115,7 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
 
   const trendKg = thisWeek.trendKg
   const proposed = targetKcal(expenditure, program, trendKg)
-  // Move gradually from whatever is in force, so one noisy week can't whipsaw the user.
-  const kcal = prior ? stepToward(prior.targets.kcal, proposed) : proposed
+  const kcal = prior ? stepToward(targetsInForce(prior, program).kcal, proposed) : proposed
 
   return {
     kind: 'ready',
@@ -137,26 +136,34 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
   }
 }
 
-function split(kcal: number, trendKg: number, program: Program): MacroTargets {
-  return splitTargets(kcal, trendKg, program.proteinGPerKg, program.fatMinPctKcal)
+export function isRetunedSince(program: Program, checkIn: CheckIn): boolean {
+  return program.updatedAt > checkIn.updatedAt
 }
 
-/**
- * A prior for the very first check-in, so week one isn't a coin flip. Deliberately wide, and
- * the data overwrites it within a fortnight.
- */
-function coldStart(inputs: CheckInInputs, trendKg: number): ExpenditureState | null {
-  const { heightCm, birthYear, sex, activity } = inputs.profile
+export function targetsInForce(checkIn: CheckIn, program: Program | null | undefined): MacroTargets {
+  if (!program || !isRetunedSince(program, checkIn)) return checkIn.targets
+  const expenditure = { kcal: checkIn.expenditureKcal, se: checkIn.expenditureSe }
+  return split(targetKcal(expenditure, program, checkIn.trendKg), checkIn.trendKg, program)
+}
+
+export function coldStartExpenditure(
+  profile: Pick<Profile, 'heightCm' | 'birthYear' | 'sex' | 'activity'>,
+  trendKg: number,
+  now: number,
+): ExpenditureState | null {
+  const { heightCm, birthYear, sex, activity } = profile
   if (heightCm === null || birthYear === null || sex === null) return null
   return estimateInitialExpenditure({
     kg: trendKg,
     heightCm,
-    age: new Date(inputs.now).getFullYear() - birthYear,
+    age: new Date(now).getFullYear() - birthYear,
     sex,
-    // Null when nobody has been asked yet, which the estimator reads as moderate and a wider
-    // error bar — never as a fact about this person.
     activity: activity ?? null,
   })
+}
+
+function split(kcal: number, trendKg: number, program: Program): MacroTargets {
+  return splitTargets(kcal, trendKg, program.proteinGPerKg, program.fatMinPctKcal)
 }
 
 export function describeCheckIn(
@@ -194,7 +201,7 @@ export function initialTargetsFromTrend(
   trendKg: number,
   now = Date.now(),
 ): MacroTargets | null {
-  const prior = coldStart({ now, program, profile, weights: [], intake: [], prior: null }, trendKg)
+  const prior = coldStartExpenditure(profile, trendKg, now)
   if (!prior) return null
   return split(targetKcal(prior, program, trendKg), trendKg, program)
 }

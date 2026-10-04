@@ -488,7 +488,47 @@ test('a goal weight gives the goal a bar and a date', async ({ page }) => {
   await expect(page.getByRole('button', { name: /78 kg goal/ })).toBeVisible()
   await expect(page.getByText(/7\.0 to go/)).toBeVisible()
   // No measured rate yet, so it says what the plan implies rather than inventing a measurement.
-  await expect(page.getByText(/The plan puts it at/)).toBeVisible()
+  await expect(page.getByText(/Steady pace gets you there/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('the goal forecast follows the pace, and says when custom targets override it', async ({
+  page,
+}) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { goal: 'lose', weight: '180', units: 'imperial' })
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  const goal = page.getByPlaceholder('lb', { exact: true })
+  await goal.fill('175')
+  await goal.blur()
+  await page.getByRole('button', { name: 'Fast', exact: true }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+
+  await expect(page.getByRole('button', { name: /175 lb goal/ })).toBeVisible()
+  await expect(page.getByText(/On target:/)).toBeVisible()
+  await page.getByRole('button', { name: /On target:/ }).click()
+  await expect(page.getByText('If you hit your target')).toBeVisible()
+  await expect(page.getByText('Your recent pace')).toBeVisible()
+  await expect(page.getByText(/-1\.\d lb\/wk/).first()).toBeVisible()
+  await expect(page.getByText(/Custom calories are on/)).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  await page.getByRole('button', { name: 'Custom', exact: true }).click()
+  await page.getByLabel('Calories', { exact: true }).fill('2900')
+  await page.getByRole('button', { name: 'Save targets' }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+
+  await page.getByRole('button', { name: /On target:|Steady|Fast|gets you there/ }).first().click()
+  await expect(page.getByText(/Custom calories are on, so your Fast pace/)).toBeVisible()
+  await page.getByRole('button', { name: 'Use my Fast pace' }).click()
+  await expect(page.getByText(/Custom calories are on/)).toHaveCount(0)
+  await expect(page.getByText('If you hit your target')).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

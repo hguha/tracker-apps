@@ -1169,3 +1169,93 @@ describe('saved meals become recipes, concurrently', () => {
     expect((await repo.customFoods()).filter((food) => food.description === 'Snack')).toHaveLength(1)
   })
 })
+
+describe('the pace in force', () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 3))
+  const measured = (weekStart: string, kcal: number) => ({
+    weekStart,
+    expenditureKcal: 2500,
+    expenditureSe: 100,
+    trendKg: 80,
+    trendChangeKgPerWeek: -0.4,
+    meanIntakeKcal: 2100,
+    daysLogged: 7,
+    kcalPerKg: 7700,
+    note: '',
+    status: 'applied' as const,
+    targets: { kcal, proteinMg: 144_000, carbsMg: 200_000, fatMg: 60_000 },
+  })
+
+  async function steadyWithCheckIn() {
+    const programId = await repo.startProgram({
+      goal: 'lose',
+      ratePctPerWeek: -0.5,
+      proteinGPerKg: 1.8,
+      fatMinPctKcal: 25,
+    })
+    await tick()
+    await repo.saveCheckIn(measured('2026-01-05', 2060))
+    await tick()
+    return programId
+  }
+
+  it('moves today’s target to a new pace at once, and leaves earlier days alone', async () => {
+    const programId = await steadyWithCheckIn()
+    await repo.setProgramFields(programId, { ratePctPerWeek: -0.75 })
+
+    const today = dayKey(Date.now())
+    const yesterday = dayKey(Date.now() - 24 * 60 * 60 * 1000)
+    const byDay = await repo.targetsByDay([yesterday, today])
+    expect(byDay.get(today)?.kcal).toBe(1840)
+    expect(byDay.get(yesterday)?.kcal).toBe(2060)
+  })
+
+  it('keeps the stored check-in target when nothing changed after it', async () => {
+    await steadyWithCheckIn()
+    expect((await repo.currentTargets())?.kcal).toBe(2060)
+  })
+
+  it('forecasts from the target in force and the measured expenditure', async () => {
+    const programId = await steadyWithCheckIn()
+    await repo.recordWeight(80, dayKey(Date.now()))
+    await repo.setGoalWeight(programId, 78)
+    await repo.setProgramFields(programId, { ratePctPerWeek: -0.75 })
+
+    const forecast = await repo.goalOutlook()
+    expect(forecast?.expenditureKcal).toBe(2500)
+    expect(forecast?.onTarget?.targetKcal).toBe(1840)
+    expect(forecast?.onTarget?.kgPerWeek).toBeCloseTo(-0.6, 2)
+    expect(forecast?.pace).toBe('matches')
+  })
+
+  it('says when custom targets are in charge, and hands control back in one tap', async () => {
+    const programId = await steadyWithCheckIn()
+    await repo.recordWeight(80, dayKey(Date.now()))
+    await repo.setGoalWeight(programId, 78)
+    await repo.setManualTargets({ kcal: 2600, proteinMg: 150_000, carbsMg: 300_000, fatMg: 70_000 })
+    expect((await repo.goalOutlook())?.pace).toBe('custom')
+
+    await repo.setManualTargets(null)
+    expect((await repo.goalOutlook())?.pace).toBe('matches')
+  })
+
+  it('re-aligns a check-in target that drifted from the chosen pace', async () => {
+    const programId = await steadyWithCheckIn()
+    await repo.recordWeight(80, dayKey(Date.now()))
+    await repo.setGoalWeight(programId, 78)
+    await tick()
+    await repo.saveCheckIn(measured('2026-01-12', 2300))
+    expect((await repo.goalOutlook())?.pace).toBe('off-pace')
+
+    await tick()
+    await repo.alignTargetsToPace(programId)
+    expect((await repo.currentTargets())?.kcal).toBe(2060)
+    expect((await repo.goalOutlook())?.pace).toBe('matches')
+  })
+
+  it('has no forecast without a goal weight', async () => {
+    await steadyWithCheckIn()
+    await repo.recordWeight(80, dayKey(Date.now()))
+    expect(await repo.goalOutlook()).toBeNull()
+  })
+})

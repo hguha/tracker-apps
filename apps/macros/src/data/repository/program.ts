@@ -8,12 +8,15 @@ import { cycleDayTargets } from '@/lib/nutrition'
 import { multiplierForDay } from '@/lib/cycling'
 import {
   buildCheckIn,
+  coldStartExpenditure,
   initialTargetsFromTrend,
+  targetsInForce,
   lastCompleteWeekKey,
   weekKeyForDay,
   type CheckInOutcome,
 } from '@/lib/checkin'
-import type { IntakeDay } from '@/lib/expenditure'
+import { kcalPerKg, type IntakeDay } from '@/lib/expenditure'
+import { EATING_WINDOW_DAYS, goalForecast, type GoalForecast } from '@/lib/goal'
 import { weights } from './body'
 import { entriesBetween } from './entries'
 import { activeUserId, alive } from './internal'
@@ -107,6 +110,12 @@ export async function setGoalWeight(programId: string, targetKg: number | null):
   })
 }
 
+export async function alignTargetsToPace(programId: string): Promise<void> {
+  const program = await activeProgram()
+  if (!program || program.id !== programId) return
+  await patch('programs', programId, { ratePctPerWeek: program.ratePctPerWeek })
+}
+
 /** Records that the target was met, so it can be marked once and then moved on from. */
 export function markGoalReached(programId: string, at = Date.now()): Promise<void> {
   return patch('programs', programId, { reachedAt: at })
@@ -196,7 +205,8 @@ export async function targetsByDay(
     const week = weekKeyForDay(day)
     const inForce = applied.find((c) => c.weekStart < week)
     if (inForce) {
-      out.set(day, cycled(day, inForce.targets))
+      const isRetuned = program !== undefined && day >= dayKey(program.updatedAt)
+      out.set(day, cycled(day, isRetuned ? targetsInForce(inForce, program) : inForce.targets))
       continue
     }
     // Before the first check-in, the cold-start estimate — from the weight known *then*, so a
@@ -343,4 +353,36 @@ export function applyCheckIn(id: string): Promise<void> {
 
 export function declineCheckIn(id: string): Promise<void> {
   return patch('checkIns', id, { status: 'declined' })
+}
+
+export async function goalOutlook(now = Date.now()): Promise<GoalForecast | null> {
+  const program = await activeProgram()
+  if (!program || program.targetKg === null) return null
+  const trend = weightTrend(await weights())
+  const latest = trend[trend.length - 1]
+  if (!latest) return null
+
+  const profile = await getProfile()
+  const inForce = (await checkIns())
+    .filter((c) => c.status === 'applied')
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
+  const expenditure = inForce
+    ? { kcal: inForce.expenditureKcal, se: inForce.expenditureSe }
+    : coldStartExpenditure(profile, latest.trendKg, now)
+  const today = dayKey(now)
+  const targets = await targetsForDay(today)
+
+  return goalForecast({
+    goal: program.goal,
+    targetKg: program.targetKg,
+    trend,
+    intake: await intakeByDay(dayKeyOffset(now, EATING_WINDOW_DAYS), dayKeyOffset(now, 1)),
+    expenditure,
+    energyPerKg: kcalPerKg(program.goal, program.ratePctPerWeek),
+    targetKcal: targets?.kcal ?? null,
+    isCustomTarget: profile.manualTargets !== null && today >= profile.manualTargets.fromDay,
+    ratePctPerWeek: program.ratePctPerWeek,
+    behaviourSince: program.startedAt,
+    now,
+  })
 }

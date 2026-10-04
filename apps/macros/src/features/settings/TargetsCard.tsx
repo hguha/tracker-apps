@@ -6,6 +6,7 @@ import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { mgToGrams } from '@/lib/nutrition'
 import { useUnits } from '@/features/shared/useUnits'
+import { RATES } from '@/features/shared/pace'
 import type { CoachingMode, Goal, Program } from '@/domain/types'
 
 const MODES: { id: CoachingMode; label: string; blurb: string }[] = [
@@ -19,22 +20,6 @@ const GOALS: { value: Goal; label: string }[] = [
   { value: 'maintain', label: 'Maintain' },
   { value: 'gain', label: 'Build' },
 ]
-
-/** %/week of bodyweight. Named rather than free-numeric, because the difference between −0.5
- *  and −1.5 is the difference between sustainable and miserable, and a slider invites the latter. */
-const RATES: Record<Goal, { value: number; label: string }[]> = {
-  lose: [
-    { value: -0.25, label: 'Gentle' },
-    { value: -0.5, label: 'Steady' },
-    { value: -0.75, label: 'Fast' },
-  ],
-  gain: [
-    { value: 0.125, label: 'Lean' },
-    { value: 0.25, label: 'Steady' },
-    { value: 0.5, label: 'Fast' },
-  ],
-  maintain: [{ value: 0, label: 'Hold' }],
-}
 
 const PROTEIN = [1.4, 1.6, 1.8, 2.0, 2.2]
 const FAT_MIN = [20, 25, 30]

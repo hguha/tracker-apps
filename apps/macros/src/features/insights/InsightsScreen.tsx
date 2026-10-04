@@ -88,7 +88,11 @@ export function InsightsScreen() {
               <>
                 <SummaryCard data={data} rangeLabel={range.label} />
                 <IntakeChart days={data.days} />
-                <WeightChart trend={data.trend} />
+                <WeightChart
+                  trend={data.trend}
+                  forecast={data.forecast}
+                  targetKg={data.program?.targetKg ?? null}
+                />
                 <ExpenditureChart windows={data.windows} />
               </>
             )}
@@ -106,7 +110,11 @@ export function InsightsScreen() {
 
             {tab === 'body' && (
               <>
-                <WeightChart trend={data.trend} />
+                <WeightChart
+                  trend={data.trend}
+                  forecast={data.forecast}
+                  targetKg={data.program?.targetKg ?? null}
+                />
                 <ExpenditureChart windows={data.windows} />
                 <BalanceChart
                   days={data.days}

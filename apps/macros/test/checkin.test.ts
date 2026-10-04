@@ -3,6 +3,7 @@ import {
   buildCheckIn,
   currentWeekKey,
   lastCompleteWeekKey,
+  targetsInForce,
   type CheckInInputs,
 } from '@/lib/checkin'
 import type { BodyWeight } from '@tracker-engine/body'
@@ -225,5 +226,55 @@ describe('expenditure accuracy over a real history', () => {
     if (outcome.kind !== 'ready') throw new Error(outcome.reason)
     expect(outcome.draft.targets.kcal).toBeLessThan(outcome.draft.expenditureKcal)
     expect(outcome.draft.targets.kcal).toBeGreaterThan(1500)
+  })
+})
+
+describe('targets in force after the pace changes', () => {
+  const applied = (over: Partial<CheckIn> = {}): CheckIn => ({
+    id: 'c1',
+    userId: 'u1',
+    weekStart: '2026-08-17',
+    expenditureKcal: 2500,
+    expenditureSe: 100,
+    trendKg: 80,
+    trendChangeKgPerWeek: -0.3,
+    meanIntakeKcal: 2200,
+    daysLogged: 7,
+    kcalPerKg: 7700,
+    targets: { kcal: 2060, proteinMg: 144_000, carbsMg: 200_000, fatMg: 60_000 },
+    status: 'applied',
+    note: '',
+    createdAt: 100,
+    updatedAt: 100,
+    deletedAt: null,
+    clientRev: 1,
+    ...over,
+  })
+
+  it('keeps the stored targets while the program is unchanged since the check-in', () => {
+    const checkIn = applied()
+    expect(targetsInForce(checkIn, program({ ratePctPerWeek: -0.75, updatedAt: 50 }))).toBe(
+      checkIn.targets,
+    )
+  })
+
+  it('re-derives from the measured expenditure the moment the pace changes', () => {
+    const fast = targetsInForce(applied(), program({ ratePctPerWeek: -0.75, updatedAt: 200 }))
+    expect(fast.kcal).toBe(2500 - 660)
+    expect(fast.proteinMg).toBe(144_000)
+  })
+
+  it('steps the next check-in from the re-derived target, not the stale stored one', () => {
+    const prior = applied({ targets: { kcal: 2400, proteinMg: 0, carbsMg: 0, fatMg: 0 } })
+    const retuned = buildCheckIn(
+      inputs({ prior, program: program({ ratePctPerWeek: -0.75, updatedAt: 200 }) }),
+    )
+    const untouched = buildCheckIn(
+      inputs({ prior, program: program({ ratePctPerWeek: -0.75, updatedAt: 50 }) }),
+    )
+    if (retuned.kind !== 'ready' || untouched.kind !== 'ready') throw new Error('no draft')
+    expect(untouched.draft.targets.kcal).toBe(2400 - 150)
+    expect(retuned.draft.targets.kcal).toBeLessThan(2100)
+    expect(Math.abs(retuned.draft.targets.kcal - 1840)).toBeLessThanOrEqual(150)
   })
 })

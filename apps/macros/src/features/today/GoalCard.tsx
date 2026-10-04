@@ -1,19 +1,16 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import {
-  bodyWeightFromKg,
-  cn,
-  convertWeight,
-  DAY_MS,
-  formatRelativeDay,
-  signed,
-} from '@tracker-engine/core'
+import { bodyWeightFromKg, cn, convertWeight, signed } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
-import { ChevronDown, PartyPopper, Target } from 'lucide-react'
+import { ChevronDown, Flag, PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { goalProgress } from '@/lib/goal'
+import { goalProgress, type GoalForecast } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
+import { paceLabel } from '@/features/shared/pace'
+import { arrivalDay, arrivalRange, perWeek, timeUntil } from '@/features/shared/goalText'
+import type { WeightUnit } from '@tracker-engine/core'
+import type { Program } from '@/domain/types'
 
 const GOAL_VERB: Record<string, string> = {
   lose: 'Losing',
@@ -21,20 +18,10 @@ const GOAL_VERB: Record<string, string> = {
   maintain: 'Holding',
 }
 
-/**
- * Where the weight is going, and when it gets there.
- *
- * The version this replaces showed the rate and a twelve-week projection, which is checkable but has
- * no end: nothing ever satisfied "losing 0.5% a week", so logging the weight you were aiming for did
- * nothing at all. With a target it has a bar, a date, and a state for having arrived.
- *
- * The date comes from the **measured** rate, never the intended one. An ETA off the plan says what
- * would happen if the plan were working; an ETA off the trend says what is happening. Where they
- * disagree, that disagreement is the useful part, so both appear.
- */
 export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], [])
+  const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
   const units = useUnits()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -42,12 +29,10 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const latest = trend[trend.length - 1]
   if (!program || !latest) return null
 
-  const rate = trendChangePerWeek(trend)
-  const targetPerWeek = (program.ratePctPerWeek / 100) * latest.trendKg
   const show = (kg: number) => bodyWeightFromKg(kg, units.weight)
 
-  // No target set: say what one would buy you, and offer it. The missing half of the feature.
   if (program.targetKg === null) {
+    const rate = trendChangePerWeek(trend)
     return (
       <Card className="p-4">
         <Header goal={program.goal} />
@@ -78,11 +63,8 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
     targetKg: program.targetKg,
     startKg: program.startKg,
     trendKg: latest.trendKg,
-    ratePerWeek: rate,
-    ratePctPerWeek: program.ratePctPerWeek,
   })
 
-  // Reached, and not yet acknowledged: the one moment this whole feature exists for.
   if (progress.isReached && program.reachedAt === null) {
     return (
       <Card className="p-4">
@@ -119,7 +101,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   }
 
   const remaining = Math.abs(convertWeight(progress.remainingKg, units.weight))
-  const weeklyTarget = convertWeight(targetPerWeek, units.weight)
+  const needsAttention = forecast !== null && forecast !== undefined && forecast.pace !== 'matches'
 
   return (
     <Card className="p-4">
@@ -150,37 +132,25 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
         </div>
       )}
 
-      {/*
-        One line, not three. The card used to print the measured rate, the intended rate, the ETA, the
-        plan's ETA and a BMI — five figures for a question with one answer, "am I on track and when do
-        I arrive". The rest is a tap away, which is where the comparisons belong.
-      */}
       <button
         onClick={() => setIsOpen((current) => !current)}
         aria-expanded={isOpen}
-        className="mt-2 flex w-full items-baseline gap-1.5 text-left active:opacity-60"
+        className="mt-2 flex w-full items-center gap-1.5 text-left active:opacity-60"
       >
         <span className="min-w-0 flex-1 text-[13px]">
-        {progress.isWrongWay ? (
-          <span style={{ color: 'var(--confidence-medium)' }}>
-            The trend is moving away from your goal. Worth a look at the target rather than the week.
-          </span>
-        ) : progress.etaAt !== null ? (
-          <span className="text-ink-secondary">
-            At this rate: {formatRelativeDay(progress.etaAt)}
-            {progress.plannedEtaAt !== null &&
-              // Only when they meaningfully disagree; a fortnight is inside the noise of either.
-              Math.abs(progress.plannedEtaAt - progress.etaAt) > 14 * DAY_MS &&
-              ` — the plan said ${formatRelativeDay(progress.plannedEtaAt)}`}
-          </span>
-        ) : (
-          <span className="text-ink-muted">
-            {progress.plannedEtaAt === null
-              ? 'No date yet — the trend needs to move first.'
-              : `Flat so far. The plan puts it at ${formatRelativeDay(progress.plannedEtaAt)}.`}
-          </span>
-        )}
+          <Headline
+            forecast={forecast ?? null}
+            program={program}
+            isReached={progress.isReached}
+          />
         </span>
+        {needsAttention && (
+          <span
+            aria-label="Target doesn't match your pace"
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: 'var(--confidence-medium)' }}
+          />
+        )}
         <ChevronDown
           size={15}
           className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
@@ -188,29 +158,14 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
       </button>
 
       {isOpen && (
-        <div className="mt-2 space-y-2 border-t border-line pt-2.5 text-[12.5px] text-ink-secondary">
-          <Row
-            label="Started at"
-            value={
-              program.startKg === null
-                ? 'not recorded'
-                : `${show(program.startKg)} ${units.weight}`
-            }
-          />
-          <Row label="Now" value={`${show(latest.trendKg)} ${units.weight} (trend)`} />
-          <Row label="Goal" value={`${show(program.targetKg)} ${units.weight}`} />
-          <Row
-            label="Aiming for"
-            value={`${signed(weeklyTarget, 2)} ${units.weight}/week`}
-          />
-          <Row
-            label="Actually doing"
-            value={
-              rate === null
-                ? 'not enough weigh-ins'
-                : `${signed(convertWeight(rate, units.weight), 2)} ${units.weight}/week`
-            }
-          />
+        <div className="mt-2.5 space-y-2.5 border-t border-line pt-3">
+          {forecast ? (
+            <ForecastDetail forecast={forecast} program={program} unit={units.weight} />
+          ) : (
+            <p className="text-[12.5px] text-ink-muted">
+              Weigh in and log a few days to get a forecast.
+            </p>
+          )}
           <button
             onClick={onOpenTargets}
             className="w-full rounded-xl bg-sunken py-2 text-[13px] font-semibold text-accent active:opacity-60"
@@ -223,12 +178,196 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Headline({
+  forecast,
+  program,
+  isReached,
+}: {
+  forecast: GoalForecast | null
+  program: Program
+  isReached: boolean
+}) {
+  if (isReached) return <span className="text-ink-secondary">At your goal. Nice work.</span>
+  if (forecast?.isWrongWay) {
+    return (
+      <span style={{ color: 'var(--confidence-medium)' }}>Trending away from your goal</span>
+    )
+  }
+  const likelyAt = forecast?.likely?.etaAt ?? null
+  if (likelyAt !== null) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <Flag size={14} className="shrink-0 text-accent" />
+        <span className="font-semibold">Likely {arrivalDay(likelyAt)}</span>
+        <span className="tabular text-ink-muted">· {timeUntil(likelyAt)}</span>
+      </span>
+    )
+  }
+  const onTargetAt = forecast?.onTarget?.etaAt ?? null
+  if (onTargetAt !== null) {
+    return (
+      <span className="text-ink-secondary">
+        On target: {arrivalDay(onTargetAt)}
+        <span className="text-ink-muted"> · {timeUntil(onTargetAt)}</span>
+      </span>
+    )
+  }
+  const chosenAt = forecast?.chosen.etaAt ?? null
+  const pace = paceLabel(program.goal, program.ratePctPerWeek)
+  if (chosenAt !== null) {
+    return (
+      <span className="text-ink-muted">
+        {pace ? `${pace} pace` : 'Your pace'} gets you there {arrivalDay(chosenAt)}
+      </span>
+    )
+  }
+  return <span className="text-ink-muted">Weigh in a few times to get a date</span>
+}
+
+function ForecastDetail({
+  forecast,
+  program,
+  unit,
+}: {
+  forecast: GoalForecast
+  program: Program
+  unit: WeightUnit
+}) {
+  const { likely, onTarget, eating, scale } = forecast
+  const pace = paceLabel(program.goal, program.ratePctPerWeek) ?? 'chosen'
+
   return (
-    <p className="flex items-baseline justify-between gap-3">
-      <span className="text-ink-muted">{label}</span>
-      <span className="tabular text-right">{value}</span>
-    </p>
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        <Lane
+          title="Your recent pace"
+          at={likely?.etaAt ?? null}
+          rate={likely ? perWeek(likely.kgPerWeek, unit) : null}
+          note={
+            likely
+              ? arrivalRange(likely.earliestAt, likely.latestAt)
+              : 'Log and weigh in for a few days'
+          }
+          isPrimary
+        />
+        <Lane
+          title="If you hit your target"
+          at={onTarget?.etaAt ?? null}
+          rate={onTarget ? perWeek(onTarget.kgPerWeek, unit) : null}
+          note={onTarget ? `${onTarget.targetKcal.toLocaleString()} kcal/day` : 'No calorie target yet'}
+        />
+      </div>
+
+      {eating && onTarget && <IntakeBar mean={eating.meanIntakeKcal} target={onTarget.targetKcal} days={eating.days} />}
+
+      {(eating || scale) && (
+        <p className="tabular text-[12px] text-ink-muted">
+          {[
+            eating && `Food log ${perWeek(eating.kgPerWeek, unit)}`,
+            scale && `Scale ${perWeek(scale.kgPerWeek, unit)}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
+
+      <PaceNotice forecast={forecast} program={program} pace={pace} unit={unit} />
+    </>
+  )
+}
+
+function Lane({
+  title,
+  at,
+  rate,
+  note,
+  isPrimary = false,
+}: {
+  title: string
+  at: number | null
+  rate: string | null
+  note: string | null
+  isPrimary?: boolean
+}) {
+  return (
+    <div className={cn('rounded-xl px-3 py-2', isPrimary ? 'bg-accent-wash' : 'bg-sunken')}>
+      <p className="text-[11.5px] font-medium text-ink-muted">{title}</p>
+      <p className={cn('tabular text-[16px] font-bold leading-tight', isPrimary && 'text-accent')}>
+        {at === null ? '—' : arrivalDay(at)}
+      </p>
+      <p className="tabular text-[11.5px] text-ink-secondary">
+        {[rate, at !== null && timeUntil(at)].filter(Boolean).join(' · ') || ' '}
+      </p>
+      {note && <p className="tabular truncate text-[11px] text-ink-muted">{note}</p>}
+    </div>
+  )
+}
+
+function IntakeBar({ mean, target, days }: { mean: number; target: number; days: number }) {
+  const gap = mean - target
+  const isClose = Math.abs(gap) <= target * 0.05
+  const scaleMax = Math.max(mean, target) * 1.1
+  const color = isClose ? 'var(--target-on)' : gap > 0 ? 'var(--target-over)' : 'var(--accent)'
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+        <span className="text-ink-muted">
+          Eating · last {days} logged day{days === 1 ? '' : 's'}
+        </span>
+        <span className="tabular font-semibold" style={{ color }}>
+          {isClose ? 'On target' : `${Math.abs(gap).toLocaleString()} ${gap > 0 ? 'over' : 'under'}`}
+        </span>
+      </div>
+      <div className="relative mt-1 h-2 rounded-full bg-sunken">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${(mean / scaleMax) * 100}%`, background: color }}
+        />
+        <div
+          className="absolute -top-0.5 h-3 w-0.5 rounded-full bg-ink"
+          style={{ left: `${(target / scaleMax) * 100}%` }}
+        />
+      </div>
+      <p className="tabular mt-0.5 text-[11.5px] text-ink-muted">
+        {mean.toLocaleString()} avg · target {target.toLocaleString()} kcal
+      </p>
+    </div>
+  )
+}
+
+function PaceNotice({
+  forecast,
+  program,
+  pace,
+  unit,
+}: {
+  forecast: GoalForecast
+  program: Program
+  pace: string
+  unit: WeightUnit
+}) {
+  if (forecast.pace === 'matches') return null
+  const isCustom = forecast.pace === 'custom'
+  const text = isCustom
+    ? `Custom calories are on, so your ${pace} pace isn't setting your target.`
+    : `Your target is set for ${forecast.onTarget ? perWeek(forecast.onTarget.kgPerWeek, unit) : 'a different pace'}, not your ${pace} pace (${perWeek(forecast.chosen.kgPerWeek, unit)}).`
+
+  return (
+    <div
+      className="rounded-xl border px-3 py-2 text-[12.5px]"
+      style={{ borderColor: 'var(--confidence-medium)' }}
+    >
+      <p>{text}</p>
+      <button
+        onClick={() =>
+          void (isCustom ? repo.setManualTargets(null) : repo.alignTargetsToPace(program.id))
+        }
+        className="mt-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-accent-contrast active:brightness-90"
+      >
+        Use my {pace} pace
+      </button>
+    </div>
   )
 }
 
@@ -237,5 +376,3 @@ function Header({ goal }: { goal: string }) {
     <h2 className="text-[15px] font-semibold tracking-tight">{GOAL_VERB[goal] ?? 'Goal'}</h2>
   )
 }
-
-/** A rate reads as a rate only with its sign: "+0.24", "-0.55". */
