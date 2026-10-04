@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
 import { ToastProvider, useColorScheme } from '@tracker-engine/ui'
@@ -22,32 +22,47 @@ import { DayScreen } from '@/features/day/DayScreen'
 import { mealForHour } from '@/lib/meals'
 import { ONBOARDING_VERSION, type MealSlot } from '@/domain/types'
 
-const OnboardingScreen = lazy(() =>
-  import('@/features/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
+const preloads: (() => Promise<unknown>)[] = []
+
+function screen<P extends object>(load: () => Promise<ComponentType<P>>) {
+  let loaded: ComponentType<P> | null = null
+  const fetch = () => load().then((component) => (loaded = component))
+  preloads.push(fetch)
+  const Lazy = lazy(() => fetch().then((component) => ({ default: component })))
+  return function Screen(props: P) {
+    const Loaded = loaded
+    return Loaded ? <Loaded {...props} /> : <Lazy {...props} />
+  }
+}
+
+function preloadScreens() {
+  const run = () => preloads.forEach((load) => void load())
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2000 })
+  else setTimeout(run, 500)
+}
+
+const OnboardingScreen = screen(() =>
+  import('@/features/onboarding/OnboardingScreen').then((m) => m.OnboardingScreen),
 )
-const InsightsScreen = lazy(() =>
-  import('@/features/insights/InsightsScreen').then((m) => ({ default: m.InsightsScreen })),
+const InsightsScreen = screen(() =>
+  import('@/features/insights/InsightsScreen').then((m) => m.InsightsScreen),
 )
-const DataScreen = lazy(() =>
-  import('@/features/settings/DataScreen').then((m) => ({ default: m.DataScreen })),
+const DataScreen = screen(() => import('@/features/settings/DataScreen').then((m) => m.DataScreen))
+const BadgesScreen = screen(() =>
+  import('@/features/badges/BadgesScreen').then((m) => m.BadgesScreen),
 )
-const BadgesScreen = lazy(() =>
-  import('@/features/badges/BadgesScreen').then((m) => ({ default: m.BadgesScreen })),
+const LibraryScreen = screen(() =>
+  import('@/features/library/LibraryScreen').then((m) => m.LibraryScreen),
 )
-const LibraryScreen = lazy(() =>
-  import('@/features/library/LibraryScreen').then((m) => ({ default: m.LibraryScreen })),
+const CoachScreen = screen(() => import('@/features/coach/CoachScreen').then((m) => m.CoachScreen))
+const AccountScreen = screen(() =>
+  import('@/features/auth/AccountScreen').then((m) => m.AccountScreen),
 )
-const CoachScreen = lazy(() =>
-  import('@/features/coach/CoachScreen').then((m) => ({ default: m.CoachScreen })),
+const RemindersScreen = screen(() =>
+  import('@/features/settings/RemindersScreen').then((m) => m.RemindersScreen),
 )
-const AccountScreen = lazy(() =>
-  import('@/features/auth/AccountScreen').then((m) => ({ default: m.AccountScreen })),
-)
-const RemindersScreen = lazy(() =>
-  import('@/features/settings/RemindersScreen').then((m) => ({ default: m.RemindersScreen })),
-)
-const AppearanceScreen = lazy(() =>
-  import('@/features/settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })),
+const AppearanceScreen = screen(() =>
+  import('@/features/settings/AppearanceScreen').then((m) => m.AppearanceScreen),
 )
 
 type View =
@@ -151,6 +166,10 @@ function SignedInApp() {
     const scheme = applyAppearance(appearance)
     if (scheme) applyStatusBarStyle(scheme)
   }, [appearance, osScheme])
+
+  useEffect(() => {
+    if (isReady) preloadScreens()
+  }, [isReady])
 
   if (!isReady || appearance === undefined) return <Splash>Setting up…</Splash>
 
