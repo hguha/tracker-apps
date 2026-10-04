@@ -269,7 +269,7 @@ function matchAmount(text: string): Amount | null {
   const rest = trimmed.slice(number.length).trim()
   for (const [word, unit] of UNIT_WORDS) {
     // Word-boundary, so "1 g" is grams and "1 garlic clove" is not.
-    if (rest === word || rest.startsWith(`${word} `) || rest.startsWith(`${word}.`)) {
+    if (rest === word || (rest.startsWith(word) && /^[ .,]/.test(rest.slice(word.length)))) {
       return { quantity: number.value, unit }
     }
   }
@@ -359,8 +359,8 @@ function cleanName(line: string): { name: string; note: string } {
     text = text.trim().slice(lead.length)
     for (const [word] of UNIT_WORDS) {
       const lower = text.trim().toLowerCase()
-      if (lower === word || lower.startsWith(`${word} `) || lower.startsWith(`${word}.`)) {
-        text = text.trim().slice(word.length).replace(/^\./, '')
+      if (lower === word || (lower.startsWith(word) && /^[ .,]/.test(lower.slice(word.length)))) {
+        text = text.trim().slice(word.length).replace(/^[.,]/, '')
         break
       }
     }

@@ -75,6 +75,7 @@ interface FdcFood {
   }[]
   servingSize?: number
   servingSizeUnit?: string
+  householdServingFullText?: string
   inputFoods?: FdcInputFood[]
   ingredients?: string
 }
@@ -117,7 +118,9 @@ function mapFood(food: FdcFood) {
 
   if (portions.length === 0 && typeof food.servingSize === 'number' &&
       (food.servingSizeUnit ?? '').toLowerCase() === 'g') {
-    portions.push({ id: 'usda-serving', label: '1 serving', grams: food.servingSize, isDefault: true })
+    const household = food.householdServingFullText?.trim() ?? ''
+    const label = /\d/.test(household) ? household.toLowerCase() : '1 serving'
+    portions.push({ id: 'usda-serving', label, grams: food.servingSize, isDefault: true })
   }
 
   const category =

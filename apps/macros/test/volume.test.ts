@@ -75,3 +75,12 @@ describe('the units a food is offered in', () => {
     })
   })
 })
+
+describe('serving labels from the databases', () => {
+  it('reads a USDA household serving and an Open Food Facts serving size as volumes', () => {
+    const usda = testFood({ portions: [{ id: 's', label: '2 tbsp', grams: 31, isDefault: true }] })
+    const off = testFood({ portions: [{ id: 's', label: '2/3 cup (55 g)', grams: 55, isDefault: true }] })
+    expect(volumeDensity(usda)?.gramsPerMl).toBeCloseTo(31 / (2 * 14.79), 2)
+    expect(volumeDensity(off)?.gramsPerMl).toBeCloseTo(55 / ((2 / 3) * 236.59), 2)
+  })
+})

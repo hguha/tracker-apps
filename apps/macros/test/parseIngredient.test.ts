@@ -242,3 +242,10 @@ describe('a pinch, and other units nothing was weighed in', () => {
   })
 })
 
+
+describe('a unit followed by a comma', () => {
+  it('still reads as the unit, as USDA writes its portions', () => {
+    expect(parseIngredientLine('1 cup, halves')).toMatchObject({ quantity: 1, unit: 'cup' })
+    expect(parseIngredientLine('2 cups, packed brown sugar')).toMatchObject({ quantity: 2, unit: 'cup' })
+  })
+})

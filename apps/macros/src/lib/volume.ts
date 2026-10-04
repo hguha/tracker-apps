@@ -17,7 +17,7 @@ const LIQUID =
 function densityFromPortions(portions: readonly FoodPortion[]): number | null {
   for (const portion of portions) {
     if (!(portion.grams > 0)) continue
-    const parsed = parseIngredientLine(portion.label)
+    const parsed = parseIngredientLine(portion.label.replace(/\([^)]*\)/g, ' '))
     if (parsed.quantity === null || parsed.quantity <= 0 || parsed.unit === null) continue
     if (!VOLUME_UNITS.includes(parsed.unit)) continue
     const ml = ML_PER[parsed.unit]
