@@ -246,7 +246,7 @@ function ForecastDetail({
           note={
             likely
               ? arrivalRange(likely.earliestAt, likely.latestAt)
-              : 'Log and weigh in for a few days'
+              : 'Needs a few days of logs'
           }
           isPrimary
         />
