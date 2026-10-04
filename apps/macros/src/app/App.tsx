@@ -214,6 +214,7 @@ function SignedInApp() {
             onOpenCoach={() => setView({ kind: 'settings', route: 'coach' })}
             onOpenAbout={() => setView({ kind: 'settings', route: 'about' })}
             onOpenRecipes={() => setView({ kind: 'settings', route: 'library' })}
+            onOpenBadges={() => setView({ kind: 'settings', route: 'badges' })}
             onAdd={(day, meal) =>
               setView({ kind: 'log', meal, day, back: { kind: 'tabs' } })
             }

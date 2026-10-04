@@ -1068,3 +1068,34 @@ test('a saved meal can be removed from the list it lives in', async ({ page }) =
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
+
+test('home keeps score: a level, the day’s goals, the next badges, and a cheer when one lands', async ({
+  page,
+}) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '80' })
+
+  await expect(page.getByRole('button', { name: /^Level 1, \d+ badges earned/ })).toBeVisible()
+  await expect(page.getByLabel('Weigh in done')).toBeVisible()
+  await expect(page.getByLabel('Log not yet')).toBeVisible()
+  await expect(page.getByRole('status', { name: 'Day One' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  const cheer = page.getByRole('status', { name: 'Day One' })
+  await expect(cheer).toBeVisible()
+  await cheer.click()
+  await expect(cheer).toHaveCount(0)
+  await expect(page.getByLabel('Log done')).toBeVisible()
+
+  await page.getByRole('button', { name: /^Level \d+, \d+ badges earned/ }).click()
+  await expect(page.getByRole('heading', { name: 'Badges', level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await expect(page.getByRole('status', { name: 'Day One' })).toHaveCount(0)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})

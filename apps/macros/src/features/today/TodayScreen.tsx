@@ -4,6 +4,8 @@ import { ChefHat, Flame, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverageCovered, dayTotals, remaining } from '@/lib/nutrition'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
+import { ProgressCard } from '@/features/badges/ProgressCard'
+import { dailyGoals } from '@/features/badges/progression'
 import { foodIdsOf } from '@/features/shared/entryName'
 import type { BodyWeightRow, Food, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
@@ -20,6 +22,7 @@ export function TodayScreen({
   onOpenCoach,
   onOpenAbout,
   onOpenRecipes,
+  onOpenBadges,
   onOpenDay,
   onOpenTargets,
   onAdd,
@@ -27,6 +30,7 @@ export function TodayScreen({
   onOpenCoach: () => void
   onOpenAbout: () => void
   onOpenRecipes: () => void
+  onOpenBadges: () => void
   onOpenDay: (day: string) => void
   onOpenTargets: () => void
   onAdd: (day: string, meal: MealSlot) => void
@@ -54,10 +58,30 @@ export function TodayScreen({
     [],
   )
   const streak = useLiveQuery(() => repo.currentStreak(), [today], 0)
+  const goalInputs = useLiveQuery(
+    async () => ({
+      targets: await repo.currentTargets(),
+      water: (await repo.waterForDay(today))?.ml ?? 0,
+      weighedIn: (await repo.weights()).some((row) => row.day === today),
+    }),
+    [today],
+    undefined,
+  )
 
   const totals = dayTotals(entries)
   const left = targets ? remaining(totals, targets) : null
   const weekDayCount = new Set((week ?? []).map((entry) => entry.day)).size
+  const goals =
+    loaded && profile && goalInputs
+      ? dailyGoals({
+          entries: entries.length,
+          proteinMg: totals.proteinMg,
+          proteinTargetMg: goalInputs.targets?.proteinMg ?? null,
+          waterMl: goalInputs.water,
+          waterTargetMl: profile.waterTargetMl,
+          weighedIn: goalInputs.weighedIn,
+        })
+      : null
 
   return (
     <div className="space-y-3 px-3 py-3">
@@ -82,6 +106,13 @@ export function TodayScreen({
         missing={missingForTarget(profile, program != null, weights ?? [])}
         onFix={onOpenAbout}
         onOpenDay={() => onOpenDay(today)}
+      />
+
+      <ProgressCard
+        owner={profile?.id ?? null}
+        day={today}
+        goals={goals}
+        onOpenBadges={onOpenBadges}
       />
 
       <TodayMeals
