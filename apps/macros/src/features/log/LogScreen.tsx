@@ -156,6 +156,11 @@ export function LogScreen({
             onLogged={onLogged}
           />
         )}
+        {(panel.kind === 'add' || panel.kind === 'quick') && (
+          <div className="px-3 pt-3">
+            <WhenLine meal={meal} at={at} onMeal={setMeal} onAt={setAt} />
+          </div>
+        )}
         {panel.kind === 'add' && (
           <AddPanel loggable={panel.loggable} target={target} onDone={onLogged} />
         )}

@@ -37,7 +37,7 @@ export interface DailyGoal {
   done: boolean
 }
 
-export const DEFAULT_WATER_ML = 2000
+const DEFAULT_WATER_ML = 2000
 
 export function dailyGoals(today: {
   entries: number

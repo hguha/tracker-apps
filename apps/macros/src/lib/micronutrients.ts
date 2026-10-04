@@ -14,7 +14,7 @@ import type { Nutrients } from '@/domain/types'
  * useful claim, and not enough to pretend to more precision than that.
  */
 
-export interface NutrientTarget {
+interface NutrientTarget {
   key: keyof Nutrients
   label: string
   /** Daily reference intake, in the field's own unit (mg). */
@@ -60,9 +60,9 @@ export function nutrientTargets(sex: ReferenceSex = null): NutrientTarget[] {
 /** The unadjusted set, for anything that has no profile to hand. */
 export const NUTRIENT_TARGETS: NutrientTarget[] = nutrientTargets(null)
 
-export type NutrientVerdict = 'short' | 'ok' | 'over' | 'unknown'
+type NutrientVerdict = 'short' | 'ok' | 'over' | 'unknown'
 
-export interface NutrientStatus extends NutrientTarget {
+interface NutrientStatus extends NutrientTarget {
   /** null when nothing logged recorded this nutrient at all. */
   amount: number | null
   /** Fraction of the reference, or null when unknown. */
@@ -110,7 +110,7 @@ export function nutrientStatus(
   })
 }
 
-export interface DietQuality {
+interface DietQuality {
   short: NutrientStatus[]
   over: NutrientStatus[]
   onTarget: NutrientStatus[]

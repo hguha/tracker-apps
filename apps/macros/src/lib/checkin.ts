@@ -31,7 +31,7 @@ import type { CheckIn, MacroTargets, Profile, Program } from '@/domain/types'
  */
 
 /** Weeks start Monday, so a weekend of eating lands in the week it belonged to. */
-export const WEEK_STARTS_ON: WeekStart = 1
+const WEEK_STARTS_ON: WeekStart = 1
 
 export interface CheckInInputs {
   now: number
@@ -44,7 +44,7 @@ export interface CheckInInputs {
   prior: CheckIn | null
 }
 
-export type CheckInDraft = Omit<
+type CheckInDraft = Omit<
   CheckIn,
   'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'clientRev'
 >

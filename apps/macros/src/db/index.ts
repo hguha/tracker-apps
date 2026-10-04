@@ -17,10 +17,10 @@ import type {
 } from '@/domain/types'
 
 // Load-bearing identifiers — keep stable across releases.
-export const DB_NAME = 'macros'
+const DB_NAME = 'macros'
 const OWNER_KEY = 'macros.owner'
 
-export class MacrosDatabase extends Dexie {
+class MacrosDatabase extends Dexie {
   foods!: EntityTable<Food, 'id'>
   customFoods!: EntityTable<CustomFood, 'id'>
   logEntries!: EntityTable<LogEntry, 'id'>

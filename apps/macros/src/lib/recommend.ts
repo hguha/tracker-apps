@@ -21,7 +21,7 @@ import { mgToGrams, perServing, proteinPer100Kcal, scale } from '@/lib/nutrition
  * user doesn't have, and the only recipes worth recommending are the ones they can cook tonight.
  */
 
-export interface RecipeRecommendation {
+interface RecipeRecommendation {
   recipe: Recipe
   /** Servings that fit the remaining calories, rounded to a half. At least 0.5. */
   servings: number
@@ -32,7 +32,7 @@ export interface RecipeRecommendation {
   why: string
 }
 
-export interface RecommendInputs {
+interface RecommendInputs {
   /** Calories left today, or null when there's no target — ranking then ignores fit entirely. */
   remainingKcal: number | null
   /** Protein still owed today, in mg. Drives the protein weighting. */

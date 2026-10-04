@@ -24,7 +24,7 @@ export const mgToGrams = (mg: number): number => mg / MG_PER_G
 export const per100FromServing = (value: number, servingGrams: number): number =>
   (value * 100) / Math.max(1, servingGrams)
 
-export interface ServingPanel {
+interface ServingPanel {
   kcal: number
   proteinG: number
   carbsG: number
@@ -110,11 +110,11 @@ export function sum(items: readonly Nutrients[]): Nutrients {
 }
 
 /** Every nutrient that can be missing — the ones a food database may simply not record. */
-export const MICRO_KEYS = NUTRIENT_KEYS.filter(
+const MICRO_KEYS = NUTRIENT_KEYS.filter(
   (key) => !(CORE_NUTRIENT_KEYS as readonly string[]).includes(key),
 ) as Exclude<keyof Nutrients, (typeof CORE_NUTRIENT_KEYS)[number]>[]
 
-export type MicroKey = (typeof MICRO_KEYS)[number]
+type MicroKey = (typeof MICRO_KEYS)[number]
 
 export interface CoveredNutrients {
   /** Micros are the sum of what *was* reported; null only when nothing reported it at all. */

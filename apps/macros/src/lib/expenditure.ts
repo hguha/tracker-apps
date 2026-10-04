@@ -17,7 +17,7 @@ import type { ActivityLevel, Goal, Program } from '@/domain/types'
  * systematically overstate a bulk's surplus.
  */
 export const KCAL_PER_KG_FAT = 7700
-export const KCAL_PER_KG_LEAN = 1800
+const KCAL_PER_KG_LEAN = 1800
 
 /**
  * The energy density to price a trend change at. Faster gain deposits proportionally more
@@ -158,7 +158,7 @@ export function stepToward(current: number, proposed: number): number {
  * has said, which is what the app assumed for everyone before there was a question — the point of
  * asking is that the two ends are 45% apart, which on a 1,600 kcal BMR is 700 kcal a day.
  */
-export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
+const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
   light: 1.375,
   moderate: 1.55,

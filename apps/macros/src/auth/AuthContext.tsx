@@ -6,7 +6,7 @@ import { LocalAuthProvider } from './localAuthProvider'
 import { MacrosAuthProvider } from './supabaseAuthProvider'
 
 /** What signing in did to this device's data, so the app can say so once. */
-export type DataTransition = { kind: 'claimed'; rows: number } | { kind: 'wiped-foreign' }
+type DataTransition = { kind: 'claimed'; rows: number } | { kind: 'wiped-foreign' }
 
 const supabase = getSupabase()
 

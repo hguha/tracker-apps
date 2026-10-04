@@ -13,9 +13,9 @@ import { matchDraft, SECOND_MS, totalOf, type EstimatedItem, type MealEstimate }
  * it. Nothing is faster in total; it is simply no longer opaque, and the part people care about
  * (*did it understand me?*) shows up first.
  */
-export type EstimatePhase = 'idle' | 'reading' | 'matching' | 'done'
+type EstimatePhase = 'idle' | 'reading' | 'matching' | 'done'
 
-export interface EstimateRun {
+interface EstimateRun {
   estimate: MealEstimate | null
   setEstimate: (estimate: MealEstimate) => void
   phase: EstimatePhase

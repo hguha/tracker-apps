@@ -121,7 +121,7 @@ export async function latestCheckIn(): Promise<CheckIn | undefined> {
   return all.sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
 }
 
-export type CheckInInput = Omit<
+type CheckInInput = Omit<
   CheckIn,
   'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'clientRev'
 >
@@ -225,7 +225,7 @@ function trendOn(trend: readonly TrendPoint[], day: string): number | null {
   return latest
 }
 
-export async function targetsForDay(day: string): Promise<MacroTargets | null> {
+async function targetsForDay(day: string): Promise<MacroTargets | null> {
   return (await targetsByDay([day])).get(day) ?? null
 }
 
@@ -297,7 +297,7 @@ async function draftCheckIn(
   })
 }
 
-export interface CheckInStatus {
+interface CheckInStatus {
   /** The week a check-in would be about: the one that just ended. */
   weekStart: string
   daysLogged: number

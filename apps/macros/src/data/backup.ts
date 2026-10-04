@@ -16,7 +16,7 @@ import type {
  * A full JSON export of everything the user authored. `foods` is excluded: it's reference data
  * anyone can re-fetch, and including ~2M rows would make a backup unusable.
  */
-export const BACKUP_FORMAT = 'macrocosm.backup.v1'
+const BACKUP_FORMAT = 'macrocosm.backup.v1'
 
 export interface Backup {
   format: typeof BACKUP_FORMAT

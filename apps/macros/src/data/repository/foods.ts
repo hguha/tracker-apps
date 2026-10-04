@@ -54,7 +54,7 @@ interface IndexedFood {
   haystack: string
 }
 
-export function invalidateFoodIndex(): void {
+function invalidateFoodIndex(): void {
   foodIndex = null
 }
 

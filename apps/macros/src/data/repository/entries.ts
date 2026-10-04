@@ -136,7 +136,7 @@ export async function logFoods(
   return foods.length
 }
 
-export interface LogFoodInput {
+interface LogFoodInput {
   food: Food
   grams?: number
   portionId?: string | null

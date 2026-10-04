@@ -48,7 +48,7 @@ const found = (food: Food, query: string): MatchedFood => ({
   matchedBy: matchesQuery(food, queryTerms(query)) ? 'exact' : 'fuzzy',
 })
 
-export interface MatchedFood {
+interface MatchedFood {
   food: Food | null
   /** `exact` when the name as written matched every word; `fuzzy` when relevance found it. */
   matchedBy: 'exact' | 'fuzzy' | 'unmatched'

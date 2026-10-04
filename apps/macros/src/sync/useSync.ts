@@ -6,9 +6,9 @@ import { useAuth } from '@/auth/AuthContext'
 import { MacroSyncEngine } from './engine'
 import { syncBackend } from './backend'
 
-export type SyncPhase = 'idle' | 'syncing' | 'error'
+type SyncPhase = 'idle' | 'syncing' | 'error'
 
-export interface SyncStatus {
+interface SyncStatus {
   pending: number
   deadLettered: number
   enabled: boolean

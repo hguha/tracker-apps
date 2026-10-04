@@ -66,7 +66,7 @@ export interface AddUnit {
   min: number
 }
 
-export interface AddSubject {
+interface AddSubject {
   title: string
   subtitle: string
   units: AddUnit[]
@@ -336,7 +336,7 @@ export interface Suggestion {
   loggable: Loggable
 }
 
-export interface Repeatable extends Suggestion {
+interface Repeatable extends Suggestion {
   logAgain: (target: LogTarget) => Promise<number>
 }
 
@@ -413,7 +413,7 @@ export function fromLibrary(hit: LibraryHit): Suggestion {
  * It was a bare "2×" floating at the end of the row, which states a number without its unit: two
  * portions? twice today? Folded into the detail line, where the sentence can carry the window.
  */
-export function withTimes(detail: string, times: number): string {
+function withTimes(detail: string, times: number): string {
   if (times < 2) return detail
   return [detail, `${times} times this month`].filter(Boolean).join(' · ')
 }

@@ -15,7 +15,7 @@ import type { CuisineKey, LogEntry, MacroTargets, Venue } from '@/domain/types'
  * to log rather than where they ate.
  */
 
-export interface VenueBreakdown {
+interface VenueBreakdown {
   venue: Venue | null
   occasions: number
   kcal: number

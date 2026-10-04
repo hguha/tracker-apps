@@ -29,7 +29,7 @@ export async function lookupBarcode(barcode: string): Promise<Food | null> {
   return viaOff ? cache(viaOff) : null
 }
 
-export interface SearchOptions {
+interface SearchOptions {
   /**
    * Whether to include Open Food Facts. Off for ingredient lookups: breaking down a meal fires one
    * search per ingredient, and OFF holds packaged products — it has nothing useful to say about

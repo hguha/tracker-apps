@@ -215,7 +215,7 @@ export async function frequentFoodIds(limit = 20, days = 90): Promise<string[]> 
  * been eaten as part of a dish is left out, because "Cheese, Ricotta" is not something anyone logs on
  * its own — it arrived inside the lasagna, and the lasagna is already in the list.
  */
-export interface RecentFood {
+interface RecentFood {
   kind: 'food'
   food: Food
   lastAt: number

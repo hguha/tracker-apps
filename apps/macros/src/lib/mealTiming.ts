@@ -12,9 +12,9 @@ import { sum } from '@/lib/nutrition'
  */
 
 /** A gap longer than this ends an eating occasion. Grazing over half an hour is one meal. */
-export const OCCASION_GAP_MINUTES = 45
+const OCCASION_GAP_MINUTES = 45
 
-export interface Occasion {
+interface Occasion {
   startAt: number
   endAt: number
   entries: LogEntry[]
@@ -43,7 +43,7 @@ export function eatingOccasions(
   }))
 }
 
-export interface DayTiming {
+interface DayTiming {
   firstAt: number | null
   lastAt: number | null
   /** First bite to last, in minutes. Null with fewer than two occasions to span. */
@@ -105,9 +105,9 @@ export function formatDuration(minutes: number): string {
   return hours === 0 ? `${whole}m` : `${hours}h ${String(whole % 60).padStart(2, '0')}m`
 }
 
-export type WindowPhase = 'before' | 'open' | 'after'
+type WindowPhase = 'before' | 'open' | 'after'
 
-export interface WindowState {
+interface WindowState {
   phase: WindowPhase
   /** Minutes until the window opens, when it hasn't. */
   opensInMinutes: number | null

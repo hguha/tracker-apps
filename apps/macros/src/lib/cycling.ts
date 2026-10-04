@@ -12,7 +12,7 @@ import type { CyclingConfig } from '@/domain/types'
  */
 
 /** How much more a high day gets, before the low days are rebalanced to compensate. */
-export const HIGH_DAY_BOOST = 0.15
+const HIGH_DAY_BOOST = 0.15
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 

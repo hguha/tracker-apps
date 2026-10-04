@@ -63,7 +63,7 @@ export interface MealEstimate {
   product: FoodDraft | null
 }
 
-export class EstimateUnavailable extends Error {}
+class EstimateUnavailable extends Error {}
 
 /**
  * When the model will be worth asking again, shared across every path that calls it.
@@ -80,7 +80,7 @@ let lastReason = ''
 export const SECOND_MS = 1_000
 
 /** Seconds until the model is worth asking again, or 0. Drives the countdown in the UI. */
-export function modelCooldownSeconds(): number {
+function modelCooldownSeconds(): number {
   return Math.max(0, Math.ceil((unavailableUntil - Date.now()) / SECOND_MS))
 }
 
@@ -131,7 +131,7 @@ interface RawProduct {
   source?: unknown
 }
 
-export interface RawEstimate {
+interface RawEstimate {
   kind?: unknown
   items?: RawItem[]
   item?: RawProduct | null

@@ -45,7 +45,7 @@ export function getRecipe(id: string): Promise<Recipe | undefined> {
   return db.recipes.get(id)
 }
 
-export interface RecipeInput {
+interface RecipeInput {
   name: string
   servings: number
   ingredients: {
@@ -205,4 +205,4 @@ export async function logRecipeIngredients(
 }
 
 /** The recipe a row belongs to, whether it *is* the recipe or came out of one. */
-export const recipeOf = (entry: LogEntry): string | null => entry.recipeId ?? entry.fromRecipeId
+const recipeOf = (entry: LogEntry): string | null => entry.recipeId ?? entry.fromRecipeId

@@ -30,7 +30,7 @@ export interface ImportedRecipe {
   sourceUrl: string
 }
 
-export class RecipeImportError extends Error {}
+class RecipeImportError extends Error {}
 
 interface RawImport {
   name?: unknown

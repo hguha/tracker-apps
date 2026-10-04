@@ -212,7 +212,7 @@ export function EstimateReview({
  * One box, two ways out of the same problem: pick a food, or ask for the thing by name and let it
  * be broken down too, exactly as on the main log screen.
  */
-export function AddToDraft({
+function AddToDraft({
   onAdd,
   nextIndex,
   placeholder = 'Add something it missed',

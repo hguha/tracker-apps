@@ -17,9 +17,9 @@ import type { NutritionStats } from '@/domain/types'
  * the diet varied. Losing weight faster earns nothing.
  */
 
-export type BadgeGroup = 'Consistency' | 'Logging' | 'Nutrition' | 'Measurement' | 'Craft'
+type BadgeGroup = 'Consistency' | 'Logging' | 'Nutrition' | 'Measurement' | 'Craft'
 
-export type Badge = EngineBadge<NutritionStats, BadgeGroup>
+type Badge = EngineBadge<NutritionStats, BadgeGroup>
 export type BadgeState = EngineBadgeState<NutritionStats, BadgeGroup>
 
 type Pick_ = (stats: NutritionStats) => number
@@ -63,7 +63,7 @@ function rateBadge(
   }
 }
 
-export const BADGES: Badge[] = [
+const BADGES: Badge[] = [
   // ── Consistency: the habit the whole method rests on ──
   count('first-day', 'Day One', 'Log everything you eat for a day.', '🌱', 'Consistency', (s) => s.daysLogged, 1),
   count('week-logged', 'First Week', 'Log 7 days.', '📅', 'Consistency', (s) => s.daysLogged, 7),

@@ -17,7 +17,7 @@ import type { Food } from '@/domain/types'
  * databases once per query, and never block on either — so rows already on screen can't vanish
  * mid-fetch and the answer to a word doesn't depend on what was searched for before it.
  */
-export interface FoodSearchState {
+interface FoodSearchState {
   results: Food[]
   /** True while a remote lookup for the current query is in flight. */
   isSearching: boolean

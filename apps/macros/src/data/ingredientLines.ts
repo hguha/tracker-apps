@@ -26,7 +26,7 @@ export interface ResolvedLine {
   isConfident: boolean
 }
 
-export interface LinesResult {
+interface LinesResult {
   lines: ResolvedLine[]
   /** One sentence naming what was assumed or skipped, in the same shape the model returned. */
   assumptions: string

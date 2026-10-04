@@ -54,7 +54,7 @@ export async function recordWeight(
 /** Weigh-ins that came from Health rather than from this app. */
 const HEALTH_SOURCE = 'apple-health'
 
-export interface WeightImport {
+interface WeightImport {
   day: string
   kg: number
   at: number

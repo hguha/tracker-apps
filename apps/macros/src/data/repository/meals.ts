@@ -39,7 +39,7 @@ export async function saveMealTemplate(
   )
 }
 
-export interface MealPart {
+interface MealPart {
   foodId: string | null
   recipeId?: string | null
   grams: number

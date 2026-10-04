@@ -144,7 +144,7 @@ export function SettingsScreen({
 
 /** The facts the cold-start target needs. Surfaced here as well as on Today, since this is
  *  where someone goes looking when the bars won't fill. */
-export function missingFacts(profile: Profile | undefined): string[] {
+function missingFacts(profile: Profile | undefined): string[] {
   if (!profile) return []
   return [
     profile.heightCm === null && 'height',

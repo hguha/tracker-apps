@@ -15,7 +15,7 @@ import type { Goal } from '@/domain/types'
  * useful information, so both are returned.
  */
 
-export interface GoalProgress {
+interface GoalProgress {
   /** 0–1 of the way from where the goal was set to the target. Clamped, and null without a start. */
   fraction: number | null
   /** Remaining, in kg. Negative once past the target. */

@@ -13,7 +13,7 @@ import type { CuisineKey, MealSlot, Nutrients, Venue } from '@/domain/types'
  * this generates a real deficit with water-weight scatter and a couple of missed days.
  */
 
-export interface DemoDay {
+interface DemoDay {
   day: string
   entries: { foodQuery: string; grams: number; meal: MealSlot }[]
   /** A recipe cooked that evening, in place of an assembled dinner. */
@@ -36,7 +36,7 @@ export interface DemoRecipe {
   ingredients: { foodQuery: string; grams: number; amount: string }[]
 }
 
-export interface DemoPlan {
+interface DemoPlan {
   days: DemoDay[]
   recipes: DemoRecipe[]
   program: { goal: 'lose'; ratePctPerWeek: number; proteinGPerKg: number; fatMinPctKcal: number }

@@ -40,7 +40,7 @@ const MEASURES =
 
 const countsAContainer = (rest: string): boolean => MEASURES.test(rest) || /\bof\b/i.test(rest)
 
-export interface ParsedQuantity {
+interface ParsedQuantity {
   /** How many were eaten. Always ≥ 1. */
   count: number
   /** The singular thing, capitalised as the user wrote it: "steak taco". */

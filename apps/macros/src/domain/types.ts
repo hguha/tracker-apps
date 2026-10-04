@@ -1,4 +1,4 @@
-export interface SyncColumns {
+interface SyncColumns {
   createdAt: number
   updatedAt: number
   deletedAt: number | null
@@ -60,7 +60,7 @@ export const EMPTY_NUTRIENTS: Nutrients = {
   ironMg: null,
 }
 
-export type FoodSource = 'usda' | 'off' | 'custom'
+type FoodSource = 'usda' | 'off' | 'custom'
 
 export interface FoodPortion {
   id: string
@@ -114,7 +114,7 @@ export type EntrySource =
   /** Logged from a saved meal. */
   | 'template'
 
-export interface EstimateMeta {
+interface EstimateMeta {
   confidence: 'high' | 'medium' | 'low'
   /** What the model said before matching, so a bad match is diagnosable. */
   rawLabel: string
