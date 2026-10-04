@@ -33,7 +33,7 @@ import * as repo from '@/data/repository'
  * at the gaps a month of logging finds, and ranked so the canonical row for a one-word query is
  * actually among the six kept.
  */
-const SEED_VERSION = 5
+const SEED_VERSION = 6
 const VERSION_KEY = 'macros.seed.version'
 
 export async function seedFoods(): Promise<number> {
