@@ -1,54 +1,29 @@
 import { useRef, useState } from 'react'
-import { Camera, RotateCcw } from 'lucide-react'
+import { Camera } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
-import { EstimateReview } from './EstimateReview'
-import type { LogTarget } from '@/features/shared/target'
-import { ProductReview } from './ProductReview'
-import { Working } from './Working'
-import { describePhoto, type FoodDraft } from './estimate'
-import { useEstimate } from './useEstimate'
 
-/** Below this the model can't resolve a plate; above it the upload is slow on a phone. */
 const MAX_EDGE = 1024
 const JPEG_QUALITY = 0.8
 
-/**
- * Logging from a photo.
- *
- * The photo never leaves as a nutrition figure: the model returns ingredient names and weights,
- * the client matches them to food rows and computes everything, and the draft says what it assumed
- * for scale. A photo genuinely cannot show the oil a dish was cooked in — so this is the weakest
- * of the logging paths, and it's presented as a starting point rather than an answer.
- *
- * Downscaled before upload: a modern phone photo is several megabytes, which on a poor connection
- * fails long before the model would have struggled with it.
- */
-export function PhotoPanel({
-  target,
-  onDone,
-  onEdit,
-}: {
-  target: LogTarget
-  onDone: () => void
-  onEdit: (product: FoodDraft) => void
-}) {
+export interface Photo {
+  base64: string
+  preview: string
+  note: string
+}
+
+export function PhotoPanel({ onPhoto }: { onPhoto: (photo: Photo) => void }) {
   const fileRef = useRef<HTMLInputElement>(null)
-  const [preview, setPreview] = useState<string | null>(null)
   const [note, setNote] = useState('')
-  const { estimate, setEstimate, phase, elapsed, error, run, reset } = useEstimate()
-  const [shrinkError, setShrinkError] = useState<string | null>(null)
-  const isBusy = phase === 'reading' || phase === 'matching'
+  const [error, setError] = useState<string | null>(null)
 
   async function handleFile(file: File | undefined) {
     if (!file) return
-    reset()
-    setShrinkError(null)
+    setError(null)
     try {
       const shrunk = await downscale(file)
-      setPreview(shrunk.dataUrl)
-      await run(() => describePhoto(shrunk.base64, 'image/jpeg', note))
+      onPhoto({ base64: shrunk.base64, preview: shrunk.dataUrl, note })
     } catch (cause) {
-      setShrinkError(cause instanceof Error ? cause.message : 'Could not read that photo.')
+      setError(cause instanceof Error ? cause.message : 'Could not read that photo.')
     }
   }
 
@@ -62,70 +37,24 @@ export function PhotoPanel({
         className="hidden"
         onChange={(event) => void handleFile(event.target.files?.[0])}
       />
-
-      {preview ? (
-        <div className="relative overflow-hidden rounded-xl bg-black">
-          <img src={preview} alt="The meal you photographed" className="max-h-56 w-full object-cover" />
-        </div>
-      ) : (
-        <p className="text-[13px] text-ink-secondary">
-          The whole plate with something for scale, or a label close enough to read.
-        </p>
-      )}
-
+      <p className="text-[13px] text-ink-secondary">
+        The whole plate with something for scale, or a label close enough to read.
+      </p>
       <input
         value={note}
         onChange={(event) => setNote(event.target.value)}
         placeholder="Anything the photo won't show (optional)"
         className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
       />
-
-      <Button className="w-full" disabled={isBusy} onClick={() => fileRef.current?.click()}>
-        {preview ? <RotateCcw size={16} /> : <Camera size={16} />}
-        {isBusy ? 'Working…' : preview ? 'Take another' : 'Take a photo'}
+      <Button className="w-full" onClick={() => fileRef.current?.click()}>
+        <Camera size={16} />
+        Take a photo
       </Button>
-
-      {isBusy && <Working phase={phase === 'reading' ? 'reading' : 'matching'} elapsed={elapsed} />}
-
-      {(error ?? shrinkError) !== null && (
-        <p
-          role="alert"
-          className="rounded-xl px-3.5 py-2.5 text-[13px]"
-          style={{
-            background: 'color-mix(in srgb, var(--status-critical) 10%, transparent)',
-            color: 'var(--status-critical)',
-          }}
-        >
-          {error ?? shrinkError}
+      {error && (
+        <p role="alert" className="text-[13px]" style={{ color: 'var(--status-critical)' }}>
+          {error}
         </p>
       )}
-
-      {estimate?.product ? (
-        <ProductReview
-          product={estimate.product}
-          target={target}
-          onDone={onDone}
-          onEdit={() => onEdit(estimate.product!)}
-          onRefine={(extra) => {
-            setNote(extra)
-            fileRef.current?.click()
-          }}
-          isRefining={isBusy}
-        />
-      ) : estimate ? (
-        <EstimateReview
-          estimate={estimate}
-          target={target}
-          source="photo"
-          onChange={setEstimate}
-          onDone={onDone}
-          onRefine={(extra) => {
-            setNote(extra)
-            fileRef.current?.click()
-          }}
-          isRefining={isBusy}
-        />
-      ) : null}
     </div>
   )
 }

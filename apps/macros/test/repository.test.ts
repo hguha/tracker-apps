@@ -542,6 +542,61 @@ describe('recipeUsage', () => {
   })
 })
 
+describe('changing a recipe after it was eaten', () => {
+  it('can rewrite the meals logged from it, at the same servings, time and dish', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Banana bread',
+      servings: 4,
+      ingredients: [{ foodId: food.id, label: 'a', grams: 400 }],
+    })
+    const before = (await repo.getRecipe(id))!
+    const at = Date.now()
+    await repo.logRecipeIngredients(before, 2, 'dinner', at, 'home', { source: 'describe' })
+    const [logged] = await repo.recipeSittings(id)
+    const dishId = logged![0]!.dishId
+
+    await repo.saveRecipe(
+      { name: 'Banana bread', servings: 4, ingredients: [{ foodId: food.id, label: 'a', grams: 800 }] },
+      id,
+    )
+    const after = (await repo.getRecipe(id))!
+    expect(await repo.relogRecipe(before, after)).toBe(1)
+
+    const rows = await repo.entriesForDay(dayKey(at))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.grams).toBe(400)
+    expect(rows[0]!.dishId).toBe(dishId)
+    expect(rows[0]!.eatenAt).toBe(at)
+    expect(rows[0]!.meal).toBe('dinner')
+    expect(rows[0]!.source).toBe('describe')
+  })
+
+  it('leaves alone a recipe nobody has logged', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipe({
+      name: 'Untouched',
+      servings: 1,
+      ingredients: [{ foodId: food.id, label: 'a', grams: 100 }],
+    })
+    const recipe = (await repo.getRecipe(id))!
+    expect(await repo.relogRecipe(recipe, recipe)).toBe(0)
+  })
+})
+
+describe('ownFoodNames', () => {
+  it('names your recipes and foods for the AI, newest first', async () => {
+    const food = await chicken()
+    await repo.saveCustomFood({ description: 'Grandma’s icing', per100: EMPTY_NUTRIENTS })
+    await repo.saveRecipe({
+      name: 'Banana bread',
+      servings: 1,
+      ingredients: [{ foodId: food.id, label: 'a', grams: 100 }],
+    })
+    expect(await repo.ownFoodNames()).toEqual(['Banana bread', 'Grandma’s icing'])
+  })
+})
+
 describe('searchLibrary', () => {
   it('finds your own recipe by name, which the food database never could', async () => {
     // "lasagna soup" is a recipe the user imported and cooked twice, and searching for it returned

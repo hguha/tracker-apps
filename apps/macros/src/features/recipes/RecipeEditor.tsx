@@ -1,81 +1,66 @@
-import { plural } from '@tracker-engine/core'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Button, Card, Screen, SegmentedTabs, useToast } from '@tracker-engine/ui'
-import { ClipboardList, Link as LinkIcon, Sparkles, Wand2 } from 'lucide-react'
+import { plural } from '@tracker-engine/core'
+import { BottomSheet, Button, Card, Screen, useToast } from '@tracker-engine/ui'
+import { Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
+import { parseQuantity } from '@/lib/parseQuantity'
 import { grams } from '@/features/shared/format'
+import { NumberInput } from '@/features/shared/NumberInput'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { AmountRow } from '@/features/shared/AmountRow'
-import { estimateIngredients, estimateMeal } from '@/features/log/estimate'
-import { resolveAmount } from '@/lib/resolveAmount'
-import { statedAmount, type ParsedIngredient } from '@/lib/parseIngredient'
-import { resolveLines, type ResolvedLine } from '@/data/ingredientLines'
-import { importRecipeFromUrl, type ImportedRecipe } from '@/data/recipeImport'
-import { CUISINES, type CuisineKey, type Food } from '@/domain/types'
+import { Working } from '@/features/log/Working'
+import {
+  describeComponents,
+  describeMeal,
+  describePhoto,
+  matchDraft,
+  SECOND_MS,
+  withoutProduct,
+  type FoodDraft,
+  type MealEstimate,
+} from '@/features/log/estimate'
+import type { LogTarget } from '@/features/shared/target'
+import type { ImportedRecipe } from '@/data/recipeImport'
+import { CUISINES, type CuisineKey, type EntrySource, type Food, type Recipe } from '@/domain/types'
+import { AddIngredient } from './AddIngredient'
+import { ImportLines } from './ImportLines'
+import {
+  recipeGrams,
+  repointRow,
+  rowForPick,
+  rowKey,
+  rowsFromRecipe,
+  rowsFromSaved,
+  type Row,
+} from './rows'
 
-interface Draft {
-  foodId: string | null
-  label: string
-  grams: number
-  /** What the recipe said — "1 cup", "2 tbsp" — kept so it survives the save. See `RecipeIngredient`. */
-  amount?: string | null
-  /**
-   * The line this row was read from, kept for the session.
-   *
-   * Because "2 cups" cannot be weighed without knowing what's in the cup: a cup of flour is 120 g
-   * and a cup of oil is 218 g. So an unmatched line has a perfectly good amount and no grams — and
-   * the moment the user picks a food, that amount becomes weighable against *its* portions. Without
-   * this the pick set the name and left the row at 0 g, which is the same wrong total with a
-   * right-looking name on it.
-   */
-  parsed?: ParsedIngredient
-  /**
-   * True while this row is one the local parser couldn't weigh.
-   *
-   * Marks the rows the model would replace if it's asked, so asking is a swap rather than a second
-   * copy of every line. Cleared the moment anything replaces them.
-   */
-  needsWeight?: boolean
+export interface LogMode {
+  target: LogTarget
+  title: string
+  when?: React.ReactNode
+  onLogged: (count: number) => void
+  onProduct?: (product: FoodDraft, text: string) => void
 }
 
-/**
- * Lines read from somewhere but not yet turned into weights.
- *
- * They exist as their own state, rather than being converted in the same breath they're read,
- * because converting nineteen ingredient lines takes most of a minute and can fail on its own. Held
- * here, a failed conversion costs a retry instead of the whole import.
- */
-interface Pending {
-  lines: string[]
-  from: string
-}
+export type ComposeStart =
+  | { kind: 'ask'; text: string }
+  | { kind: 'photo'; base64: string; note: string; preview: string }
 
-type StartMode = 'link' | 'paste' | 'describe'
+type Asking = { phase: 'reading' | 'matching'; startedAt: number }
 
-const START_TABS = [
-  { key: 'link' as const, label: 'From a link' },
-  { key: 'paste' as const, label: 'Paste it' },
-  { key: 'describe' as const, label: 'Describe it' },
-]
-
-/**
- * Building or editing a recipe.
- *
- * Three ways in, because entering fifteen ingredients by hand is why nobody uses recipe features:
- * import a link, paste an ingredient list, or describe the dish. All three land in the same place —
- * verbatim lines, then weights, then an editable list — so there's one path to understand and one
- * to fix when a line converts wrongly. Every number comes from a matched food row; nothing
- * nutritional is ever read off a web page.
- */
 export function RecipeEditor({
   recipeId,
   onBack,
+  log,
+  start,
 }: {
   recipeId: string | null
   onBack: () => void
+  log?: LogMode
+  start?: ComposeStart
 }) {
   const toast = useToast()
   const existing = useLiveQuery(
@@ -83,110 +68,165 @@ export function RecipeEditor({
     [recipeId],
     undefined,
   )
+  const recipes = useLiveQuery(() => repo.recipes(), [], [])
 
   const [name, setName] = useState('')
-  const [servings, setServings] = useState('4')
+  const [servings, setServings] = useState(log ? 1 : 4)
+  const [eaten, setEaten] = useState(1)
   const [cuisine, setCuisine] = useState<CuisineKey | ''>('')
-  const [items, setItems] = useState<Draft[]>([])
+  const [rows, setRows] = useState<Row[]>([])
   const [steps, setSteps] = useState('')
   const [totalMinutes, setTotalMinutes] = useState<number | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [source, setSource] = useState<string | null>(null)
-  /** What the parse assumed or skipped — shown, because a silent skip is a silent undercount. */
   const [notes, setNotes] = useState('')
-  /** Which ingredient row has its food-swap box open. */
-  const [editing, setEditing] = useState<number | null>(null)
-
-  const [mode, setMode] = useState<StartMode>('link')
-  const [input, setInput] = useState('')
-  const [pending, setPending] = useState<Pending | null>(null)
-  /**
-   * The lines the local parser couldn't put a weight on, waiting on a decision.
-   *
-   * Their own state, because asking the model is now the user's call: it costs most of a minute and
-   * one of a small daily allowance, and "1 handful of parsley" is a line plenty of people would rather
-   * leave uncounted than wait for.
-   */
-  const [needsWeight, setNeedsWeight] = useState<ResolvedLine[]>([])
-  const [isReading, setIsReading] = useState(false)
-  const [isConverting, setIsConverting] = useState(false)
-  /**
-   * How far the conversion has got, and which half is running.
-   *
-   * "Sometimes instant, sometimes slow" was two different steps behind one label: reading the amounts
-   * is local and takes a second, while the leftover lines go to the model and take thirty. Naming the
-   * step and counting the lines is the whole fix — nothing here got faster.
-   */
-  const [progress, setProgress] = useState<{ done: number; total: number; isModel: boolean } | null>(
-    null,
-  )
-  const [isSaving, setIsSaving] = useState(false)
+  const [swapping, setSwapping] = useState<string | null>(null)
+  const [asking, setAsking] = useState<Asking | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const [aiSource, setAiSource] = useState<EntrySource | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [pastMeals, setPastMeals] = useState<{ count: number; before: Recipe } | null>(null)
+  const started = useRef(false)
 
-  // Load once, when the row arrives; later edits are local until saved.
   useEffect(() => {
     if (!existing) return
     setName(existing.name)
-    setServings(String(existing.servings))
+    setServings(existing.servings)
     setCuisine(existing.cuisine ?? '')
     setSteps(existing.steps.join('\n'))
     setTotalMinutes(existing.totalMinutes)
     setTags(existing.tags)
     setSource(existing.sourceUrl)
-    setItems(
-      existing.ingredients.map((ingredient) => ({
-        foodId: ingredient.foodId,
-        label: ingredient.label,
-        grams: ingredient.grams,
-        amount: ingredient.amount ?? null,
-      })),
-    )
+    setRows(rowsFromSaved(existing))
   }, [existing?.id])
 
+  useEffect(() => {
+    if (!asking) return
+    const id = window.setInterval(
+      () => setElapsed(Math.round((Date.now() - asking.startedAt) / SECOND_MS)),
+      SECOND_MS,
+    )
+    return () => window.clearInterval(id)
+  }, [asking?.startedAt])
+
+  useEffect(() => {
+    if (!start || started.current) return
+    started.current = true
+    if (start.kind === 'ask') void ask(start.text, () => describeMeal(start.text), 'describe')
+    else {
+      setPreview(start.preview)
+      void ask(start.note, () => describePhoto(start.base64, 'image/jpeg', start.note), 'photo')
+    }
+  }, [])
+
   const foods = useLiveQuery(
-    () => repo.foodsByIds(items.map((item) => item.foodId).filter(isPresent)),
-    [items],
+    () => repo.foodsByIds(rows.map((row) => row.foodId).filter(isPresent)),
+    [rows.map((row) => row.foodId).join(',')],
     new Map<string, Food>(),
   )
 
   const total = recipeNutrients(
     {
-      ingredients: items.map((item, index) => ({
-        ...item,
-        id: String(index),
+      ingredients: rows.map((row) => ({
+        id: row.key,
+        foodId: row.foodId,
+        label: row.label,
+        grams: row.grams,
         optional: false,
-        amount: item.amount ?? null,
+        amount: row.amount ?? null,
       })),
     },
     foods ?? new Map(),
   )
-  const each = scale(total, 1 / Math.max(1, Number(servings) || 1))
-  const unmatched = items.filter((item) => item.foodId === null).length
+  const each = scale(total, 1 / Math.max(1, servings))
+  const unmatched = rows.filter((row) => row.foodId === null && !row.isMatching).length
+  const counted = rows.filter((row) => row.foodId !== null && row.grams > 0)
+  const fallbackName = rows
+    .slice(0, 2)
+    .map((row) => row.label.split(',')[0])
+    .join(' & ')
+  const finalName = name.trim() || fallbackName
 
-  /** Stage one: read the page. Fast, and everything it found is kept even if stage two fails. */
-  async function read() {
-    const url = input.trim()
-    if (url.length < 8) return
-    setIsReading(true)
+  async function ask(text: string, read: () => Promise<MealEstimate>, kind: EntrySource) {
+    if (asking) return
+    setAsking({ phase: 'reading', startedAt: Date.now() })
+    setElapsed(0)
     setError(null)
+    const isFresh = name.trim() === '' && rows.length === 0
+    if (isFresh && text.trim()) {
+      const quantity = parseQuantity(text.trim())
+      setName(capitalise(quantity?.unit ?? text.trim()))
+      if (quantity && log) {
+        setServings(quantity.count)
+        setEaten(quantity.count)
+      }
+    }
     try {
-      const imported = await importRecipeFromUrl(url)
-      applyImported(imported)
-      setPending({ lines: imported.ingredients, from: hostOf(imported.sourceUrl) })
-      setInput('')
-      // Straight into the conversion, so the common case is still one tap — but from a state
-      // where a failure leaves the lines on screen instead of discarding the whole import.
-      await convert(imported.ingredients)
+      let draft = await read()
+      if (draft.product) {
+        if (log?.onProduct && rows.length === 0) {
+          log.onProduct(draft.product, text)
+          return
+        }
+        draft = withoutProduct(draft)
+      }
+      setAiSource((current) => current ?? kind)
+      if (draft.assumptions) setNotes(draft.assumptions)
+      if (isFresh && !text.trim() && draft.label) setName(capitalise(draft.label))
+
+      const byName = new Map(recipes.map((recipe) => [recipe.name.trim().toLowerCase(), recipe]))
+      const keys = new Map<string, string>()
+      const added: Row[] = []
+      const toMatch = draft.items.filter((item) => {
+        const recipe = byName.get(item.query.trim().toLowerCase())
+        if (!recipe) return true
+        const whole = recipeGrams(recipe)
+        added.push(...rowsFromRecipe(recipe, whole > 0 && item.grams > 0 ? item.grams / whole : undefined))
+        return false
+      })
+      for (const item of toMatch) {
+        const key = rowKey()
+        keys.set(item.id, key)
+        added.push({
+          key,
+          foodId: null,
+          label: item.query,
+          query: item.query,
+          grams: item.grams,
+          isMatching: true,
+        })
+      }
+      setRows((current) => [...current, ...added])
+      if (draft.items.length === 0) setError('Nothing came back. Search for the foods instead.')
+
+      setAsking((current) => current && { ...current, phase: 'matching' })
+      await matchDraft({ ...draft, items: toMatch }, (item) =>
+        setRows((current) =>
+          current.map((row) =>
+            row.key === keys.get(item.id)
+              ? {
+                  ...row,
+                  foodId: item.food?.id ?? null,
+                  label: item.food?.description ?? item.query,
+                  isMatching: false,
+                }
+              : row,
+          ),
+        ),
+      )
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not read that link.')
+      setError(cause instanceof Error ? cause.message : 'Could not work that out.')
+      setRows((current) => current.map((row) => (row.isMatching ? { ...row, isMatching: false } : row)))
     } finally {
-      setIsReading(false)
+      setAsking(null)
     }
   }
 
   function applyImported(imported: ImportedRecipe) {
     setName((current) => current || imported.name)
-    if (imported.servings) setServings(String(imported.servings))
+    if (imported.servings) setServings(imported.servings)
     if (imported.cuisine) setCuisine(imported.cuisine)
     if (imported.steps.length > 0) setSteps(imported.steps.join('\n'))
     setTotalMinutes(imported.totalMinutes)
@@ -194,374 +234,138 @@ export function RecipeEditor({
     setSource(imported.sourceUrl)
   }
 
-  /**
-   * Stage two: the amounts each line states, at the amounts it states them. Locally, always.
-   *
-   * `resolveLines` does this without a model, because "1/2 pound lean ground beef" is a quantity, a
-   * unit and a food — not a language problem. It takes a second, can't be rate limited, and gives the
-   * same answer every time.
-   *
-   * **The lines it can't weigh stop here.** They used to go straight on to the model, which is a
-   * thirty-second wait and one of a handful of daily requests spent without being asked — and when
-   * the model then found nothing, nothing appeared and nothing was said. Now they land as rows at the
-   * amount written, with the model offered as a button. See `weighWithModel`.
-   */
-  async function convert(lines: readonly string[]) {
-    if (lines.length === 0 || isConverting) return
-    setIsConverting(true)
-    setError(null)
-    setProgress({ done: 0, total: lines.length, isModel: false })
-    try {
-      const local = await resolveLines(lines, (done, total) =>
-        setProgress({ done, total, isModel: false }),
-      )
-      const resolved = local.lines.filter((line) => line.grams !== null && line.grams > 0)
-      const unweighed = local.lines.filter((line) => line.grams === null)
-      // A seasoning is worth listing and not worth asking about. "Salt and pepper to taste" and "a
-      // pinch of saffron" have no weight anyone — model included — can honestly supply, and they used
-      // to be dropped from the list altogether, so the recipe lost a line it needs to be a recipe.
-      const unreadable = unweighed.filter((line) => !line.parsed.isToTaste)
+  const input = () => ({
+    name: finalName,
+    servings,
+    ingredients: rows.map((row) => ({
+      foodId: row.foodId,
+      label: row.label,
+      grams: row.grams,
+      amount: row.amount ?? null,
+    })),
+    steps: steps
+      .split('\n')
+      .map((step) => step.trim())
+      .filter(Boolean),
+    cuisine: cuisine === '' ? null : cuisine,
+    totalMinutes,
+    tags,
+    sourceUrl: source,
+  })
 
-      setItems((current) => [
-        ...current,
-        ...resolved.map((line) => ({
-          foodId: line.food?.id ?? null,
-          label: line.food?.description ?? line.parsed.name,
-          grams: line.grams!,
-          parsed: line.parsed,
-          amount: statedAmount(line.parsed),
-        })),
-        // Kept at the amount written rather than dropped. A recipe is worth having as a recipe even
-        // when a line's macros aren't known, and the stated amount is the part nobody has to guess.
-        ...unweighed.map((line) => ({
-          foodId: line.food?.id ?? null,
-          label: line.food?.description ?? line.parsed.name,
-          grams: 0,
-          parsed: line.parsed,
-          amount: statedAmount(line.parsed),
-          needsWeight: !line.parsed.isToTaste,
-        })),
-      ])
-      // Said out loud, because from outside the two paths are indistinguishable and it looked like
-      // every import went to the model. Nineteen lines read in a second, or two lines that needed a
-      // request, are different facts about how much of this you should double-check.
-      setNotes(
-        [readingNote(resolved.length, unreadable.length), local.assumptions]
-          .filter(Boolean)
-          .join('. '),
-      )
-      setPending(null)
-      setNeedsWeight(unreadable)
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? `${cause.message} The ingredient list is still here — try again.`
-          : 'Could not read those lines.',
-      )
+  async function busy(work: () => Promise<void>) {
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      await work()
     } finally {
-      setIsConverting(false)
-      setProgress(null)
+      setIsSaving(false)
     }
   }
 
-  /**
-   * The leftover lines, sent to the model because the user asked.
-   *
-   * Every outcome is reported, which is the whole point of it being a separate step: the previous
-   * version called this automatically and, when the model returned nothing usable, added nothing and
-   * said nothing — so a recipe silently came out light and there was no way to tell whether the AI had
-   * been asked at all.
-   */
-  async function weighWithModel() {
-    if (needsWeight.length === 0 || isConverting) return
-    setIsConverting(true)
-    setError(null)
-    setProgress({ done: 0, total: needsWeight.length, isModel: true })
-    try {
-      const estimate = await estimateIngredients(needsWeight.map((line) => line.parsed.raw))
-      const weighed = estimate.items.filter((item) => item.grams > 0 && item.food !== null)
-      if (estimate.items.length === 0) {
-        setError(
-          `The AI read those ${plural(needsWeight.length, 'line')} and couldn’t make anything of them. ` +
-            'They’re still listed at the amount written — pick a food on each and the weight follows.',
-        )
+  async function persist(updatePast: boolean) {
+    const before = pastMeals?.before ?? existing
+    const id = await repo.saveRecipe(input(), recipeId ?? undefined)
+    const after = await repo.getRecipe(id)
+    const updated = updatePast && before && after ? await repo.relogRecipe(before, after) : 0
+    setPastMeals(null)
+    toast.show(
+      updated > 0
+        ? `Recipe and ${plural(updated, 'meal')} updated`
+        : recipeId
+          ? 'Recipe updated'
+          : 'Saved to your recipes',
+    )
+    onBack()
+  }
+
+  const save = (updatePast: boolean) => busy(() => persist(updatePast))
+
+  const requestSave = () =>
+    busy(async () => {
+      const sittings = recipeId && existing ? await repo.recipeSittings(recipeId) : []
+      if (sittings.length > 0 && existing) setPastMeals({ count: sittings.length, before: existing })
+      else await persist(false)
+    })
+
+  const logIt = () =>
+    busy(async () => {
+      if (!log) return
+      const { meal, at, venue } = log.target
+      const kind = aiSource ?? 'recipe'
+      if (rows.length === 1 && counted.length === 1) {
+        const food = foods?.get(counted[0]!.foodId!)
+        if (!food) return
+        await repo.logFood({
+          food,
+          grams: (counted[0]!.grams * eaten) / Math.max(1, servings),
+          meal,
+          eatenAt: at,
+          venue,
+          source: kind,
+          note: counted[0]!.query,
+        })
+        toast.show('Logged')
+        log.onLogged(1)
         return
       }
-      setItems((current) => [
-        ...current.filter((draft) => !draft.needsWeight),
-        ...estimate.items.map(toDraft),
-      ])
-      setNeedsWeight([])
-      if (weighed.length < estimate.items.length) {
-        setError(
-          `${estimate.items.length - weighed.length} of ${estimate.items.length} still have no food matched — pick one on each and the weight follows.`,
-        )
-      }
-    } catch (cause) {
-      setError(
-        `${cause instanceof Error ? cause.message : 'Could not weigh those lines.'} ` +
-          `The ${plural(needsWeight.length, 'line')} are still listed at the amount written.`,
-      )
-    } finally {
-      setIsConverting(false)
-      setProgress(null)
-    }
-  }
-
-  /** Pasted text: one ingredient per line, converted by the same path as an import. */
-  async function fromPaste() {
-    const lines = input
-      .split('\n')
-      .map((line) => line.replace(/^[-*•\s]+/, '').trim())
-      .filter((line) => line.length > 1)
-    if (lines.length === 0) return
-    setPending({ lines, from: 'what you pasted' })
-    setInput('')
-    await convert(lines)
-  }
-
-  /** A described dish, where nobody stated an amount and ordinary portions are the right guess. */
-  async function fromDescription() {
-    const text = input.trim()
-    if (text.length < 3) return
-    setIsConverting(true)
-    setError(null)
-    try {
-      const estimate = await estimateMeal(text)
-      setItems((current) => [...current, ...estimate.items.map(toDraft)])
-      setName((current) => current || text)
-      setInput('')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not work that out.')
-    } finally {
-      setIsConverting(false)
-    }
-  }
-
-  const isBusy = isReading || isConverting
-  const canSave = items.length > 0 && name.trim().length > 0
-
-  function save() {
-    if (isSaving || !canSave) return
-    setIsSaving(true)
-    return repo
-      .saveRecipe(
-        {
-          name,
-          servings: Number(servings) || 1,
-          ingredients: items,
-          steps: steps.split('\n').map((step) => step.trim()).filter(Boolean),
-          cuisine: cuisine === '' ? null : cuisine,
-          totalMinutes,
-          tags,
-          sourceUrl: source,
-        },
-        recipeId ?? undefined,
-      )
-      .then(() => {
-        toast.show(recipeId ? 'Recipe updated' : 'Recipe saved')
-        onBack()
+      const id = await repo.saveRecipe(input(), recipeId ?? undefined)
+      const recipe = await repo.getRecipe(id)
+      if (!recipe) return
+      const written = await repo.logRecipeIngredients(recipe, eaten, meal, at, venue, {
+        source: kind,
       })
-      .finally(() => setIsSaving(false))
-  }
+      toast.show(`${recipe.name} logged · saved to recipes`)
+      log.onLogged(written)
+    })
+
+  const canSave = rows.length > 0 && finalName.length > 0 && !asking
+  const canLog = counted.length > 0 && !asking
+  const isFirst = rows.length === 0 && !asking
 
   return (
     <Screen
-      title={recipeId ? 'Edit recipe' : 'New recipe'}
+      title={log?.title ?? (recipeId ? 'Edit recipe' : 'New recipe')}
       onBack={onBack}
       action={
-        <button
-          disabled={!canSave || isSaving}
-          onClick={() => void save()}
-          className="h-9 shrink-0 rounded-lg px-2.5 text-[14px] font-semibold text-accent disabled:opacity-40 active:bg-sunken"
-        >
-          {isSaving ? 'Saving…' : 'Save'}
-        </button>
+        log ? undefined : (
+          <button
+            disabled={!canSave || isSaving}
+            onClick={() => void requestSave()}
+            className="h-9 shrink-0 rounded-lg px-2.5 text-[14px] font-semibold text-accent disabled:opacity-40 active:bg-sunken"
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+        )
       }
     >
-      <Card className="space-y-3 p-4">
-        <label className="block">
-          <span className="text-[11px] text-ink-muted">Name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Sunday chilli"
-            className="mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
-          />
-        </label>
-        <div className="flex gap-3">
-          <label className="block flex-1">
-            <span className="text-[11px] text-ink-muted">Servings</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={servings}
-              onChange={(event) => setServings(event.target.value)}
-              className="tabular mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
-            />
-          </label>
-          <label className="block flex-[1.4]">
-            <span className="text-[11px] text-ink-muted">Cuisine</span>
-            <select
-              value={cuisine}
-              onChange={(event) => setCuisine(event.target.value as CuisineKey | '')}
-              className="mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
-            >
-              <option value="">Not set</option>
-              {CUISINES.map((key) => (
-                <option key={key} value={key}>
-                  {CUISINE_LABELS[key]}
-                </option>
-              ))}
-            </select>
-          </label>
+      {log?.when}
+
+      {preview && (
+        <div className="overflow-hidden rounded-xl bg-black">
+          <img src={preview} alt="Your photo" className="max-h-40 w-full object-cover" />
         </div>
-        {totalMinutes !== null && (
-          <p className="text-[12px] text-ink-muted">Takes about {totalMinutes} minutes.</p>
-        )}
-      </Card>
+      )}
 
       <Card className="space-y-2 p-4">
-        <SegmentedTabs
-          tabs={START_TABS}
-          active={mode}
-          onSelect={(next) => {
-            setMode(next)
-            setInput('')
-            setError(null)
-          }}
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={fallbackName || 'Name'}
+          aria-label="Name"
+          className="w-full rounded-xl bg-sunken px-3 py-2 text-[15px] font-medium outline-none"
         />
-
-        {mode === 'link' ? (
-          <input
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            inputMode="url"
-            placeholder="https://…"
-            className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+        <label className="flex items-center gap-2 text-[13px] text-ink-secondary">
+          Makes
+          <NumberInput
+            value={servings}
+            onValue={(value) => setServings(Math.max(1, Math.round(value)))}
+            aria-label="Servings it makes"
+            className="tabular w-14 rounded-lg bg-sunken px-2 py-1 text-center text-[14px] outline-none"
           />
-        ) : (
-          <textarea
-            rows={mode === 'paste' ? 4 : 2}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder={
-              mode === 'paste'
-                ? '500g beef mince\n2 tins chopped tomatoes\n1 onion'
-                : 'A big bowl of chilli with rice and sour cream'
-            }
-            className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
-          />
-        )}
-
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={input.trim().length < 3 || isBusy}
-          onClick={() => {
-            if (mode === 'link') void read()
-            else if (mode === 'paste') void fromPaste()
-            else void fromDescription()
-          }}
-        >
-          {mode === 'link' ? <LinkIcon size={15} /> : mode === 'paste' ? <ClipboardList size={15} /> : <Sparkles size={15} />}
-          {isReading
-            ? 'Reading the page…'
-            : isConverting
-              ? convertingLabel(progress)
-              : mode === 'link'
-                ? 'Read the ingredients'
-                : mode === 'paste'
-                  ? 'Convert these lines'
-                  : 'Break it into ingredients'}
-        </Button>
-
-        {/* One line each. The three-sentence versions explained *how* the import works, which is the
-            app's business — what the user needs is which box to type in. */}
-        <p className="text-[12px] text-ink-muted">
-          {mode === 'link'
-            ? 'Macros come from the food database, never from the page.'
-            : mode === 'paste'
-              ? 'One ingredient per line, at the amounts written.'
-              : 'Ordinary portions are assumed, so check the weights.'}
-        </p>
-
-        {error && (
-          <p role="alert" className="text-[12.5px]" style={{ color: 'var(--status-critical)' }}>
-            {error}
-          </p>
-        )}
+          {servings === 1 ? 'serving' : 'servings'}
+        </label>
       </Card>
-
-      {pending && (
-        <Card className="space-y-2 p-4">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-            Read from {pending.from}
-          </h2>
-          <ul className="space-y-0.5">
-            {pending.lines.map((line, index) => (
-              <li key={index} className="text-[13px] text-ink-secondary">
-                {line}
-              </li>
-            ))}
-          </ul>
-          <Button
-            className="w-full"
-            disabled={isConverting}
-            onClick={() => void convert(pending.lines)}
-          >
-            <Wand2 size={15} />
-            {isConverting
-              ? convertingLabel(progress)
-              : `Convert ${pending.lines.length} amounts to weights`}
-          </Button>
-          <button
-            onClick={() => setPending(null)}
-            className="w-full py-1 text-[12.5px] text-ink-muted active:opacity-60"
-          >
-            Discard these lines
-          </button>
-        </Card>
-      )}
-
-      {/*
-        The AI as an offer, not a default. These lines are already on the list at the amount written —
-        this only buys them a weight, and it costs a wait and one of a small daily allowance.
-      */}
-      {needsWeight.length > 0 && (
-        <Card className="space-y-2 p-4">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-            {needsWeight.length === 1 ? '1 line has no weight' : `${needsWeight.length} lines have no weight`}
-          </h2>
-          <ul className="space-y-0.5">
-            {needsWeight.map((line, index) => (
-              <li key={index} className="truncate text-[13px] text-ink-secondary">
-                {line.parsed.raw}
-              </li>
-            ))}
-          </ul>
-          <p className="text-[12px] text-ink-muted">
-            “{needsWeight[0]!.parsed.name}” has no weight anyone can work out from the words.
-          </p>
-          <Button
-            variant="secondary"
-            className="w-full"
-            disabled={isConverting}
-            onClick={() => void weighWithModel()}
-          >
-            <Sparkles size={15} />
-            {isConverting
-              ? convertingLabel(progress)
-              : `Ask the AI to weigh ${needsWeight.length === 1 ? 'it' : 'them'}`}
-          </Button>
-          <button
-            onClick={() => setNeedsWeight([])}
-            className="w-full py-1 text-[12.5px] text-ink-muted active:opacity-60"
-          >
-            {needsWeight.length === 1 ? 'Leave it uncounted' : 'Leave them uncounted'}
-          </button>
-        </Card>
-      )}
 
       <Card className="p-0">
         <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
@@ -574,196 +378,250 @@ export function RecipeEditor({
             </span>
           )}
         </div>
-        {items.length === 0 ? (
-          <p className="px-4 pb-3 text-[13px] text-ink-muted">Nothing added yet.</p>
-        ) : (
+
+        {rows.length > 0 && (
           <ul className="divide-y divide-line px-4">
-            {items.map((item, index) => {
-              const setGrams = (grams: number) =>
-                setItems(items.map((draft, i) => (i === index ? { ...draft, grams } : draft)))
-              // Deliberately not asserted: the food lookup is a live query, so a row added a
-              // moment ago is legitimately absent from the map for one render. Asserting it
-              // crashed the editor every time an ingredient was added.
-              const food = item.foodId === null ? undefined : foods?.get(item.foodId)
+            {rows.map((row) => {
+              const food = row.foodId === null ? undefined : foods?.get(row.foodId)
+              const isSwapping = swapping === row.key || (row.foodId === null && !row.isMatching)
               return (
                 <AmountRow
-                  key={index}
+                  key={row.key}
                   food={food}
+                  title={food?.description ?? row.label}
+                  subtitle={
+                    <RowNote
+                      row={row}
+                      food={food}
+                      isSwapping={swapping === row.key}
+                      onSwap={() => setSwapping(swapping === row.key ? null : row.key)}
+                    />
+                  }
+                  grams={row.grams}
+                  onGrams={(value) =>
+                    setRows((current) =>
+                      current.map((r) => (r.key === row.key ? { ...r, grams: value } : r)),
+                    )
+                  }
+                  onRemove={() => setRows((current) => current.filter((r) => r.key !== row.key))}
                   after={
-                    // Every row, not only the unmatched ones. An import always leaves a few lines
-                    // with no row (which count zero, so the total reads low) — but it also matches
-                    // some of them to the *wrong* row, and there was no way to correct that but
-                    // delete and search again from the bottom of the screen.
-                    // Auto-opened for a row with no food, because that row counts zero and the
-                    // total reads low until it's fixed — but not for a seasoning, which is meant to
-                    // count zero and would otherwise leave two pickers open on every import.
-                    editing === index ||
-                    (item.foodId === null && item.parsed?.isToTaste !== true) ? (
+                    isSwapping && row.parsed?.isToTaste !== true ? (
                       <FoodSearchPicker
-                        placeholder={
-                          item.foodId === null
-                            ? `Find a match for “${item.label}”`
-                            : `Swap “${item.label}” for something else`
-                        }
+                        placeholder={`Which “${row.query}”?`}
+                        initialQuery={row.query}
                         branded={false}
                         limit={5}
-                        onPick={(food) => {
-                          setItems(
-                            items.map((draft, i) =>
-                              i === index ? matchDraftTo(draft, food) : draft,
-                            ),
+                        onPick={(picked) => {
+                          setRows((current) =>
+                            current.map((r) => (r.key === row.key ? repointRow(r, picked) : r)),
                           )
-                          setEditing(null)
+                          setSwapping(null)
                         }}
                       />
                     ) : undefined
                   }
-                  title={food?.description ?? item.label}
-                  subtitle={
-                    item.foodId === null ? (
-                      // A seasoning is *meant* to count nothing, so it isn't a problem to fix.
-                      item.parsed?.isToTaste ? (
-                        <span className="text-ink-muted">{item.amount ?? 'to taste'} · not counted</span>
-                      ) : (
-                        <span style={{ color: 'var(--status-serious)' }}>no macros — match a food</span>
-                      )
-                    ) : (
-                      <span className="tabular text-ink-muted">
-                        {/* The amount itself is editable in the food's own measures now, so repeating
-                            what the recipe said here only gave it a second chance to be stale: edit
-                            the grams and "1 cup" stayed on screen beside two of them. */}
-                        {food ? `${Math.round(nutrientsFor(food, item.grams).kcal)} kcal` : '…'}
-                        {' · '}
-                        <button
-                          onClick={() => setEditing(editing === index ? null : index)}
-                          className="font-semibold text-accent active:opacity-60"
-                        >
-                          {editing === index ? 'cancel' : 'change food'}
-                        </button>
-                      </span>
-                    )
-                  }
-                  grams={item.grams}
-                  onGrams={setGrams}
-                  onRemove={() => setItems(items.filter((_, i) => i !== index))}
                 />
               )
             })}
           </ul>
         )}
 
-        <div className="border-t border-line px-4 py-3">
-          <FoodSearchPicker
-            placeholder="Add an ingredient by hand"
-            branded={false}
-            onPick={(food) =>
-              setItems((current) => [
-                ...current,
-                { foodId: food.id, label: food.description, grams: 100 },
-              ])
-            }
+        <div className="space-y-2 border-t border-line px-4 py-3">
+          {asking && <Working phase={asking.phase} elapsed={elapsed} />}
+          <AddIngredient
+            recipes={recipes}
+            isFirst={isFirst}
+            autoFocus={!!log && !start}
+            isAsking={asking !== null}
+            onFood={(food) => setRows((current) => [...current, rowForPick(food)])}
+            onRecipe={(recipe) => setRows((current) => [...current, ...rowsFromRecipe(recipe)])}
+            onAsk={(text) => void ask(text, () => describeComponents(text), 'describe')}
           />
+          <ImportLines onImported={applyImported} setRows={setRows} onNotes={setNotes} />
+          {error && (
+            <p role="alert" className="text-[12.5px]" style={{ color: 'var(--status-critical)' }}>
+              {error}
+            </p>
+          )}
         </div>
       </Card>
 
-      <Card className="space-y-1.5 p-4">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-          Method
-        </h2>
-        <textarea
-          rows={Math.min(12, Math.max(3, steps.split('\n').length))}
-          value={steps}
-          onChange={(event) => setSteps(event.target.value)}
-          placeholder="One step per line. Imported recipes fill this in."
-          className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[13.5px] leading-relaxed outline-none"
-        />
-      </Card>
-
-      <Card className="p-4">
-        <p className="tabular text-[13.5px] font-semibold">
-          {total.kcal} kcal total · {each.kcal} kcal per serving
-        </p>
-        <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-          Per serving: {grams(each.proteinMg)}P {grams(each.carbsMg)}C {grams(each.fatMg)}F
-        </p>
-        {notes && <p className="mt-1.5 text-[12px] text-ink-muted">{notes}</p>}
-        {unmatched > 0 && (
-          <p className="mt-1.5 text-[12px]" style={{ color: 'var(--status-serious)' }}>
-            {unmatched} ingredient{unmatched === 1 ? '' : 's'} add nothing to this total. The recipe
-            saves either way.
+      {rows.length > 0 && (
+        <Card className="p-4">
+          <p className="tabular text-[13.5px] font-semibold">
+            {servings > 1
+              ? `${each.kcal} kcal a serving · ${total.kcal} total`
+              : `${total.kcal} kcal`}
           </p>
-        )}
-        {source && (
-          <p className="mt-2 truncate text-[12px] text-ink-muted">From {hostOf(source)}</p>
-        )}
+          <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
+            {servings > 1 ? 'Each: ' : ''}
+            {grams(each.proteinMg)}P {grams(each.carbsMg)}C {grams(each.fatMg)}F
+          </p>
+          {notes && <p className="mt-1.5 text-[12px] text-ink-muted">{notes}</p>}
+        </Card>
+      )}
 
-        {/* Also in the header, for a long form — but the end of the form is where you finish, and
-            a header-only Save reads as "no way to save this". */}
-        <Button className="mt-3 w-full" disabled={!canSave || isSaving} onClick={() => void save()}>
+      {!log && (
+        <details className="rounded-2xl bg-surface px-4 py-3">
+          <summary className="cursor-pointer text-[13px] font-semibold text-ink-secondary">
+            Method & details
+          </summary>
+          <div className="mt-2.5 space-y-2.5">
+            <select
+              value={cuisine}
+              onChange={(event) => setCuisine(event.target.value as CuisineKey | '')}
+              aria-label="Cuisine"
+              className="w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none"
+            >
+              <option value="">Cuisine not set</option>
+              {CUISINES.map((key) => (
+                <option key={key} value={key}>
+                  {CUISINE_LABELS[key]}
+                </option>
+              ))}
+            </select>
+            <textarea
+              rows={Math.min(12, Math.max(3, steps.split('\n').length))}
+              value={steps}
+              onChange={(event) => setSteps(event.target.value)}
+              placeholder="One step per line"
+              aria-label="Method"
+              className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[13.5px] leading-relaxed outline-none"
+            />
+            {totalMinutes !== null && (
+              <p className="text-[12px] text-ink-muted">Takes about {totalMinutes} minutes.</p>
+            )}
+            {source && <p className="truncate text-[12px] text-ink-muted">From {hostOf(source)}</p>}
+          </div>
+        </details>
+      )}
+
+      {log ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-2.5">
+            <span className="text-[13.5px] text-ink-secondary">You had</span>
+            <div className="flex items-center gap-2">
+              <Stepper label="Fewer" onClick={() => setEaten(fewer(eaten))}>
+                <Minus size={15} />
+              </Stepper>
+              <NumberInput
+                value={eaten}
+                onValue={(value) => setEaten(Math.max(0.25, value))}
+                aria-label="Servings eaten"
+                className="tabular w-12 rounded-lg bg-sunken px-1 py-1 text-center text-[14px] outline-none"
+              />
+              <Stepper label="More" onClick={() => setEaten(more(eaten))}>
+                <Plus size={15} />
+              </Stepper>
+              <span className="w-14 text-[13px] text-ink-muted">
+                {eaten === 1 ? 'serving' : 'servings'}
+              </span>
+            </div>
+          </div>
+          <Button className="w-full" disabled={!canLog || isSaving} onClick={() => void logIt()}>
+            {isSaving ? 'Logging…' : `Log ${Math.round(each.kcal * eaten)} kcal`}
+          </Button>
+          {rows.length > 0 && (
+            <button
+              disabled={!canSave || isSaving}
+              onClick={() => void save(false)}
+              className="w-full py-1.5 text-[12.5px] font-semibold text-ink-muted disabled:opacity-40 active:opacity-60"
+            >
+              Save without logging
+            </button>
+          )}
+        </div>
+      ) : (
+        <Button className="w-full" disabled={!canSave || isSaving} onClick={() => void requestSave()}>
           {isSaving ? 'Saving…' : recipeId ? 'Save changes' : 'Save recipe'}
         </Button>
-        {!canSave && (
-          <p className="mt-1.5 text-center text-[12px] text-ink-muted">
-            {name.trim().length === 0 ? 'Needs a name.' : 'Needs an ingredient.'}
-          </p>
-        )}
-      </Card>
+      )}
+
+      {pastMeals && (
+        <BottomSheet onDismiss={() => setPastMeals(null)} panelClassName="space-y-2 p-4">
+          <h2 className="text-[16px] font-semibold tracking-tight">
+            Update the {plural(pastMeals.count, 'meal')} you logged?
+          </h2>
+          <Button className="w-full" disabled={isSaving} onClick={() => void save(true)}>
+            Update past meals too
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={isSaving}
+            onClick={() => void save(false)}
+          >
+            Only from now on
+          </Button>
+        </BottomSheet>
+      )}
     </Screen>
   )
 }
 
-const toDraft = (item: { food: Food | null; query: string; grams: number }): Draft => ({
-  foodId: item.food?.id ?? null,
-  label: item.food?.description ?? item.query,
-  grams: item.grams,
-})
-
-/**
- * Points a row at a food, and re-weighs it against that food's own portions.
- *
- * The weight is the whole reason this isn't a one-line setter: "9 lasagna noodles" has a perfectly
- * clear amount that no table can convert, because it depends on the noodle. USDA measured it, so the
- * moment there's a food the number is available — and only ever falls back to what was already on
- * the row, never to a guess.
- */
-function matchDraftTo(draft: Draft, food: Food): Draft {
-  const weighed = draft.parsed ? resolveAmount(draft.parsed, food).grams : null
-  return {
-    ...draft,
-    foodId: food.id,
-    label: food.description,
-    grams: weighed ?? (draft.grams > 0 ? draft.grams : 100),
+function RowNote({
+  row,
+  food,
+  isSwapping,
+  onSwap,
+}: {
+  row: Row
+  food: Food | undefined
+  isSwapping: boolean
+  onSwap: () => void
+}) {
+  if (row.isMatching) return <span className="text-ink-muted">looking it up…</span>
+  if (row.foodId === null) {
+    return row.parsed?.isToTaste ? (
+      <span className="text-ink-muted">{row.amount ?? 'to taste'} · not counted</span>
+    ) : (
+      <span style={{ color: 'var(--status-serious)' }}>no match — pick one</span>
+    )
   }
+  return (
+    <span className="tabular text-ink-muted">
+      {food ? `${Math.round(nutrientsFor(food, row.grams).kcal)} kcal` : '…'}
+      {' · '}
+      <button onClick={onSwap} className="font-semibold text-accent active:opacity-60">
+        {isSwapping ? 'cancel' : 'change'}
+      </button>
+    </span>
+  )
 }
 
-/** How much of the list was read without a model, in a sentence rather than a spinner. */
-function readingNote(readLocally: number, unweighed: number): string {
-  if (readLocally === 0) return ''
-  if (unweighed === 0) return `Read all ${readLocally} lines directly — no AI involved`
-  return `Read ${readLocally} of ${readLocally + unweighed} lines directly; ${unweighed} state no weight`
+function Stepper({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className="flex size-8 items-center justify-center rounded-lg bg-sunken text-ink-secondary active:opacity-60"
+    >
+      {children}
+    </button>
+  )
 }
+
+const fewer = (value: number): number =>
+  value > 1 ? Math.max(1, Math.ceil(value) - 1) : Math.max(0.25, value - 0.25)
+
+const more = (value: number): number => (value < 1 ? Math.min(1, value + 0.25) : Math.floor(value) + 1)
+
+const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
 const isPresent = (value: string | null): value is string => value !== null
 
-/** The site's name, which is what a person recognises — not the whole tracking-laden URL. */
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
   } catch {
     return url
   }
-}
-
-/**
- * Which step is running, and how far through.
- *
- * Two genuinely different waits used to share one sentence: reading the amounts is local and takes a
- * second, and the leftovers go to a language model and take most of a minute.
- */
-function convertingLabel(
-  progress: { done: number; total: number; isModel: boolean } | null,
-): string {
-  if (!progress) return 'Working out the amounts…'
-  if (progress.isModel) return 'Asking the AI about the rest…'
-  return `Matching foods — ${progress.done} of ${progress.total}`
 }

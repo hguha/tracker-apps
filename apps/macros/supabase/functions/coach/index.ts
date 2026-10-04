@@ -90,6 +90,7 @@ interface Body {
   components?: boolean
   /** Diets, allergies and dislikes. Changes what a vague description should be read as. */
   dietNotes?: string
+  knownFoods?: string[]
   /** For `photo`: base64 image bytes (no data: prefix) and its mime type. */
   image?: string
   mimeType?: string
@@ -246,20 +247,32 @@ Deno.serve(async (request) => {
       body.dietNotes ?? '',
       undefined,
       body.components === true ? ESTIMATE_SYSTEM + COMPONENTS_ONLY : undefined,
+      body.knownFoods,
     )
   }
 
   if (body.mode === 'ingredients') {
     const lines = (body.lines ?? []).filter((line) => typeof line === 'string').slice(0, 40)
     if (lines.length === 0) return json({ error: 'lines is required' }, 400)
-    return estimate(key, lines.join('\n'), body.dietNotes ?? '', undefined, INGREDIENTS_SYSTEM)
+    return estimate(
+      key,
+      lines.join('\n'),
+      body.dietNotes ?? '',
+      undefined,
+      INGREDIENTS_SYSTEM,
+      body.knownFoods,
+    )
   }
 
   if (body.mode === 'photo') {
-    return estimate(key, body.description ?? '', body.dietNotes ?? '', {
-      data: body.image ?? '',
-      mimeType: body.mimeType ?? 'image/jpeg',
-    })
+    return estimate(
+      key,
+      body.description ?? '',
+      body.dietNotes ?? '',
+      { data: body.image ?? '', mimeType: body.mimeType ?? 'image/jpeg' },
+      undefined,
+      body.knownFoods,
+    )
   }
 
   if (!Array.isArray(body.contents) || body.contents.length === 0) {
@@ -315,6 +328,7 @@ async function estimate(
   image?: { data: string; mimeType: string },
   /** Replaces the portion-guessing rules when the amounts are already stated. */
   systemOverride?: string,
+  knownFoods: unknown = [],
 ): Promise<Response> {
   const text = description.trim()
   if (!text && !image?.data) return json({ error: 'description or image is required' }, 400)
@@ -322,6 +336,14 @@ async function estimate(
   const preferences = dietNotes.trim()
     ? `\n\nThe user has stated: ${dietNotes.trim()}. Read any vague description in that light —
 do not assume an ingredient they have ruled out.`
+    : ''
+  const own = (Array.isArray(knownFoods) ? knownFoods : [])
+    .filter((name): name is string => typeof name === 'string' && name.trim().length > 0)
+    .slice(0, 60)
+    .map((name) => name.trim().slice(0, 80))
+  const ownFoods = own.length
+    ? `\n\nThe user keeps these foods and recipes of their own. When a component is one of them, use
+its name exactly as written here, and its weight for the amount eaten: ${JSON.stringify(own)}`
     : ''
 
   const { response, raw, model, timedOut } = await callGemini(key, {
@@ -338,7 +360,10 @@ do not assume an ingredient they have ruled out.`
     ],
     systemInstruction: {
       parts: [
-        { text: (systemOverride ?? ESTIMATE_SYSTEM) + (image ? PHOTO_SYSTEM : '') + preferences },
+        {
+          text:
+            (systemOverride ?? ESTIMATE_SYSTEM) + (image ? PHOTO_SYSTEM : '') + preferences + ownFoods,
+        },
       ],
     },
     generationConfig: {

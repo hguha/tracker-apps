@@ -426,12 +426,6 @@ const minutesIntoDay = (at: number): number => {
   return date.getHours() * 60 + date.getMinutes()
 }
 
-/**
- * A new dish id, for a caller assembling one from several writes.
- *
- * Exported so `EstimateReview` can stamp its rows without knowing how ids are made — the alternative
- * was passing `newId` out of the outbox module, which is not something a screen should reach for.
- */
 export const newDishId = (): string => newId()
 
 /** One fresh dish id per source dish, so a copied dish stays one dish. */

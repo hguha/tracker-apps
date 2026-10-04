@@ -189,25 +189,20 @@ function positive(value: unknown): number {
 
 const round1 = (value: unknown): number => Math.round(positive(value) * 10) / 10
 
-/**
- * Phase one: what the model read, with nothing looked up yet.
- *
- * Returns the moment the model answers, so the draft can be on screen while the database work
- * happens. `extra` is appended to the description — the refine path, where the user says "zucchini,
- * not plain" after seeing a wrong answer.
- */
-export async function describeMeal(description: string, extra = ''): Promise<MealEstimate> {
-  const text = extra.trim() ? `${description.trim()} (${extra.trim()})` : description.trim()
-  return runDescribe({ mode: 'estimate', description: text }, description.trim())
+export async function describeMeal(description: string): Promise<MealEstimate> {
+  return runDescribe({ mode: 'estimate', description: description.trim() }, description.trim())
 }
 
-export async function estimateMeal(description: string): Promise<MealEstimate> {
+export async function describeComponents(description: string): Promise<MealEstimate> {
   const draft = await runDescribe(
     { mode: 'estimate', description: description.trim(), components: true },
     description.trim(),
   )
-  return matchDraft(draft.product === null ? draft : asComponent(draft, draft.product))
+  return withoutProduct(draft)
 }
+
+export const withoutProduct = (draft: MealEstimate): MealEstimate =>
+  draft.product === null ? draft : asComponent(draft, draft.product)
 
 function asComponent(draft: MealEstimate, product: FoodDraft): MealEstimate {
   const item = toItem(
@@ -236,7 +231,7 @@ export async function describePhoto(
 /**
  * Recipe ingredient lines, at the amounts the recipe states.
  *
- * A separate mode from `estimateMeal` because the rules are opposite: a described meal needs
+ * A separate mode from `describeComponents` because the rules are opposite: a described meal needs
  * ordinary portions guessed for it, while a recipe already says "1/2 pound" and guessing a serving
  * size instead would quietly divide the dish.
  */
@@ -276,7 +271,7 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
 
   // Preferences go along: "a sandwich" means something different to someone who wrote down
   // "vegetarian", and guessing turkey would be worse than asking.
-  const { dietNotes } = await repo.getProfile()
+  const [{ dietNotes }, knownFoods] = await Promise.all([repo.getProfile(), repo.ownFoodNames()])
   const { data, error } = await client.functions.invoke<
     RawEstimate & {
       error?: string
@@ -285,7 +280,7 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
       quota?: string | null
       retryAfterSeconds?: number
     }
-  >('coach', { body: { ...body, dietNotes } })
+  >('coach', { body: { ...body, dietNotes, knownFoods } })
 
   // A quota wall, an overloaded model and an unreadable meal are three different problems with
   // three different answers. Reporting them all as "couldn't work that out" made a spent

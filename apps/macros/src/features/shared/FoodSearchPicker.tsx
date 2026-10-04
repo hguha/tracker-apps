@@ -22,6 +22,7 @@ export function FoodSearchPicker({
   minChars = 2,
   autoFocus = false,
   initialQuery = '',
+  lead,
   children,
 }: {
   placeholder: string
@@ -39,6 +40,7 @@ export function FoodSearchPicker({
    * asking them to repeat what the app already knows.
    */
   initialQuery?: string
+  lead?: (query: string, clear: () => void) => React.ReactNode
   /** Rendered under the results, with the current query — for an "ask instead" escape hatch. */
   children?: (query: string) => React.ReactNode
 }) {
@@ -57,6 +59,7 @@ export function FoodSearchPicker({
 
       {trimmed.length >= minChars && (
         <>
+          {lead?.(trimmed, () => setQuery(''))}
           <ul className="mt-1.5">
             {results.map((food) => (
               <li key={food.id}>

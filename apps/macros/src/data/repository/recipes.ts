@@ -1,9 +1,10 @@
-import { dayKeyOffset } from '@tracker-engine/core'
+import { dayKeyOffset, groupBy } from '@tracker-engine/core'
 import { syncStamp, touch } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
 import {
   type CuisineKey,
+  type EntrySource,
   type LogEntry,
   type MealSlot,
   type Recipe,
@@ -174,10 +175,10 @@ export async function logRecipeIngredients(
   meal: MealSlot,
   at = Date.now(),
   venue: Venue | null = 'home',
+  { dishId = newId(), source = 'recipe' }: { dishId?: string; source?: EntrySource } = {},
 ): Promise<number> {
   const share = servings / Math.max(1, recipe.servings)
   const foods = await foodsByIds(recipe.ingredients.map((row) => row.foodId).filter(isPresent))
-  const dishId = newId()
 
   let written = 0
   for (const ingredient of recipe.ingredients) {
@@ -190,7 +191,7 @@ export async function logRecipeIngredients(
       meal,
       eatenAt: at,
       venue,
-      source: 'recipe',
+      source,
       note: recipe.name,
       // Its id, so "what you cook" and `recipeUsage` still see the dish...
       fromRecipeId: recipe.id,
@@ -206,3 +207,42 @@ export async function logRecipeIngredients(
 
 /** The recipe a row belongs to, whether it *is* the recipe or came out of one. */
 const recipeOf = (entry: LogEntry): string | null => entry.recipeId ?? entry.fromRecipeId
+
+export async function recipeSittings(recipeId: string): Promise<LogEntry[][]> {
+  const rows = await db.logEntries
+    .filter((entry) => alive(entry) && entry.fromRecipeId === recipeId)
+    .toArray()
+  return [...groupBy(rows, (row) => row.dishId ?? row.id).values()]
+}
+
+export async function relogRecipe(before: Recipe, after: Recipe): Promise<number> {
+  const counted = before.ingredients
+    .filter((row) => row.foodId !== null && row.grams > 0)
+    .reduce((total, row) => total + row.grams, 0)
+  const sittings = await recipeSittings(before.id)
+  for (const rows of sittings) {
+    const first = [...rows].sort((a, b) => a.sortIndex - b.sortIndex)[0]!
+    const eaten = rows.reduce((total, row) => total + row.grams, 0)
+    const servings = counted > 0 ? (eaten / counted) * before.servings : 1
+    for (const row of rows) await patch('logEntries', row.id, { deletedAt: Date.now() })
+    await logRecipeIngredients(after, servings, first.meal, first.eatenAt, first.venue, {
+      dishId: first.dishId ?? newId(),
+      source: first.source,
+    })
+  }
+  return sittings.length
+}
+
+export async function ownFoodNames(limit = 60): Promise<string[]> {
+  const [recipes, foods] = await Promise.all([
+    db.recipes.filter(alive).toArray(),
+    db.customFoods.filter(alive).toArray(),
+  ])
+  const named = [
+    ...recipes.map((row) => ({ name: row.name, at: row.updatedAt })),
+    ...foods.map((row) => ({ name: row.description, at: row.updatedAt })),
+  ]
+  return [...new Set(named.sort((a, b) => b.at - a.at).map((row) => row.name.trim()))]
+    .filter(Boolean)
+    .slice(0, limit)
+}

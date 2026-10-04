@@ -139,13 +139,13 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
   await expect(newRecipe).toBeVisible()
   // The editor renders offline: the link import needs a session, everything else does not.
   await newRecipe.click()
-  await expect(page.getByRole('heading', { name: 'New recipe', level: 1 })).toBeVisible()
-  await expect(page.getByPlaceholder('Sunday chilli')).toBeVisible()
-  // Three ways in, all landing in the same ingredient list.
-  for (const mode of ['From a link', 'Paste it', 'Describe it']) {
+  await expect(page.getByRole('heading', { name: /^Add to /, level: 1 })).toBeVisible()
+  await expect(page.getByPlaceholder('Describe it, or search a food')).toBeVisible()
+  for (const mode of ['From a link', 'Paste a list']) {
     await expect(page.getByRole('button', { name: mode })).toBeVisible()
   }
   await page.getByRole('button', { name: 'Back' }).click()
+  await expect(page.getByRole('button', { name: 'Describe with AI' })).toBeVisible()
   // The meal and the time are one tappable line rather than a card owning the top third of the
   // screen: both are right on almost every log, and both are correctable on the day afterwards.
   // Which meal depends on the clock, so the assertion is on the shape rather than on a name — the
@@ -314,9 +314,10 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   await page.getByRole('button', { name: /Your library/ }).click()
   await page.getByRole('button', { name: /New recipe/ }).click()
 
-  await page.getByPlaceholder('Sunday chilli').fill('Test bowl')
-  await page.locator('select').first().selectOption('italian')
-  await page.getByPlaceholder('Add an ingredient').fill('chicken breast')
+  await page.getByLabel('Name', { exact: true }).fill('Test bowl')
+  await page.getByText('Method & details').click()
+  await page.getByLabel('Cuisine').selectOption('italian')
+  await page.getByPlaceholder('Describe it, or search a food').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   // The amount is editable in the food's own measures — "1 breast" for chicken — and grams is always
   // one of them, because grams is what gets stored.
@@ -518,10 +519,10 @@ test('a recipe logs as its ingredients, each with its own macros', async ({ page
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: /Your library/ }).click()
   await page.getByRole('button', { name: /New recipe/ }).click()
-  await page.getByPlaceholder('Sunday chilli').fill('Two things')
-  await page.getByPlaceholder('Add an ingredient by hand').fill('chicken breast')
+  await page.getByLabel('Name', { exact: true }).fill('Two things')
+  await page.getByPlaceholder('Describe it, or search a food').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await page.getByPlaceholder('Add an ingredient by hand').fill('rice')
+  await page.getByPlaceholder('Add more').fill('rice')
   await page.getByRole('button', { name: /Rice/ }).first().click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
@@ -565,6 +566,60 @@ test('a recipe logs as its ingredients, each with its own macros', async ({ page
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
+test('changing a recipe can fix the meals already logged from it', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Your library/ }).click()
+  await page.getByRole('button', { name: /New recipe/ }).click()
+  await page.getByLabel('Name', { exact: true }).fill('Fix me')
+  await page.getByPlaceholder('Describe it, or search a food').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByPlaceholder('Add more').fill('rice')
+  await page.getByRole('button', { name: /Rice/ }).first().click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await page.getByRole('button', { name: /Fix me/ }).first().click()
+  await page.getByRole('button', { name: /^Log \d+ kcal$/ }).click()
+  await page.getByRole('button', { name: /Fix me/ }).first().click()
+  await page.getByRole('button', { name: 'Edit this recipe' }).click()
+  await page.getByLabel(/^Unit for Chicken/).selectOption('__grams')
+  await page.getByLabel(/^Amount of Chicken/).fill('900')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await expect(page.getByText('Update the 1 meal you logged?')).toBeVisible()
+  await page.getByRole('button', { name: 'Update past meals too' }).click()
+  await expect(page.getByText('Recipe and 1 meal updated')).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('describing a meal opens the same editor, and still works without the AI', async ({
+  page,
+}) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('banana bread with icing')
+  await page.getByRole('button', { name: /Ask AI about/ }).click()
+  await expect(page.getByRole('heading', { name: /^Add to /, level: 1 })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('without an AI connection')
+
+  await page.getByPlaceholder('Describe it, or search a food').fill('banana bread')
+  await page.getByRole('button', { name: /Bread, banana/ }).first().click()
+  await page.getByPlaceholder('Add more').fill('chocolate chips')
+  await page.getByRole('button', { name: /Chocolate chips/ }).first().click()
+  await page.getByRole('button', { name: /^Log \d+ kcal$/ }).click()
+
+  await expect(page.getByRole('heading', { name: /added to/, level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: /^Saved/ }).click()
+  await expect(page.getByRole('button', { name: /Banana bread with icing/ })).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
 test('a meal from the day saves as a recipe you can rename', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
@@ -587,7 +642,7 @@ test('a meal from the day saves as a recipe you can rename', async ({ page }) =>
   await page.getByRole('button', { name: /Usual breakfast/ }).first().click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
   await page.getByRole('button', { name: 'Edit this recipe' }).click()
-  await page.getByPlaceholder('Sunday chilli').fill('Weekday breakfast')
+  await page.getByLabel('Name', { exact: true }).fill('Weekday breakfast')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByText('Weekday breakfast').first()).toBeVisible({ timeout: 15_000 })
 
@@ -773,10 +828,11 @@ test('your own recipes are findable from the search box', async ({ page }) => {
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByRole('button', { name: /^Saved/ }).click()
   await page.getByRole('button', { name: /New recipe/ }).click()
-  await page.getByPlaceholder('Sunday chilli').fill('Lasagna soup')
-  await page.getByPlaceholder('Find a food').or(page.getByPlaceholder('Add an ingredient by hand')).fill('chicken breast')
+  await page.getByLabel('Name', { exact: true }).fill('Lasagna soup')
+  await page.getByLabel('Servings it makes').fill('4')
+  await page.getByPlaceholder('Describe it, or search a food').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await page.getByRole('button', { name: /^Save recipe/ }).click()
+  await page.getByRole('button', { name: 'Save without logging' }).click()
 
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('lasagna soup')
   // Under "Yours", above the database.
@@ -1002,11 +1058,11 @@ test('a pasted recipe keeps the amounts it stated, and only asks the AI if told 
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByRole('button', { name: 'More ways to add' }).click()
   await page.getByRole('button', { name: 'New recipe' }).click()
-  await page.getByRole('button', { name: 'Paste it' }).click()
+  await page.getByRole('button', { name: 'Paste a list' }).click()
   await page
     .getByPlaceholder(/500g beef mince/)
     .fill('1 cup white rice\n2 tbsp olive oil\n1 pinch of saffron\nsome chopped parsley')
-  await page.getByRole('button', { name: /Convert these lines/ }).click()
+  await page.getByRole('button', { name: 'Add these lines' }).click()
 
   // Editable in the unit the recipe stated, because "158 g of rice" cannot be measured with cups and
   // spoons. Grams stay canonical underneath: the row converts and stores them.
@@ -1021,9 +1077,9 @@ test('a pasted recipe keeps the amounts it stated, and only asks the AI if told 
 
   // The model is an offer. It used to be called automatically — half a minute and one of a small
   // daily allowance, spent without being asked, and silence when it came back with nothing.
-  await expect(page.getByRole('button', { name: /Ask the AI to weigh/ })).toBeVisible()
-  await page.getByRole('button', { name: /Leave (it|them) uncounted/ }).click()
-  await expect(page.getByRole('button', { name: /Ask the AI to weigh/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Ask the AI' })).toBeVisible()
+  await page.getByRole('button', { name: 'Leave uncounted' }).click()
+  await expect(page.getByRole('button', { name: 'Ask the AI' })).toHaveCount(0)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

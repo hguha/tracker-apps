@@ -1,9 +1,20 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { matchIngredient } from '@/data/matchFood'
 import { seedFoods } from '@/db/seed'
 import { normalizeQuery, overlapScore, queryTerms } from '@/lib/foodSearch'
+import { testFood } from './fixtures'
+
+const frosting = testFood({
+  id: 'usda:frosting',
+  description: 'Frostings, vanilla, creamy, ready-to-eat',
+  dataType: 'sr legacy',
+})
+
+vi.mock('@/data/foodLookup', () => ({
+  searchRemote: async (query: string) => (/frosting/.test(query) ? [frosting] : []),
+}))
 
 beforeAll(async () => {
   await seedFoods()
@@ -83,5 +94,18 @@ describe('matchIngredient', () => {
   it('says so rather than guessing when there is genuinely nothing', async () => {
     const matched = await matchIngredient('zzzqx')
     expect(matched).toEqual({ food: null, matchedBy: 'unmatched' })
+  })
+})
+
+describe('matching an ingredient the AI named', () => {
+  it('finds icing under the name the database files it by', async () => {
+    expect((await matchIngredient('vanilla icing')).food?.description).toBe(
+      'Frostings, vanilla, creamy, ready-to-eat',
+    )
+  })
+
+  it('matches what the dish is, not what it is made of', async () => {
+    expect((await matchIngredient('cream cheese icing')).food?.id).toBe('usda:frosting')
+    expect((await matchIngredient('parmesan fries')).food?.description).toMatch(/fries/)
   })
 })

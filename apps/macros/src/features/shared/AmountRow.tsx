@@ -46,11 +46,18 @@ export function AmountRow({
 
   return (
     <li className="py-2">
-      <div className="flex items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13.5px]">{title}</div>
-          {subtitle !== undefined && <div className="text-[11.5px]">{subtitle}</div>}
-        </div>
+      <div className="flex items-start gap-2">
+        <div className="line-clamp-2 min-w-0 flex-1 pt-0.5 text-[13.5px] leading-snug">{title}</div>
+        <button
+          onClick={onRemove}
+          aria-label={`Remove ${title}`}
+          className="-mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        <div className="min-w-0 flex-1 text-[11.5px]">{subtitle}</div>
         <NumberInput
           value={grams / unit.grams}
           onValue={(value) => onGrams(Math.round(value * unit.grams))}
@@ -61,7 +68,7 @@ export function AmountRow({
           value={unit.id}
           onChange={(event) => setUnitId(event.target.value)}
           aria-label={`Unit for ${title}`}
-          className="max-w-[112px] shrink-0 rounded-lg bg-sunken py-1.5 pl-1.5 text-[12px] text-ink-secondary outline-none"
+          className="w-[112px] shrink-0 rounded-lg bg-sunken py-1.5 pl-1.5 text-[12px] text-ink-secondary outline-none"
         >
           {units.map((option) => (
             <option key={option.id} value={option.id}>
@@ -69,13 +76,6 @@ export function AmountRow({
             </option>
           ))}
         </select>
-        <button
-          onClick={onRemove}
-          aria-label={`Remove ${title}`}
-          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-        >
-          <Trash2 size={15} />
-        </button>
       </div>
       {after !== undefined && <div className="mt-1.5">{after}</div>}
     </li>

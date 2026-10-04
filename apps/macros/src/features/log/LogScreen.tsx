@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   PlusCircle,
   ScanLine,
+  Sparkles,
 } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
@@ -30,13 +31,13 @@ import { FitsPanel } from './FitsPanel'
 import { DescribeRow, Empty, FoodList, MoreWaysSheet } from './browseRows'
 import { LoggableList } from '@/features/shared/LoggableList'
 import { fromLibrary, fromRecent } from '@/features/shared/loggable'
-import { DescribePanel } from './DescribePanel'
 import { WhenLine } from './WhenLine'
 import { CustomFoodPanel } from './CustomFoodPanel'
 import { PhotoPanel } from './PhotoPanel'
+import { ProductReview } from './ProductReview'
 import { QuickAddPanel } from './QuickAddPanel'
 import { ScanPanel } from './ScanPanel'
-import { RecipeEditor } from '@/features/recipes/RecipeEditor'
+import { RecipeEditor, type ComposeStart } from '@/features/recipes/RecipeEditor'
 import type { FoodDraft } from './estimate'
 import type { Loggable } from '@/features/shared/loggable'
 import type { LogTarget } from '@/features/shared/target'
@@ -44,12 +45,12 @@ import type { LogTarget } from '@/features/shared/target'
 type Panel =
   | { kind: 'browse' }
   | { kind: 'add'; loggable: Loggable }
-  | { kind: 'describe' }
+  | { kind: 'compose'; start?: ComposeStart }
+  | { kind: 'product'; product: FoodDraft; text: string }
   | { kind: 'scan' }
   | { kind: 'photo' }
   | { kind: 'quick' }
   | { kind: 'custom'; name: string; barcode?: string; draft?: FoodDraft }
-  | { kind: 'recipe' }
   | { kind: 'fits' }
 
 /**
@@ -104,10 +105,21 @@ export function LogScreen({
   const onEditProduct = (draft: FoodDraft) =>
     setPanel({ kind: 'custom', name: draft.name, draft })
 
-  // The recipe editor owns the whole screen: it has its own header, and a recipe is a different
-  // job from logging today's food even though both start at the same "+".
-  if (panel.kind === 'recipe') {
-    return <RecipeEditor recipeId={null} onBack={() => setPanel({ kind: 'browse' })} />
+  if (panel.kind === 'compose') {
+    return (
+      <RecipeEditor
+        recipeId={null}
+        start={panel.start}
+        onBack={() => setPanel({ kind: 'browse' })}
+        log={{
+          target,
+          title: `Add to ${MEAL_LABELS[meal].toLowerCase()}`,
+          when: <WhenLine meal={meal} at={at} onMeal={setMeal} onAt={setAt} />,
+          onLogged,
+          onProduct: (product, text) => setPanel({ kind: 'product', product, text }),
+        }}
+      />
+    )
   }
 
   return (
@@ -153,17 +165,27 @@ export function LogScreen({
         {panel.kind === 'fits' && (
           <FitsPanel onOpen={(loggable) => setPanel({ kind: 'add', loggable })} />
         )}
-        {panel.kind === 'describe' && (
-          <DescribePanel
-            target={target}
-            initialText={query}
-            onDone={onLogged}
-            onEdit={onEditProduct}
-          />
+        {panel.kind === 'product' && (
+          <div className="px-4 py-3">
+            <ProductReview
+              product={panel.product}
+              target={target}
+              onDone={onLogged}
+              onEdit={() => onEditProduct(panel.product)}
+              onRefine={(extra) =>
+                setPanel({
+                  kind: 'compose',
+                  start: { kind: 'ask', text: `${panel.text} (${extra.trim()})` },
+                })
+              }
+            />
+          </div>
         )}
         {panel.kind === 'quick' && <QuickAddPanel target={target} onDone={onLogged} />}
         {panel.kind === 'photo' && (
-          <PhotoPanel target={target} onDone={onLogged} onEdit={onEditProduct} />
+          <PhotoPanel
+            onPhoto={(photo) => setPanel({ kind: 'compose', start: { kind: 'photo', ...photo } })}
+          />
         )}
         {panel.kind === 'custom' && (
           <CustomFoodPanel
@@ -267,7 +289,10 @@ function BrowsePanel({
    */
   const describeRow =
     trimmed.length >= 3 ? (
-      <DescribeRow text={trimmed} onOpen={() => onPanel({ kind: 'describe' })} />
+      <DescribeRow
+        text={trimmed}
+        onOpen={() => onPanel({ kind: 'compose', start: { kind: 'ask', text: trimmed } })}
+      />
     ) : null
   const terms = queryTerms(trimmed)
   const describeLeads =
@@ -307,6 +332,13 @@ function BrowsePanel({
             placeholder="Search a food, a recipe, or a meal"
           />
         </div>
+        <button
+          onClick={() => onPanel({ kind: 'compose' })}
+          aria-label="Describe with AI"
+          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent-wash text-accent active:opacity-60"
+        >
+          <Sparkles size={20} />
+        </button>
         {canScan && (
           <button
             onClick={() => onPanel({ kind: 'scan' })}
@@ -397,7 +429,7 @@ function BrowsePanel({
           {tab === 'saved' && (
             <>
               <button
-                onClick={() => onPanel({ kind: 'recipe' })}
+                onClick={() => onPanel({ kind: 'compose' })}
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-sunken py-2.5 text-[13.5px] font-semibold text-accent active:opacity-60"
               >
                 <ChefHat size={15} />
@@ -474,7 +506,13 @@ function BrowsePanel({
           onDismiss={() => setIsMoreOpen(false)}
           onPick={(kind) => {
             setIsMoreOpen(false)
-            onPanel(kind === 'custom' ? { kind: 'custom', name: '' } : { kind })
+            onPanel(
+              kind === 'custom'
+                ? { kind: 'custom', name: '' }
+                : kind === 'recipe'
+                  ? { kind: 'compose' }
+                  : { kind },
+            )
           }}
         />
       )}
