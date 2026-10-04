@@ -2,13 +2,15 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { AppearanceCard, Card, Screen } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { THEME_PRESETS } from '@/lib/theme'
+import { UnitsCard } from './UnitsCard'
 import type { ColorSchemePreference, ThemePreset } from '@/domain/types'
 
 export function AppearanceScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
 
   return (
-    <Screen title="Appearance" onBack={onBack}>
+    <Screen title="Units & appearance" onBack={onBack}>
+      <UnitsCard />
       <AppearanceCard
         themes={THEME_PRESETS}
         theme={profile?.theme ?? 'default'}

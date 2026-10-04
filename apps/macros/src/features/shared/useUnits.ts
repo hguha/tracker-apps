@@ -1,20 +1,29 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { METRIC, unitsFor, type UnitPreference } from '@tracker-engine/core'
+import { unitsFor, type UnitPreference } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
+import type { UnitSystem } from '@/domain/types'
 
-/**
- * The user's units, for every screen that shows a weight or a height.
- *
- * A hook rather than a prop drilled from the top, because the alternative is what shipped: the
- * setting existed, synced, and displayed itself in Settings, while every screen printed kg
- * regardless. One read per screen off a live query is cheap; a setting that silently does nothing
- * is not.
- *
- * Storage stays metric always — kg and cm — and conversion happens only at the edges, in
- * `@tracker-engine/core`'s units module, shared with REPutation so the two apps cannot disagree
- * about what a bodyweight is.
- */
+const REMEMBERED = 'macros.units'
+
+function remembered(): UnitSystem {
+  try {
+    return localStorage.getItem(REMEMBERED) === 'imperial' ? 'imperial' : 'metric'
+  } catch {
+    return 'metric'
+  }
+}
+
+let lastKnown: UnitSystem = remembered()
+
 export function useUnits(): UnitPreference {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  return profile ? unitsFor(profile.units) : METRIC
+  if (profile && profile.units !== lastKnown) {
+    lastKnown = profile.units
+    try {
+      localStorage.setItem(REMEMBERED, profile.units)
+    } catch {
+      return unitsFor(profile.units)
+    }
+  }
+  return unitsFor(profile?.units ?? lastKnown)
 }

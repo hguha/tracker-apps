@@ -1,3 +1,4 @@
+import { convertWeight, type WeightUnit } from '@tracker-engine/core'
 import { plural } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow } from '@tracker-engine/ui'
@@ -8,22 +9,19 @@ import {
   ChevronRight,
   Database,
   Palette,
-  UserRound,
   Sparkles,
   Target,
-  Utensils,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import * as repo from '@/data/repository'
-import { formatClock } from '@/lib/mealTiming'
+import { useUnits } from '@/features/shared/useUnits'
 import { describeReminders } from '@/data/reminders'
 import type { Profile, Program } from '@/domain/types'
 
 export type SettingsRoute =
   | 'targets'
   | 'about'
-  | 'preferences'
   | 'reminders'
   | 'appearance'
   | 'badges'
@@ -51,6 +49,8 @@ export function SettingsScreen({
   const myFoods = useLiveQuery(() => repo.customFoods(), [], [])
 
   const missing = missingFacts(profile)
+  const weights = useLiveQuery(() => repo.weights(), [], [])
+  const units = useUnits()
 
   return (
     <div className="space-y-3 px-3 py-3">
@@ -102,28 +102,14 @@ export function SettingsScreen({
         <NavRow
           icon={<Target size={17} />}
           label="Targets & goal"
-          hint={goalHint(program)}
-          onClick={() => onOpen('targets')}
-        />
-        <NavRow
-          icon={<UserRound size={17} />}
-          label="About you"
           hint={
             missing.length > 0
-              ? `Missing your ${missing.join(', ')} — no target without them`
-              : 'Height, age, sex'
+              ? `Add your ${missing.join(', ')} to get a target`
+              : goalHint(program, weights?.[weights.length - 1]?.kg ?? null, units.weight)
           }
           tone={missing.length > 0 ? 'warning' : undefined}
-          onClick={() => onOpen('about')}
+          onClick={() => onOpen('targets')}
         />
-        <NavRow
-          icon={<Utensils size={17} />}
-          label="Food & water"
-          hint={preferencesHint(profile)}
-          onClick={() => onOpen('preferences')}
-        />
-        {/* Its own row, because a notification setting is not something anyone looks for under
-            "food and water" — and the times are now free rather than five presets a meal. */}
         <NavRow
           icon={<Bell size={17} />}
           label="Reminders"
@@ -132,8 +118,12 @@ export function SettingsScreen({
         />
         <NavRow
           icon={<Palette size={17} />}
-          label="Appearance"
-          hint={profile ? `${schemeLabel(profile.colorScheme)} · ${profile.theme}` : ''}
+          label="Units & appearance"
+          hint={
+            profile
+              ? `${profile.units === 'metric' ? 'kg' : 'lb'} · ${schemeLabel(profile.colorScheme)} · ${profile.theme}`
+              : ''
+          }
           onClick={() => onOpen('appearance')}
         />
       </NavList>
@@ -173,22 +163,18 @@ function libraryHint(recipes: number, meals: number, foods: number): string {
   return parts.length === 0 ? 'Recipes, saved meals and your own foods' : parts.join(' · ')
 }
 
-function goalHint(program: Program | undefined): string {
+function goalHint(
+  program: Program | undefined,
+  latestKg: number | null,
+  unit: WeightUnit,
+): string {
   if (!program) return 'No goal set'
   const verb =
     program.goal === 'lose' ? 'Losing' : program.goal === 'gain' ? 'Building' : 'Maintaining'
-  return program.ratePctPerWeek === 0 ? verb : `${verb} · ${program.ratePctPerWeek}%/week`
-}
-
-function preferencesHint(profile: Profile | undefined): string {
-  if (!profile) return ''
-  const parts = [profile.units === 'metric' ? 'kg / cm' : 'lb / in']
-  if (profile.eatingWindow) {
-    parts.push(
-      `${formatClock(profile.eatingWindow.startMinute)}–${formatClock(profile.eatingWindow.endMinute)}`,
-    )
-  }
-  return parts.join(' · ')
+  if (program.ratePctPerWeek === 0) return verb
+  if (latestKg === null) return `${verb} · ${Math.abs(program.ratePctPerWeek)}%/week`
+  const perWeek = Math.abs(convertWeight((program.ratePctPerWeek / 100) * latestKg, unit))
+  return `${verb} · ${perWeek.toFixed(1)} ${unit}/week`
 }
 
 function dataHint(sync: { deadLettered: number; pending: number; enabled: boolean }): string {

@@ -290,3 +290,33 @@ export function splitTargets(
   }
 }
 
+
+export function kcalFromMacros(t: Pick<MacroTargets, 'proteinMg' | 'carbsMg' | 'fatMg'>): number {
+  return Math.round(mgToGrams(t.proteinMg) * 4 + mgToGrams(t.carbsMg) * 4 + mgToGrams(t.fatMg) * 9)
+}
+
+export function withMacro(
+  targets: MacroTargets,
+  key: 'proteinMg' | 'carbsMg' | 'fatMg',
+  grams: number,
+): MacroTargets {
+  const next = { ...targets, [key]: gramsToMg(Math.max(0, grams)) }
+  return { ...next, kcal: kcalFromMacros(next) }
+}
+
+export function withCalories(targets: MacroTargets, kcal: number): MacroTargets {
+  const fixedKcal = mgToGrams(targets.proteinMg) * 4 + mgToGrams(targets.fatMg) * 9
+  const carbsMg = gramsToMg(Math.max(0, (kcal - fixedKcal) / 4))
+  const next = { ...targets, carbsMg }
+  return { ...next, kcal: Math.max(Math.round(kcal), kcalFromMacros(next)) }
+}
+
+export function macroShareOfTargets(t: MacroTargets): Record<'proteinMg' | 'carbsMg' | 'fatMg', number> {
+  const total = kcalFromMacros(t)
+  if (total <= 0) return { proteinMg: 0, carbsMg: 0, fatMg: 0 }
+  return {
+    proteinMg: Math.round(((mgToGrams(t.proteinMg) * 4) / total) * 100),
+    carbsMg: Math.round(((mgToGrams(t.carbsMg) * 4) / total) * 100),
+    fatMg: Math.round(((mgToGrams(t.fatMg) * 9) / total) * 100),
+  }
+}

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Send, Sparkles } from 'lucide-react'
+import { ChevronLeft, Send, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Button, Card, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@tracker-engine/core'
 import { grams } from '@/features/shared/format'
 import { buildCoachContext, geminiCoachProvider } from './geminiProvider'
 import { mockCoachProvider } from './mockProvider'
+import { DietNotesCard } from './DietNotesCard'
 import type { CoachAction, CoachProvider, GeminiContent } from './types'
 
 type Item =
@@ -27,6 +28,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const [isEditingNotes, setIsEditingNotes] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -102,9 +104,21 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
             offline
           </span>
         )}
+        <button
+          onClick={() => setIsEditingNotes((current) => !current)}
+          aria-label="What the coach should know"
+          aria-expanded={isEditingNotes}
+          className={cn(
+            'flex size-10 shrink-0 items-center justify-center rounded-lg active:bg-sunken',
+            isEditingNotes ? 'text-accent' : 'text-ink-secondary',
+          )}
+        >
+          <SlidersHorizontal size={19} />
+        </button>
       </header>
 
       <div className="flex-1 space-y-2.5 overflow-y-auto px-3 py-3">
+        {isEditingNotes && <DietNotesCard />}
         {items.length === 0 && (
           <Card className="p-4">
             <span className="flex size-10 items-center justify-center rounded-xl bg-accent-wash text-accent">

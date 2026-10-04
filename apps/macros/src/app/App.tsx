@@ -17,8 +17,6 @@ import { TodayScreen } from '@/features/today/TodayScreen'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { SettingsScreen, type SettingsRoute } from '@/features/settings/SettingsScreen'
 import { TargetsScreen } from '@/features/settings/TargetsScreen'
-import { AboutYouScreen } from '@/features/settings/AboutYouScreen'
-import { PreferencesScreen } from '@/features/settings/PreferencesScreen'
 import { LogScreen } from '@/features/log/LogScreen'
 import { DayScreen } from '@/features/day/DayScreen'
 import { mealForHour } from '@/lib/meals'
@@ -185,11 +183,8 @@ function SignedInApp() {
   if (view.kind === 'settings') {
     switch (view.route) {
       case 'targets':
-        return <TargetsScreen onBack={toTabs} />
       case 'about':
-        return <AboutYouScreen onBack={toTabs} />
-      case 'preferences':
-        return <PreferencesScreen onBack={toTabs} />
+        return <TargetsScreen onBack={toTabs} />
       case 'reminders':
         return <RemindersScreen onBack={toTabs} />
       case 'appearance':

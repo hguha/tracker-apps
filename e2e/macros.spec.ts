@@ -277,10 +277,8 @@ test('every tab and the coach render without errors', async ({ page }) => {
   // Settings is a list of destinations; each one has to be reachable and come back.
   for (const route of [
     'Targets & goal',
-    'About you',
-    'Food & water',
     'Reminders',
-    'Appearance',
+    'Units & appearance',
     'Badges',
   ]) {
     await page.getByRole('button', { name: new RegExp(route) }).click()
@@ -307,6 +305,8 @@ test('every tab and the coach render without errors', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Ask about your own numbers/ })).toBeVisible()
   await page.getByRole('button', { name: /What's left for today\?/ }).click()
   await expect(page.getByText(/target|protein|kcal/i).first()).toBeVisible()
+  await page.getByRole('button', { name: 'What the coach should know' }).click()
+  await expect(page.getByPlaceholder(/Vegetarian/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -410,7 +410,7 @@ test('switching to imperial changes every weight on screen', async ({ page }) =>
   await expect(page.getByText(/80 kg|80\.0 kg/).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food & water/ }).click()
+  await page.getByRole('button', { name: /Units & appearance/ }).click()
   await page.getByRole('button', { name: /lb \/ in/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
 
@@ -422,10 +422,10 @@ test('switching to imperial changes every weight on screen', async ({ page }) =>
 
   // Entry follows too, and storage stays metric — so the value survives switching back.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /About you/ }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
   await expect(page.getByText('Height (in)')).toBeVisible()
   await page.getByRole('button', { name: 'Back' }).click()
-  await page.getByRole('button', { name: /Food & water/ }).click()
+  await page.getByRole('button', { name: /Units & appearance/ }).click()
   await page.getByRole('button', { name: /kg \/ cm/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -503,7 +503,8 @@ test('an eating window shows itself on the day it applies to', async ({ page }) 
   await completeOnboarding(page, { facts: false, weight: '' })
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food & water/ }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  await page.getByText('More options').click()
   await page.getByRole('button', { name: /16:8/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -622,7 +623,7 @@ test('water counts on the home screen, in the units you picked', async ({ page }
 
   // A target turns the count into progress, and the glass fills against it.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food & water/ }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
   await page.getByRole('button', { name: '2.0 L', exact: true }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -632,7 +633,7 @@ test('water counts on the home screen, in the units you picked', async ({ page }
   // Millilitres are what's stored; the unit is a display preference, so switching converts rather
   // than reinterpreting — 250 ml is 8 fl oz, not 250 fl oz.
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: /Food & water/ }).click()
+  await page.getByRole('button', { name: /Units & appearance/ }).click()
   await page.getByRole('button', { name: /lb \/ in/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -978,24 +979,25 @@ test('targets can be typed in, and they reach the day', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: /Targets & goal/ }).click()
-  await page.getByRole('button', { name: /Set the targets myself/ }).click()
-  await page.getByLabel('kcal').fill('2400')
-  await page.getByLabel('protein g').fill('180')
-  await page.getByLabel('carbs g').fill('250')
-  await page.getByLabel('fat g').fill('70')
+  await page.getByRole('button', { name: 'Custom', exact: true }).click()
+  await page.getByLabel('Protein', { exact: true }).fill('180')
+  await page.getByLabel('Carbs', { exact: true }).fill('250')
+  await page.getByLabel('Fat', { exact: true }).fill('70')
+  await expect(page.getByLabel('Calories', { exact: true })).toHaveValue('2350')
 
-  // The macros are checked against the calorie figure but not enforced: labels round, and a plan that
-  // comes to 2,390 is not a mistake. A split that comes to 2,900 against a 2,200 target is.
-  await page.getByLabel('kcal').fill('1200')
-  await expect(page.getByText(/come to 2350 kcal, not 1200/)).toBeVisible()
-  await page.getByLabel('kcal').fill('2400')
+  await page.getByLabel('Calories', { exact: true }).fill('2550')
+  await expect(page.getByLabel('Carbs', { exact: true })).toHaveValue('300')
+  await expect(page.getByLabel('Protein', { exact: true })).toHaveValue('180')
+  await page.getByRole('button', { name: 'More Protein' }).click()
+  await expect(page.getByLabel('Calories', { exact: true })).toHaveValue('2570')
+  await page.getByRole('button', { name: 'Less Protein' }).click()
 
-  await page.getByRole('button', { name: /Use these instead/ }).click()
-  await expect(page.getByText('2400 kcal · 180P 250C 70F')).toBeVisible()
+  await page.getByRole('button', { name: 'Save targets' }).click()
+  await expect(page.getByRole('button', { name: 'Save targets' })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
-  await expect(page.getByText('of 2400')).toBeVisible()
+  await expect(page.getByText('of 2550')).toBeVisible()
   await expect(page.getByText('0 / 180g')).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])

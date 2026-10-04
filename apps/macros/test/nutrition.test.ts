@@ -12,6 +12,9 @@ import {
   sumCovered,
   dailyAverageCovered,
   portionFor,
+  kcalFromMacros,
+  withCalories,
+  withMacro,
 } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Food, type Nutrients } from '@/domain/types'
 
@@ -241,5 +244,28 @@ describe('the portion a food opens on', () => {
       ],
     })
     expect(portionFor(row, null)?.label).toBe('1 cup')
+  })
+})
+
+describe('editing targets keeps calories and macros in agreement', () => {
+  const start = { kcal: 2000, proteinMg: 150_000, carbsMg: 200_000, fatMg: 67_000 }
+
+  it('recomputes calories when a macro changes', () => {
+    const next = withMacro(start, 'proteinMg', 180)
+    expect(next.proteinMg).toBe(180_000)
+    expect(next.kcal).toBe(kcalFromMacros(next))
+  })
+
+  it('lets carbs absorb a calorie change and keeps protein and fat', () => {
+    const next = withCalories(start, 2200)
+    expect(next.proteinMg).toBe(150_000)
+    expect(next.fatMg).toBe(67_000)
+    expect(Math.abs(kcalFromMacros(next) - 2200)).toBeLessThanOrEqual(1)
+  })
+
+  it('never takes carbs below zero', () => {
+    const next = withCalories(start, 800)
+    expect(next.carbsMg).toBe(0)
+    expect(next.kcal).toBe(kcalFromMacros(next))
   })
 })

@@ -6,7 +6,7 @@ import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { mgToGrams } from '@/lib/nutrition'
 import { useUnits } from '@/features/shared/useUnits'
-import type { CoachingMode, Goal, MacroTargets, Program } from '@/domain/types'
+import type { CoachingMode, Goal, Program } from '@/domain/types'
 
 const MODES: { id: CoachingMode; label: string; blurb: string }[] = [
   { id: 'coached', label: 'Coached', blurb: 'Targets update themselves each week.' },
@@ -53,10 +53,8 @@ const FAT_MIN = [20, 25, 30]
  */
 export function TargetsCard() {
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
-  const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const weights = useLiveQuery(() => repo.weights(), [], [])
   const units = useUnits()
-  const [isOpen, setIsOpen] = useState(false)
   if (!program) return null
 
   const rates = RATES[program.goal]
@@ -71,7 +69,7 @@ export function TargetsCard() {
   return (
     <>
       <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">What you&rsquo;re aiming at</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight">Goal</h2>
 
         <div className="mt-2.5 space-y-3">
           <Field label="Direction">
@@ -114,9 +112,19 @@ export function TargetsCard() {
           )}
         </div>
 
-        <TodaysNumbers targets={targets} />
       </Card>
+    </>
+  )
+}
 
+export function TargetRulesCard() {
+  const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
+  const targets = useLiveQuery(() => repo.currentTargets(), [], null)
+  const [isOpen, setIsOpen] = useState(false)
+  if (!program) return null
+
+  return (
+    <>
       <Card className="p-0">
         <button
           onClick={() => setIsOpen((current) => !current)}
@@ -196,55 +204,12 @@ export function TargetsCard() {
             </Field>
 
             <p className="text-[12px] text-ink-muted">
-              Calories follow your weight trend and adjust weekly. Protein and fat are floors; carbs fill the rest.
-            </p>
-            {/* Said here because "how active am I" is the question people expect a calorie target
-                to hinge on, and in this app it very nearly doesn't. */}
-            <p className="text-[12px] text-ink-muted">
-              Height, age, sex and how active you are (under About you) only seed the first estimate.
+              Protein and fat are floors; carbs fill the rest.
             </p>
           </div>
         )}
       </Card>
     </>
-  )
-}
-
-/**
- * The four numbers all of the above actually produces.
- *
- * Without it the screen is a set of inputs with no visible output, which is most of why it read as
- * arbitrary — you could move the pace three times and see nothing change.
- */
-function TodaysNumbers({ targets }: { targets: MacroTargets | null }) {
-  if (!targets) {
-    return (
-      <p className="mt-3 text-[12px] text-ink-muted">
-        No target yet — it needs your height, age, sex and a weigh-in.
-      </p>
-    )
-  }
-  return (
-    <div className="mt-3 rounded-xl bg-sunken px-3 py-2.5">
-      <p className="text-[11px] text-ink-muted">Today, this comes out as</p>
-      <p className="tabular mt-0.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-[13px]">
-        <span className="font-semibold">{targets.kcal} kcal</span>
-        <Macro grams={Math.round(mgToGrams(targets.proteinMg))} label="protein" color="var(--macro-protein)" />
-        <Macro grams={Math.round(mgToGrams(targets.carbsMg))} label="carbs" color="var(--macro-carbs)" />
-        <Macro grams={Math.round(mgToGrams(targets.fatMg))} label="fat" color="var(--macro-fat)" />
-      </p>
-    </div>
-  )
-}
-
-function Macro({ grams, label, color }: { grams: number; label: string; color: string }) {
-  return (
-    <span className="flex items-baseline gap-1">
-      <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
-      <span>
-        {grams}g <span className="text-ink-muted">{label}</span>
-      </span>
-    </span>
   )
 }
 
@@ -297,7 +262,7 @@ function GoalWeightField({ program }: { program: Program }) {
       label="Goal weight"
       hint={
         program.targetKg === null
-          ? 'Optional — but it is what gives the goal an end, and a date'
+          ? 'Optional'
           : program.startKg === null
             ? `Aiming for ${bodyWeightFromKg(program.targetKg, units.weight)} ${units.weight}`
             : `From ${bodyWeightFromKg(program.startKg, units.weight)} to ${bodyWeightFromKg(program.targetKg, units.weight)} ${units.weight}`
