@@ -30,7 +30,7 @@ import { LoggableList } from '@/features/shared/LoggableList'
 import { fromRecent } from '@/features/shared/loggable'
 import { SwipeRow } from '@/features/shared/SwipeRow'
 import { VenueChoice } from '@/features/shared/VenueChoice'
-import { SaveMealSheet } from '@/features/today/SaveMealSheet'
+import { SaveRecipeSheet } from '@/features/shared/SaveRecipeSheet'
 import { EditEntryScreen, type EditSubject } from '@/features/log/EditEntryScreen'
 import {
   MEAL_SLOTS,
@@ -263,7 +263,7 @@ export function DayScreen({
       </div>
 
       {savingMeal && (
-        <SaveMealSheet
+        <SaveRecipeSheet
           entries={savingMeal}
           defaultName={defaultMealName(savingMeal[0]!)}
           onDismiss={() => setSavingMeal(null)}
@@ -364,7 +364,7 @@ function MealCard({
         </span>
         <button
           onClick={onSave}
-          aria-label="Save this meal to log again"
+          aria-label="Save as a recipe"
           className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
         >
           <Bookmark size={15} />
@@ -506,13 +506,6 @@ function sameEntries(a: readonly LogEntry[], b: readonly LogEntry[]): boolean {
   return left.every((value, index) => value === right[index])
 }
 
-/**
- * What to call a saved meal, before the user renames it.
- *
- * The date, not the clock time: "Breakfast · 11 Aug" is a thing you can find again in a list a month
- * later, and "Breakfast · 11:15" is a fact about one morning that tells you nothing about which
- * morning.
- */
 const defaultMealName = (entry: LogEntry): string =>
   `${MEAL_LABELS[entry.meal]} · ${new Date(entry.eatenAt).toLocaleDateString(undefined, {
     day: 'numeric',

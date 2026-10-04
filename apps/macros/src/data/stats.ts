@@ -106,11 +106,11 @@ export function resetNutritionStatsCache(): void {
 
 export async function nutritionStats(): Promise<NutritionStats> {
   const profile = await repo.getProfile()
-  const [summaries, weights, checkIns, templates] = await Promise.all([
+  const [summaries, weights, checkIns, recipes] = await Promise.all([
     daySummaries(profile.id),
     repo.weights(),
     repo.checkIns(),
-    repo.mealTemplates(),
+    repo.recipes(),
   ])
   const fiberReference =
     nutrientTargets(profile.sex).find((target) => target.key === 'fiberMg')?.reference ?? 28_000
@@ -161,7 +161,7 @@ export async function nutritionStats(): Promise<NutritionStats> {
     daysWithinTarget,
     daysFiberMet,
     checkInsEarned: checkIns.length,
-    savedMeals: templates.length,
+    recipesSaved: recipes.length,
     barcodesScanned,
     describedMeals: sittings.size,
     completeWeeks,

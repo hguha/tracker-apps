@@ -44,7 +44,6 @@ export function SettingsScreen({
   const sync = useSync()
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
   const myFoods = useLiveQuery(() => repo.customFoods(), [], [])
 
@@ -81,13 +80,10 @@ export function SettingsScreen({
           hint="Ask about your own numbers"
           onClick={() => onOpen('coach')}
         />
-        {/* One row, not three. "Recipes", "Saved meals" and "Your foods" side by side told nobody
-            which was which — they're one idea with three shapes, so they share a screen that says
-            what each shape is for. */}
         <NavRow
           icon={<ChefHat size={17} />}
           label="Your library"
-          hint={libraryHint(recipes?.length ?? 0, templates?.length ?? 0, myFoods?.length ?? 0)}
+          hint={libraryHint(recipes?.length ?? 0, myFoods?.length ?? 0)}
           onClick={() => onOpen('library')}
         />
         <NavRow
@@ -154,13 +150,12 @@ function missingFacts(profile: Profile | undefined): string[] {
 }
 
 /** Counts, so the row says what's in there rather than only what it's called. */
-function libraryHint(recipes: number, meals: number, foods: number): string {
+function libraryHint(recipes: number, foods: number): string {
   const parts = [
     recipes > 0 && plural(recipes, 'recipe'),
-    meals > 0 && plural(meals, 'meal'),
     foods > 0 && plural(foods, 'own food'),
   ].filter((part): part is string => typeof part === 'string')
-  return parts.length === 0 ? 'Recipes, saved meals and your own foods' : parts.join(' · ')
+  return parts.length === 0 ? 'Recipes and your own foods' : parts.join(' · ')
 }
 
 function goalHint(

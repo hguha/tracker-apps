@@ -1,6 +1,7 @@
 import { syncStamp } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue } from '@/data/outbox'
+import { migrateSavedMeals } from '@/data/repository'
 import type {
   BodyWeightRow,
   CheckIn,
@@ -167,4 +168,5 @@ export async function importBackup(backup: Backup): Promise<void> {
       await enqueue(name, row.id)
     }
   }
+  await migrateSavedMeals()
 }

@@ -21,7 +21,7 @@ const stats = (over: Partial<NutritionStats> = {}): NutritionStats => ({
   daysWithinTarget: 0,
   daysFiberMet: 0,
   checkInsEarned: 0,
-  savedMeals: 0,
+  recipesSaved: 0,
   barcodesScanned: 0,
   describedMeals: 0,
   completeWeeks: 0,

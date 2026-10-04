@@ -33,16 +33,6 @@ const SORTS: SegmentedTab<SortKey>[] = [
 
 type Route = { kind: 'list' } | { kind: 'detail'; id: string } | { kind: 'edit'; id: string | null }
 
-/**
- * Recipes: a dish you cook, divided into servings.
- *
- * Distinct from a saved meal, which is "log these exact items again". A recipe has a yield, so a
- * batch cooked on Sunday can be logged a third at a time all week without re-entering anything.
- *
- * The default order is Suggested rather than alphabetical, because the question this screen is
- * usually open to answer is "what should I cook", not "where is the chilli" — and a search box
- * answers the second one in fewer taps than scrolling an A–Z list.
- */
 export function RecipesScreen({
   onBack,
   header,

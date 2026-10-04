@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { liveQuery } from 'dexie'
 import { db } from '@/db'
+import { migrateSavedMeals } from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { MacroSyncEngine } from './engine'
 import { syncBackend } from './backend'
@@ -63,7 +64,10 @@ export function useSync(): SyncStatus {
 
     const reconcile = () => {
       if (cancelled || isOffline()) return
-      void engine.sync().catch((error) => console.warn('[sync] reconcile threw', error))
+      void engine
+        .sync()
+        .then(() => migrateSavedMeals())
+        .catch((error) => console.warn('[sync] reconcile threw', error))
     }
 
     reconcile()

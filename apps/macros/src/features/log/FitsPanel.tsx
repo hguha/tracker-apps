@@ -21,12 +21,11 @@ import type { Loggable, Suggestion } from '@/features/shared/loggable'
  *
  * It used to draw on foods and recipes only, and only ever showed them as two fixed sections.
  */
-type Source = 'all' | 'recipes' | 'saved' | 'foods'
+type Source = 'all' | 'recipes' | 'foods'
 
 const SOURCES: SegmentedTab<Source>[] = [
   { key: 'all', label: 'Anything' },
-  { key: 'recipes', label: 'Cook' },
-  { key: 'saved', label: 'Saved' },
+  { key: 'recipes', label: 'Recipes' },
   { key: 'foods', label: 'Foods' },
 ]
 
@@ -43,7 +42,6 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
   const frequentIds = useLiveQuery(() => repo.frequentFoodIds(40), [], [])
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
-  const templates = useLiveQuery(() => repo.mealTemplates(), [], [])
   const usage = useLiveQuery(() => repo.recipeUsage(), [], new Map())
   const recentCuisines = useLiveQuery(() => repo.recentRecipeCuisines(), [], [])
 
@@ -91,28 +89,12 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
       source: 'foods',
     }))
 
-    const fromSaved: Fit[] = (templates ?? []).flatMap((template) => {
-      const why = fitNote(template.nutrients, left)
-      return why === null
-        ? []
-        : [
-            {
-              key: `m:${template.id}`,
-              title: template.name,
-              nutrients: template.nutrients,
-              detail: why,
-              loggable: { kind: 'meal' as const, template },
-              source: 'saved' as const,
-            },
-          ]
-    })
-
     // Interleaved rather than sectioned, so "Anything" is a genuine ranking and not three lists
     // stacked in a fixed order that always favours whatever happens to be on top.
-    return [...fromRecipes, ...fromSaved, ...fromFoods].sort(
+    return [...fromRecipes, ...fromFoods].sort(
       (a, b) => fitGap(a.nutrients, left) - fitGap(b.nutrients, left),
     )
-  }, [left, recipes, templates, usage, recentCuisines, candidates, today])
+  }, [left, recipes, usage, recentCuisines, candidates, today])
 
   const shown = source === 'all' ? suggestions : suggestions.filter((row) => row.source === source)
 
@@ -147,18 +129,4 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
 /** How far a portion is from filling the gap, in kcal. Lower is a better fit, over or under. */
 function fitGap(nutrients: Nutrients, left: MacroTargets): number {
   return Math.abs(left.kcal - nutrients.kcal)
-}
-
-/**
- * Why a saved meal is worth offering, or null when it isn't.
- *
- * A whole meal is a coarser instrument than a single food, so the window is generous: anything from a
- * third of what's left up to a tenth over it. Past that the honest answer is "not this".
- */
-function fitNote(nutrients: Nutrients, left: MacroTargets): string | null {
-  if (left.kcal <= 0 || nutrients.kcal <= 0) return null
-  const share = nutrients.kcal / left.kcal
-  if (share > 1.1 || share < 0.33) return null
-  const protein = Math.round(mgToGrams(nutrients.proteinMg))
-  return `${Math.round(share * 100)}% of what's left · ${protein} g protein`
 }

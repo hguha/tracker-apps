@@ -362,7 +362,7 @@ function SaveForNextTime({ items, label }: { items: readonly EstimatedItem[]; la
     if (isSaving) return
     setIsSaving(true)
     void repo
-      .saveMealFromParts(
+      .saveRecipeFromParts(
         savedName,
         items.map((item) => ({
           foodId: item.food!.id,

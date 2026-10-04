@@ -10,7 +10,7 @@ import {
 import { parseIngredientLine } from '@/lib/parseIngredient'
 import { volumeMeasures } from '@/lib/volume'
 import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
-import { EMPTY_NUTRIENTS, type Food, type MealTemplate, type Nutrients, type Recipe } from '@/domain/types'
+import { EMPTY_NUTRIENTS, type Food, type Nutrients, type Recipe } from '@/domain/types'
 import type {
   BorrowedPortions,
   LibraryHit,
@@ -20,22 +20,9 @@ import type {
 } from '@/data/repository'
 import type { LogTarget } from '@/features/shared/target'
 
-/**
- * Everything that can be added to a day, behind one shape.
- *
- * There used to be three screens for this. A tangerine got a portion picker with the day it would
- * make; a saved meal got a bottom sheet with 0.5×/1×/1.5×/2× buttons and no sense of the day; a
- * repeated dish got a bare "Log" button that wrote six rows with no confirmation at all. Same
- * question every time — *how much of this, and does it fit?* — asked three different ways, so
- * learning the app meant learning three.
- *
- * They differ in exactly two respects: what the unit is called, and how the write happens. So that's
- * what this describes, and one screen renders all five.
- */
 export type Loggable =
   | { kind: 'food'; food: Food }
   | { kind: 'recipe'; recipe: Recipe }
-  | { kind: 'meal'; template: MealTemplate }
   | { kind: 'dish'; dish: RecentDish }
   | { kind: 'quick'; quick: RecentQuick }
 
@@ -160,8 +147,6 @@ export function describeLoggable(
       return foodSubject(loggable.food, borrowed)
     case 'recipe':
       return recipeSubject(loggable.recipe)
-    case 'meal':
-      return mealSubject(loggable.template)
     case 'dish':
       return dishSubject(loggable.dish)
     case 'quick':
@@ -257,28 +242,6 @@ function recipeSubject(recipe: Recipe): AddSubject {
     isComposite: true,
     log: (_unit, count, target) =>
       repo.logRecipeIngredients(recipe, count, target.meal, target.at),
-  }
-}
-
-function mealSubject(template: MealTemplate): AddSubject {
-  const unit: AddUnit = {
-    id: 'portion',
-    label: template.items.length === 1 ? 'of this' : 'of this meal',
-    nutrientsAt: (count) => scale(template.nutrients, count),
-    gramsAt: (count) =>
-      template.items.reduce((total, item) => total + item.grams, 0) * count || null,
-    summaryAt: (count) => plural(template.items.length * count, 'item'),
-    step: 0.5,
-    min: 0.5,
-  }
-  return {
-    title: template.name,
-    subtitle: `Saved · ${template.nutrients.kcal} kcal`,
-    units: [unit],
-    initialUnitId: unit.id,
-    isComposite: true,
-    log: (_unit, count, target) =>
-      repo.logMealTemplate(template, target.meal, target.at, count, target.venue),
   }
 }
 
@@ -392,14 +355,6 @@ export function fromLibrary(hit: LibraryHit): Suggestion {
         detail: 'a serving',
         loggable: { kind: 'recipe', recipe: hit.recipe },
       }
-    case 'meal':
-      return {
-        key: `m:${hit.template.id}`,
-        title: hit.name,
-        nutrients: hit.template.nutrients,
-        detail: 'saved',
-        loggable: { kind: 'meal', template: hit.template },
-      }
     case 'dish':
       return fromRecent(hit.dish)
     case 'quick':
@@ -425,13 +380,6 @@ export interface LoggablePart {
   grams: number
 }
 
-/**
- * What a composite contains, per one unit of it.
- *
- * Read here rather than passed in, because the labels come from `foods` and only the recipe and the
- * saved meal know which ids they need. The dish reads its own rows back: `RecentDish` carries part
- * *names* for its subtitle, and this screen wants each part's macros too.
- */
 export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
   if (loggable.kind === 'food' || loggable.kind === 'quick') return []
 
@@ -451,18 +399,6 @@ export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
         nutrients: food ? nutrientsFor(food, grams) : EMPTY_NUTRIENTS,
       }
     })
-  }
-
-  if (loggable.kind === 'meal') {
-    const { template } = loggable
-    const foods = await repo.foodsByIds(
-      template.items.map((row) => row.foodId).filter((id): id is string => id !== null),
-    )
-    return template.items.map((item) => ({
-      label: (item.foodId ? foods.get(item.foodId)?.description : null) ?? 'Calories only',
-      grams: item.grams,
-      nutrients: item.nutrients,
-    }))
   }
 
   const rows = await repo.dishEntries(loggable.dish.dishId)

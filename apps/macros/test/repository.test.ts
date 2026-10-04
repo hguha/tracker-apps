@@ -308,22 +308,87 @@ describe('targets in force', () => {
   })
 })
 
-describe('saved meals', () => {
-  it('logs a saved meal as ordinary entries at the time given', async () => {
+describe('saving what was eaten as a recipe', () => {
+  it('keeps the meal’s nutrients and logs back as one dish from that recipe', async () => {
     const food = await chicken()
     await repo.logFood({ food, grams: 200, meal: 'dinner' })
     const entries = await repo.entriesForDay(dayKey(Date.now()))
-    const id = await repo.saveMealTemplate('Usual dinner', entries)
-
-    const template = (await repo.mealTemplates()).find((row) => row.id === id)!
-    expect(template.nutrients.kcal).toBe(dayTotals(entries).kcal)
+    const id = await repo.saveRecipeFromEntries('Usual dinner', entries)
+    const recipe = (await repo.getRecipe(id))!
+    expect(recipe.nutrients.kcal).toBe(dayTotals(entries).kcal)
 
     const at = Date.parse('2026-09-01T19:30:00')
-    await repo.logMealTemplate(template, 'dinner', at)
+    await repo.logRecipeIngredients(recipe, 1, 'dinner', at)
     const logged = await repo.entriesForDay('2026-09-01')
     expect(logged).toHaveLength(1)
     expect(logged[0]!.eatenAt).toBe(at)
-    expect(logged[0]!.source).toBe('template')
+    expect(logged[0]!.fromRecipeId).toBe(id)
+    expect(logged[0]!.dishName).toBe('Usual dinner')
+  })
+
+  it('stores an AI breakdown of "3 tacos" as three servings, so one is one serving', async () => {
+    const food = await chicken()
+    const id = await repo.saveRecipeFromParts(
+      'steak taco',
+      [{ foodId: food.id, grams: 300, nutrients: nutrientsFor(food, 300) }],
+      3,
+    )
+    const recipe = (await repo.getRecipe(id))!
+    expect(recipe.servings).toBe(3)
+    expect(recipe.ingredients[0]!.grams).toBe(300)
+  })
+})
+
+describe('saved meals become recipes', () => {
+  async function givenSavedMeal() {
+    const food = await chicken()
+    const recipeId = await repo.saveRecipe({
+      name: 'Rice bowl',
+      servings: 2,
+      ingredients: [{ foodId: food.id, label: food.description, grams: 400 }],
+    })
+    const recipe = (await repo.getRecipe(recipeId))!
+    const half = { ...recipe.nutrients, kcal: recipe.nutrients.kcal / 2 }
+    await db.mealTemplates.put({
+      id: 'tpl-1',
+      userId: 'local-user',
+      name: 'Usual lunch',
+      items: [
+        { id: 'a', foodId: food.id, recipeId: null, grams: 150, nutrients: nutrientsFor(food, 150) },
+        { id: 'b', foodId: null, recipeId, grams: 0, nutrients: half },
+        { id: 'c', foodId: null, recipeId: null, grams: 0, nutrients: { ...EMPTY_NUTRIENTS, kcal: 90 } },
+      ],
+      nutrients: EMPTY_NUTRIENTS,
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+      clientRev: 1,
+    })
+    return food
+  }
+
+  it('converts every kind of item, under the same id, and retires the saved meal', async () => {
+    const food = await givenSavedMeal()
+    expect(await repo.migrateSavedMeals()).toBe(1)
+
+    const recipe = (await repo.getRecipe('tpl-1'))!
+    expect(recipe.name).toBe('Usual lunch')
+    expect(recipe.servings).toBe(1)
+    const chickenGrams = recipe.ingredients
+      .filter((row) => row.foodId === food.id)
+      .reduce((total, row) => total + row.grams, 0)
+    expect(chickenGrams).toBeCloseTo(150 + 200)
+    const quick = recipe.ingredients.find((row) => row.label === 'Usual lunch')!
+    expect((await repo.getFood(quick.foodId!))!.per100.kcal).toBe(90)
+    expect((await db.mealTemplates.get('tpl-1'))!.deletedAt).not.toBeNull()
+  })
+
+  it('is safe to run again, and on a second device', async () => {
+    await givenSavedMeal()
+    await repo.migrateSavedMeals()
+    await db.mealTemplates.update('tpl-1', { deletedAt: null })
+    await repo.migrateSavedMeals()
+    expect((await repo.recipes()).filter((row) => row.name === 'Usual lunch')).toHaveLength(1)
   })
 })
 
@@ -493,10 +558,10 @@ describe('searchLibrary', () => {
     expect(hits[0]!.name).toBe('Lasagna soup')
   })
 
-  it('finds saved meals too, and matches terms in any order', async () => {
+  it('finds a meal saved from the day, and matches terms in any order', async () => {
     const food = await chicken()
     await repo.logFood({ food, grams: 200, meal: 'dinner' })
-    await repo.saveMealTemplate('Usual dinner', await repo.entriesForDay(dayKey(Date.now())))
+    await repo.saveRecipeFromEntries('Usual dinner', await repo.entriesForDay(dayKey(Date.now())))
     expect(await repo.searchLibrary('dinner usual')).toHaveLength(1)
   })
 
@@ -1029,5 +1094,23 @@ describe('editing a logged row', () => {
     const id = await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
     await repo.deleteEntry(id)
     expect(await repo.getEntry(id)).toBeNull()
+  })
+})
+
+describe('saved meals become recipes, concurrently', () => {
+  it('converts once when startup and sync ask at the same time', async () => {
+    await db.mealTemplates.put({
+      id: 'tpl-q',
+      userId: 'local-user',
+      name: 'Snack',
+      items: [{ id: 'q', foodId: null, recipeId: null, grams: 0, nutrients: { ...EMPTY_NUTRIENTS, kcal: 120 } }],
+      nutrients: EMPTY_NUTRIENTS,
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+      clientRev: 1,
+    })
+    await Promise.all([repo.migrateSavedMeals(), repo.migrateSavedMeals()])
+    expect((await repo.customFoods()).filter((food) => food.description === 'Snack')).toHaveLength(1)
   })
 })

@@ -325,3 +325,8 @@ export function macroShareOfTargets(t: MacroTargets): Record<'proteinMg' | 'carb
     fatMg: Math.round(((mgToGrams(t.fatMg) * 9) / total) * 100),
   }
 }
+
+export function servingsIn(nutrients: Nutrients, recipe: Pick<Recipe, 'nutrients' | 'servings'>): number {
+  const one = perServing(recipe).kcal
+  return one > 0 ? nutrients.kcal / one : 1
+}

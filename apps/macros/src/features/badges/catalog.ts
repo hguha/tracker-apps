@@ -112,8 +112,8 @@ const BADGES: Badge[] = [
   count('scans-25', 'Barcode Regular', 'Log 25 items by barcode.', '🏷️', 'Craft', (s) => s.barcodesScanned, 25),
   count('first-describe', 'In Your Own Words', 'Log a meal by describing it.', '💬', 'Craft', (s) => s.describedMeals, 1),
   count('describe-25', 'Describer', 'Log 25 meals by describing them.', '🗣️', 'Craft', (s) => s.describedMeals, 25),
-  count('first-saved-meal', 'Saved for Later', 'Save a meal you eat often.', '🔖', 'Craft', (s) => s.savedMeals, 1),
-  count('saved-meals-5', 'Rotation', 'Save 5 meals.', '🗂️', 'Craft', (s) => s.savedMeals, 5),
+  count('first-saved-meal', 'Saved for Later', 'Save a recipe you eat often.', '🔖', 'Craft', (s) => s.recipesSaved, 1),
+  count('saved-meals-5', 'Rotation', 'Save 5 recipes.', '🗂️', 'Craft', (s) => s.recipesSaved, 5),
 ]
 
 const GROUP_ORDER: BadgeGroup[] = [

@@ -134,9 +134,7 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
 
   // Log a seeded food end to end: search, portion, then it lands on the day.
   await page.getByRole('button', { name: 'Log food' }).click()
-  // Creating a recipe lives on the Recipes tab, where a recipe belongs — it used to sit in the
-  // header of the screen you open to log a yoghurt.
-  await page.getByRole('button', { name: /^Recipes/ }).click()
+  await page.getByRole('button', { name: /^Saved/ }).click()
   const newRecipe = page.getByRole('button', { name: /New recipe/ })
   await expect(newRecipe).toBeVisible()
   // The editor renders offline: the link import needs a session, everything else does not.
@@ -286,13 +284,9 @@ test('every tab and the coach render without errors', async ({ page }) => {
     await page.getByRole('button', { name: 'Back' }).click()
   }
 
-  // Recipes, saved meals and own foods share one screen: three rows called those things told
-  // nobody which was which, and Settings is the last place you'd look for something you cook.
   await page.getByRole('button', { name: /Your library/ }).click()
   await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
-  // The same words the log screen uses, in the same order: "Saved" there and "Meals" here described
-  // one thing, which is most of why it was unclear where anything would show up.
-  for (const tab of ['Recipes', 'Saved', 'Foods']) {
+  for (const tab of ['Recipes', 'Foods']) {
     // Anchored, not exact: a tab's label gains a count badge inside the button as soon as its live
     // query lands, so "Saved" and "Saved 1" are the same tab a few milliseconds apart.
     await page.getByRole('button', { name: new RegExp(`^${tab}`) }).click()
@@ -552,8 +546,14 @@ test('a recipe logs as its ingredients, each with its own macros', async ({ page
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
   await expect(page.getByText(/Rice/).first()).toBeVisible()
   await expect(page.getByRole('button', { name: /^Log again/ })).toBeVisible()
-  await page.getByRole('button', { name: 'Back' }).click()
-  await page.getByRole('button', { name: 'Back' }).click()
+  await expect(page.getByRole('button', { name: 'Change the recipe' })).toBeVisible()
+
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await expect(page.getByText('Part of Two things')).toBeVisible()
+  await expect(page.getByText('Changes this meal only')).toBeVisible()
+  await page.getByRole('button', { name: 'Change the recipe' }).click()
+  await expect(page.getByRole('heading', { name: 'Edit recipe', level: 1 })).toBeVisible()
+  for (let i = 0; i < 4; i += 1) await page.getByRole('button', { name: 'Back' }).first().click()
 
   // And the recipe still counts as cooked — the rows carry it as provenance, since a row's subject
   // is a food and the schema allows exactly one subject.
@@ -565,7 +565,7 @@ test('a recipe logs as its ingredients, each with its own macros', async ({ page
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
-test('a saved meal can be opened and renamed', async ({ page }) => {
+test('a meal from the day saves as a recipe you can rename', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
 
@@ -576,28 +576,20 @@ test('a saved meal can be opened and renamed', async ({ page }) => {
   await page.getByRole('button', { name: 'Back' }).click()
 
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
-  await page.getByRole('button', { name: /Save this meal/ }).click()
-  // A date, not a clock time: "Breakfast · 11 Aug" is findable in a list a month later, and
-  // "Breakfast · 11:15" is a fact about one morning that says nothing about which morning.
+  await page.getByRole('button', { name: 'Save as a recipe' }).click()
   await expect(page.getByPlaceholder('Usual breakfast')).toHaveValue(/· .*\d+/)
-  await page.getByRole('button', { name: 'Save meal' }).click()
+  await page.getByPlaceholder('Usual breakfast').fill('Usual breakfast')
+  await page.getByRole('button', { name: 'Save recipe' }).click()
 
-  // Openable and renameable, both of which were missing — and with a default name that is a date,
-  // renaming is what makes the list usable at all.
   await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: /Your library/ }).click()
-  await page.getByRole('button', { name: /^Saved/ }).click()
-  const saved = page.getByRole('button', { name: /\d+ item.*kcal/ }).first()
-  await saved.click()
-  await expect(page.getByText(/Chicken breast/)).toBeVisible()
-  await page.getByLabel('Name').fill('Usual breakfast')
-  await page.getByLabel('Name').blur()
-  // A write plus a live-query round trip, which under a parallel run is slower than the default
-  // assertion window — and slow is not the same as broken.
-  await expect(page.getByRole('button', { name: /Usual breakfast/ })).toBeVisible({
-    timeout: 15_000,
-  })
+  await page.getByRole('button', { name: /Usual breakfast/ }).first().click()
+  await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Edit this recipe' }).click()
+  await page.getByPlaceholder('Sunday chilli').fill('Weekday breakfast')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByText('Weekday breakfast').first()).toBeVisible({ timeout: 15_000 })
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -771,7 +763,7 @@ test('the day screen shows what each food contributes, and what the day comes to
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
-test('your own recipes and saved meals are findable from the search box', async ({ page }) => {
+test('your own recipes are findable from the search box', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
 
@@ -779,7 +771,7 @@ test('your own recipes and saved meals are findable from the search box', async 
   // returned USDA's lasagna rows and not theirs, and the only way in was to remember it existed and
   // switch tabs. A thing you saved is the most likely answer to typing its name.
   await page.getByRole('button', { name: 'Log food' }).click()
-  await page.getByRole('button', { name: /^Recipes/ }).click()
+  await page.getByRole('button', { name: /^Saved/ }).click()
   await page.getByRole('button', { name: /New recipe/ }).click()
   await page.getByPlaceholder('Sunday chilli').fill('Lasagna soup')
   await page.getByPlaceholder('Find a food').or(page.getByPlaceholder('Add an ingredient by hand')).fill('chicken breast')
@@ -841,12 +833,10 @@ test('any food can be looked up in the library, with its micronutrients', async 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
-test('one bookmark, one Saved list — foods and meals together', async ({ page }) => {
+test('one Saved list — starred foods and recipes together', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
 
-  // There used to be two words for one idea: a starred food was "pinned" and a kept meal was
-  // "saved", living in different places, so there was no guessing where either would turn up.
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   await page.getByRole('button', { name: /^Save Chicken breast/ }).first().click()
@@ -857,7 +847,7 @@ test('one bookmark, one Saved list — foods and meals together', async ({ page 
 
   // And the same bookmark undoes it.
   await page.getByRole('button', { name: /^Remove Chicken breast/ }).first().click()
-  await expect(page.getByText(/Bookmark a food/)).toBeVisible()
+  await expect(page.getByText(/Star a food or save a recipe/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -870,10 +860,10 @@ test('what fits can be narrowed to one kind of thing', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByRole('button', { name: /What can I still have/ }).click()
-  for (const source of ['Anything', 'Cook', 'Saved', 'Foods']) {
+  for (const source of ['Anything', 'Recipes', 'Foods']) {
     await expect(page.getByRole('button', { name: source, exact: true })).toBeVisible()
   }
-  await page.getByRole('button', { name: 'Cook', exact: true }).click()
+  await page.getByRole('button', { name: 'Recipes', exact: true }).click()
   await expect(page.getByText(/Nothing here fits/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
@@ -1038,7 +1028,7 @@ test('a pasted recipe keeps the amounts it stated, and only asks the AI if told 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
-test('a saved meal can be removed from the list it lives in', async ({ page }) => {
+test('a recipe saved from the day can be deleted from its own screen', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
 
@@ -1048,23 +1038,22 @@ test('a saved meal can be removed from the list it lives in', async ({ page }) =
   await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
-  await page.getByRole('button', { name: /Save this meal/ }).click()
-  await page.getByRole('button', { name: /^Save/ }).last().click()
+  await page.getByRole('button', { name: 'Save as a recipe' }).click()
+  await page.getByPlaceholder('Usual breakfast').fill('Chicken plate')
+  await page.getByRole('button', { name: 'Save recipe' }).click()
 
-  // The gap: a bookmarked food had a filled bookmark to tap again, and a saved meal could only be
-  // deleted from a different screen in Settings — so "how do I get rid of this" had no local answer.
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.getByRole('button', { name: 'Log food' }).click()
   await page.getByRole('button', { name: /^Saved/ }).click()
-  await expect(page.getByText('Swipe a row to remove it.')).toBeVisible()
-  const saved = page.getByRole('button', { name: /1 item/ }).first()
-  const box = (await saved.boundingBox())!
-  await page.mouse.move(box.x + box.width - 40, box.y + box.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(box.x + box.width - 160, box.y + box.height / 2, { steps: 8 })
-  await page.mouse.up()
-  await page.getByRole('button', { name: 'Remove' }).first().click()
-  await expect(page.getByText(/Bookmark a food, or a whole meal/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Chicken plate/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Your library/ }).click()
+  await page.getByRole('button', { name: /Chicken plate/ }).first().click()
+  page.once('dialog', (dialog) => void dialog.accept())
+  await page.getByRole('button', { name: /Delete this recipe/ }).click()
+  await expect(page.getByRole('button', { name: /Chicken plate/ })).toHaveCount(0)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

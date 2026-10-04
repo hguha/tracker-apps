@@ -109,7 +109,7 @@ function SignedInApp() {
   // Writes belong in an effect, not a live query: Dexie refuses a readwrite transaction inside
   // a liveQuery context, and a querier that writes would also re-fire on its own writes.
   useEffect(() => {
-    void seedFoods()
+    void seedFoods().then(() => repo.migrateSavedMeals())
     void repo
       .ensureProfile()
       // Before the check-in: an imported weigh-in is part of the week it measures.

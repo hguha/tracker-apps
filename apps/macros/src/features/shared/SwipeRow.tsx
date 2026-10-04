@@ -2,19 +2,6 @@ import { useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@tracker-engine/core'
 
-/**
- * A row you can swipe left to reveal what you can do to it.
- *
- * The app's destructive and repeat actions were all *inside* something: deleting a logged food meant
- * expanding the row and finding a bin; removing a saved meal meant a different screen; having a dish
- * again meant opening it first. Each is one tap too many for the thing people do most often to a
- * list, and on a phone the gesture is already the expectation.
- *
- * **The buttons are always in the DOM**, only translated off-screen — so a screen reader reaches them
- * by name and a keyboard can tab to them, neither of which can perform a swipe. The gesture is an
- * accelerator over controls that exist, not the only way in; the expanded row keeps its own controls
- * for exactly that reason.
- */
 export interface SwipeAction {
   label: string
   icon: LucideIcon
@@ -52,14 +39,6 @@ export function SwipeRow({
 
   return (
     <div className={cn('relative overflow-hidden', className)}>
-      {/*
-        Behind the content, full height, right-aligned.
-
-        Rendered *and* exposed even when closed, with no `aria-hidden`: a control that only exists once
-        a gesture has happened cannot be reached by anything that doesn't gesture, and for a saved meal
-        the swipe is the only route there is. Focus opens the row, so tabbing to "Delete" doesn't focus
-        something invisible.
-      */}
       <div
         className="absolute inset-y-0 right-0 flex"
         style={{ width }}

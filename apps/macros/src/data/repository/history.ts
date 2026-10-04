@@ -3,7 +3,6 @@ import { db } from '@/db'
 import {
   type Food,
   type LogEntry,
-  type MealTemplate,
   type Nutrients,
   type Recipe,
 } from '@/domain/types'
@@ -13,35 +12,21 @@ import { entriesBetween, type LastAmount } from './entries'
 import { foodsByIds } from './foods'
 import { alive, byRecency, isPresent } from './internal'
 
-/**
- * The user's own recipes and saved meals, matched by name.
- *
- * Because they were unfindable. Searching "lasagna soup" — a recipe the user had imported, named and
- * cooked twice — returned USDA's lasagna rows and not their own, and the only way to reach it was to
- * remember it existed and go to a different tab. A thing you saved is the *most* likely answer to
- * typing its name, so these rank above the database rather than beside it.
- *
- * Substring over every term, in any order, over the name only: an ingredient list is not a name, and
- * matching on it would make every recipe containing an onion a hit for "onion".
- */
 export async function searchLibrary(query: string, limit = 8): Promise<LibraryHit[]> {
   const terms = queryTerms(query)
   if (terms.length === 0) return []
 
   const hits = (r: { name: string }) => terms.every((term) => r.name.toLowerCase().includes(term))
-  const [recipeRows, templateRows] = await Promise.all([
-    db.recipes.filter((row) => alive(row) && hits(row)).toArray(),
-    db.mealTemplates.filter((row) => alive(row) && hits(row)).toArray(),
-  ])
-
-  const saved: LibraryHit[] = [
-    ...recipeRows.map((recipe) => ({ kind: 'recipe' as const, recipe, name: recipe.name })),
-    ...templateRows.map((template) => ({ kind: 'meal' as const, template, name: template.name })),
-  ]
+  const recipeRows = await db.recipes.filter((row) => alive(row) && hits(row)).toArray()
+  const saved: LibraryHit[] = recipeRows.map((recipe) => ({
+    kind: 'recipe' as const,
+    recipe,
+    name: recipe.name,
+  }))
 
   // Dishes from the diary too, because a described meal is not saved anywhere: "3 steak tacos" was
   // eaten, named and re-loggable, and could only be reached by scrolling back to the day it was on.
-  // Dropped where a recipe or saved meal already answers by that name — logging a recipe copies its
+  // Dropped where a recipe already answers by that name — logging a recipe copies its
   // name onto every row, so the two would otherwise be the same answer twice.
   const named = new Set(saved.map((hit) => hit.name.toLowerCase()))
   const fromDiary = (await searchHistory(query, { limit })).flatMap((item): LibraryHit[] => {
@@ -63,7 +48,6 @@ export async function searchLibrary(query: string, limit = 8): Promise<LibraryHi
 
 export type LibraryHit =
   | { kind: 'recipe'; recipe: Recipe; name: string }
-  | { kind: 'meal'; template: MealTemplate; name: string }
   | { kind: 'dish'; dish: RecentDish; name: string }
   | { kind: 'quick'; quick: RecentQuick; name: string }
 

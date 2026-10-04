@@ -261,7 +261,7 @@ export interface RecipeUsage {
   lastCookedDay: string | null
 }
 
-export interface MealTemplateItem {
+interface MealTemplateItem {
   id: string
   foodId: string | null
   recipeId: string | null
@@ -550,7 +550,7 @@ export interface NutritionStats {
   daysWithinTarget: number
   daysFiberMet: number
   checkInsEarned: number
-  savedMeals: number
+  recipesSaved: number
   barcodesScanned: number
   describedMeals: number
   completeWeeks: number

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Card,
   ScreenHeader,
   SearchField,
   SegmentedTabs,
@@ -21,7 +20,6 @@ import { CUISINE_LABELS } from '@/lib/cuisine'
 import { matchesQuery, queryTerms } from '@/lib/foodSearch'
 import { MEAL_LABELS } from '@/lib/meals'
 import { amountGrams } from '@/features/shared/format'
-import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import { useDebouncedValue } from '@/features/shared/useDebouncedValue'
@@ -29,7 +27,7 @@ import type { LastAmount } from '@/data/repository'
 import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'
 import { FitsPanel } from './FitsPanel'
-import { DescribeRow, Empty, FoodList, MoreWaysSheet, SavedMeals } from './browseRows'
+import { DescribeRow, Empty, FoodList, MoreWaysSheet } from './browseRows'
 import { LoggableList } from '@/features/shared/LoggableList'
 import { fromLibrary, fromRecent } from '@/features/shared/loggable'
 import { DescribePanel } from './DescribePanel'
@@ -62,20 +60,8 @@ type Panel =
  * ingredients had nothing in it at all. Everything it did well, Recent already does: it counts
  * repeats ("8×"), it puts starred foods first, and it never takes a fortnight to admit a new staple.
  */
-type BrowseTab = 'recent' | 'saved' | 'recipes'
+type BrowseTab = 'recent' | 'saved'
 
-/**
- * Adding food, as a screen rather than a sheet.
- *
- * One input, not a mode switch: the same text either matches foods, your own recipes and saved meals,
- * or gets broken down as a meal — because a person typing "turkey sandwich and an apple" has no way
- * of knowing in advance which of those the app can do. Everything else exists to avoid typing at all.
- *
- * **It opens on what you ate recently.** It used to open on "Suggested" — a computed list of what
- * would fit the calories left — which is the one tab that fails exactly when the screen is most used:
- * `suggestFoods` needs 120 kcal of headroom, and people log most often when the day is nearly full.
- * So the highest-traffic surface in the app opened on an empty card with nothing to tap.
- */
 export function LogScreen({
   meal: initialMeal,
   day,
@@ -250,7 +236,6 @@ function BrowsePanel({
    * every list flashed its empty state on open — and on the default tab that meant the first thing
    * anybody saw was "everything you log turns up here", which reads as "you have nothing logged".
    */
-  const templates = useLiveQuery(() => repo.mealTemplates(), [], undefined)
   const recipes = useLiveQuery(() => repo.recipes(), [], undefined)
   const recents = useLiveQuery(() => repo.recentItems(), [], undefined)
   const savedFoods = useLiveQuery(
@@ -290,13 +275,12 @@ function BrowsePanel({
     (libraryHits ?? []).length === 0 &&
     !results.some((food) => matchesQuery(food, terms))
 
-  const savedCount = (templates ?? []).length + (savedFoods ?? []).length
+  const savedCount = (recipes ?? []).length + (savedFoods ?? []).length
 
   const tabs: SegmentedTab<BrowseTab>[] = [
     { key: 'recent', label: 'Recent', badge: (recents ?? []).length || undefined },
     // Deliberately the same word the library uses for the same thing.
     { key: 'saved', label: 'Saved', badge: savedCount || undefined },
-    { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
   ]
 
   const pickedTotal = picked.reduce((sum, food) => {
@@ -410,46 +394,7 @@ function BrowsePanel({
               <LoggableList items={recents.map(fromRecent)} onPick={(row) => onOpen(row.loggable)} />
             ))}
 
-          {/*
-            One Saved list, holding both kinds. A bookmarked food and a kept meal were two features
-            with two words — "pinned" and "saved" — living in two places, so there was no answering
-            the question "where did that go?".
-          */}
-          {tab === 'saved' &&
-            (templates === undefined || savedFoods === undefined ? null : savedCount === 0 ? (
-              <Empty>Bookmark a food, or a whole meal from your day, and it lands here.</Empty>
-            ) : (
-              <>
-                {templates.length > 0 && (
-                  <SavedMeals
-                    templates={templates}
-                    onOpen={onOpen}
-                    onRemove={(template) => {
-                      void repo.deleteMealTemplate(template.id)
-                    }}
-                  />
-                )}
-                {savedFoods.length > 0 && (
-                  <FoodList
-                    foods={savedFoods}
-                    onSelect={(food) => onOpen({ kind: 'food', food })}
-                    picked={picked}
-                    onToggle={toggle}
-                    saved={savedIds}
-                    lastAmounts={lastAmounts ?? new Map()}
-                    emptyLabel=""
-                    isRemovable
-                  />
-                )}
-                {/* Said once, at the bottom, because a gesture nobody has met needs introducing
-                    exactly as often as that. */}
-                <p className="px-1 text-center text-[11.5px] text-ink-muted">
-                  Swipe a row to remove it.
-                </p>
-              </>
-            ))}
-
-          {tab === 'recipes' && (
+          {tab === 'saved' && (
             <>
               <button
                 onClick={() => onPanel({ kind: 'recipe' })}
@@ -458,42 +403,36 @@ function BrowsePanel({
                 <ChefHat size={15} />
                 New recipe
               </button>
-              {recipes === undefined ? null : recipes.length === 0 ? (
-                <Empty>Paste a recipe link and the whole ingredient list comes across.</Empty>
+              {recipes === undefined || savedFoods === undefined ? null : savedCount === 0 ? (
+                <Empty>Star a food or save a recipe and it lands here.</Empty>
               ) : (
-                <Card className="p-0">
-                  <ul className="divide-y divide-line">
-                    {recipes.map((recipe) => {
-                      const each = perServing(recipe)
-                      return (
-                        <li key={recipe.id}>
-                          <button
-                            onClick={() => onOpen({ kind: 'recipe', recipe })}
-                            className="w-full px-4 py-2.5 text-left active:bg-sunken"
-                          >
-                            <span className="flex items-baseline gap-2">
-                              <span className="min-w-0 flex-1 truncate text-[14px]">
-                                {recipe.name}
-                              </span>
-                              {recipe.cuisine && (
-                                <span className="shrink-0 text-[11px] text-ink-muted">
-                                  {CUISINE_LABELS[recipe.cuisine]}
-                                </span>
-                              )}
-                            </span>
-                            <span className="tabular mt-0.5 flex items-baseline gap-2">
-                              <span className="shrink-0 text-[12px] font-semibold">
-                                {each.kcal} kcal
-                              </span>
-                              <MacroNumbers nutrients={each} />
-                              <span className="text-[11.5px] text-ink-muted">a serving</span>
-                            </span>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </Card>
+                <>
+                  {recipes.length > 0 && (
+                    <LoggableList
+                      heading="Recipes"
+                      items={recipes.map((recipe) => ({
+                        key: `r:${recipe.id}`,
+                        title: recipe.name,
+                        nutrients: perServing(recipe),
+                        detail: recipe.cuisine ? CUISINE_LABELS[recipe.cuisine] : 'a serving',
+                        loggable: { kind: 'recipe' as const, recipe },
+                      }))}
+                      onPick={(row) => onOpen(row.loggable)}
+                    />
+                  )}
+                  {savedFoods.length > 0 && (
+                    <FoodList
+                      foods={savedFoods}
+                      onSelect={(food) => onOpen({ kind: 'food', food })}
+                      picked={picked}
+                      onToggle={toggle}
+                      saved={savedIds}
+                      lastAmounts={lastAmounts ?? new Map()}
+                      emptyLabel=""
+                      isRemovable
+                    />
+                  )}
+                </>
               )}
             </>
           )}

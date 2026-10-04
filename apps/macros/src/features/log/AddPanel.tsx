@@ -20,22 +20,6 @@ import {
 import type { LogTarget } from '@/features/shared/target'
 import { EditActions } from './EditActions'
 
-/**
- * How much of it, and what that does to the day. **One screen for everything loggable.**
- *
- * A food, a recipe, a saved meal and a repeat of last night's dinner all used to be added through
- * different controls — a portion picker, a servings stepper, a 0.5×/2× sheet, and a bare "Log"
- * button that wrote six rows with no confirmation. The question is the same in all four cases, so
- * the answer is one screen and `loggable.ts` describes the differences.
- *
- * **The day, not just the food.** It showed a line of "240 kcal · 45gP 0gC 5gF" and then two thirds
- * of a blank page. The question at this moment is not what the food contains, it is whether it fits —
- * so the ring and the bars show the day as it will be once this is logged, with the part this adds
- * drawn on top of what is already there.
- *
- * `isSaving` is not decoration: without it a second tap while the first write is in flight logs the
- * food twice, which is how three copies of a scanned barcode ended up in one day.
- */
 interface EditMode {
   start: { unitId: string; amount: number }
   excludeIds: readonly string[]
@@ -259,7 +243,6 @@ export function AddPanel({
         <div className="h-[122px] rounded-xl bg-sunken" aria-hidden />
       )}
 
-      {/* What's in it. A saved meal nobody remembers the contents of is one nobody dares log. */}
       {subject.isComposite && parts !== undefined && parts.length > 0 && (
         <div className="rounded-xl bg-sunken/60 px-3 py-2">
           <ul className="divide-y divide-line">
@@ -303,8 +286,6 @@ function subjectKey(loggable: Loggable): string {
       return `food:${loggable.food.id}`
     case 'recipe':
       return `recipe:${loggable.recipe.id}`
-    case 'meal':
-      return `meal:${loggable.template.id}`
     case 'dish':
       return `dish:${loggable.dish.dishId}`
     case 'quick':

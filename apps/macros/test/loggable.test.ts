@@ -111,18 +111,17 @@ describe('a recipe', () => {
   })
 })
 
-describe('a saved meal', () => {
-  it('scales by whole and half portions', async () => {
+describe('a meal saved from the day', () => {
+  it('is a one-serving recipe, and scales like one', async () => {
     const food = testFood()
     await repo.logFood({ food, grams: 200, meal: 'dinner' })
     const entries = await repo.entriesForDay(today())
-    const id = await repo.saveMealTemplate('Usual dinner', entries)
-    const template = (await repo.mealTemplates()).find((row) => row.id === id)!
+    const id = await repo.saveRecipeFromEntries('Usual dinner', entries)
+    const recipe = (await repo.getRecipe(id))!
 
-    const subject = describeLoggable({ kind: 'meal', template })
-    const unit = subject.units[0]!
-    expect(unit.nutrientsAt(2).kcal).toBe(template.nutrients.kcal * 2)
-    expect(unit.gramsAt(1)).toBe(200)
+    expect(recipe.servings).toBe(1)
+    const unit = describeLoggable({ kind: 'recipe', recipe }).units[0]!
+    expect(unit.nutrientsAt(2).kcal).toBe(recipe.nutrients.kcal * 2)
   })
 })
 

@@ -1,14 +1,12 @@
 import { BottomSheet, Card } from '@tracker-engine/ui'
 import { Bookmark, Camera, ChefHat, Check, PencilLine, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { cn, plural } from '@tracker-engine/core'
+import { cn } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { nutrientsFor } from '@/lib/nutrition'
 import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
 import { SwipeRow } from '@/features/shared/SwipeRow'
-import { LoggableList } from '@/features/shared/LoggableList'
 import type { LastAmount } from '@/data/repository'
-import type { Food, MealTemplate } from '@/domain/types'
-import type { Loggable } from '@/features/shared/loggable'
+import type { Food } from '@/domain/types'
 
 /**
  * The rows and sheets the browse panel is made of.
@@ -60,47 +58,6 @@ export function MoreWaysSheet({
         ))}
       </ul>
     </BottomSheet>
-  )
-}
-
-/**
- * The meals you kept, with a way to stop keeping them.
- *
- * There wasn't one. A bookmarked food had a filled bookmark to tap again, but a saved meal could only
- * be deleted from a different screen in Settings — so the answer to "how do I get rid of this" was
- * "somewhere else", which is the same as no answer.
- */
-export function SavedMeals({
-  templates,
-  onOpen,
-  onRemove,
-}: {
-  templates: readonly MealTemplate[]
-  onOpen: (loggable: Loggable) => void
-  onRemove: (template: MealTemplate) => void
-}) {
-  const items = templates.map((template) => ({
-    key: `m:${template.id}`,
-    title: template.name,
-    nutrients: template.nutrients,
-    detail: plural(template.items.length, 'item'),
-    loggable: { kind: 'meal' as const, template },
-  }))
-  const byKey = new Map(templates.map((template) => [`m:${template.id}`, template]))
-
-  return (
-    <LoggableList
-      items={items}
-      onPick={(suggestion) => onOpen(suggestion.loggable)}
-      actionsFor={(suggestion) => [
-        {
-          label: 'Remove',
-          icon: Trash2,
-          tone: 'critical',
-          onAction: () => onRemove(byKey.get(suggestion.key)!),
-        },
-      ]}
-    />
   )
 }
 
