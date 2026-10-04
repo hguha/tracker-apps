@@ -36,7 +36,15 @@ describe('nutritionStats, kept current a day at a time', () => {
     await log('2026-09-03')
     expect(await nutritionStats()).toEqual(await fresh())
 
-    await repo.updateEntryAmount(first, 400)
+    const row = (await repo.getEntry(first))!
+    await repo.updateFoodEntry(first, { amount: { grams: 400 }, meal: row.meal, eatenAt: row.eatenAt })
+    expect(await nutritionStats()).toEqual(await fresh())
+
+    await repo.updateFoodEntry(first, {
+      amount: { grams: 400 },
+      meal: row.meal,
+      eatenAt: Date.parse('2026-09-02T12:00:00'),
+    })
     expect(await nutritionStats()).toEqual(await fresh())
 
     await repo.deleteEntry(first)
