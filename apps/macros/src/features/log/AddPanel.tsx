@@ -2,14 +2,23 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { cn, dayKey } from '@tracker-engine/core'
 import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
-import { Minus, Plus } from 'lucide-react'
+import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { dayTotals, mgToGrams, scale, sum } from '@/lib/nutrition'
 import { MACRO_BARS } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
-import { describeLoggable, partsOf, GRAMS, type Loggable, type LoggablePart } from '@/features/shared/loggable'
+import {
+  describeLoggable,
+  partsOf,
+  startingAmount,
+  GRAMS,
+  type AddUnit,
+  type Loggable,
+  type LoggablePart,
+} from '@/features/shared/loggable'
 import type { LogTarget } from '@/features/shared/target'
+import { EditActions } from './EditActions'
 
 /**
  * How much of it, and what that does to the day. **One screen for everything loggable.**
@@ -27,24 +36,45 @@ import type { LogTarget } from '@/features/shared/target'
  * `isSaving` is not decoration: without it a second tap while the first write is in flight logs the
  * food twice, which is how three copies of a scanned barcode ended up in one day.
  */
+interface EditMode {
+  start: { unitId: string; amount: number }
+  excludeIds: readonly string[]
+  onSave: (unit: AddUnit, count: number) => Promise<void>
+  onCopy: (unit: AddUnit, count: number) => Promise<void>
+  copyLabel: string
+  onDelete: () => Promise<void>
+}
+
 export function AddPanel({
   loggable,
   target,
   onDone,
+  edit,
+  onOpenPart,
 }: {
   loggable: Loggable
   target: LogTarget
   /** Given the number of rows written, so the log screen's counter is right for a whole recipe. */
   onDone: (count: number) => void
+  edit?: EditMode
+  onOpenPart?: (index: number) => void
 }) {
   const toast = useToast()
-  const subject = describeLoggable(loggable)
   const key = subjectKey(loggable)
+  const borrowed = useLiveQuery(
+    async () => (loggable.kind === 'food' ? repo.borrowedPortions(loggable.food) : null),
+    [key],
+    undefined,
+  )
+  const subject = describeLoggable(loggable, borrowed ?? null)
 
   // How much of this you had last time. The database's "1 serving" is wrong for nearly everyone on
   // nearly every food, and re-typing 180 g of chicken daily is the friction that ends a food diary.
   const last = useLiveQuery(
-    () => (loggable.kind === 'food' ? repo.lastAmountFor(loggable.food.id) : Promise.resolve(null)),
+    () =>
+      loggable.kind === 'food' && !edit
+        ? repo.lastAmountFor(loggable.food.id)
+        : Promise.resolve(null),
     [key],
     undefined,
   )
@@ -62,23 +92,25 @@ export function AddPanel({
     }
   }, [key, loggable])
 
-  const [unitId, setUnitId] = useState(subject.initialUnitId)
-  const [amount, setAmount] = useState(() => String(subject.initialUnitId === GRAMS ? 100 : 1))
+  const [unitId, setUnitId] = useState(edit?.start.unitId ?? subject.initialUnitId)
+  const [amount, setAmount] = useState(() =>
+    String(edit?.start.amount ?? (subject.initialUnitId === GRAMS ? 100 : 1)),
+  )
   const [isEdited, setIsEdited] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
-  // Applied once, when the lookup lands, and never over something the user has already touched.
+  const borrowedKey = borrowed === undefined ? 'pending' : (borrowed?.from.id ?? 'none')
   useEffect(() => {
-    if (isEdited || last === undefined || last === null) return
-    const named = last.portionId === null ? null : subject.units.find((u) => u.id === last.portionId)
-    if (named) {
-      setUnitId(named.id)
-      setAmount(String(last.portionCount ?? 1))
-    } else {
-      setUnitId(GRAMS)
-      setAmount(String(Math.round(last.grams)))
+    if (edit || isEdited || last === undefined || borrowed === undefined) return
+    if (last === null) {
+      setUnitId(subject.initialUnitId)
+      setAmount(String(subject.initialUnitId === GRAMS ? 100 : 1))
+      return
     }
-  }, [key, isEdited, last])
+    const start = startingAmount(subject.units, last)
+    setUnitId(start.unitId)
+    setAmount(String(start.amount))
+  }, [key, isEdited, last, borrowedKey])
 
   const unit = subject.units.find((row) => row.id === unitId) ?? subject.units[0]!
   const typed = Number(amount)
@@ -113,7 +145,8 @@ export function AddPanel({
   const parts = useLiveQuery(() => partsOf(loggable), [key], undefined)
 
   const isDayLoaded = dayEntries !== undefined && targets !== undefined
-  const already = dayTotals(dayEntries ?? [])
+  const excluded = new Set(edit?.excludeIds ?? [])
+  const already = dayTotals((dayEntries ?? []).filter((entry) => !excluded.has(entry.id)))
   const after = adding ? sum([already, adding]) : already
 
   const nudge = (delta: number) => {
@@ -121,16 +154,23 @@ export function AddPanel({
     setAmount(String(Math.max(unit.min, Math.round((count + delta) * 100) / 100)))
   }
 
-  async function log() {
-    if (isSaving || count === 0) return
+  async function run(action: () => Promise<void>) {
+    if (isSaving) return
     setIsSaving(true)
     try {
-      const written = await subject.log(unit, count, target)
-      toast.show(written === 0 ? 'Nothing to log' : `Logged ${subject.title}`)
-      if (written > 0) onDone(written)
+      await action()
     } finally {
       setIsSaving(false)
     }
+  }
+
+  async function log() {
+    if (count === 0) return
+    await run(async () => {
+      const written = await subject.log(unit, count, target)
+      toast.show(written === 0 ? 'Nothing to log' : `Logged ${subject.title}`)
+      if (written > 0) onDone(written)
+    })
   }
 
   return (
@@ -224,7 +264,12 @@ export function AddPanel({
         <div className="rounded-xl bg-sunken/60 px-3 py-2">
           <ul className="divide-y divide-line">
             {parts.map((part, index) => (
-              <PartRow key={index} part={part} count={count} />
+              <PartRow
+                key={index}
+                part={part}
+                count={count}
+                onOpen={onOpenPart ? () => onOpenPart(index) : undefined}
+              />
             ))}
           </ul>
         </div>
@@ -232,9 +277,21 @@ export function AddPanel({
 
       {madeOf && <MadeOf madeOf={madeOf} />}
 
-      <Button className="w-full" disabled={count === 0 || isSaving} onClick={() => void log()}>
-        {isSaving ? 'Logging…' : `Log it · ${adding?.kcal ?? 0} kcal`}
-      </Button>
+      {edit ? (
+        <EditActions
+          kcal={adding?.kcal ?? 0}
+          canSave={count > 0}
+          isBusy={isSaving}
+          copyLabel={edit.copyLabel}
+          onSave={() => void run(() => edit.onSave(unit, count))}
+          onCopy={() => void run(() => edit.onCopy(unit, count))}
+          onDelete={() => void run(edit.onDelete)}
+        />
+      ) : (
+        <Button className="w-full" disabled={count === 0 || isSaving} onClick={() => void log()}>
+          {isSaving ? 'Logging…' : `Log it · ${adding?.kcal ?? 0} kcal`}
+        </Button>
+      )}
     </div>
   )
 }
@@ -285,10 +342,18 @@ function MadeOf({ madeOf }: { madeOf: FoodParts }) {
 const sentence = (text: string): string =>
   text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
 
-function PartRow({ part, count }: { part: LoggablePart; count: number }) {
+function PartRow({
+  part,
+  count,
+  onOpen,
+}: {
+  part: LoggablePart
+  count: number
+  onOpen?: () => void
+}) {
   const scaled = scale(part.nutrients, count)
-  return (
-    <li className="flex items-baseline gap-2 py-1">
+  const content = (
+    <>
       <span className="min-w-0 flex-1 truncate text-[12.5px]">{part.label}</span>
       {part.grams > 0 && (
         <span className="tabular shrink-0 text-[11px] text-ink-muted">
@@ -296,6 +361,21 @@ function PartRow({ part, count }: { part: LoggablePart; count: number }) {
         </span>
       )}
       <span className="tabular w-9 shrink-0 text-right text-[12px]">{scaled.kcal}</span>
+      {onOpen && <ChevronRight size={14} className="shrink-0 self-center text-ink-muted" />}
+    </>
+  )
+  return (
+    <li>
+      {onOpen ? (
+        <button
+          onClick={onOpen}
+          className="flex w-full items-baseline gap-2 py-1.5 text-left active:opacity-60"
+        >
+          {content}
+        </button>
+      ) : (
+        <div className="flex items-baseline gap-2 py-1">{content}</div>
+      )}
     </li>
   )
 }
@@ -322,7 +402,7 @@ function DayPreview({
   if (!targets) {
     return (
       <div className="rounded-xl bg-sunken px-3 py-2.5">
-        <p className="text-[11px] text-ink-muted">Your day, once this is logged</p>
+        <p className="text-[11px] text-ink-muted">Your day with this</p>
         <p className="tabular mt-0.5 flex flex-wrap items-baseline gap-x-2.5 text-[13px]">
           <span className="font-semibold">{after.kcal} kcal</span>
           {MACRO_BARS.map((macro) => (
@@ -373,8 +453,8 @@ function DayPreview({
           </span>
         ) : (
           <span style={{ color: 'var(--target-over)' }}>
-            <span className="tabular font-semibold">{Math.abs(left)} kcal</span> over target if you
-            log this.
+            <span className="tabular font-semibold">{Math.abs(left)} kcal</span> over target with
+            this.
           </span>
         )}
       </p>

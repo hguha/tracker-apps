@@ -1,8 +1,23 @@
 import * as repo from '@/data/repository'
-import { nutrientsFor, perServing, portionFor, scale } from '@/lib/nutrition'
+import {
+  GRAMS_PER_OZ,
+  householdPortions,
+  nutrientsFor,
+  perServing,
+  portionFor,
+  scale,
+} from '@/lib/nutrition'
+import { parseIngredientLine } from '@/lib/parseIngredient'
+import { volumeMeasures } from '@/lib/volume'
 import { amountGrams, describeAmount, portionWithGrams } from '@/features/shared/format'
 import { EMPTY_NUTRIENTS, type Food, type MealTemplate, type Nutrients, type Recipe } from '@/domain/types'
-import type { LibraryHit, RecentDish, RecentItem, RecentQuick } from '@/data/repository'
+import type {
+  BorrowedPortions,
+  LibraryHit,
+  RecentDish,
+  RecentItem,
+  RecentQuick,
+} from '@/data/repository'
 import type { LogTarget } from '@/features/shared/target'
 
 /**
@@ -65,10 +80,84 @@ export interface AddSubject {
 /** The literal-grams option, alongside a food's own portions. */
 export const GRAMS = '__grams'
 
-export function describeLoggable(loggable: Loggable): AddSubject {
+export const OUNCES = '__oz'
+
+interface Measure {
+  id: string
+  label: string
+  grams: number
+  isBorrowed: boolean
+}
+
+export function measuresFor(food: Food, borrowed: BorrowedPortions | null = null): Measure[] {
+  const household = householdPortions(food)
+  const own = (household.length > 0 ? household : food.portions.filter((p) => p.grams > 0))
+    .map((portion) => ({
+      id: portion.id,
+      label: portionWithGrams(portion),
+      grams: portion.grams,
+      isBorrowed: false,
+    }))
+  const like = (borrowed?.portions ?? []).map((portion) => ({
+    id: `like:${borrowed!.from.id}:${portion.id}`,
+    label: `≈ ${portionWithGrams(portion)}`,
+    grams: portion.grams,
+    isBorrowed: true,
+  }))
+  const listed = [...food.portions, ...(borrowed?.portions ?? [])]
+  const volumes = volumeMeasures(food, borrowed?.portions ?? [])
+    .filter((measure) => !listed.some((portion) => isOneOf(portion.label, measure.id)))
+    .map((measure) => ({ ...measure, isBorrowed: measure.label.startsWith('≈') }))
+  return [...own, ...like, ...volumes]
+}
+
+const isOneOf = (label: string, id: string): boolean => {
+  const parsed = parseIngredientLine(label)
+  return parsed.quantity === 1 && `__${parsed.unit}` === id
+}
+
+export function readableUnitId(grams: number, measures: readonly { id: string; grams: number }[]): string {
+  if (grams <= 0) return GRAMS
+  const largestFirst = [...measures].sort((a, b) => b.grams - a.grams)
+  for (const measure of largestFirst) {
+    const count = Math.round((grams / measure.grams) * 4) / 4
+    if (count >= 0.25 && Math.abs(count * measure.grams - grams) <= grams * 0.02) return measure.id
+  }
+  return GRAMS
+}
+
+export function startingAmount(
+  units: readonly AddUnit[],
+  logged: { grams: number; portionId: string | null; portionCount: number | null },
+): { unitId: string; amount: number } {
+  const named = logged.portionId === null ? undefined : units.find((u) => u.id === logged.portionId)
+  if (named) {
+    const one = named.gramsAt(1)
+    return {
+      unitId: named.id,
+      amount: logged.portionCount ?? (one ? Math.round((logged.grams / one) * 4) / 4 : 1),
+    }
+  }
+  const measures = units.flatMap((unit) => {
+    const one = unit.gramsAt(1)
+    return unit.id === GRAMS || unit.id === OUNCES || one === null ? [] : [{ id: unit.id, grams: one }]
+  })
+  const unitId = readableUnitId(logged.grams, measures)
+  const unit = units.find((u) => u.id === unitId)
+  const one = unit?.gramsAt(1) ?? 1
+  return {
+    unitId,
+    amount: unitId === GRAMS ? Math.round(logged.grams) : Math.round((logged.grams / one) * 4) / 4,
+  }
+}
+
+export function describeLoggable(
+  loggable: Loggable,
+  borrowed: BorrowedPortions | null = null,
+): AddSubject {
   switch (loggable.kind) {
     case 'food':
-      return foodSubject(loggable.food)
+      return foodSubject(loggable.food, borrowed)
     case 'recipe':
       return recipeSubject(loggable.recipe)
     case 'meal':
@@ -80,14 +169,14 @@ export function describeLoggable(loggable: Loggable): AddSubject {
   }
 }
 
-function foodSubject(food: Food): AddSubject {
+function foodSubject(food: Food, borrowed: BorrowedPortions | null): AddSubject {
   const units: AddUnit[] = [
-    ...food.portions.map((portion) => ({
-      id: portion.id,
-      label: portionWithGrams(portion),
-      nutrientsAt: (count: number) => nutrientsFor(food, portion.grams * count),
-      gramsAt: (count: number) => portion.grams * count,
-      summaryAt: (count: number) => `${Math.round(portion.grams * count)} g`,
+    ...measuresFor(food, borrowed).map((measure) => ({
+      id: measure.id,
+      label: measure.label,
+      nutrientsAt: (count: number) => nutrientsFor(food, measure.grams * count),
+      gramsAt: (count: number) => measure.grams * count,
+      summaryAt: (count: number) => `${Math.round(measure.grams * count)} g`,
       step: 0.5,
       min: 0.5,
     })),
@@ -102,15 +191,23 @@ function foodSubject(food: Food): AddSubject {
       step: 10,
       min: 1,
     },
+    {
+      id: OUNCES,
+      label: 'oz',
+      nutrientsAt: (count: number) => nutrientsFor(food, count * GRAMS_PER_OZ),
+      gramsAt: (count: number) => count * GRAMS_PER_OZ,
+      summaryAt: (count: number) => `${Math.round(count * GRAMS_PER_OZ)} g`,
+      step: 0.5,
+      min: 0.25,
+    },
   ]
+  const firstBorrowed = units.find((unit) => unit.id.startsWith('like:'))
 
   return {
     title: food.description,
     subtitle: `${food.brand ? `${food.brand} · ` : ''}${food.per100.kcal} kcal / 100 g`,
     units,
-    // A food with no portions — most branded rows, any own food with no stated serving — opens in
-    // grams, so it never opens on an empty box with a disabled button.
-    initialUnitId: portionFor(food, null)?.id ?? GRAMS,
+    initialUnitId: portionFor(food, null)?.id ?? firstBorrowed?.id ?? GRAMS,
     isComposite: false,
     log: (unit, count, target) =>
       repo
@@ -120,12 +217,21 @@ function foodSubject(food: Food): AddSubject {
           eatenAt: target.at,
           venue: target.venue,
           source: food.barcode ? 'barcode' : 'search',
-          ...(unit.id === GRAMS
-            ? { grams: count }
-            : { portionId: unit.id, portionCount: count }),
+          ...amountFields(food, unit, count),
         })
         .then(() => 1),
   }
+}
+
+export function amountFields(
+  food: Food,
+  unit: AddUnit,
+  count: number,
+): { grams: number } | { portionId: string; portionCount: number } {
+  if (food.portions.some((portion) => portion.id === unit.id)) {
+    return { portionId: unit.id, portionCount: count }
+  }
+  return { grams: Math.round((unit.gramsAt(count) ?? count) * 10) / 10 }
 }
 
 function recipeSubject(recipe: Recipe): AddSubject {

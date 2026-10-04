@@ -52,6 +52,11 @@ export function per100FromPanel(panel: ServingPanel, servingGrams: number): Nutr
 
 const GUIDELINE = /^guideline amount/i
 
+export const householdPortions = (food: Pick<Food, 'portions'>): FoodPortion[] =>
+  food.portions.filter((p) => p.grams > 0 && !GUIDELINE.test(p.label))
+
+export const GRAMS_PER_OZ = 28.349523125
+
 export function portionFor(food: Food, portionId: string | null): FoodPortion | null {
   if (portionId) return food.portions.find((p) => p.id === portionId) ?? null
   const measures = food.portions.filter((p) => !GUIDELINE.test(p.label))

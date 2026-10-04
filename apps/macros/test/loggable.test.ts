@@ -3,7 +3,7 @@ import { dayKey } from '@tracker-engine/core'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
-import { describeLoggable, partsOf, GRAMS } from '@/features/shared/loggable'
+import { describeLoggable, partsOf, GRAMS, OUNCES } from '@/features/shared/loggable'
 import { nutrientsFor } from '@/lib/nutrition'
 import { givenFoods, testFood } from './fixtures'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
@@ -28,9 +28,9 @@ beforeEach(async () => {
 const today = () => dayKey(Date.now())
 
 describe('a food', () => {
-  it('offers its own portions and grams, and opens on the default portion', () => {
+  it('offers its own portions, grams and ounces, and opens on the default portion', () => {
     const subject = describeLoggable({ kind: 'food', food: testFood() })
-    expect(subject.units.map((unit) => unit.id)).toEqual(['p0', GRAMS])
+    expect(subject.units.map((unit) => unit.id)).toEqual(['p0', GRAMS, OUNCES])
     expect(subject.initialUnitId).toBe('p0')
     expect(subject.isComposite).toBe(false)
   })

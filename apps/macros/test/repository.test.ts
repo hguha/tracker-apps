@@ -101,16 +101,6 @@ describe('logFood', () => {
   })
 })
 
-describe('updateEntryAmount', () => {
-  it('re-resolves nutrients so the row stays self-consistent', async () => {
-    const id = await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
-    await repo.updateEntryAmount(id, 300)
-    const entry = await db.logEntries.get(id)
-    expect(entry?.grams).toBe(300)
-    expect(entry?.nutrients.kcal).toBe(360)
-  })
-})
-
 describe('deleteEntry', () => {
   it('tombstones rather than removing, so the delete can sync', async () => {
     const id = await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
@@ -736,22 +726,22 @@ describe('editing what was logged', () => {
       }),
     )
 
-  it('keeps the portion when the new amount is a whole number of them', async () => {
-    // "2 slices" corrected to 3 must stay 3 slices. It used to become a bare gram figure, which then
-    // became the prefill for that food forever after.
+  it('keeps the portion when it is corrected in portions', async () => {
     const withPortion = await bread()
     const id = await repo.logFood({ food: withPortion, portionId: 'p1', portionCount: 2, meal: 'breakfast' })
+    const row = (await repo.getEntry(id))!
 
-    await repo.updateEntryAmount(id, 84)
+    await repo.updateFoodEntry(id, { amount: { portionId: 'p1', portionCount: 3 }, meal: row.meal, eatenAt: row.eatenAt })
     const entry = (await repo.entriesForDay(dayKey(Date.now()))).find((row) => row.id === id)!
     expect(entry.portionId).toBe('p1')
     expect(entry.portionCount).toBe(3)
   })
 
-  it('drops the portion when the amount no longer matches one', async () => {
+  it('drops the portion when it is corrected in grams', async () => {
     const withPortion = await bread()
     const id = await repo.logFood({ food: withPortion, portionId: 'p1', portionCount: 2, meal: 'breakfast' })
-    await repo.updateEntryAmount(id, 70)
+    const row = (await repo.getEntry(id))!
+    await repo.updateFoodEntry(id, { amount: { grams: 70 }, meal: row.meal, eatenAt: row.eatenAt })
     const entry = (await repo.entriesForDay(dayKey(Date.now()))).find((row) => row.id === id)!
     expect(entry.portionId).toBeNull()
     expect(entry.grams).toBe(70)
@@ -1006,5 +996,38 @@ describe('currentStreak', () => {
     await logOn('2026-09-07')
     await repo.deleteEntry(id)
     expect(await repo.currentStreak(now)).toBe(0)
+  })
+})
+
+describe('editing a logged row', () => {
+  it('rewrites the amount, meal and time of a food in one save', async () => {
+    const food = await chicken()
+    const id = await repo.logFood({ food, meal: 'lunch', grams: 100, eatenAt: Date.parse('2026-09-01T12:00:00') })
+    const later = Date.parse('2026-09-02T19:30:00')
+    await repo.updateFoodEntry(id, { amount: { portionId: 'p0', portionCount: 2 }, meal: 'dinner', eatenAt: later })
+    const row = (await repo.getEntry(id))!
+    expect(row).toMatchObject({ grams: 348, portionId: 'p0', portionCount: 2, meal: 'dinner', day: '2026-09-02' })
+    expect(row.nutrients).toEqual(nutrientsFor(food, 348))
+  })
+
+  it('scales and moves every row of a dish together', async () => {
+    const food = await chicken()
+    const dishId = repo.newDishId()
+    const at = Date.parse('2026-09-01T12:00:00')
+    await repo.logFood({ food, meal: 'lunch', grams: 100, eatenAt: at, dishId, dishName: 'Bowl' })
+    await repo.logFood({ food, meal: 'lunch', grams: 50, eatenAt: at, dishId, dishName: 'Bowl' })
+    await repo.editEntries(
+      (await repo.dishEntries(dishId)).map((row) => row.id),
+      { multiple: 2, meal: 'dinner', shiftMs: 60 * 60_000 },
+    )
+    const rows = await repo.dishEntries(dishId)
+    expect(rows.map((row) => row.grams).sort((a, b) => a - b)).toEqual([100, 200])
+    expect(rows.every((row) => row.meal === 'dinner' && row.eatenAt === at + 60 * 60_000)).toBe(true)
+  })
+
+  it('reads a deleted row as gone', async () => {
+    const id = await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
+    await repo.deleteEntry(id)
+    expect(await repo.getEntry(id)).toBeNull()
   })
 })

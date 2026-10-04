@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  cn,
   dayKey,
   dayKeyOffset,
   dayNoon,
   formatDayHeading,
   formatTimeOfDay,
+  plural,
 } from '@tracker-engine/core'
 import { Card, ScreenHeader, SearchField, useToast } from '@tracker-engine/ui'
 import {
   Bookmark,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -32,8 +31,7 @@ import { fromRecent } from '@/features/shared/loggable'
 import { SwipeRow } from '@/features/shared/SwipeRow'
 import { VenueChoice } from '@/features/shared/VenueChoice'
 import { SaveMealSheet } from '@/features/today/SaveMealSheet'
-import { EntrySheet } from '@/features/today/EntrySheet'
-import { AmountStepper } from './AmountStepper'
+import { EditEntryScreen, type EditSubject } from '@/features/log/EditEntryScreen'
 import {
   MEAL_SLOTS,
   type Food,
@@ -70,9 +68,8 @@ export function DayScreen({
 }) {
   const toast = useToast()
   const [day, setDay] = useState(initialDay)
-  const [editing, setEditing] = useState<{ entry: LogEntry; siblings: LogEntry[] } | null>(null)
+  const [editing, setEditing] = useState<EditSubject | null>(null)
   const [savingMeal, setSavingMeal] = useState<LogEntry[] | null>(null)
-  const [expanded, setExpanded] = useState<string | null>(null)
   /** What to look for in the diary — see the search field below. */
   const [find, setFind] = useState('')
 
@@ -118,6 +115,8 @@ export function DayScreen({
     snapshot.current?.day === day &&
     hasSnapshot &&
     !sameEntries(snapshot.current.rows, rows)
+
+  if (editing) return <EditEntryScreen subject={editing} onClose={() => setEditing(null)} />
 
   return (
     <div className="flex h-full flex-col">
@@ -206,11 +205,9 @@ export function DayScreen({
                 key={group.meal}
                 group={group}
                 foods={foods}
-                expanded={expanded}
-                onExpand={(key) => setExpanded((current) => (current === key ? null : key))}
                 onAdd={() => onAdd(day, group.meal)}
                 onSave={() => setSavingMeal(group.entries)}
-                onDetails={(entry) => setEditing({ entry, siblings: group.entries })}
+                onEdit={setEditing}
                 onLogAgain={(dishId, name) => {
                   void repo.logDishAgain(dishId).then((n) => {
                     if (n > 0) toast.show(`${name} logged again`)
@@ -264,15 +261,6 @@ export function DayScreen({
           </>
         )}
       </div>
-
-      {editing && (
-        <EntrySheet
-          entry={editing.entry}
-          name={entryName(editing.entry, foods)}
-          siblings={editing.siblings}
-          onDismiss={() => setEditing(null)}
-        />
-      )}
 
       {savingMeal && (
         <SaveMealSheet
@@ -348,21 +336,17 @@ function PastItems({
 function MealCard({
   group,
   foods,
-  expanded,
-  onExpand,
   onAdd,
   onSave,
-  onDetails,
+  onEdit,
   onLogAgain,
   onRemove,
 }: {
   group: MealGroup
   foods: ReadonlyMap<string, Food>
-  expanded: string | null
-  onExpand: (key: string) => void
   onAdd: () => void
   onSave: () => void
-  onDetails: (entry: LogEntry) => void
+  onEdit: (subject: EditSubject) => void
   onLogAgain: (dishId: string, name: string) => void
   onRemove: (dishId: string, name: string) => void
 }) {
@@ -371,11 +355,6 @@ function MealCard({
       <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold">{MEAL_LABELS[group.meal]}</span>
-          {/*
-            A range when the sitting spans the day. Two snacks eight hours apart both filed under
-            "2:00 PM" — the slot's first row — which is a fact about one of them presented as a fact
-            about both.
-          */}
           <span className="tabular block text-[11.5px] text-ink-muted">
             {formatTimeOfDay(group.firstAt)}
             {group.lastAt - group.firstAt >= SPREAD_MS && `–${formatTimeOfDay(group.lastAt)}`}
@@ -392,10 +371,6 @@ function MealCard({
         </button>
       </div>
 
-      {/*
-        The venue question lives here, not in the log flow. This is the moment the answer is known —
-        the meal is finished and sitting in front of you — and one tap covers every row in it.
-      */}
       <div className="border-b border-line px-3.5 py-2">
         <VenueChoice entries={group.entries} />
       </div>
@@ -407,20 +382,13 @@ function MealCard({
               key={dish.entries[0]!.id}
               entry={dish.entries[0]!}
               name={entryName(dish.entries[0]!, foods)}
-              isOpen={expanded === dish.entries[0]!.id}
-              onToggle={() => onExpand(dish.entries[0]!.id)}
-              onDetails={() => onDetails(dish.entries[0]!)}
+              onOpen={() => onEdit({ kind: 'entry', id: dish.entries[0]!.id })}
             />
           ) : (
             <DishRow
               key={dish.dishId}
               dish={dish}
-              foods={foods}
-              isOpen={expanded === dish.dishId}
-              onToggle={() => onExpand(dish.dishId!)}
-              expandedEntry={expanded}
-              onExpandEntry={onExpand}
-              onDetails={onDetails}
+              onOpen={() => onEdit({ kind: 'dish', dishId: dish.dishId! })}
               onLogAgain={() => onLogAgain(dish.dishId!, dish.name ?? 'Dish')}
               onRemove={() => onRemove(dish.dishId!, dish.name ?? 'Dish')}
             />
@@ -439,143 +407,56 @@ function MealCard({
   )
 }
 
-/**
- * A dish: one line with the name the user gave it, opening onto the foods it resolved to.
- *
- * This is the fix for the single worst thing the app did. "3 steak tacos" resolved to six USDA rows
- * — *Tortillas, corn* · *Beef, round, top round steak* · *Cheddar cheese* · … — and the diary then
- * contained nothing the person recognised as their lunch, and nothing to tap to have another one.
- * The ingredients are still all there, one tap down, because they are what makes the macros and the
- * micronutrients right.
- */
 function DishRow({
   dish,
-  foods,
-  isOpen,
-  onToggle,
-  expandedEntry,
-  onExpandEntry,
-  onDetails,
+  onOpen,
   onLogAgain,
   onRemove,
 }: {
   dish: DishGroup
-  foods: ReadonlyMap<string, Food>
-  isOpen: boolean
-  onToggle: () => void
-  expandedEntry: string | null
-  onExpandEntry: (key: string) => void
-  onDetails: (entry: LogEntry) => void
+  onOpen: () => void
   onLogAgain: () => void
   onRemove: () => void
 }) {
   return (
     <li>
-      {/* The same two actions as a single row, on the dish. Removing "3 steak tacos" by deleting six
-          rows one at a time is not a thing anyone should have to do. */}
       <SwipeRow
         actions={[
           { label: 'Again', icon: Plus, onAction: onLogAgain },
           { label: 'Delete', icon: Trash2, tone: 'critical', onAction: onRemove },
         ]}
       >
-        <button
-          onClick={onToggle}
-          aria-expanded={isOpen}
-          className={cn('w-full px-3.5 py-2.5 text-left active:bg-sunken', isOpen && 'bg-sunken/60')}
-        >
+        <button onClick={onOpen} className="w-full px-3.5 py-2.5 text-left active:bg-sunken">
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">
               {dish.name ?? 'Dish'}
             </span>
             <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
-              {dish.entries.length} item{dish.entries.length === 1 ? '' : 's'}
+              {plural(dish.entries.length, 'item')}
             </span>
             <span className="tabular w-11 shrink-0 text-right text-[13px] font-semibold">
               {dish.nutrients.kcal}
             </span>
-            <ChevronDown
-              size={15}
-              className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
-            />
+            <ChevronRight size={15} className="shrink-0 text-ink-muted" />
           </span>
           <MacroNumbers nutrients={dish.nutrients} className="mt-0.5" />
         </button>
       </SwipeRow>
-
-      {isOpen && (
-        <div className="border-t border-line bg-sunken/30">
-          <ul className="divide-y divide-line">
-            {dish.entries.map((entry) => (
-              <EntryRow
-                key={entry.id}
-                entry={entry}
-                name={entryName(entry, foods)}
-                isOpen={expandedEntry === entry.id}
-                onToggle={() => onExpandEntry(entry.id)}
-                onDetails={() => onDetails(entry)}
-                inset
-              />
-            ))}
-          </ul>
-          {/* Both actions on the dish, not on its parts. Removing "3 steak tacos" by deleting six
-              rows one at a time is not a thing anyone should have to do. */}
-          <div className="flex items-center gap-1 border-t border-line">
-            <button
-              onClick={onLogAgain}
-              className="flex min-w-0 flex-1 items-center justify-center gap-1.5 py-2 text-[12.5px] font-semibold text-accent active:bg-sunken"
-            >
-              <Plus size={13} />
-              Have this again
-            </button>
-            <button
-              onClick={onRemove}
-              aria-label={`Remove ${dish.name ?? 'this dish'}`}
-              className="mr-2 flex size-8 shrink-0 items-center justify-center rounded-lg active:bg-sunken"
-              style={{ color: 'var(--status-critical)' }}
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        </div>
-      )}
     </li>
   )
 }
 
-/**
- * One food, with its amount editable in place.
- *
- * Tapping expands rather than opening a sheet, because changing a portion is the overwhelmingly
- * common correction and a sheet costs two extra taps to do it. Everything rarer — the meal, the
- * time, deleting — is behind "More".
- *
- * The macros are on the row as numbers. They used to be a colour bar and a gram figure, which
- * answers "roughly what shape is this" but not "how much protein was the chicken" — and the second
- * question is the one somebody opens a day to ask.
- */
 function EntryRow({
   entry,
   name,
-  isOpen,
-  onToggle,
-  onDetails,
-  inset = false,
+  onOpen,
 }: {
   entry: LogEntry
   name: string
-  isOpen: boolean
-  onToggle: () => void
-  onDetails: () => void
-  inset?: boolean
+  onOpen: () => void
 }) {
   return (
     <li>
-      {/*
-        Swipe for the two things people do to a logged row: drop it, or have it again. Both were behind
-        expanding the row first, which is a tap too many for the commonest correction in the app. The
-        expanded controls stay — see `SwipeRow` for why the gesture is never the only way in.
-      */}
       <SwipeRow
         actions={[
           {
@@ -591,21 +472,7 @@ function EntryRow({
           },
         ]}
       >
-        <button
-          onClick={onToggle}
-          aria-expanded={isOpen}
-          className={cn(
-            'w-full py-2 pr-3.5 text-left active:bg-sunken',
-            inset ? 'pl-[34px]' : 'pl-3.5',
-            isOpen && 'bg-sunken/60',
-          )}
-        >
-        {/*
-          The same three columns as every other row, at the same widths. Grams used to appear only
-          when a row had them and the chevron only on a dish, so a meal of four things had four
-          different layouts and the calorie column never lined up. A quick add has no weight, so its
-          slot stays empty rather than collapsing and shunting the numbers sideways.
-        */}
+        <button onClick={onOpen} className="w-full px-3.5 py-2 text-left active:bg-sunken">
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate text-[13.5px]">{name}</span>
             <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
@@ -614,16 +481,8 @@ function EntryRow({
             <span className="tabular w-11 shrink-0 text-right text-[13px] font-medium">
               {entry.nutrients.kcal}
             </span>
-            <ChevronDown
-              size={15}
-              className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
-            />
+            <ChevronRight size={15} className="shrink-0 text-ink-muted" />
           </span>
-        {/*
-          The row's own clock time, beside its macros. Grouping is by meal slot, so a snack at 2pm and
-          another at 10pm share a card — and without this there was nothing on either row to tell them
-          apart, or to catch one stamped at the wrong hour.
-        */}
           <span className="mt-0.5 flex items-baseline gap-2">
             <MacroNumbers nutrients={entry.nutrients} />
             <span className="tabular flex-1 text-right text-[11px] text-ink-muted">
@@ -632,34 +491,10 @@ function EntryRow({
           </span>
         </button>
       </SwipeRow>
-
-      {isOpen && (
-        <div
-          className={cn(
-            'flex items-center gap-2 border-t border-line py-2 pr-3.5',
-            inset ? 'pl-[34px]' : 'pl-3.5',
-          )}
-        >
-          <AmountStepper entry={entry} label={name} />
-          <button
-            onClick={onDetails}
-            className="shrink-0 rounded-lg px-2 py-1.5 text-[12.5px] font-semibold text-accent active:bg-page"
-          >
-            More
-          </button>
-          <button
-            onClick={() => void repo.deleteEntry(entry.id)}
-            aria-label={`Remove ${name}`}
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg active:bg-page"
-            style={{ color: 'var(--status-critical)' }}
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
-      )}
     </li>
   )
 }
+
 
 /** Whether the day still matches its snapshot, on the fields the screen can change. */
 function sameEntries(a: readonly LogEntry[], b: readonly LogEntry[]): boolean {

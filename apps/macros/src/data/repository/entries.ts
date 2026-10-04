@@ -51,7 +51,7 @@ export async function currentStreak(now = Date.now()): Promise<number> {
   return count
 }
 
-export async function loggedDays(): Promise<string[]> {
+async function loggedDays(): Promise<string[]> {
   const days = new Set<string>()
   await db.logEntries.filter(alive).each((entry) => days.add(entry.day))
   return [...days].sort()
@@ -232,30 +232,6 @@ export async function logQuickAdd(
 }
 
 /**
- * Re-resolves nutrients when the amount changes, keeping the portion the user thinks in.
- *
- * It used to clear `portionId`/`portionCount` unconditionally, so nudging "2 slices · 56 g" up to
- * three slices turned the row into a bare "84g" — and `lastAmountFor`, which is the thing that makes
- * logging fast, then offered 84 g of bread forever after instead of 3 slices. Correcting an amount is
- * the most common edit in the app, so it must not degrade the row it corrects.
- */
-export async function updateEntryAmount(id: string, grams: number): Promise<void> {
-  const entry = await db.logEntries.get(id)
-  if (!entry) return
-  const food = entry.foodId ? await getFood(entry.foodId) : undefined
-  const portion = food && entry.portionId ? portionFor(food, entry.portionId) : null
-  await patch('logEntries', id, {
-    grams,
-    // Kept only when the new amount is a whole-ish number of the portion the row already used;
-    // otherwise the label would claim a count the grams don't match.
-    ...(portion && portion.grams > 0 && Math.abs((grams / portion.grams) % 1) < 0.02
-      ? { portionId: portion.id, portionCount: Math.round(grams / portion.grams) }
-      : { portionId: null, portionCount: null }),
-    nutrients: food ? nutrientsFor(food, grams) : entry.nutrients,
-  })
-}
-
-/**
  * Corrects the macros on a row with no food behind it.
  *
  * Every screen that showed a quick add used to apologise for it — "a quick add has no food behind
@@ -278,9 +254,64 @@ export async function updateQuickAdd(
   })
 }
 
-export function moveEntry(id: string, meal: MealSlot): Promise<void> {
-  return patch('logEntries', id, { meal })
+export async function getEntry(id: string): Promise<LogEntry | null> {
+  const entry = await db.logEntries.get(id)
+  return entry && alive(entry) ? entry : null
 }
+
+export async function updateFoodEntry(
+  id: string,
+  change: {
+    amount: { grams: number } | { portionId: string; portionCount: number }
+    meal: MealSlot
+    eatenAt: number
+  },
+): Promise<void> {
+  const entry = await db.logEntries.get(id)
+  if (!entry?.foodId) return
+  const food = await getFood(entry.foodId)
+  if (!food) return
+  const portion = 'portionId' in change.amount ? portionFor(food, change.amount.portionId) : null
+  const grams =
+    'grams' in change.amount
+      ? change.amount.grams
+      : (portion?.grams ?? 0) * change.amount.portionCount
+  await patch('logEntries', id, {
+    grams,
+    portionId: portion ? portion.id : null,
+    portionCount: portion && 'portionCount' in change.amount ? change.amount.portionCount : null,
+    nutrients: nutrientsFor(food, grams),
+    meal: change.meal,
+    ...timeFields(entry, change.eatenAt),
+  })
+}
+
+export async function editEntries(
+  ids: readonly string[],
+  change: { multiple: number; meal: MealSlot; shiftMs: number },
+): Promise<void> {
+  const rows = (await db.logEntries.bulkGet([...ids])).filter(
+    (row): row is LogEntry => row !== undefined && alive(row),
+  )
+  for (const row of rows) {
+    const food = row.foodId ? await getFood(row.foodId) : undefined
+    const grams = row.grams * change.multiple
+    await patch('logEntries', row.id, {
+      grams,
+      portionCount:
+        row.portionCount === null ? null : Math.round(row.portionCount * change.multiple * 100) / 100,
+      nutrients: food ? nutrientsFor(food, grams) : scaleNutrients(row.nutrients, change.multiple),
+      quickAdd: row.quickAdd === null ? null : scaleNutrients(row.quickAdd, change.multiple),
+      meal: change.meal,
+      ...timeFields(row, row.eatenAt + change.shiftMs),
+    })
+  }
+}
+
+const timeFields = (entry: LogEntry, eatenAt: number) =>
+  eatenAt === entry.eatenAt
+    ? {}
+    : { eatenAt, day: dayKey(eatenAt), sortIndex: nextSortIndex(eatenAt) }
 
 /**
  * Corrects where a sitting was eaten — every row in it, not just the one tapped.
@@ -291,14 +322,6 @@ export function moveEntry(id: string, meal: MealSlot): Promise<void> {
  */
 export async function setVenue(ids: readonly string[], venue: Venue | null): Promise<void> {
   for (const id of ids) await patch('logEntries', id, { venue })
-}
-
-/**
- * Corrects when something was eaten. `day` and `sortIndex` follow the timestamp, because a row
- * whose day disagrees with its `eatenAt` would be counted on one day and drawn on another.
- */
-export function retimeEntry(id: string, eatenAt: number): Promise<void> {
-  return patch('logEntries', id, { eatenAt, day: dayKey(eatenAt), sortIndex: eatenAt })
 }
 
 export function deleteEntry(id: string): Promise<void> {

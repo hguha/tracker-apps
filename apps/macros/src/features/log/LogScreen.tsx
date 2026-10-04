@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cn, formatRelativeDay, formatTimeOfDay } from '@tracker-engine/core'
 import {
   Card,
   ScreenHeader,
@@ -10,12 +9,10 @@ import {
 } from '@tracker-engine/ui'
 import {
   ChefHat,
-  ChevronDown,
   Compass,
   MoreHorizontal,
   PlusCircle,
   ScanLine,
-  Utensils,
 } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
@@ -36,7 +33,7 @@ import { DescribeRow, Empty, FoodList, MoreWaysSheet, SavedMeals } from './brows
 import { LoggableList } from '@/features/shared/LoggableList'
 import { fromLibrary, fromRecent } from '@/features/shared/loggable'
 import { DescribePanel } from './DescribePanel'
-import { MealTimePicker } from './MealTimePicker'
+import { WhenLine } from './WhenLine'
 import { CustomFoodPanel } from './CustomFoodPanel'
 import { PhotoPanel } from './PhotoPanel'
 import { QuickAddPanel } from './QuickAddPanel'
@@ -219,7 +216,6 @@ function BrowsePanel({
   const trimmed = query.trim()
   const isTyping = trimmed.length >= 2
   const [tab, setTab] = useState<BrowseTab>('recent')
-  const [isEditingWhen, setIsEditingWhen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   /**
    * Foods ticked for logging together.
@@ -311,28 +307,7 @@ function BrowsePanel({
         afterwards on the day screen, so paying for them on every write served the rare case at the
         expense of the common one.
       */}
-      <div>
-        <button
-          onClick={() => setIsEditingWhen((current) => !current)}
-          aria-expanded={isEditingWhen}
-          className="flex w-full items-center gap-1.5 rounded-xl bg-sunken px-3 py-2 text-left text-[13px] active:opacity-60"
-        >
-          <Utensils size={13} className="shrink-0 text-ink-muted" />
-          <span className="font-medium">{MEAL_LABELS[meal]}</span>
-          <span className="tabular min-w-0 flex-1 truncate text-ink-muted">
-            · {formatRelativeDay(at)} {formatTimeOfDay(at)}
-          </span>
-          <ChevronDown
-            size={15}
-            className={cn('shrink-0 text-ink-muted transition-transform', isEditingWhen && 'rotate-180')}
-          />
-        </button>
-        {isEditingWhen && (
-          <Card className="mt-2 p-3">
-            <MealTimePicker meal={meal} at={at} onMeal={onMeal} onAt={onAt} />
-          </Card>
-        )}
-      </div>
+      <WhenLine meal={meal} at={at} onMeal={onMeal} onAt={onAt} />
 
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">

@@ -209,19 +209,19 @@ test('device-only setup reaches the log, then logs a food', async ({ page }) => 
     'true',
   )
 
-  // Tapping a row opens the amount in place — the common correction, without a sheet.
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  const stepper = page.locator('input[aria-label^="Amount of"]').first()
-  await expect(stepper).toBeVisible()
-  const before = await stepper.inputValue()
-  await page.getByRole('button', { name: /^More Chicken breast/ }).click()
-  await expect(stepper).not.toHaveValue(before)
+  const amount = page.getByLabel('Amount', { exact: true })
+  await expect(amount).toBeVisible()
+  const before = await amount.inputValue()
+  await page.getByRole('button', { name: 'More', exact: true }).click()
+  await expect(amount).not.toHaveValue(before)
+  await page.getByRole('button', { name: /^Save/ }).click()
 
-  // Which is a real change, so it can be reverted wholesale.
   await expect(page.getByRole('button', { name: 'Revert' })).toBeVisible()
   await page.getByRole('button', { name: 'Revert' }).click()
-  await expect(stepper).toHaveValue(before)
   await expect(page.getByRole('button', { name: 'Revert' })).toHaveCount(0)
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await expect(page.getByLabel('Amount', { exact: true })).toHaveValue(before)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -449,7 +449,7 @@ test('several foods log at once, at the amount each was last eaten in', async ({
   await page.getByLabel('Amount', { exact: true }).fill('183')
   // And the screen says what it does to the day, which is the question at this moment. This account
   // has no target (facts skipped), so it states the day's totals rather than a ring against one.
-  await expect(page.getByText('Your day, once this is logged')).toBeVisible()
+  await expect(page.getByText('Your day with this')).toBeVisible()
   await page.getByRole('button', { name: /^Log it/ }).click()
 
   // Now the tick path, without leaving: the screen stayed open, which is the point of it.
@@ -551,8 +551,8 @@ test('a recipe logs as its ingredients, each with its own macros', async ({ page
   await page.getByRole('button', { name: /Two things/ }).first().click()
   await expect(page.getByText(/Chicken breast/).first()).toBeVisible()
   await expect(page.getByText(/Rice/).first()).toBeVisible()
-  // And one tap re-logs the whole dish, which is the answer to "I had another one".
-  await expect(page.getByRole('button', { name: /Have this again/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Log again/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Back' }).click()
 
   // And the recipe still counts as cooked — the rows carry it as provenance, since a row's subject
@@ -721,11 +721,11 @@ test('a described dish can be removed, and kept as one of its units', async ({ p
 
   // A single food is not wrapped in a dish: that would add a layer to open for nothing.
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
-  await expect(page.getByRole('button', { name: /Have this again/ })).toHaveCount(0)
+  await expect(page.getByText(/\d+ items?$/)).toHaveCount(0)
 
-  // Removing a lone row is the row's own bin.
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
-  await expect(page.getByRole('button', { name: /^Remove Chicken breast/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.getByText(/Nothing logged/).first()).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -1096,6 +1096,91 @@ test('home keeps score: a level, the day’s goals, the next badges, and a cheer
   await expect(page.getByRole('heading', { name: 'Badges', level: 1 })).toBeVisible()
   await page.getByRole('button', { name: 'Back' }).click()
   await expect(page.getByRole('status', { name: 'Day One' })).toHaveCount(0)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+async function logChickenAndOpenTheDay(page: import('@playwright/test').Page) {
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+}
+
+test('a logged food is edited on the screen it was added with', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+  await logChickenAndOpenTheDay(page)
+
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByLabel('Unit').selectOption({ label: 'grams' })
+  await page.getByLabel('Amount', { exact: true }).fill('250')
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack) ·/ }).click()
+  await page.getByRole('button', { name: 'Dinner', exact: true }).click()
+  await page.getByRole('button', { name: /^Save/ }).click()
+
+  await expect(page.getByText('Dinner', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('250g')).toBeVisible()
+
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await expect(page.getByLabel('Amount', { exact: true })).toHaveValue('250')
+  await page.getByRole('button', { name: 'Log again', exact: true }).click()
+  await expect(page.getByRole('button', { name: /Chicken breast/ })).toHaveCount(2)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a past day’s food can be logged again today from its edit screen', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+  await logChickenAndOpenTheDay(page)
+
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack) ·/ }).click()
+  const when = page.locator('input[type="datetime-local"]')
+  const value = await when.inputValue()
+  const shifted = new Date(Date.parse(value) - 86_400_000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  await when.fill(
+    `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}T${value.slice(11)}`,
+  )
+  await page.getByRole('button', { name: /^Save/ }).click()
+  await expect(page.getByText(/Nothing logged/).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Previous day' }).click()
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: 'Log again today' }).click()
+  await page.getByRole('button', { name: 'Next day' }).click()
+  await expect(page.getByRole('button', { name: /Chicken breast/ })).toHaveCount(1)
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('a food with no stated serving still offers ounces and a cup', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('parmesan fries')
+  await page.getByRole('button', { name: /Create .parmesan fries./ }).click()
+  await page.getByPlaceholder('Name').fill('Parmesan fries')
+  await page.getByRole('button', { name: 'Per 100 g' }).click()
+  await page.getByLabel('kcal').fill('300')
+  await page.getByLabel('Protein in g').fill('5')
+  await page.getByLabel('Carbs in g').fill('35')
+  await page.getByLabel('Fat in g').fill('15')
+  await page.getByRole('button', { name: 'Save and log it' }).click()
+
+  const unit = page.getByLabel('Unit')
+  await expect(unit.locator('option', { hasText: /^oz$/ })).toHaveCount(1)
+  await expect(unit.locator('option', { hasText: /cup/ }).first()).toBeAttached()
+  await expect(unit).toHaveValue(/^like:/)
+  await page.getByLabel('Amount', { exact: true }).fill('1.5')
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await expect(page.getByText(/Parmesan fries/).first()).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

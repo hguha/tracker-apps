@@ -2,8 +2,9 @@ import { syncStamp, touch } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
 import { type CustomFood, type Food, type FoodPortion, type Nutrients } from '@/domain/types'
-import { portionFor } from '@/lib/nutrition'
+import { householdPortions, portionFor } from '@/lib/nutrition'
 import { haystackOf, matchesHaystack, overlapScore, queryTerms, rankFoods } from '@/lib/foodSearch'
+import { closestGeneric, type LentPortions } from '@/lib/borrowPortions'
 import { activeUserId, alive, isPresent } from './internal'
 
 /**
@@ -238,4 +239,15 @@ export async function deleteCustomFood(id: string): Promise<void> {
 export async function putFoods(foods: readonly Food[]): Promise<void> {
   await db.foods.bulkPut(foods as Food[])
   invalidateFoodIndex()
+}
+
+export type BorrowedPortions = LentPortions
+
+export async function borrowedPortions(food: Food): Promise<BorrowedPortions | null> {
+  if (householdPortions(food).length > 0) return null
+  const rows = await allCachedFoods()
+  return closestGeneric(
+    food,
+    rows.map((row) => row.food),
+  )
 }

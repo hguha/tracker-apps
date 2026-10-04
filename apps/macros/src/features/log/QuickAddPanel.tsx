@@ -1,22 +1,45 @@
 import { useState } from 'react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { gramsToMg } from '@/lib/nutrition'
-import { EMPTY_NUTRIENTS } from '@/domain/types'
+import { gramsToMg, mgToGrams } from '@/lib/nutrition'
+import { EMPTY_NUTRIENTS, type Nutrients } from '@/domain/types'
 import type { LogTarget } from '@/features/shared/target'
+import { EditActions } from './EditActions'
+
+interface QuickEdit {
+  label: string
+  nutrients: Nutrients
+  copyLabel: string
+  onSave: (label: string, nutrients: Nutrients) => Promise<void>
+  onCopy: (label: string, nutrients: Nutrients) => Promise<void>
+  onDelete: () => Promise<void>
+}
+
+const asField = (mg: number) => String(Math.round(mgToGrams(mg)))
 
 /** For a label in your hand and no database row — the escape hatch that stops someone
  *  abandoning the log entirely. */
 export function QuickAddPanel({
   target,
   onDone,
+  edit,
 }: {
   target: LogTarget
   onDone: () => void
+  edit?: QuickEdit
 }) {
   const toast = useToast()
-  const [label, setLabel] = useState('')
-  const [fields, setFields] = useState({ kcal: '', protein: '', carbs: '', fat: '' })
+  const [label, setLabel] = useState(edit?.label ?? '')
+  const [fields, setFields] = useState(
+    edit
+      ? {
+          kcal: String(edit.nutrients.kcal),
+          protein: asField(edit.nutrients.proteinMg),
+          carbs: asField(edit.nutrients.carbsMg),
+          fat: asField(edit.nutrients.fatMg),
+        }
+      : { kcal: '', protein: '', carbs: '', fat: '' },
+  )
   const [isSaving, setIsSaving] = useState(false)
 
   const numbers = {
@@ -24,6 +47,18 @@ export function QuickAddPanel({
     proteinMg: gramsToMg(Number(fields.protein) || 0),
     carbsMg: gramsToMg(Number(fields.carbs) || 0),
     fatMg: gramsToMg(Number(fields.fat) || 0),
+  }
+
+  const whole = (): Nutrients => ({ ...(edit?.nutrients ?? EMPTY_NUTRIENTS), ...numbers })
+
+  async function run(action: () => Promise<void>) {
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      await action()
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function log() {
@@ -73,9 +108,21 @@ export function QuickAddPanel({
         ))}
       </div>
 
-      <Button className="w-full" disabled={numbers.kcal <= 0 || isSaving} onClick={() => void log()}>
-        {isSaving ? 'Logging…' : 'Add'}
-      </Button>
+      {edit ? (
+        <EditActions
+          kcal={numbers.kcal}
+          canSave={numbers.kcal > 0}
+          isBusy={isSaving}
+          copyLabel={edit.copyLabel}
+          onSave={() => void run(() => edit.onSave(label.trim() || 'Calories only', whole()))}
+          onCopy={() => void run(() => edit.onCopy(label.trim() || 'Calories only', whole()))}
+          onDelete={() => void run(edit.onDelete)}
+        />
+      ) : (
+        <Button className="w-full" disabled={numbers.kcal <= 0 || isSaving} onClick={() => void log()}>
+          {isSaving ? 'Logging…' : 'Add'}
+        </Button>
+      )}
     </div>
   )
 }
