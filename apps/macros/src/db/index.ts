@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie'
 import type { DeadLetterEntry, OutboxEntry, SyncState } from '@tracker-engine/local-first'
 import { createOwnerGuard } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
+import { entryChangeTracker } from './entryChanges'
 import type {
   BodyWeightRow,
   CustomFood,
@@ -118,6 +119,7 @@ export class MacrosDatabase extends Dexie {
             profile.reminders ??= null
           })
       })
+    this.use(entryChangeTracker)
   }
 }
 
