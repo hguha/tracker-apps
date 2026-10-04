@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { bodyWeightFromKg, cn, convertWeight, signed, weightToKg } from '@tracker-engine/core'
 import { ChevronDown } from 'lucide-react'
@@ -277,6 +277,7 @@ function GoalWeightField({ program }: { program: Program }) {
   const units = useUnits()
   const stored = program.targetKg === null ? '' : String(bodyWeightFromKg(program.targetKg, units.weight))
   const [value, setValue] = useState(stored)
+  useEffect(() => setValue(stored), [stored])
 
   const commit = () => {
     const entered = Number(value)
@@ -306,8 +307,6 @@ function GoalWeightField({ program }: { program: Program }) {
         type="number"
         inputMode="decimal"
         step="0.1"
-        // Keyed on the unit so switching kg/lb re-reads the stored value into the box.
-        key={units.weight}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onBlur={commit}

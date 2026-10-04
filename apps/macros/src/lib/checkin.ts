@@ -1,4 +1,13 @@
-import { dayNoon, signed, weekKey, weekStart, type WeekStart } from '@tracker-engine/core'
+import {
+  convertWeight,
+  dayNoon,
+  groupBy,
+  signed,
+  weekKey,
+  weekStart,
+  type WeekStart,
+  type WeightUnit,
+} from '@tracker-engine/core'
 import { weightTrend, type BodyWeight } from '@tracker-engine/body'
 import {
   estimateInitialExpenditure,
@@ -46,12 +55,7 @@ export type CheckInOutcome =
 
 /** Weeks are grouped once here so the estimator and the UI can't disagree about boundaries. */
 export function groupByWeek<T>(items: readonly T[], dayOf: (item: T) => string) {
-  const weeks = new Map<string, T[]>()
-  for (const item of items) {
-    const key = weekKey(dayNoon(dayOf(item)), WEEK_STARTS_ON)
-    weeks.set(key, [...(weeks.get(key) ?? []), item])
-  }
-  return weeks
+  return groupBy(items, (item) => weekKey(dayNoon(dayOf(item)), WEEK_STARTS_ON))
 }
 
 export function currentWeekKey(now: number): string {
@@ -153,6 +157,15 @@ function coldStart(inputs: CheckInInputs, trendKg: number): ExpenditureState | n
     // error bar — never as a fact about this person.
     activity: activity ?? null,
   })
+}
+
+export function describeCheckIn(
+  checkIn: Pick<CheckInDraft, 'trendChangeKgPerWeek' | 'expenditureKcal' | 'expenditureSe'>,
+  unit: WeightUnit,
+): string {
+  const rate = checkIn.trendChangeKgPerWeek
+  const direction = rate > 0.05 ? 'rising' : rate < -0.05 ? 'falling' : 'flat'
+  return `Weight ${direction} at ${signed(convertWeight(rate, unit), 2)} ${unit}/week · burning ${checkIn.expenditureKcal} ± ${checkIn.expenditureSe} kcal/day`
 }
 
 /** Why the number moved, in one sentence. A target nobody understands is a target nobody keeps. */

@@ -379,6 +379,26 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
+test('a goal weight entered in lb stays in lb', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { goal: 'lose', facts: false, weight: '180', units: 'imperial' })
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  const goal = page.getByPlaceholder('lb', { exact: true })
+  await goal.fill('165')
+  await goal.blur()
+  await expect(page.getByText(/to 165 lb/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  await expect(page.getByPlaceholder('lb', { exact: true })).toHaveValue('165')
+  await page.getByPlaceholder('lb', { exact: true }).blur()
+  await expect(page.getByText(/to 165 lb/)).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
 test('switching to imperial changes every weight on screen', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { goal: 'maintain', facts: false, weight: '80' })

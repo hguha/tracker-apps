@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, useToast } from '@tracker-engine/ui'
 import { RefreshCw } from 'lucide-react'
 import * as repo from '@/data/repository'
+import { describeCheckIn } from '@/lib/checkin'
+import { useUnits } from '@/features/shared/useUnits'
 import { Numbers } from './CheckInCard'
 
 /** The week needs this much before an expenditure estimate means anything. */
@@ -13,6 +15,7 @@ export function CheckInStatusCard() {
   const toast = useToast()
   const [isRunning, setIsRunning] = useState(false)
   const status = useLiveQuery(() => repo.checkInStatus(), [], undefined)
+  const units = useUnits()
 
   const enoughDays = (status?.daysLogged ?? 0) >= MIN_DAYS
   const enoughWeighIns = (status?.weighIns ?? 0) >= MIN_WEIGH_INS
@@ -42,7 +45,7 @@ export function CheckInStatusCard() {
               Already run for this week ({status.existing.status}).
             </p>
             <Numbers checkIn={status.existing} />
-            <p className="mt-1 text-[12.5px] text-ink-secondary">{status.existing.note}</p>
+            <p className="mt-1 text-[12.5px] text-ink-secondary">{describeCheckIn(status.existing, units.weight)}</p>
           </div>
         ) : status?.outcome?.kind === 'ready' ? (
           <div className="mt-3 border-t border-line pt-3">
@@ -51,7 +54,7 @@ export function CheckInStatusCard() {
               {status.outcome.draft.targets.kcal}
               <span className="text-[13px] font-medium text-ink-muted"> kcal/day</span>
             </p>
-            <p className="mt-1 text-[12.5px] text-ink-secondary">{status.outcome.draft.note}</p>
+            <p className="mt-1 text-[12.5px] text-ink-secondary">{describeCheckIn(status.outcome.draft, units.weight)}</p>
           </div>
         ) : (
           <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-ink-muted">
