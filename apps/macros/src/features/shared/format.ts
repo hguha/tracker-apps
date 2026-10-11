@@ -1,5 +1,5 @@
 import type { UnitPreference } from '@tracker-engine/core'
-import { mgToGrams, portionFor } from '@/lib/nutrition'
+import { mgToGrams, nutrientsFor, portionFor } from '@/lib/nutrition'
 import { householdAmount } from '@/lib/householdAmount'
 import type { LastAmount } from '@/data/repository'
 import type { Food } from '@/domain/types'
@@ -90,7 +90,13 @@ export function describeAmount(food: Food, last: LastAmount | null | undefined):
   const grams = amountGrams(food, last)
   const portion = last?.portionId ? portionFor(food, last.portionId) : null
   const count = last?.portionCount ?? 1
-  return portion
-    ? `${count} × ${portionLabel(portion)} · ${Math.round(grams)} g`
-    : `${Math.round(grams)} g`
+  if (!portion) return `${Math.round(grams)} g`
+  const label = count === 1 ? portionLabel(portion) : `${count} × ${portionLabel(portion)}`
+  return `${label} · ${Math.round(grams)} g`
+}
+
+export function servingLine(food: Food): string {
+  const portion = portionFor(food, null)
+  const kcal = Math.round(nutrientsFor(food, portion?.grams ?? 100).kcal)
+  return `${kcal} kcal · ${portion ? portionWithGrams(portion) : '100 g'}`
 }

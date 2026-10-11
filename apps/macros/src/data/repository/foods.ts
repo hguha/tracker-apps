@@ -4,6 +4,8 @@ import { enqueue, newId, patch } from '@/data/outbox'
 import { type CustomFood, type Food, type FoodPortion, type Nutrients } from '@/domain/types'
 import { portionFor } from '@/lib/nutrition'
 import { haystackOf, matchesHaystack, overlapScore, queryTerms, rankFoods } from '@/lib/foodSearch'
+import { isAverage } from '@/lib/averageFood'
+import { namesIngredient } from '@/lib/ingredientMatch'
 import { closestGeneric, lendersFrom, type Lender, type LentPortions } from '@/lib/borrowPortions'
 import { activeUserId, alive, isPresent } from './internal'
 
@@ -117,12 +119,23 @@ export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
     else rest.push(row)
   }
 
-  const ranked = rankFoods(strict, query, limit)
+  const ranked = rankFoods(distinct(strict), query, limit)
   // Only when the strict search has genuinely come up short. A single-term query has nothing to relax,
   // and a query with a real page of exact matches doesn't want rows that matched half of it: "chicken
   // thigh" with a dozen answers should not start listing everything containing "chicken".
   if (terms.length < 2 || ranked.length >= ENOUGH_STRICT) return ranked
-  return [...ranked, ...bestOverlap(rest, terms, query, limit - ranked.length)]
+  const named = rest.filter((row) => namesIngredient(row.food, query))
+  return [...ranked, ...bestOverlap(named.length > 0 ? named : rest, terms, query, limit - ranked.length)]
+}
+
+function distinct(foods: readonly Food[]): Food[] {
+  const seen = new Set<string>()
+  return foods.filter((food) => {
+    const key = `${food.description.toLowerCase()}|${food.brand ?? ''}|${food.per100.kcal}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**
@@ -229,6 +242,24 @@ export async function keepAsOwnFood(food: Food): Promise<Food> {
     per100: food.per100,
   })
   return (await db.customFoods.get(id)) ?? food
+}
+
+export async function adoptAverage(food: Food): Promise<Food> {
+  if (!isAverage(food) || food.id.startsWith('custom:')) return food
+  const existing = await db.customFoods
+    .filter((row) => alive(row) && isAverage(row) && row.description === food.description)
+    .first()
+  const row: CustomFood = {
+    ...food,
+    id: existing?.id ?? `custom:${newId()}`,
+    userId: activeUserId,
+    ...syncStamp(),
+    ...(existing ? { ...touch(existing.clientRev), createdAt: existing.createdAt } : {}),
+  }
+  await db.customFoods.put(row)
+  await enqueue('customFoods', row.id)
+  invalidateFoodIndex()
+  return row
 }
 
 export async function deleteCustomFood(id: string): Promise<void> {

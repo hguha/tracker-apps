@@ -28,7 +28,7 @@ import type { LastAmount } from '@/data/repository'
 import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'
 import { FitsPanel } from './FitsPanel'
-import { DescribeRow, Empty, FoodList, MoreWaysSheet } from './browseRows'
+import { AverageRow, DescribeRow, Empty, FoodList, MoreWaysSheet } from './browseRows'
 import { LoggableList } from '@/features/shared/LoggableList'
 import { fromLibrary, fromRecent } from '@/features/shared/loggable'
 import { WhenLine } from './WhenLine'
@@ -246,7 +246,7 @@ function BrowsePanel({
         : [...current, food],
     )
 
-  const { results, isSearching } = useFoodSearch(query)
+  const { results, average, isSearching } = useFoodSearch(query)
   const settled = useDebouncedValue(trimmed)
   const libraryHits = useLiveQuery(() => repo.searchLibrary(settled), [settled], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
@@ -378,6 +378,9 @@ function BrowsePanel({
             this — ask the AI, or create the food — *are* the answer, and a card between them saying
             so only pushed them apart.
           */}
+          {average && (
+            <AverageRow food={average} onOpen={() => onOpen({ kind: 'food', food: average })} />
+          )}
           {(results.length > 0 || isSearching) && (
             <FoodList
               foods={results}

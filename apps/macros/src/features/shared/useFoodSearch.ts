@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { searchRemote } from '@/data/foodLookup'
+import { averageFood, isAverage } from '@/lib/averageFood'
 import type { Food } from '@/domain/types'
 
 /**
@@ -19,6 +20,7 @@ import type { Food } from '@/domain/types'
  */
 interface FoodSearchState {
   results: Food[]
+  average: Food | null
   /** True while a remote lookup for the current query is in flight. */
   isSearching: boolean
   /** True when the search has finished and genuinely found nothing. */
@@ -28,6 +30,7 @@ interface FoodSearchState {
 /** Below this a query is too vague to spend a request on. */
 const MIN_REMOTE_CHARS = 3
 const DEBOUNCE_MS = 400
+const AVERAGE_POOL = 60
 
 /**
  * Queries already sent this session, so retyping one is free.
@@ -46,7 +49,15 @@ export function useFoodSearch(
   { limit = 40, branded = true }: { limit?: number; branded?: boolean } = {},
 ): FoodSearchState {
   const trimmed = query.trim()
-  const results = useLiveQuery(() => repo.searchFoods(trimmed, limit), [trimmed, limit], undefined)
+  const pool = useLiveQuery(
+    () => repo.searchFoods(trimmed, Math.max(limit, AVERAGE_POOL)),
+    [trimmed, limit],
+    undefined,
+  )
+  const average = useMemo(() => (pool ? averageFood(trimmed, pool) : null), [pool, trimmed])
+  const results = pool
+    ?.filter((food) => !(average && isAverage(food) && food.description === average.description))
+    .slice(0, limit)
   const [searchingFor, setSearchingFor] = useState<string | null>(null)
 
   useEffect(() => {
@@ -72,6 +83,7 @@ export function useFoodSearch(
 
   return {
     results: results ?? [],
+    average,
     isSearching,
     // Undefined results means the local query hasn't run yet, which is not the same as "nothing".
     isEmpty: results !== undefined && results.length === 0 && !isSearching,

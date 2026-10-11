@@ -11,7 +11,7 @@ import {
   type Venue,
 } from '@/domain/types'
 import { nutrientsFor, portionFor, scale as scaleNutrients } from '@/lib/nutrition'
-import { getFood } from './foods'
+import { adoptAverage, getFood } from './foods'
 import { activeUserId, alive, byRecency, isLater, nextSortIndex } from './internal'
 
 /** Every surviving entry. Only for lifetime aggregates — screens read a window. */
@@ -160,9 +160,10 @@ interface LogFoodInput {
  * update can correct future logs without silently rewriting what someone already ate.
  */
 export async function logFood(input: LogFoodInput): Promise<string> {
+  const food = await adoptAverage(input.food)
   const portion = input.portionId === undefined
-    ? portionFor(input.food, null)
-    : portionFor(input.food, input.portionId)
+    ? portionFor(food, null)
+    : portionFor(food, input.portionId)
   const count = input.portionCount ?? 1
   const grams = input.grams ?? (portion ? portion.grams * count : 100)
   const eatenAt = input.eatenAt ?? Date.now()
@@ -174,7 +175,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     eatenAt,
     meal: input.meal,
     sortIndex: nextSortIndex(eatenAt),
-    foodId: input.food.id,
+    foodId: food.id,
     recipeId: null,
     quickAdd: null,
     fromRecipeId: input.fromRecipeId ?? null,
@@ -183,7 +184,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     grams,
     portionId: input.grams !== undefined ? null : (portion?.id ?? null),
     portionCount: input.grams !== undefined ? null : count,
-    nutrients: nutrientsFor(input.food, grams),
+    nutrients: nutrientsFor(food, grams),
     source: input.source ?? 'search',
     estimate: input.estimate ?? null,
     venue: input.venue ?? null,

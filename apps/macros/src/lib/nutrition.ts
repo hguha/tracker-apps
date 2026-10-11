@@ -81,6 +81,23 @@ export function nutrientsFor(food: Food, grams: number): Nutrients {
   return scale(food.per100, grams / 100)
 }
 
+export function medianNutrients(items: readonly Nutrients[]): Nutrients {
+  const out: NutrientRecord = { ...EMPTY_NUTRIENTS }
+  for (const key of NUTRIENT_KEYS) {
+    const known = items.map((item) => item[key]).filter((value): value is number => value !== null)
+    const isCore = (CORE_NUTRIENT_KEYS as readonly string[]).includes(key)
+    out[key] = isCore || known.length * 2 >= items.length ? Math.round(median(known) ?? 0) : null
+  }
+  return out as Nutrients
+}
+
+export function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+}
+
 /**
  * Sums a list. A nullable nutrient is null unless *every* contributor reports it —
  * summing only the known rows would understate the total while looking precise.

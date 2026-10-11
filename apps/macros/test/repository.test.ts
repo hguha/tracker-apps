@@ -3,7 +3,7 @@ import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
 import { givenFoods, testFood } from './fixtures'
-import { dayKey } from '@tracker-engine/core'
+import { dayKey, dayKeyOffset } from '@tracker-engine/core'
 import { dayTotals, nutrientsFor } from '@/lib/nutrition'
 import { lastCompleteWeekKey } from '@/lib/checkin'
 import { multipliersForHighDays } from '@/lib/cycling'
@@ -734,9 +734,9 @@ describe('recentItems', () => {
     // five rows — none of which named a food — and it grew without bound instead of converging on the
     // handful of things a person actually eats.
     const food = await chicken()
-    for (const day of ['2026-09-06', '2026-09-07', '2026-09-08']) {
+    for (const daysAgo of [3, 2, 1]) {
       const dishId = repo.newDishId()
-      const at = Date.parse(`${day}T12:30:00`)
+      const at = Date.parse(`${dayKeyOffset(Date.now(), daysAgo)}T12:30:00`)
       await repo.logFood({ food, grams: 150, meal: 'lunch', eatenAt: at, dishId, dishName: 'Usual lunch' })
       await repo.logFood({ food, grams: 50, meal: 'lunch', eatenAt: at, dishId, dishName: 'Usual lunch' })
     }

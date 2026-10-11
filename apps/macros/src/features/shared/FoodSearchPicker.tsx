@@ -3,6 +3,8 @@ import { SearchField } from '@tracker-engine/ui'
 import { Loader2, Plus } from 'lucide-react'
 import { portionWithGrams } from '@/features/shared/format'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
+import * as repo from '@/data/repository'
+import { isAverage } from '@/lib/averageFood'
 import type { Food } from '@/domain/types'
 
 /**
@@ -46,7 +48,8 @@ export function FoodSearchPicker({
 }) {
   const [query, setQuery] = useState(initialQuery)
   const trimmed = query.trim()
-  const { results, isSearching, isEmpty } = useFoodSearch(query, { limit, branded })
+  const { results, average, isSearching, isEmpty } = useFoodSearch(query, { limit, branded })
+  const shown = average ? [average, ...results.slice(0, limit - 1)] : results
 
   return (
     <div>
@@ -61,11 +64,11 @@ export function FoodSearchPicker({
         <>
           {lead?.(trimmed, () => setQuery(''))}
           <ul className="mt-1.5">
-            {results.map((food) => (
+            {shown.map((food) => (
               <li key={food.id}>
                 <button
                   onClick={() => {
-                    onPick(food)
+                    void repo.adoptAverage(food).then(onPick)
                     setQuery('')
                   }}
                   className="flex w-full items-center gap-2 py-1.5 text-left active:opacity-60"
@@ -73,6 +76,7 @@ export function FoodSearchPicker({
                   <Plus size={14} className="shrink-0 text-accent" />
                   <span className="min-w-0 flex-1 truncate text-[13.5px]">
                     {food.description}
+                    {isAverage(food) && <span className="font-semibold text-accent"> · average</span>}
                     {food.portions.length > 0 && (
                       <span className="text-ink-muted"> · {portionWithGrams(food.portions[0]!)}</span>
                     )}

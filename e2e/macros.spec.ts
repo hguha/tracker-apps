@@ -834,9 +834,10 @@ test('the day screen shows what each food contributes, and what the day comes to
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
 
-  // The portion screen answers "does this fit", not just "what is in it" — a ring for the day it will
-  // make, and each macro bar split into what's already eaten plus what this adds.
-  await expect(page.getByText(/still free after this/)).toBeVisible()
+  await expect(page.getByText(/left after this/)).toBeVisible()
+  await expect(page.getByText('Already eaten')).toBeVisible()
+  await expect(page.getByText(/^\+\d+$/).first()).toBeVisible()
+  await expect(page.getByText(/^\+\d+g$/).first()).toBeVisible()
   await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
 
@@ -1085,6 +1086,22 @@ test('targets can be typed in, and they reach the day', async ({ page }) => {
   await page.getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByText('of 2550')).toBeVisible()
   await expect(page.getByText('0 / 180g')).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
+test('searching a dish many brands sell offers their average first', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('hummus')
+  await page.getByRole('button', { name: /Hummus, average/ }).click()
+  await expect(page.getByText(/^Average of \d+/)).toBeVisible()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('hummus')
+  await expect(page.getByRole('button', { name: /Hummus, average/ })).toHaveCount(1)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

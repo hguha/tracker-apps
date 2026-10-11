@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cn, dayKey } from '@tracker-engine/core'
-import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
+import { dayKey } from '@tracker-engine/core'
+import { Button, useToast } from '@tracker-engine/ui'
 import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { dayTotals, mgToGrams, scale, sum } from '@/lib/nutrition'
 import { MACRO_BARS } from '@/features/shared/MacroBar'
+import { SplitRing } from '@/features/shared/SplitRing'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import {
   describeLoggable,
@@ -133,6 +134,8 @@ export function AddPanel({
   const already = dayTotals((dayEntries ?? []).filter((entry) => !excluded.has(entry.id)))
   const after = adding ? sum([already, adding]) : already
 
+  const isLastTime = last !== undefined && last !== null && !isEdited
+
   const nudge = (delta: number) => {
     setIsEdited(true)
     setAmount(String(Math.max(unit.min, Math.round((count + delta) * 100) / 100)))
@@ -152,8 +155,8 @@ export function AddPanel({
     if (count === 0) return
     await run(async () => {
       const written = await subject.log(unit, count, target)
-      toast.show(written === 0 ? 'Nothing to log' : `Logged ${subject.title}`)
-      if (written > 0) onDone(written)
+      if (written === 0) toast.show('Nothing to log')
+      else onDone(written)
     })
   }
 
@@ -231,16 +234,24 @@ export function AddPanel({
         )}
       </div>
 
-      <p className="tabular text-[12.5px] text-ink-muted">
-        {count === 0 ? 'Pick an amount' : unit.summaryAt(count)}
-        {last !== undefined && last !== null && !isEdited && ' · what you had last time'}
-      </p>
+      {(count === 0 || isLastTime || !unit.label.endsWith(unit.summaryAt(count))) && (
+        <p className="tabular text-[12.5px] text-ink-muted">
+          {count === 0
+            ? 'Pick an amount'
+            : [
+                !unit.label.endsWith(unit.summaryAt(count)) && unit.summaryAt(count),
+                isLastTime && 'what you had last time',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+        </p>
+      )}
 
       {isDayLoaded ? (
         <DayPreview already={already} adding={adding} after={after} targets={targets ?? null} />
       ) : (
         // A placeholder of roughly the right height, so the panel doesn't jump when it lands.
-        <div className="h-[122px] rounded-xl bg-sunken" aria-hidden />
+        <div className="h-[196px] rounded-xl bg-sunken" aria-hidden />
       )}
 
       {subject.isComposite && parts !== undefined && parts.length > 0 && (
@@ -361,14 +372,6 @@ function PartRow({
   )
 }
 
-/**
- * The day as it will be, with this addition drawn on top of what is already there.
- *
- * Two segments per bar rather than one, because "does this fit" is a question about the *increment*:
- * a protein bar at 82% tells you nothing about whether the chicken you are about to log is what got
- * it there. Without a target there is nothing to fit inside, so it falls back to stating the day's
- * totals — still more use than the item's macros alone, which the row above already gave.
- */
 function DayPreview({
   already,
   adding,
@@ -380,70 +383,89 @@ function DayPreview({
   after: Nutrients
   targets: MacroTargets | null
 }) {
-  if (!targets) {
-    return (
-      <div className="rounded-xl bg-sunken px-3 py-2.5">
-        <p className="text-[11px] text-ink-muted">Your day with this</p>
-        <p className="tabular mt-0.5 flex flex-wrap items-baseline gap-x-2.5 text-[13px]">
-          <span className="font-semibold">{after.kcal} kcal</span>
-          {MACRO_BARS.map((macro) => (
-            <span key={macro.key} className="flex items-baseline gap-1">
-              <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{ background: macro.color }}
-                aria-hidden
-              />
-              {Math.round(mgToGrams(after[macro.key]))}g
-            </span>
-          ))}
-        </p>
-      </div>
-    )
-  }
-
-  const left = targets.kcal - after.kcal
+  const added = adding?.kcal ?? 0
+  const left = targets ? targets.kcal - after.kcal : null
 
   return (
     <div className="rounded-xl bg-sunken p-3">
       <div className="flex items-center gap-3.5">
-        <ProgressRing value={after.kcal} max={targets.kcal} size={78}>
-          <div className="text-center">
-            <div className="tabular text-[17px] font-bold leading-none">{after.kcal}</div>
-            <div className="text-[10px] text-ink-muted">of {targets.kcal}</div>
+        {targets ? (
+          <SplitRing before={already.kcal} adding={added} max={targets.kcal}>
+            <div className="text-center">
+              <div
+                className={`tabular font-bold leading-none text-accent ${added >= 1000 ? 'text-[14px]' : 'text-[17px]'}`}
+              >
+                +{added.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-ink-muted">kcal</div>
+            </div>
+          </SplitRing>
+        ) : (
+          <div className="shrink-0">
+            <p className="text-[11px] text-ink-muted">Your day with this</p>
+            <p className="tabular text-[20px] font-bold leading-tight text-accent">+{added}</p>
           </div>
-        </ProgressRing>
+        )}
 
-        <div className="min-w-0 flex-1 space-y-1.5">
-          {MACRO_BARS.map((macro) => (
-            <SplitBar
-              key={macro.key}
-              label={macro.label}
-              alreadyMg={already[macro.key]}
-              addingMg={adding?.[macro.key] ?? 0}
-              targetMg={targets[macro.key]}
-              color={macro.color}
-            />
-          ))}
+        <div className="min-w-0 flex-1">
+          <p className="tabular text-[15px] leading-tight">
+            <span className="text-ink-muted">{already.kcal.toLocaleString()}</span>
+            <span className="text-ink-muted"> → </span>
+            <span className="font-semibold">{after.kcal.toLocaleString()}</span>
+            {targets && (
+              <span className="text-[12px] text-ink-muted"> of {targets.kcal.toLocaleString()}</span>
+            )}
+          </p>
+          {left !== null && (
+            <p
+              className="tabular mt-0.5 text-[12.5px]"
+              style={{ color: left >= 0 ? 'var(--text-secondary)' : 'var(--target-over)' }}
+            >
+              {left >= 0
+                ? `${left.toLocaleString()} left after this`
+                : `${Math.abs(left).toLocaleString()} over after this`}
+            </p>
+          )}
+          <p className="mt-1.5 flex items-center gap-3 text-[11px] text-ink-muted">
+            <Swatch tone="before" />
+            Already eaten
+            <Swatch tone="adding" />
+            Adding
+          </p>
         </div>
       </div>
 
-      <p className="mt-2.5 text-[12.5px]">
-        {left >= 0 ? (
-          <span className="text-ink-secondary">
-            <span className="tabular font-semibold">{left} kcal</span> still free after this.
-          </span>
-        ) : (
-          <span style={{ color: 'var(--target-over)' }}>
-            <span className="tabular font-semibold">{Math.abs(left)} kcal</span> over target with
-            this.
-          </span>
-        )}
-      </p>
+      <div className="mt-3 space-y-2">
+        {MACRO_BARS.map((macro) => (
+          <SplitBar
+            key={macro.key}
+            label={macro.label}
+            alreadyMg={already[macro.key]}
+            addingMg={adding?.[macro.key] ?? 0}
+            targetMg={targets?.[macro.key] ?? null}
+            color={macro.color}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
-/** Already eaten, then this addition on top, against the target. */
+function Swatch({ tone }: { tone: 'before' | 'adding' }) {
+  return (
+    <span
+      aria-hidden
+      className="-mr-2 inline-block size-2 rounded-full"
+      style={{
+        background:
+          tone === 'adding'
+            ? 'var(--accent)'
+            : 'color-mix(in srgb, var(--accent) 32%, transparent)',
+      }}
+    />
+  )
+}
+
 function SplitBar({
   label,
   alreadyMg,
@@ -454,30 +476,43 @@ function SplitBar({
   label: string
   alreadyMg: number
   addingMg: number
-  targetMg: number
+  targetMg: number | null
   color: string
 }) {
-  const pct = (mg: number) => (targetMg <= 0 ? 0 : Math.max(0, (mg / targetMg) * 100))
+  const pct = (mg: number) => (!targetMg || targetMg <= 0 ? 0 : Math.max(0, (mg / targetMg) * 100))
   const base = Math.min(100, pct(alreadyMg))
-  // Clamped against what's left of the bar, so an overshoot doesn't push the segment off the end and
-  // silently disappear — the total is spelled out beside it either way.
   const extra = Math.min(100 - base, pct(addingMg))
+  const before = Math.round(mgToGrams(alreadyMg))
+  const plus = Math.round(mgToGrams(addingMg))
+  const isOver = targetMg !== null && alreadyMg + addingMg > targetMg * 1.05
 
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-2 text-[11px]">
-        <span className="text-ink-secondary">{label}</span>
-        <span className="tabular text-ink-muted">
-          {Math.round(mgToGrams(alreadyMg + addingMg))} / {Math.round(mgToGrams(targetMg))}g
-          {addingMg > 0 && <span style={{ color }}> +{Math.round(mgToGrams(addingMg))}</span>}
+      <div className="flex items-baseline gap-2 text-[12px]">
+        <span className="w-14 shrink-0 text-ink-secondary">{label}</span>
+        <span className="tabular min-w-0 flex-1 text-ink-muted">
+          {before}
+          {' → '}
+          <span className="font-semibold text-ink" style={isOver ? { color: 'var(--target-over)' } : undefined}>
+            {before + plus}g
+          </span>
+          {targetMg !== null && ` of ${Math.round(mgToGrams(targetMg))}g`}
+        </span>
+        <span
+          className="tabular shrink-0 font-semibold"
+          style={{ color: plus > 0 ? color : 'var(--text-muted)' }}
+        >
+          +{plus}g
         </span>
       </div>
-      <div className="mt-0.5 flex h-1.5 overflow-hidden rounded-full bg-page">
-        <span
-          style={{ width: `${base}%`, background: `color-mix(in srgb, ${color} 34%, transparent)` }}
-        />
-        <span className={cn('transition-[width]')} style={{ width: `${extra}%`, background: color }} />
-      </div>
+      {targetMg !== null && (
+        <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-page">
+          <span
+            style={{ width: `${base}%`, background: `color-mix(in srgb, ${color} 34%, transparent)` }}
+          />
+          <span className="transition-[width]" style={{ width: `${extra}%`, background: color }} />
+        </div>
+      )}
     </div>
   )
 }
