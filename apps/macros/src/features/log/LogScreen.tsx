@@ -378,8 +378,12 @@ function BrowsePanel({
             this — ask the AI, or create the food — *are* the answer, and a card between them saying
             so only pushed them apart.
           */}
-          {average && (
-            <AverageRow food={average} onOpen={() => onOpen({ kind: 'food', food: average })} />
+          {(average || (isSearching && terms.length >= 2)) && (
+            <AverageRow
+              food={average}
+              pendingName={capitalise(trimmed)}
+              onOpen={() => average && onOpen({ kind: 'food', food: average })}
+            />
           )}
           {(results.length > 0 || isSearching) && (
             <FoodList
@@ -532,3 +536,5 @@ function atOnDay(day: string | undefined): number {
     ? at + (now.getHours() * 60 + now.getMinutes()) * 60_000
     : Date.now()
 }
+
+const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)

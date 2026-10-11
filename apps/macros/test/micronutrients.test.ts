@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   NUTRIENT_TARGETS,
   bmi,
-  coverageNote,
   dietQuality,
   goalWeightKg,
+  nutrientSources,
   nutrientStatus,
   nutrientTargets,
 } from '@/lib/micronutrients'
@@ -48,14 +48,12 @@ describe('dietQuality', () => {
     expect(quality.summary).toMatch(/No nutrient data/)
   })
 
-  it('reports how much of the picture it could see, and never invents a score', () => {
-    // One nutrient recorded and in range. The old code reduced this to "100%", which read as a
-    // verdict on the whole diet from a single data point.
+  it('counts what it could see, and never invents a score', () => {
     const quality = dietQuality(nutrients({ fiberMg: 30_000 }))
     expect(quality).not.toHaveProperty('score')
     expect(quality.measured).toBe(1)
     expect(quality.tracked).toBe(7)
-    expect(quality.summary).toMatch(/1 of 7 recorded/)
+    expect(quality.summary).toBe('Everything is in range')
   })
 
   it('names each nutrient out of range rather than averaging them away', () => {
@@ -135,7 +133,6 @@ describe('coverage gates the verdict', () => {
     expect(fibre!.verdict).toBe('unknown')
     // The measured amount is still carried, so the bar can be drawn at what was actually seen.
     expect(fibre!.amount).toBe(12_000)
-    expect(coverageNote(fibre!)).toBe('only 30% of what you ate records it')
   })
 
   it('judges once most of the day reports it', () => {
@@ -149,9 +146,21 @@ describe('coverage gates the verdict', () => {
     const [fibre] = nutrientStatus({ ...EMPTY_NUTRIENTS, fiberMg: 40_000 }, 'male')
     expect(fibre!.verdict).toBe('ok')
   })
+})
 
-  it('says nothing recorded it when nothing did', () => {
-    const [fibre] = nutrientStatus({ ...EMPTY_NUTRIENTS, fiberMg: null }, 'male', { fiberMg: 0 })
-    expect(coverageNote(fibre!)).toBe('none of these foods record it')
+describe('where a nutrient comes from', () => {
+  it('names the biggest sources per day, and the foods that do not list it', () => {
+    const rows = [
+      { name: 'Oatmeal', nutrients: nutrients({ kcal: 300, fiberMg: 8_000 }) },
+      { name: 'Apple', nutrients: nutrients({ kcal: 95, fiberMg: 4_000 }) },
+      { name: 'Oatmeal', nutrients: nutrients({ kcal: 300, fiberMg: 8_000 }) },
+      { name: 'Chicken bake', nutrients: nutrients({ kcal: 800, fiberMg: null }) },
+    ]
+    const sources = nutrientSources(rows, 'fiberMg', 2)
+    expect(sources.top).toEqual([
+      { name: 'Oatmeal', amount: 8_000, share: 0.8 },
+      { name: 'Apple', amount: 2_000, share: 0.2 },
+    ])
+    expect(sources.missing).toEqual(['Chicken bake'])
   })
 })

@@ -1,102 +1,26 @@
-import { plural } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import {
-  coverageNote,
-  formatAmount,
-  nutrientStatus,
-  nutrientTargets,
-  type ReferenceSex,
-} from '@/lib/micronutrients'
+import { Card } from '@tracker-engine/ui'
+import { nutrientTargets, type ReferenceSex } from '@/lib/micronutrients'
+import { NutrientRows, type NamedRow } from '@/features/shared/NutrientRows'
 import { mgToGrams, type CoveredNutrients } from '@/lib/nutrition'
 import { shortDay, useChartTokens } from './chartTokens'
 import type { InsightsDay } from './useInsightsData'
 
-/**
- * Micronutrients as a share of their reference intake, over the whole window.
- *
- * Bars rather than a score, for the reason lib/micronutrients spells out: one number over a
- * partly-recorded set of nutrients means nothing. A nutrient nothing recorded is drawn as absent,
- * not as zero.
- */
-export function AdequacyChart({
-  nutrition,
-  dayCount,
-  sex,
-}: {
+export function NutrientList(props: {
   nutrition: CoveredNutrients
+  rows: readonly NamedRow[]
   dayCount: number
   sex: ReferenceSex
 }) {
-  const tokens = useChartTokens()
-  const statuses = nutrientStatus(nutrition.totals, sex, nutrition.coverage)
-  const known = statuses.filter((status) => status.verdict !== 'unknown')
-
-  const colorFor = (verdict: string): string =>
-    verdict === 'short' ? tokens.inkMuted : verdict === 'over' ? tokens.over : tokens.on
-
-  const option: EChartsOption = {
-    animation: false,
-    grid: { left: 90, right: 30, top: 8, bottom: 24 },
-    xAxis: {
-      type: 'value',
-      max: 150,
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10, formatter: '{value}%' },
-    },
-    yAxis: {
-      type: 'category',
-      data: known.map((status) => status.label).reverse(),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    tooltip: { trigger: 'axis' },
-    series: [
-      {
-        type: 'bar',
-        barMaxWidth: 14,
-        data: known
-          .map((status) => ({
-            value: Math.min(150, Math.round((status.ratio ?? 0) * 100)),
-            itemStyle: { color: colorFor(status.verdict) },
-          }))
-          .reverse(),
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          label: { formatter: 'reference', color: tokens.inkMuted, fontSize: 9 },
-          lineStyle: { color: tokens.inkMuted, type: 'dashed' },
-          data: [{ xAxis: 100 }],
-        },
-      },
-    ],
-  }
-
-  const unknown = statuses.length - known.length
-
   return (
-    <ChartCard
-      title="Micronutrients"
-      subtitle={
-        known.length === 0
-          ? undefined
-          : `Daily average over ${plural(dayCount, 'logged day')}` +
-            (unknown > 0 ? ` · ${unknown} too patchily recorded to judge` : '')
-      }
-      isEmpty={known.length === 0}
-      emptyMessage="None of the foods logged carried micronutrient data."
-      table={{
-        columns: ['Nutrient', 'Average', 'Reference', 'Share'],
-        rows: statuses.map((status) => [
-          status.label,
-          status.verdict === 'unknown' ? coverageNote(status) : formatAmount(status),
-          formatAmount({ ...status, amount: status.reference }),
-          status.ratio === null ? '—' : `${Math.round(status.ratio * 100)}%`,
-        ]),
-      }}
-    >
-      <Chart option={option} ariaLabel="Micronutrient averages as a share of reference intake" />
-    </ChartCard>
+    <Card className="p-0">
+      <div className="px-4 pb-1 pt-3">
+        <h2 className="text-[15px] font-semibold tracking-tight">Nutrients</h2>
+        <p className="text-[12px] text-ink-muted">Daily average · tap one to see where it comes from</p>
+      </div>
+      <NutrientRows {...props} />
+    </Card>
   )
 }
 
@@ -166,7 +90,7 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
       subtitle={
         measured.length === 0
           ? undefined
-          : `Fully recorded on ${measured.length} of ${days.length} logged days · reference ${referenceG}g`
+          : `Daily · reference ${referenceG}g`
       }
       isEmpty={measured.length === 0}
       emptyMessage="None of the foods logged carried a fibre figure."

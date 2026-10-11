@@ -239,7 +239,7 @@ test('a food the databases do not have can be entered and logged offline', async
   await page.getByLabel('kcal').fill('500')
   await page.getByLabel('Protein in g').fill('35')
   await page.getByLabel('Carbs in g').fill('50')
-  await page.getByLabel('Fat in g').fill('18')
+  await page.getByLabel('Fat in g', { exact: true }).fill('18')
   await expect(page.getByText('200 kcal per 100 g')).toBeVisible()
   await page.getByRole('button', { name: 'Save and log it' }).click()
 
@@ -834,10 +834,9 @@ test('the day screen shows what each food contributes, and what the day comes to
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
 
-  await expect(page.getByText(/left after this/)).toBeVisible()
-  await expect(page.getByText('Already eaten')).toBeVisible()
+  await expect(page.getByText(/^[\d,]+ left$/)).toBeVisible()
   await expect(page.getByText(/^\+\d+$/).first()).toBeVisible()
-  await expect(page.getByText(/^\+\d+g$/).first()).toBeVisible()
+  await expect(page.getByText(/^\d+ → $/).first()).toBeVisible()
   await page.getByRole('button', { name: /^Log it/ }).click()
   await page.getByRole('button', { name: 'Back' }).click()
 
@@ -849,12 +848,10 @@ test('the day screen shows what each food contributes, and what the day comes to
   // The micronutrients survive. `sum` is all-or-nothing, which is right for a recipe and wrong for a
   // day: one food with a gap used to erase that nutrient from the whole day.
   await page.getByRole('button', { name: /Nutrition/ }).click()
-  // Six of seven, not one of seven. The staples used to carry only macros and fibre, and being short
-  // clean descriptions they outrank the fuller USDA rows for exactly the queries people type — so the
-  // app's most-logged foods were its least complete. USDA records no sugar figure for raw chicken, and
-  // that one genuinely stays unknown: absence is not zero.
-  await expect(page.getByText('6 of 7 recorded')).toBeVisible()
-  await expect(page.getByText('none of these foods record it')).toHaveCount(1)
+  await page.getByRole('button', { name: /^Sodium/ }).click()
+  await expect(page.getByText(/^Chicken breast/).last()).toBeVisible()
+  await page.getByRole('button', { name: /^Sugars/ }).click()
+  await expect(page.getByText(/^Not listed for Chicken breast/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -1272,7 +1269,7 @@ test('a food with no stated serving still offers ounces and a cup', async ({ pag
   await page.getByLabel('kcal').fill('300')
   await page.getByLabel('Protein in g').fill('5')
   await page.getByLabel('Carbs in g').fill('35')
-  await page.getByLabel('Fat in g').fill('15')
+  await page.getByLabel('Fat in g', { exact: true }).fill('15')
   await page.getByRole('button', { name: 'Save and log it' }).click()
 
   const unit = page.getByLabel('Unit')

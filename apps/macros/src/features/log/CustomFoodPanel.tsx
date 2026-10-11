@@ -54,6 +54,8 @@ export function CustomFoodPanel({
     carbs: text(draft?.carbsG),
     fat: text(draft?.fatG),
     fiber: text(draft?.fiberG),
+    sugar: text(draft?.sugarG),
+    satFat: text(draft?.satFatG),
     sodium: text(draft?.sodiumMg),
   })
   const [isSaving, setIsSaving] = useState(false)
@@ -85,6 +87,8 @@ export function CustomFoodPanel({
             carbsG: number(fields.carbs),
             fatG: number(fields.fat),
             fiberG: fields.fiber ? number(fields.fiber) : null,
+            sugarG: fields.sugar ? number(fields.sugar) : null,
+            satFatG: fields.satFat ? number(fields.satFat) : null,
             sodiumMg: fields.sodium ? number(fields.sodium) : null,
           },
           basis === 'hundred' ? 100 : servingGrams,
@@ -155,19 +159,16 @@ export function CustomFoodPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Field
-          label="Fibre"
-          suffix="g"
-          value={fields.fiber}
-          onChange={(value) => setFields({ ...fields, fiber: value })}
-        />
-        <Field
-          label="Sodium"
-          suffix="mg"
-          value={fields.sodium}
-          onChange={(value) => setFields({ ...fields, sodium: value })}
-        />
+      <div className="grid grid-cols-4 gap-2">
+        {EXTRAS.map(([field, label, suffix]) => (
+          <Field
+            key={field}
+            label={label}
+            suffix={suffix}
+            value={fields[field]}
+            onChange={(value) => setFields({ ...fields, [field]: value })}
+          />
+        ))}
       </div>
 
       {/* The converted figure, so per-serving entry isn't a leap of faith. It also catches the
@@ -184,6 +185,13 @@ export function CustomFoodPanel({
     </div>
   )
 }
+
+const EXTRAS = [
+  ['fiber', 'Fibre', 'g'],
+  ['sugar', 'Sugars', 'g'],
+  ['satFat', 'Sat fat', 'g'],
+  ['sodium', 'Sodium', 'mg'],
+] as const
 
 const text = (value: number | null | undefined): string =>
   value === null || value === undefined ? '' : String(value)

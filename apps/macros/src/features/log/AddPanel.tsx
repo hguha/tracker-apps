@@ -5,8 +5,8 @@ import { Button, useToast } from '@tracker-engine/ui'
 import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
-import { dayTotals, mgToGrams, scale, sum } from '@/lib/nutrition'
-import { MACRO_BARS } from '@/features/shared/MacroBar'
+import { dayTotals, macroSharePct, scale, sum } from '@/lib/nutrition'
+import { MacroBar, MACRO_BARS } from '@/features/shared/MacroBar'
 import { SplitRing } from '@/features/shared/SplitRing'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import {
@@ -251,7 +251,7 @@ export function AddPanel({
         <DayPreview already={already} adding={adding} after={after} targets={targets ?? null} />
       ) : (
         // A placeholder of roughly the right height, so the panel doesn't jump when it lands.
-        <div className="h-[196px] rounded-xl bg-sunken" aria-hidden />
+        <div className="h-[196px] rounded-2xl bg-surface" aria-hidden />
       )}
 
       {subject.isComposite && parts !== undefined && parts.length > 0 && (
@@ -384,10 +384,11 @@ function DayPreview({
   targets: MacroTargets | null
 }) {
   const added = adding?.kcal ?? 0
+  const shares = macroSharePct(after)
   const left = targets ? targets.kcal - after.kcal : null
 
   return (
-    <div className="rounded-xl bg-sunken p-3">
+    <div className="rounded-2xl bg-surface p-3">
       <div className="flex items-center gap-3.5">
         {targets ? (
           <SplitRing before={already.kcal} adding={added} max={targets.kcal}>
@@ -422,97 +423,26 @@ function DayPreview({
               style={{ color: left >= 0 ? 'var(--text-secondary)' : 'var(--target-over)' }}
             >
               {left >= 0
-                ? `${left.toLocaleString()} left after this`
-                : `${Math.abs(left).toLocaleString()} over after this`}
+                ? `${left.toLocaleString()} left`
+                : `${Math.abs(left).toLocaleString()} over`}
             </p>
           )}
-          <p className="mt-1.5 flex items-center gap-3 text-[11px] text-ink-muted">
-            <Swatch tone="before" />
-            Already eaten
-            <Swatch tone="adding" />
-            Adding
-          </p>
         </div>
       </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-1.5">
         {MACRO_BARS.map((macro) => (
-          <SplitBar
+          <MacroBar
             key={macro.key}
             label={macro.label}
-            alreadyMg={already[macro.key]}
+            eatenMg={already[macro.key]}
             addingMg={adding?.[macro.key] ?? 0}
-            targetMg={targets?.[macro.key] ?? null}
+            targetMg={targets?.[macro.key] ?? 0}
+            sharePct={shares[macro.key]}
             color={macro.color}
           />
         ))}
       </div>
-    </div>
-  )
-}
-
-function Swatch({ tone }: { tone: 'before' | 'adding' }) {
-  return (
-    <span
-      aria-hidden
-      className="-mr-2 inline-block size-2 rounded-full"
-      style={{
-        background:
-          tone === 'adding'
-            ? 'var(--accent)'
-            : 'color-mix(in srgb, var(--accent) 32%, transparent)',
-      }}
-    />
-  )
-}
-
-function SplitBar({
-  label,
-  alreadyMg,
-  addingMg,
-  targetMg,
-  color,
-}: {
-  label: string
-  alreadyMg: number
-  addingMg: number
-  targetMg: number | null
-  color: string
-}) {
-  const pct = (mg: number) => (!targetMg || targetMg <= 0 ? 0 : Math.max(0, (mg / targetMg) * 100))
-  const base = Math.min(100, pct(alreadyMg))
-  const extra = Math.min(100 - base, pct(addingMg))
-  const before = Math.round(mgToGrams(alreadyMg))
-  const plus = Math.round(mgToGrams(addingMg))
-  const isOver = targetMg !== null && alreadyMg + addingMg > targetMg * 1.05
-
-  return (
-    <div>
-      <div className="flex items-baseline gap-2 text-[12px]">
-        <span className="w-14 shrink-0 text-ink-secondary">{label}</span>
-        <span className="tabular min-w-0 flex-1 text-ink-muted">
-          {before}
-          {' → '}
-          <span className="font-semibold text-ink" style={isOver ? { color: 'var(--target-over)' } : undefined}>
-            {before + plus}g
-          </span>
-          {targetMg !== null && ` of ${Math.round(mgToGrams(targetMg))}g`}
-        </span>
-        <span
-          className="tabular shrink-0 font-semibold"
-          style={{ color: plus > 0 ? color : 'var(--text-muted)' }}
-        >
-          +{plus}g
-        </span>
-      </div>
-      {targetMg !== null && (
-        <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-page">
-          <span
-            style={{ width: `${base}%`, background: `color-mix(in srgb, ${color} 34%, transparent)` }}
-          />
-          <span className="transition-[width]" style={{ width: `${extra}%`, background: color }} />
-        </div>
-      )}
     </div>
   )
 }

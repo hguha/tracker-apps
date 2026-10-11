@@ -29,7 +29,7 @@ interface FoodSearchState {
 
 /** Below this a query is too vague to spend a request on. */
 const MIN_REMOTE_CHARS = 3
-const DEBOUNCE_MS = 400
+const DEBOUNCE_MS = 250
 const AVERAGE_POOL = 60
 
 /**

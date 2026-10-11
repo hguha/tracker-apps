@@ -139,6 +139,8 @@ const ESTIMATE_SCHEMA = {
         carbsG: { type: 'number' },
         fatG: { type: 'number' },
         fiberG: { type: 'number' },
+        sugarG: { type: 'number' },
+        satFatG: { type: 'number' },
         sodiumMg: { type: 'number' },
         confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
         source: { type: 'string' },
@@ -160,6 +162,7 @@ chocolate chip", "Trader Joe's mandarin orange chicken". Fill "item" and leave "
 - servingGrams is what one of them weighs. Give your best figure even when the panel doesn't
   state one, and drop confidence to "medium" when you had to judge it.
 - servingLabel is what one is called: "1 chicken bake", "1 bowl", "1 bar".
+- Include fiberG, sugarG, satFatG and sodiumMg whenever the panel states them.
 - brand is the chain or company on its own ("Costco", "Chipotle"); name is the item without it.
 - source says in a few words where the figures come from: "Costco's published nutrition panel".
 - confidence: "high" only when recalling a specific published panel; "medium" when you know the

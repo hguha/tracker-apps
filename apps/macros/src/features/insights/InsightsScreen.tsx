@@ -16,7 +16,7 @@ import { SummaryCard } from './SummaryCard'
 import { AdherenceChart, ProteinChart, TopFoodsChart, WeekdayChart } from './chartsIntake'
 import { BalanceChart, ExpenditureChart } from './chartsBody'
 import { ConsistencyChart, MealTimingChart, SourceMixChart } from './chartsHabits'
-import { AdequacyChart, FiberChart } from './chartsNutrients'
+import { FiberChart, NutrientList } from './chartsNutrients'
 import { WaterChart } from './chartsWater'
 import { CuisineMixCard, VenueSplitChart } from './chartsVenue'
 import { useInsightsData } from './useInsightsData'
@@ -141,8 +141,9 @@ export function InsightsScreen() {
 
             {tab === 'nutrients' && (
               <>
-                <AdequacyChart
+                <NutrientList
                   nutrition={data.nutrition}
+                  rows={data.namedRows}
                   dayCount={data.loggedDayCount}
                   sex={data.profile?.sex ?? null}
                 />

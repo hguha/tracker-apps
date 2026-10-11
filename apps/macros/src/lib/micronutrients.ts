@@ -151,7 +151,7 @@ export function dietQuality(
     onTarget: known.filter((s) => s.verdict === 'ok'),
     measured: known.length,
     tracked: statuses.length,
-    summary: summarize(short, over, known.length, statuses.length),
+    summary: summarize(short, over, known.length),
   }
 }
 
@@ -159,17 +159,13 @@ function summarize(
   short: NutrientStatus[],
   over: NutrientStatus[],
   measured: number,
-  tracked: number,
 ): string {
   if (measured === 0) return 'No nutrient data in these foods yet.'
-  const coverage = measured < tracked ? ` · ${measured} of ${tracked} recorded` : ''
-  if (short.length === 0 && over.length === 0) {
-    return `Everything recorded is in range${coverage}`
-  }
+  if (short.length === 0 && over.length === 0) return 'Everything is in range'
   const parts: string[] = []
   if (short.length > 0) parts.push(`low on ${list(short.map((s) => s.label.toLowerCase()))}`)
   if (over.length > 0) parts.push(`high on ${list(over.map((s) => s.label.toLowerCase()))}`)
-  return `${capitalize(parts.join(', '))}${coverage}`
+  return capitalize(parts.join(', '))
 }
 
 const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
@@ -191,17 +187,6 @@ export function formatAmount(status: Pick<NutrientStatus, 'key' | 'amount'>): st
   return `${Math.round(status.amount)}mg`
 }
 
-/**
- * Why a nutrient couldn't be judged, in the user's terms.
- *
- * "Not recorded" is true but useless when the real situation is "two thirds of your food reported it
- * and the steak didn't" — that's actionable, because the fix is correcting one row.
- */
-export function coverageNote(status: NutrientStatus): string {
-  if (status.amount === null) return 'none of these foods record it'
-  const pct = Math.round(status.coverage * 100)
-  return `only ${pct}% of what you ate records it`
-}
 
 /** Bodyweight goal, for the Today header. Derived, never stored — the program owns the intent
  *  and the trend owns the number, so a stored "goal weight" would just go stale. */
@@ -217,4 +202,44 @@ export function goalWeightKg(
 export function bmi(trendKg: number, heightCm: number): number {
   const metres = heightCm / 100
   return trendKg / (metres * metres)
+}
+
+export interface NutrientSource {
+  name: string
+  amount: number
+  share: number
+}
+
+export interface NutrientSources {
+  top: NutrientSource[]
+  missing: string[]
+}
+
+export function nutrientSources(
+  rows: readonly { name: string; nutrients: Nutrients }[],
+  key: keyof Nutrients,
+  dayCount: number,
+  limit = 4,
+): NutrientSources {
+  const amounts = new Map<string, number>()
+  const missing = new Map<string, number>()
+  for (const { name, nutrients } of rows) {
+    const value = nutrients[key]
+    if (value === null) missing.set(name, (missing.get(name) ?? 0) + nutrients.kcal)
+    else amounts.set(name, (amounts.get(name) ?? 0) + value)
+  }
+  const total = [...amounts.values()].reduce((sum, value) => sum + value, 0)
+  const days = Math.max(1, dayCount)
+  return {
+    top: [...amounts]
+      .filter(([, value]) => value > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([name, value]) => ({ name, amount: value / days, share: total > 0 ? value / total : 0 })),
+    missing: [...missing]
+      .filter(([, kcal]) => kcal > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name]) => name),
+  }
 }

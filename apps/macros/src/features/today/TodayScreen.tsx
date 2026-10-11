@@ -135,6 +135,7 @@ export function TodayScreen({
           nutrition={dailyAverageCovered(week ?? [])}
           dayCount={weekDayCount}
           sex={profile?.sex ?? null}
+          entries={week ?? []}
         />
       )}
 

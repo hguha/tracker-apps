@@ -27,6 +27,7 @@ export function MacroBar({
   targetMg,
   sharePct,
   color,
+  addingMg = 0,
 }: {
   label: string
   eatenMg: number
@@ -36,13 +37,17 @@ export function MacroBar({
   sharePct: number
   /** A `var(--macro-*)` reference. */
   color: string
+  addingMg?: number
 }) {
   const hasTarget = targetMg > 0
-  const eaten = Math.round(mgToGrams(eatenMg))
+  const before = Math.round(mgToGrams(eatenMg))
+  const eaten = Math.round(mgToGrams(eatenMg + addingMg))
   const goal = Math.round(mgToGrams(targetMg))
-  const pct = hasTarget ? (eatenMg / targetMg) * 100 : sharePct
+  const pct = hasTarget ? ((eatenMg + addingMg) / targetMg) * 100 : sharePct
   const fill = Math.min(100, Math.max(0, pct))
+  const base = hasTarget ? Math.min(fill, Math.max(0, (eatenMg / targetMg) * 100)) : fill
   const over = hasTarget && eaten > goal
+  const isAdding = addingMg > 0
 
   return (
     <div
@@ -56,8 +61,18 @@ export function MacroBar({
     >
       <div
         className="absolute inset-y-0 left-0 transition-[width]"
-        style={{ width: `${fill}%`, background: `color-mix(in srgb, ${color} 30%, transparent)` }}
+        style={{ width: `${base}%`, background: `color-mix(in srgb, ${color} 30%, transparent)` }}
       />
+      {isAdding && (
+        <div
+          className="absolute inset-y-0 transition-[left,width]"
+          style={{
+            left: `${base}%`,
+            width: `${fill - base}%`,
+            background: `color-mix(in srgb, ${color} 62%, transparent)`,
+          }}
+        />
+      )}
       {/* Past the target the whole bar is hatched, so overshoot is visible without a hue change. */}
       {over && (
         <div
@@ -76,7 +91,8 @@ export function MacroBar({
       <div className="relative flex h-full items-center justify-between gap-2 px-2.5">
         <span className="text-[12.5px] font-medium">{label}</span>
         <span className="tabular text-[12.5px]">
-          {eaten}
+          {isAdding && <span className="text-ink-secondary">{before} → </span>}
+          <span className={isAdding ? 'font-semibold' : undefined}>{eaten}</span>
           {hasTarget ? (
             <>
               <span className="text-ink-secondary"> / {goal}g</span>

@@ -2,21 +2,14 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Card } from '@tracker-engine/ui'
 import { cn } from '@tracker-engine/core'
-import {
-  coverageNote,
-  dietQuality,
-  formatAmount,
-  nutrientStatus,
-  type ReferenceSex,
-} from '@/lib/micronutrients'
+import { useLiveQuery } from 'dexie-react-hooks'
+import * as repo from '@/data/repository'
+import { dietQuality, type ReferenceSex } from '@/lib/micronutrients'
+import { foodIdsOf } from '@/features/shared/entryName'
+import { NutrientRows, namedRows } from '@/features/shared/NutrientRows'
+import type { Food, LogEntry } from '@/domain/types'
 import type { CoveredNutrients } from '@/lib/nutrition'
 
-const VERDICT_COLOR: Record<string, string> = {
-  short: 'var(--target-under)',
-  over: 'var(--target-over)',
-  ok: 'var(--target-on)',
-  unknown: 'var(--confidence-low)',
-}
 
 /**
  * Diet completeness over the last week, collapsed by default.
@@ -31,16 +24,23 @@ export function NutritionCard({
   nutrition,
   dayCount,
   sex,
+  entries,
 }: {
   /** Averages *and* how much of the period each nutrient covers — see `sumCovered`. */
   nutrition: CoveredNutrients
   dayCount: number
   /** References differ by sex for iron, fibre and potassium — see lib/micronutrients. */
   sex: ReferenceSex
+  entries: readonly LogEntry[]
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const quality = dietQuality(nutrition.totals, sex, nutrition.coverage)
-  const statuses = nutrientStatus(nutrition.totals, sex, nutrition.coverage)
+  const foods = useLiveQuery(
+    () => repo.foodsByIds(foodIdsOf(entries)),
+    [entries.map((entry) => entry.foodId).join(',')],
+    new Map<string, Food>(),
+  )
+  const rows = namedRows(entries, foods ?? new Map())
 
   return (
     <Card className="p-0">
@@ -85,48 +85,8 @@ export function NutritionCard({
       </button>
 
       {isOpen && (
-        <div className="border-t border-line px-4 py-3">
-          <p className="text-[12px] text-ink-muted">
-            Daily average, against adult reference intakes.
-          </p>
-          <ul className="mt-2 space-y-2">
-            {statuses.map((status) => (
-              <li key={status.key}>
-                <div className="flex items-baseline justify-between text-[12.5px]">
-                  <span className="text-ink-secondary">
-                    {status.label}
-                    {!status.isFloor && <span className="text-ink-muted"> (limit)</span>}
-                  </span>
-                  <span className="tabular text-ink-muted">
-                    {status.verdict === 'unknown'
-                      ? coverageNote(status)
-                      : `${formatAmount(status)} / ${formatAmount({ ...status, amount: status.reference })}`}
-                  </span>
-                </div>
-                {/*
-                  Drawn at what *was* measured even when it can't be judged, in the grey that means
-                  "don't read too much into this". A zero-width bar next to "only 58% records it"
-                  would say the opposite of what the sentence says.
-                */}
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-sunken">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, ((status.amount ?? 0) / status.reference) * 100))}%`,
-                      background: VERDICT_COLOR[status.verdict],
-                    }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {quality.measured < quality.tracked && (
-            <p className="mt-3 text-[12px] text-ink-muted">
-              {quality.tracked - quality.measured} can&rsquo;t be judged: too little of what you ate
-              reports them. The totals shown are floors, not zeroes.
-            </p>
-          )}
+        <div className="border-t border-line">
+          <NutrientRows nutrition={nutrition} rows={rows} dayCount={dayCount} sex={sex} />
         </div>
       )}
     </Card>

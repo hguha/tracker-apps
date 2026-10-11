@@ -1,5 +1,5 @@
 import { BottomSheet, Card } from '@tracker-engine/ui'
-import { Bookmark, Camera, ChefHat, Check, ChevronRight, PencilLine, Plus, Scale, Sparkles, Trash2 } from 'lucide-react'
+import { Bookmark, Camera, ChefHat, Check, ChevronRight, Loader2, PencilLine, Plus, Scale, Sparkles, Trash2 } from 'lucide-react'
 import { cn } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import { nutrientsFor } from '@/lib/nutrition'
@@ -201,22 +201,38 @@ export function FoodList({
   )
 }
 
-export function AverageRow({ food, onOpen }: { food: Food; onOpen: () => void }) {
+export function AverageRow({
+  food,
+  pendingName,
+  onOpen,
+}: {
+  food: Food | null
+  pendingName: string
+  onOpen: () => void
+}) {
   return (
     <button
       onClick={onOpen}
-      className="flex w-full items-center gap-3 rounded-2xl bg-surface px-4 py-2.5 text-left shadow-[inset_0_0_0_1.5px_var(--accent)] active:bg-sunken"
+      disabled={food === null}
+      className="flex w-full items-center gap-3 rounded-2xl bg-surface px-4 py-2.5 text-left shadow-[inset_0_0_0_1.5px_var(--accent)] active:bg-sunken disabled:shadow-[inset_0_0_0_1.5px_var(--line)]"
     >
-      <Scale size={17} className="shrink-0 text-accent" />
+      <Scale size={17} className={food ? 'shrink-0 text-accent' : 'shrink-0 text-ink-muted'} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[14px] font-semibold">
-          {food.description}, average
+          {food?.description ?? pendingName}, average
         </span>
-        <span className="tabular block truncate text-[12px] text-ink-muted">
-          {food.brand?.replace(/^Average of /, '')} sources · {servingLine(food)}
+        <span className="tabular flex items-center gap-1.5 truncate text-[12px] text-ink-muted">
+          {food ? (
+            `${food.brand?.replace(/^Average of /, '')} sources · ${servingLine(food)}`
+          ) : (
+            <>
+              <Loader2 size={12} className="shrink-0 animate-spin" />
+              finding sources
+            </>
+          )}
         </span>
       </span>
-      <ChevronRight size={16} className="shrink-0 text-ink-muted" />
+      {food && <ChevronRight size={16} className="shrink-0 text-ink-muted" />}
     </button>
   )
 }
