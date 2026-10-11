@@ -22,7 +22,7 @@ import {
   type CheckInOutcome,
 } from '@/lib/checkin'
 import { kcalPerKg, type ExpenditureState, type IntakeDay } from '@/lib/expenditure'
-import { paceForDate, type DatedPace } from '@/lib/pace'
+import { kcalFloor, paceForDate, type DatedPace } from '@/lib/pace'
 import { EATING_WINDOW_DAYS, goalForecast, type GoalForecast } from '@/lib/goal'
 import { weights } from './body'
 import { entriesBetween } from './entries'
@@ -213,7 +213,7 @@ export async function targetsByDay(
     const inForce = applied.find((c) => c.weekStart < week)
     if (inForce) {
       const isRetuned = program !== undefined && day >= dayKey(program.updatedAt)
-      out.set(day, cycled(day, isRetuned ? targetsInForce(inForce, program) : inForce.targets))
+      out.set(day, cycled(day, isRetuned ? targetsInForce(inForce, program, kcalFloor(profile.sex)) : inForce.targets))
       continue
     }
     // Before the first check-in, the cold-start estimate — from the weight known *then*, so a
@@ -384,6 +384,7 @@ export async function goalOutlook(now = Date.now()): Promise<GoalForecast | null
     targetKcal: targets?.kcal ?? null,
     isCustomTarget: profile.manualTargets !== null && today >= profile.manualTargets.fromDay,
     ratePctPerWeek: program.ratePctPerWeek,
+    floorKcal: kcalFloor(profile.sex),
     behaviourSince: program.startedAt,
     now,
   })

@@ -20,6 +20,7 @@ import {
   type IntakeDay,
 } from '@/lib/expenditure'
 import { splitTargets } from '@/lib/nutrition'
+import { kcalFloor } from '@/lib/pace'
 import type { CheckIn, MacroTargets, Profile, Program } from '@/domain/types'
 
 /**
@@ -114,8 +115,9 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
   }
 
   const trendKg = thisWeek.trendKg
-  const proposed = targetKcal(expenditure, program, trendKg)
-  const kcal = prior ? stepToward(targetsInForce(prior, program).kcal, proposed) : proposed
+  const floor = kcalFloor(inputs.profile.sex)
+  const proposed = targetKcal(expenditure, program, trendKg, floor)
+  const kcal = prior ? stepToward(targetsInForce(prior, program, floor).kcal, proposed) : proposed
 
   return {
     kind: 'ready',
@@ -140,10 +142,18 @@ export function isRetunedSince(program: Program, checkIn: CheckIn): boolean {
   return program.updatedAt > checkIn.updatedAt
 }
 
-export function targetsInForce(checkIn: CheckIn, program: Program | null | undefined): MacroTargets {
+export function targetsInForce(
+  checkIn: CheckIn,
+  program: Program | null | undefined,
+  floorKcal = 0,
+): MacroTargets {
   if (!program || !isRetunedSince(program, checkIn)) return checkIn.targets
   const expenditure = { kcal: checkIn.expenditureKcal, se: checkIn.expenditureSe }
-  return split(targetKcal(expenditure, program, checkIn.trendKg), checkIn.trendKg, program)
+  return split(
+    targetKcal(expenditure, program, checkIn.trendKg, floorKcal),
+    checkIn.trendKg,
+    program,
+  )
 }
 
 export function coldStartExpenditure(
@@ -203,5 +213,5 @@ export function initialTargetsFromTrend(
 ): MacroTargets | null {
   const prior = coldStartExpenditure(profile, trendKg, now)
   if (!prior) return null
-  return split(targetKcal(prior, program, trendKg), trendKg, program)
+  return split(targetKcal(prior, program, trendKg, kcalFloor(profile.sex)), trendKg, program)
 }

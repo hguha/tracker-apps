@@ -348,6 +348,17 @@ function PaceNotice({
   unit: WeightUnit
 }) {
   if (forecast.pace === 'matches') return null
+  if (forecast.pace === 'floor') {
+    return (
+      <p
+        className="rounded-xl border px-3 py-2 text-[12.5px]"
+        style={{ borderColor: 'var(--confidence-medium)' }}
+      >
+        Held at {forecast.onTarget?.targetKcal.toLocaleString()} kcal, the safe minimum, so your{' '}
+        {pace} pace is slower here.
+      </p>
+    )
+  }
   const isCustom = forecast.pace === 'custom'
   const text = isCustom
     ? `Custom calories are on, so your ${pace} pace isn't setting your target.`

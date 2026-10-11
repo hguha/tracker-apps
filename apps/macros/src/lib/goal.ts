@@ -147,7 +147,7 @@ export function rateForKcal(
 }
 
 export type Confidence = 'low' | 'medium' | 'high'
-export type PaceCheck = 'matches' | 'custom' | 'off-pace'
+export type PaceCheck = 'matches' | 'custom' | 'off-pace' | 'floor'
 
 export interface RateLine {
   kgPerWeek: number
@@ -184,6 +184,7 @@ export function goalForecast(inputs: {
   targetKcal: number | null
   isCustomTarget: boolean
   ratePctPerWeek: number
+  floorKcal?: number
   behaviourSince?: number | null
   now: number
 }): GoalForecast | null {
@@ -220,6 +221,11 @@ export function goalForecast(inputs: {
     expenditureKcal: expenditure?.kcal ?? null,
     pace: paceCheck({
       isCustomTarget: inputs.isCustomTarget,
+      isAtFloor:
+        inputs.goal === 'lose' &&
+        inputs.targetKcal !== null &&
+        inputs.floorKcal !== undefined &&
+        inputs.targetKcal <= inputs.floorKcal,
       goal: inputs.goal,
       onTargetRate,
       chosenRate,
@@ -253,12 +259,14 @@ function likelyLine(
 
 function paceCheck(inputs: {
   isCustomTarget: boolean
+  isAtFloor: boolean
   goal: Goal
   onTargetRate: number | null
   chosenRate: number
   trendKg: number
 }): PaceCheck {
   if (inputs.isCustomTarget) return 'custom'
+  if (inputs.isAtFloor) return 'floor'
   if (inputs.onTargetRate === null) return 'matches'
   const gapPct = (Math.abs(inputs.onTargetRate - inputs.chosenRate) / inputs.trendKg) * 100
   return gapPct > PACE_TOLERANCE_PCT ? 'off-pace' : 'matches'

@@ -69,3 +69,17 @@ describe('safeMaxPct', () => {
     expect(safeMaxPct({ goal: 'lose', trendKg: 100, expenditureKcal: null, sex: null })).toBe(1)
   })
 })
+
+describe('the calorie floor holds for every losing pace', () => {
+  it('never sets a losing target under the floor, whatever pace was picked', () => {
+    const program = { goal: 'lose' as const, ratePctPerWeek: -1 }
+    expect(targetKcal({ kcal: 1800, se: 100 }, program, 60, kcalFloor('female'))).toBe(1200)
+    expect(targetKcal({ kcal: 1800, se: 100 }, program, 60, kcalFloor('male'))).toBe(1500)
+  })
+
+  it('leaves a gain alone', () => {
+    const program = { goal: 'gain' as const, ratePctPerWeek: 0.25 }
+    expect(targetKcal({ kcal: 1400, se: 100 }, program, 60, 1500)).toBeLessThan(1500 + 1000)
+    expect(targetKcal({ kcal: 1400, se: 100 }, program, 60, 1500)).toBeGreaterThan(1400)
+  })
+})
