@@ -1283,3 +1283,45 @@ test('a food with no stated serving still offers ounces and a cup', async ({ pag
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
+
+test('a goal can be set by a date, and a date too soon is held to a safe pace', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { goal: 'lose', weight: '80' })
+  const inWeeks = (weeks: number) => {
+    const date = new Date()
+    date.setDate(date.getDate() + weeks * 7)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  }
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  await page.getByRole('button', { name: 'By date', exact: true }).click()
+  await expect(page.getByText('Set a goal weight first.')).toBeVisible()
+
+  const goal = page.getByPlaceholder('kg', { exact: true })
+  await goal.fill('76')
+  await goal.blur()
+  await page.getByLabel('Goal date').fill(inWeeks(12))
+  await expect(page.getByText(/-0\.34 kg a week · [\d,]+ kcal a day/)).toBeVisible()
+  await expect(page.getByText(/Too soon/)).toHaveCount(0)
+
+  await page.getByLabel('Goal date').fill(inWeeks(1))
+  await expect(page.getByText(/Too soon to be safe\. Earliest: /)).toBeVisible()
+  await expect(page.getByText(/-0\.80 kg a week · [\d,]+ kcal a day/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Custom', exact: true }).click()
+  await page.getByLabel('Calories', { exact: true }).fill('2900')
+  await page.getByRole('button', { name: 'Save targets' }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  await page.getByRole('button', { name: /On target:|gets you there|Likely/ }).first().click()
+  await expect(page.getByText(/your -1\.00%\/wk pace/)).toBeVisible()
+  await page.getByRole('button', { name: 'Use my -1.00%/wk pace' }).click()
+  await expect(page.getByText(/Custom calories are on/)).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /Targets & goal/ }).click()
+  await expect(page.getByLabel('Goal date')).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})

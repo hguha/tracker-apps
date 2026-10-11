@@ -3,7 +3,7 @@ import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
 import { givenFoods, testFood } from './fixtures'
-import { dayKey, dayKeyOffset } from '@tracker-engine/core'
+import { WEEK_MS, dayKey, dayKeyOffset } from '@tracker-engine/core'
 import { dayTotals, nutrientsFor } from '@/lib/nutrition'
 import { lastCompleteWeekKey } from '@/lib/checkin'
 import { multipliersForHighDays } from '@/lib/cycling'
@@ -1251,6 +1251,25 @@ describe('the pace in force', () => {
     await repo.alignTargetsToPace(programId)
     expect((await repo.currentTargets())?.kcal).toBe(2060)
     expect((await repo.goalOutlook())?.pace).toBe('matches')
+  })
+
+  it('sets the pace from a goal date, capped at the safe limit', async () => {
+    const programId = await steadyWithCheckIn()
+    await repo.recordWeight(80, dayKey(Date.now()))
+    await repo.setGoalWeight(programId, 76)
+    await tick()
+
+    const byDate = await repo.setGoalDate(programId, Date.now() + 8 * WEEK_MS)
+    expect(byDate).toEqual({ ratePctPerWeek: -0.63, isTooSoon: false, earliestAt: null })
+    expect((await repo.activeProgram())?.ratePctPerWeek).toBe(-0.63)
+    expect((await repo.currentTargets())?.kcal).toBeLessThan(2060)
+    expect((await repo.goalOutlook())?.pace).toBe('matches')
+
+    await tick()
+    const tooSoon = await repo.setGoalDate(programId, Date.now() + WEEK_MS)
+    expect(tooSoon?.isTooSoon).toBe(true)
+    expect(tooSoon?.ratePctPerWeek).toBe(-1)
+    expect((await repo.currentTargets())?.kcal).toBeGreaterThanOrEqual(1500)
   })
 
   it('has no forecast without a goal weight', async () => {

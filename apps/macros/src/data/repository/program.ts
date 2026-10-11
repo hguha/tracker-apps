@@ -3,7 +3,13 @@ import { syncStamp } from '@tracker-engine/local-first'
 import { weightTrend, type TrendPoint } from '@tracker-engine/body'
 import { db } from '@/db'
 import { enqueue, newId, patch } from '@/data/outbox'
-import { type CheckIn, type CoachingMode, type MacroTargets, type Program } from '@/domain/types'
+import {
+  type CheckIn,
+  type CoachingMode,
+  type MacroTargets,
+  type Profile,
+  type Program,
+} from '@/domain/types'
 import { cycleDayTargets } from '@/lib/nutrition'
 import { multiplierForDay } from '@/lib/cycling'
 import {
@@ -15,7 +21,8 @@ import {
   weekKeyForDay,
   type CheckInOutcome,
 } from '@/lib/checkin'
-import { kcalPerKg, type IntakeDay } from '@/lib/expenditure'
+import { kcalPerKg, type ExpenditureState, type IntakeDay } from '@/lib/expenditure'
+import { paceForDate, type DatedPace } from '@/lib/pace'
 import { EATING_WINDOW_DAYS, goalForecast, type GoalForecast } from '@/lib/goal'
 import { weights } from './body'
 import { entriesBetween } from './entries'
@@ -363,12 +370,7 @@ export async function goalOutlook(now = Date.now()): Promise<GoalForecast | null
   if (!latest) return null
 
   const profile = await getProfile()
-  const inForce = (await checkIns())
-    .filter((c) => c.status === 'applied')
-    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
-  const expenditure = inForce
-    ? { kcal: inForce.expenditureKcal, se: inForce.expenditureSe }
-    : coldStartExpenditure(profile, latest.trendKg, now)
+  const expenditure = await expenditureNow(profile, latest.trendKg, now)
   const today = dayKey(now)
   const targets = await targetsForDay(today)
 
@@ -385,4 +387,43 @@ export async function goalOutlook(now = Date.now()): Promise<GoalForecast | null
     behaviourSince: program.startedAt,
     now,
   })
+}
+
+async function expenditureNow(
+  profile: Profile,
+  trendKg: number,
+  now: number,
+): Promise<ExpenditureState | null> {
+  const inForce = (await checkIns())
+    .filter((c) => c.status === 'applied')
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
+  return inForce
+    ? { kcal: inForce.expenditureKcal, se: inForce.expenditureSe }
+    : coldStartExpenditure(profile, trendKg, now)
+}
+
+export async function setGoalDate(
+  programId: string,
+  byAt: number,
+  now = Date.now(),
+): Promise<DatedPace | null> {
+  const program = await activeProgram()
+  if (!program || program.id !== programId || program.targetKg === null) return null
+  const trend = weightTrend(await weights())
+  const latest = trend[trend.length - 1]
+  if (!latest) return null
+  const profile = await getProfile()
+  const pace = paceForDate({
+    goal: program.goal,
+    trendKg: latest.trendKg,
+    targetKg: program.targetKg,
+    byAt,
+    now,
+    expenditureKcal: (await expenditureNow(profile, latest.trendKg, now))?.kcal ?? null,
+    sex: profile.sex,
+  })
+  if (pace && pace.ratePctPerWeek !== 0) {
+    await patch('programs', programId, { ratePctPerWeek: pace.ratePctPerWeek })
+  }
+  return pace
 }

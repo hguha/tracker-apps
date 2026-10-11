@@ -7,7 +7,7 @@ import { ChevronDown, Flag, PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { goalProgress, type GoalForecast } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
-import { paceLabel } from '@/features/shared/pace'
+import { paceLabel, paceName } from '@/features/shared/pace'
 import { arrivalDay, arrivalRange, perWeek, timeUntil } from '@/features/shared/goalText'
 import type { WeightUnit } from '@tracker-engine/core'
 import type { Program } from '@/domain/types'
@@ -234,7 +234,7 @@ function ForecastDetail({
   unit: WeightUnit
 }) {
   const { likely, onTarget, eating, scale } = forecast
-  const pace = paceLabel(program.goal, program.ratePctPerWeek) ?? 'chosen'
+  const pace = paceName(program.goal, program.ratePctPerWeek)
 
   return (
     <>

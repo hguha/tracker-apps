@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { bodyWeightFromKg, cn, convertWeight, signed, weightToKg } from '@tracker-engine/core'
+import {
+  bodyWeightFromKg,
+  cn,
+  convertWeight,
+  dayKey,
+  dayKeyOffset,
+  dayNoon,
+  signed,
+  weightToKg,
+} from '@tracker-engine/core'
 import { ChevronDown } from 'lucide-react'
 import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { mgToGrams } from '@/lib/nutrition'
 import { useUnits } from '@/features/shared/useUnits'
 import { RATES } from '@/features/shared/pace'
+import { arrivalDay } from '@/features/shared/goalText'
+import type { DatedPace } from '@/lib/pace'
 import type { CoachingMode, Goal, Program } from '@/domain/types'
+
+const BY_DATE = 'date'
 
 const MODES: { id: CoachingMode; label: string; blurb: string }[] = [
   { id: 'coached', label: 'Coached', blurb: 'Targets update themselves each week.' },
@@ -39,10 +52,15 @@ const FAT_MIN = [20, 25, 30]
 export function TargetsCard() {
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], [])
+  const targets = useLiveQuery(() => repo.currentTargets(), [], null)
+  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const units = useUnits()
+  const [isByDate, setIsByDate] = useState(false)
   if (!program) return null
 
   const rates = RATES[program.goal]
+  const isDated = isByDate || !rates.some((rate) => rate.value === program.ratePctPerWeek)
+  const kcal = profile?.manualTargets ? null : (targets?.kcal ?? null)
   const latestKg = weights?.[weights.length - 1]?.kg ?? null
   // The pace as a weight per week rather than a percentage, which is the form anyone thinks in.
   const perWeek = (pct: number): string | null => {
@@ -63,6 +81,7 @@ export function TargetsCard() {
               options={GOALS}
               onChange={(goal) => {
                 if (!goal) return
+                setIsByDate(false)
                 const rate = RATES[goal][goal === 'maintain' ? 0 : 1]?.value ?? 0
                 void repo.startProgram({
                   goal,
@@ -83,21 +102,77 @@ export function TargetsCard() {
           {rates.length > 1 && (
             <Field
               label="Pace"
-              hint={perWeek(program.ratePctPerWeek) ?? `${program.ratePctPerWeek}% of bodyweight a week`}
+              hint={[
+                perWeek(program.ratePctPerWeek) ?? `${program.ratePctPerWeek}% of bodyweight a week`,
+                kcal !== null && `${kcal.toLocaleString()} kcal a day`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             >
               <PillSelect
-                value={String(program.ratePctPerWeek)}
-                options={rates.map((r) => ({ value: String(r.value), label: r.label }))}
+                value={isDated ? BY_DATE : String(program.ratePctPerWeek)}
+                options={[
+                  ...rates.map((r) => ({ value: String(r.value), label: r.label })),
+                  { value: BY_DATE, label: 'By date' },
+                ]}
                 onChange={(value) => {
                   if (value === null) return
+                  if (value === BY_DATE) {
+                    setIsByDate(true)
+                    return
+                  }
+                  setIsByDate(false)
                   void repo.setProgramFields(program.id, { ratePctPerWeek: Number(value) })
                 }}
               />
+              {isDated && <GoalDateField key={program.targetKg ?? 0} program={program} />}
             </Field>
           )}
         </div>
 
       </Card>
+    </>
+  )
+}
+
+function GoalDateField({ program }: { program: Program }) {
+  const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
+  const [picked, setPicked] = useState<{ day: string; pace?: DatedPace | null } | null>(null)
+
+  if (program.targetKg === null) {
+    return <p className="mt-1.5 text-[12px] text-ink-muted">Set a goal weight first.</p>
+  }
+
+  const chosenAt = forecast?.chosen.etaAt ?? null
+  const day = picked?.day ?? (chosenAt === null ? '' : dayKey(chosenAt))
+  const pace = picked?.pace
+
+  const pick = async (value: string) => {
+    if (!value) return
+    setPicked({ day: value })
+    setPicked({ day: value, pace: await repo.setGoalDate(program.id, dayNoon(value)) })
+  }
+
+  return (
+    <>
+      <input
+        type="date"
+        aria-label="Goal date"
+        min={dayKeyOffset(Date.now(), -1)}
+        value={day}
+        onChange={(event) => void pick(event.target.value)}
+        className="tabular mt-1.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+      />
+      {pace === null && (
+        <p className="mt-1 text-[12px] text-ink-muted">You&rsquo;re already past your goal weight.</p>
+      )}
+      {pace?.isTooSoon && (
+        <p className="mt-1 text-[12px]" style={{ color: 'var(--confidence-medium)' }}>
+          {pace.earliestAt === null
+            ? 'Calories can’t safely go any lower.'
+            : `Too soon to be safe. Earliest: ${arrivalDay(pace.earliestAt)}.`}
+        </p>
+      )}
     </>
   )
 }
