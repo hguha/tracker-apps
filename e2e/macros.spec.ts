@@ -849,7 +849,8 @@ test('the day screen shows what each food contributes, and what the day comes to
   // day: one food with a gap used to erase that nutrient from the whole day.
   await page.getByRole('button', { name: /Nutrition/ }).click()
   await page.getByRole('button', { name: /^Sodium/ }).click()
-  await expect(page.getByText(/^Chicken breast/).last()).toBeVisible()
+  const sodium = page.locator('li').filter({ has: page.getByRole('button', { name: /^Sodium/ }) })
+  await expect(sodium.getByText(/^Chicken breast/)).toBeVisible()
   await page.getByRole('button', { name: /^Sugars/ }).click()
   await expect(page.getByText(/^Not listed for Chicken breast/)).toBeVisible()
 

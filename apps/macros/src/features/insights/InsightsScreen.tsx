@@ -143,7 +143,7 @@ export function InsightsScreen() {
               <>
                 <NutrientList
                   nutrition={data.nutrition}
-                  rows={data.namedRows}
+                  entries={data.entries}
                   dayCount={data.loggedDayCount}
                   sex={data.profile?.sex ?? null}
                 />

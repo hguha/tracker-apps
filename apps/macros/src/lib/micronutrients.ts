@@ -152,7 +152,7 @@ export function dietQuality(
     onTarget: known.filter((s) => s.verdict === 'ok'),
     measured: known.length,
     tracked: statuses.length,
-    summary: summarize(short, over, known.length),
+    summary: summarize(short, over, known.length, statuses.length),
   }
 }
 
@@ -160,9 +160,12 @@ function summarize(
   short: NutrientStatus[],
   over: NutrientStatus[],
   measured: number,
+  tracked: number,
 ): string {
   if (measured === 0) return 'No nutrient data in these foods yet.'
-  if (short.length === 0 && over.length === 0) return 'Everything is in range'
+  if (short.length === 0 && over.length === 0) {
+    return measured < tracked ? 'Everything recorded is in range' : 'Everything is in range'
+  }
   const parts: string[] = []
   if (short.length > 0) parts.push(`low on ${list(short.map((s) => s.label.toLowerCase()))}`)
   if (over.length > 0) parts.push(`high on ${list(over.map((s) => s.label.toLowerCase()))}`)
@@ -186,7 +189,6 @@ export function formatAmount(status: Pick<NutrientStatus, 'key' | 'amount'>): st
   return `${Math.round(status.amount)}mg`
 }
 
-
 /** Bodyweight goal, for the Today header. Derived, never stored — the program owns the intent
  *  and the trend owns the number, so a stored "goal weight" would just go stale. */
 export function goalWeightKg(
@@ -203,13 +205,15 @@ export function bmi(trendKg: number, heightCm: number): number {
   return trendKg / (metres * metres)
 }
 
-export interface NutrientSource {
+const TOP_SOURCES = 4
+
+interface NutrientSource {
   name: string
   amount: number
   share: number
 }
 
-export interface NutrientSources {
+interface NutrientSources {
   top: NutrientSource[]
   missing: string[]
 }
@@ -218,7 +222,6 @@ export function nutrientSources(
   rows: readonly { name: string; nutrients: Nutrients }[],
   key: keyof Nutrients,
   dayCount: number,
-  limit = 4,
 ): NutrientSources {
   const amounts = new Map<string, number>()
   const missing = new Map<string, number>()
@@ -233,7 +236,7 @@ export function nutrientSources(
     top: [...amounts]
       .filter(([, value]) => value > 0)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
+      .slice(0, TOP_SOURCES)
       .map(([name, value]) => ({ name, amount: value / days, share: total > 0 ? value / total : 0 })),
     missing: [...missing]
       .filter(([, kcal]) => kcal > 0)

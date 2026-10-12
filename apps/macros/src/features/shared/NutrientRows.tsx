@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronDown } from 'lucide-react'
+import * as repo from '@/data/repository'
 import { cn } from '@tracker-engine/core'
 import {
   formatAmount,
@@ -8,35 +10,25 @@ import {
   type ReferenceSex,
 } from '@/lib/micronutrients'
 import type { CoveredNutrients } from '@/lib/nutrition'
-import { entryName } from '@/features/shared/entryName'
-import type { Food, LogEntry, Nutrients } from '@/domain/types'
-
-export interface NamedRow {
-  name: string
-  nutrients: Nutrients
-}
-
-export const namedRows = (
-  entries: readonly LogEntry[],
-  foods: ReadonlyMap<string, Food>,
-): NamedRow[] =>
-  entries.map((entry) => ({
-    name: entry.dishName ?? entryName(entry, foods),
-    nutrients: entry.nutrients,
-  }))
+import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import type { LogEntry } from '@/domain/types'
 
 export function NutrientRows({
   nutrition,
-  rows,
+  entries,
   dayCount,
   sex,
 }: {
   nutrition: CoveredNutrients
-  rows: readonly NamedRow[]
+  entries: readonly LogEntry[]
   dayCount: number
   sex: ReferenceSex
 }) {
   const [open, setOpen] = useState<string | null>(null)
+  const foods = useLiveQuery(
+    () => (open === null ? undefined : repo.foodsByIds(foodIdsOf(entries))),
+    [open === null, entries],
+  )
   const statuses = nutrientStatus(nutrition.totals, sex, nutrition.coverage)
   if (statuses.every((status) => status.amount === null)) {
     return (
@@ -50,8 +42,19 @@ export function NutrientRows({
     <ul className="divide-y divide-line">
         {statuses.map((status) => {
           const isOpen = open === status.key
-          const sources = isOpen ? nutrientSources(rows, status.key, dayCount) : null
-          const ratio = status.ratio ?? 0
+          const sources =
+            isOpen && foods
+              ? nutrientSources(
+                  entries.map((entry) => ({
+                    name: entry.dishName ?? entryName(entry, foods),
+                    nutrients: entry.nutrients,
+                  })),
+                  status.key,
+                  dayCount,
+                )
+              : null
+          const ratio = status.ratio ?? (status.amount ?? 0) / status.reference
+          const isPartial = status.verdict === 'unknown'
           return (
             <li key={status.key}>
               <button
@@ -68,7 +71,7 @@ export function NutrientRows({
                     />
                   </span>
                   <span className="tabular text-ink-muted">
-                    <span className="text-ink">{formatAmount(status)}</span>
+                    <span className={isPartial ? undefined : 'text-ink'}>{formatAmount(status)}</span>
                     {' / '}
                     {formatAmount({ ...status, amount: status.reference })}
                     {!status.isFloor && ' max'}

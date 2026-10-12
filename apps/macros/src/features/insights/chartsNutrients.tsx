@@ -2,14 +2,15 @@ import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { Card } from '@tracker-engine/ui'
 import { nutrientTargets, type ReferenceSex } from '@/lib/micronutrients'
-import { NutrientRows, type NamedRow } from '@/features/shared/NutrientRows'
+import { NutrientRows } from '@/features/shared/NutrientRows'
+import type { LogEntry } from '@/domain/types'
 import { mgToGrams, type CoveredNutrients } from '@/lib/nutrition'
 import { shortDay, useChartTokens } from './chartTokens'
 import type { InsightsDay } from './useInsightsData'
 
 export function NutrientList(props: {
   nutrition: CoveredNutrients
-  rows: readonly NamedRow[]
+  entries: readonly LogEntry[]
   dayCount: number
   sex: ReferenceSex
 }) {

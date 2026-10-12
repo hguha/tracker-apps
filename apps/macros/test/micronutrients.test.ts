@@ -53,7 +53,7 @@ describe('dietQuality', () => {
     expect(quality).not.toHaveProperty('score')
     expect(quality.measured).toBe(1)
     expect(quality.tracked).toBe(7)
-    expect(quality.summary).toBe('Everything is in range')
+    expect(quality.summary).toBe('Everything recorded is in range')
   })
 
   it('names each nutrient out of range rather than averaging them away', () => {

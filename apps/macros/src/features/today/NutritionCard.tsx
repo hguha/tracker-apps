@@ -2,14 +2,10 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Card } from '@tracker-engine/ui'
 import { cn } from '@tracker-engine/core'
-import { useLiveQuery } from 'dexie-react-hooks'
-import * as repo from '@/data/repository'
 import { dietQuality, type ReferenceSex } from '@/lib/micronutrients'
-import { foodIdsOf } from '@/features/shared/entryName'
-import { NutrientRows, namedRows } from '@/features/shared/NutrientRows'
-import type { Food, LogEntry } from '@/domain/types'
+import { NutrientRows } from '@/features/shared/NutrientRows'
+import type { LogEntry } from '@/domain/types'
 import type { CoveredNutrients } from '@/lib/nutrition'
-
 
 /**
  * Diet completeness over the last week, collapsed by default.
@@ -35,12 +31,6 @@ export function NutritionCard({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const quality = dietQuality(nutrition.totals, sex, nutrition.coverage)
-  const foods = useLiveQuery(
-    () => repo.foodsByIds(foodIdsOf(entries)),
-    [entries.map((entry) => entry.foodId).join(',')],
-    new Map<string, Food>(),
-  )
-  const rows = namedRows(entries, foods ?? new Map())
 
   return (
     <Card className="p-0">
@@ -86,7 +76,7 @@ export function NutritionCard({
 
       {isOpen && (
         <div className="border-t border-line">
-          <NutrientRows nutrition={nutrition} rows={rows} dayCount={dayCount} sex={sex} />
+          <NutrientRows nutrition={nutrition} entries={entries} dayCount={dayCount} sex={sex} />
         </div>
       )}
     </Card>

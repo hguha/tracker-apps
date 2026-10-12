@@ -14,11 +14,11 @@ import { filterExpenditure, kcalPerKg, windowEstimate, type ExpenditureWindow } 
 import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
 import { cuisineMix, venueSummary, type CuisineShare, type VenueSummary } from '@/lib/patterns'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
-import { namedRows, type NamedRow } from '@/features/shared/NutrientRows'
 import type { GoalForecast } from '@/lib/goal'
 import type {
   CheckIn,
   CuisineKey,
+  LogEntry,
   MacroTargets,
   Profile,
   Program,
@@ -81,7 +81,7 @@ export interface InsightsData {
   weightChangeKg: number | null
   /** Share of days with a target that landed within 10% of it. Null when no day had one. */
   adherencePct: number | null
-  namedRows: NamedRow[]
+  entries: LogEntry[]
   /** The foods contributing the most calories over the window. */
   topFoods: { name: string; kcal: number; entries: number }[]
   /** Home vs out, by occasion, and what each side costs against target. */
@@ -224,7 +224,7 @@ export function useInsightsData(windowDays: number): InsightsData {
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count),
     weightChangeKg: first && last && trend.length > 1 ? last.trendKg - first.trendKg : null,
-    namedRows: namedRows(entries ?? [], foods ?? new Map()),
+    entries: entries ?? [],
     topFoods: [...contribution.entries()]
       .map(([name, value]) => ({ name, ...value }))
       .sort((a, b) => b.kcal - a.kcal)
