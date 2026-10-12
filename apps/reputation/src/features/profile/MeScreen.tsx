@@ -1,6 +1,7 @@
 // The Me tab: a menu of destinations (§5.2 /me), grouped as things you do, then
 // things you set, then things that are dangerous.
 
+import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ChevronRight,
   ClipboardList,
@@ -11,9 +12,13 @@ import {
   Sparkles,
   Trophy,
 } from 'lucide-react'
+import { plural } from '@tracker-engine/core'
+import { NavList, NavRow } from '@tracker-engine/ui'
+import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { useAuth } from '@/auth/AuthContext'
 import { initialsOf } from '@/auth/types'
+import { THEME_PRESETS } from '@/lib/theme'
 import { useSync } from '@/sync/useSync'
 
 export function MeScreen({
@@ -37,6 +42,15 @@ export function MeScreen({
 }) {
   const { session } = useAuth()
   const sync = useSync()
+  const counts = useLiveQuery(async () => {
+    const [exercises, templates, profile] = await Promise.all([
+      repo.listExercises(),
+      repo.listTemplates(),
+      repo.getProfile(),
+    ])
+    return { exercises: exercises.length, templates: templates.length, profile }
+  }, [])
+  const theme = THEME_PRESETS.find((preset) => preset.id === counts?.profile.theme)?.label
 
   return (
     <div className="space-y-3 px-3 py-3">
@@ -60,102 +74,70 @@ export function MeScreen({
         </button>
       </Card>
 
-      <Card className="overflow-hidden">
-        <Row
-          icon={<Dumbbell size={19} />}
+      <NavList>
+        <NavRow
+          icon={<Dumbbell size={18} />}
           label="Exercise library"
-          hint="Browse, search, and edit every exercise"
+          hint={counts ? plural(counts.exercises, 'exercise') : 'Browse and edit exercises'}
           onClick={onOpenLibrary}
-          isFirst
         />
-        <Row
-          icon={<ClipboardList size={19} />}
+        <NavRow
+          icon={<ClipboardList size={18} />}
           label="Templates"
-          hint="Build and edit reusable workout plans"
+          hint={
+            counts && counts.templates > 0
+              ? plural(counts.templates, 'template')
+              : 'Build reusable workout plans'
+          }
           onClick={onOpenTemplates}
         />
-        <Row
-          icon={<Sparkles size={19} />}
+        <NavRow
+          icon={<Sparkles size={18} />}
           label="Coach"
-          hint="Critique your balance and draft a plan from your history"
+          hint="Critique your balance and draft a plan"
           onClick={onOpenCoach}
         />
-        <Row
-          icon={<Trophy size={19} />}
+        <NavRow
+          icon={<Trophy size={18} />}
           label="Badges"
-          hint="Milestones across strength, consistency, and cardio"
+          hint="Strength, consistency, and cardio milestones"
           onClick={onOpenBadges}
         />
-      </Card>
+      </NavList>
 
-      <Card className="overflow-hidden">
-        <Row
-          icon={<Settings size={19} />}
+      <NavList>
+        <NavRow
+          icon={<Settings size={18} />}
           label="Settings"
-          hint="Units, logging, coaching, and appearance"
+          hint={
+            counts
+              ? [counts.profile.unitWeight, counts.profile.unitDistance, theme]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'Units, logging, coaching, and appearance'
+          }
           onClick={onOpenSettings}
-          isFirst
         />
-        <Row
-          icon={<HeartPulse size={19} />}
+        <NavRow
+          icon={<HeartPulse size={18} />}
           label="Body"
-          hint="Weight, body fat, waist, resting heart rate"
+          hint="Weight and body measurements"
           onClick={onOpenBody}
         />
-        <Row
-          icon={<Database size={19} />}
+        <NavRow
+          icon={<Database size={18} />}
           label="Data & sync"
           hint={
             sync.deadLettered > 0
-              ? `${sync.deadLettered} change${sync.deadLettered === 1 ? '' : 's'} failed to sync`
+              ? `${plural(sync.deadLettered, 'change')} failed to sync`
               : sync.pending > 0
-                ? `${sync.pending} change${sync.pending === 1 ? '' : 's'} waiting to upload`
+                ? `${plural(sync.pending, 'change')} waiting to upload`
                 : 'Backup, restore, and reset'
           }
-          isWarning={sync.deadLettered > 0}
+          tone={sync.deadLettered > 0 ? 'warning' : undefined}
           onClick={onOpenData}
         />
-      </Card>
+      </NavList>
     </div>
-  )
-}
-
-function Row({
-  icon,
-  label,
-  hint,
-  onClick,
-  isFirst = false,
-  isWarning = false,
-}: {
-  icon: React.ReactNode
-  label: string
-  hint: string
-  onClick: () => void
-  isFirst?: boolean
-  isWarning?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        'flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-accent-wash',
-        isFirst ? '' : 'border-t border-line',
-      ].join(' ')}
-    >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-wash text-accent">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-semibold">{label}</span>
-        <span
-          className="block text-[12.5px] text-ink-muted"
-          style={isWarning ? { color: 'var(--status-serious)' } : undefined}
-        >
-          {hint}
-        </span>
-      </span>
-      <ChevronRight size={17} className="shrink-0 text-ink-muted" />
-    </button>
   )
 }
