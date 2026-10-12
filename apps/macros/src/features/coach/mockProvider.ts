@@ -3,7 +3,7 @@ import { bodyWeightFromKg, convertWeight, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, remaining } from '@/lib/nutrition'
-import type { CoachChatResult, CoachProvider, GeminiContent } from './types'
+import { withReply, type CoachChatResult, type CoachProvider, type GeminiContent } from './types'
 
 /**
  * The offline coach. Always available, no key, no network.
@@ -23,18 +23,17 @@ export const mockCoachProvider: CoachProvider = {
   // Context is ignored: this reads the repository directly, so it always has the real
   // numbers rather than a summary.
   async chat(contents: GeminiContent[]): Promise<CoachChatResult> {
-    const question = lastUserText(contents).toLowerCase()
-
-    if (/weigh|weight|scale|trend/.test(question)) return { text: await weightAnswer(), action: null }
-    if (/protein/.test(question)) return { text: await proteinAnswer(), action: null }
-    if (/expend|tdee|burn|metabolis/.test(question)) {
-      return { text: await expenditureAnswer(), action: null }
-    }
-    if (/eat|dinner|lunch|hungry|left|remaining|snack/.test(question)) {
-      return { text: await remainingAnswer(), action: null }
-    }
-    return { text: await summaryAnswer(), action: null }
+    const text = await answer(lastUserText(contents).toLowerCase())
+    return { text, action: null, contents: withReply(contents, text) }
   },
+}
+
+function answer(question: string): Promise<string> {
+  if (/weigh|weight|scale|trend/.test(question)) return weightAnswer()
+  if (/protein/.test(question)) return proteinAnswer()
+  if (/expend|tdee|burn|metabolis/.test(question)) return expenditureAnswer()
+  if (/eat|dinner|lunch|hungry|left|remaining|snack/.test(question)) return remainingAnswer()
+  return summaryAnswer()
 }
 
 function lastUserText(contents: GeminiContent[]): string {

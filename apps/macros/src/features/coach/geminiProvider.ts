@@ -11,13 +11,14 @@ import {
   toolLabel,
   toolToAction,
 } from './tools'
-import type {
-  CoachAction,
-  CoachChatHooks,
-  CoachChatResult,
-  CoachContext,
-  CoachProvider,
-  GeminiContent,
+import {
+  withReply,
+  type CoachAction,
+  type CoachChatHooks,
+  type CoachChatResult,
+  type CoachContext,
+  type CoachProvider,
+  type GeminiContent,
 } from './types'
 
 // Cap tool rounds per message so one turn can't exhaust the shared free-tier quota.
@@ -58,9 +59,16 @@ export const geminiCoachProvider: CoachProvider = {
       fallbackText:
         "I looked at your numbers but couldn't pull that together — try asking a bit more specifically.",
     })
-    return { text: result.text, action: result.action ?? null }
+    return {
+      text: result.text,
+      action: result.action ?? null,
+      contents: endsOnCall(result.contents) ? withReply(contents, result.text) : result.contents,
+    }
   },
 }
+
+const endsOnCall = (contents: GeminiContent[]): boolean =>
+  contents.at(-1)?.parts.some((part) => part.functionCall) ?? false
 
 /** Built once per turn, so the opening context isn't recomputed on every tool round. */
 export async function buildCoachContext(): Promise<CoachContext> {

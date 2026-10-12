@@ -39,7 +39,11 @@ export type CoachAction =
 export interface CoachChatResult {
   text: string
   action: CoachAction | null
+  contents: GeminiContent[]
 }
+
+export const withReply = (contents: GeminiContent[], text: string): GeminiContent[] =>
+  text ? [...contents, { role: 'model', parts: [{ text }] }] : contents
 
 export interface CoachChatHooks {
   /** Called when a retrieval tool starts, for a status chip. */

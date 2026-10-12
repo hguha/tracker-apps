@@ -63,10 +63,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
         onTool: (label) => setStatus(label),
       })
       setIsOffline(provider === mockCoachProvider)
-      setContents((current) => [
-        ...current,
-        { role: 'model', parts: [{ text: result.text }] },
-      ])
+      setContents(result.contents)
       setItems((current) => [
         ...current,
         ...(result.text
@@ -79,6 +76,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
     } catch {
       const fallback = await mockCoachProvider.chat(nextContents, await buildCoachContext())
       setIsOffline(true)
+      setContents(fallback.contents)
       setItems((current) => [
         ...current,
         { id: crypto.randomUUID(), role: 'assistant', text: fallback.text },
