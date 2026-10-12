@@ -4,6 +4,7 @@ import { db, OWNED_TABLES, OWNER_KEY } from '@/db'
 import type { Table } from 'dexie'
 import { enqueue } from '@/data/outbox'
 import { weightIdFor } from './body'
+import { waterIdFor } from './water'
 import type { BodyWeightRow, WaterRow } from '@/domain/types'
 
 export function claimLocalData(userId: string): Promise<number> {
@@ -25,7 +26,7 @@ export function claimLocalData(userId: string): Promise<number> {
       }
     }
     claimed += await rekeyByDay('bodyWeights', db.bodyWeights as Table<BodyWeightRow, string>, userId, weightIdFor)
-    claimed += await rekeyByDay('waterLogs', db.waterLogs as Table<WaterRow, string>, userId, (owner, day) => `w:${owner}:${day}`)
+    claimed += await rekeyByDay('waterLogs', db.waterLogs as Table<WaterRow, string>, userId, waterIdFor)
     return claimed
   })
 }

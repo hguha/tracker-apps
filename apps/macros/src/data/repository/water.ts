@@ -11,7 +11,8 @@ import { activeUserId, alive } from './internal'
  * "+ a glass" eight times is eight edits to one running total, not eight events, and two devices
  * that each recorded some of a day's water must converge on one row rather than accumulate two.
  */
-const waterId = (day: string): string => `w:${activeUserId}:${day}`
+export const waterIdFor = (userId: string, day: string): string => `w:${userId}:${day}`
+const waterId = (day: string): string => waterIdFor(activeUserId, day)
 
 export function waterForDay(day: string): Promise<WaterRow | undefined> {
   return db.waterLogs.get(waterId(day))

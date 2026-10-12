@@ -66,8 +66,8 @@ describe('importBackup', () => {
     )
 
     await importBackup(backup)
-    expect((await db.bodyWeights.toArray()).map((row) => row.id)).toEqual(['bw:a'])
-    expect((await db.outbox.toArray()).map((entry) => entry.rowId)).toEqual(['bw:a'])
+    expect((await db.bodyWeights.toArray()).map((row) => row.id)).toEqual(['bw:local-user:2026-10-01'])
+    expect((await db.outbox.toArray()).map((entry) => entry.rowId)).toEqual(['bw:local-user:2026-10-01'])
   })
 
   it('writes nothing when one table fails to import', async () => {
@@ -82,5 +82,31 @@ describe('importBackup', () => {
     await expect(importBackup(backup)).rejects.toThrow('disk full')
     expect(await db.logEntries.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
+  })
+})
+
+describe('importBackup onto another account', () => {
+  it('re-owns rows to the signed-in user, keeps deletions, and re-keys per-day rows', async () => {
+    const day = '2026-10-01'
+    const backup = parseBackup(
+      JSON.stringify({
+        format: JSON.parse(await exportToJson()).format,
+        bodyWeights: [{ id: `bw:old-user:${day}`, userId: 'old-user', day, kg: 80, deletedAt: null }],
+        waterLogs: [{ id: `w:old-user:${day}`, userId: 'old-user', day, ml: 500, deletedAt: null }],
+        programs: [{ id: 'p-gone', userId: 'old-user', deletedAt: 1_000 }],
+      }),
+    )
+    repo.setActiveUserId('new-user')
+    await db.profiles.put({ ...(await repo.getProfile()), id: 'someone-else' })
+
+    await importBackup(backup)
+
+    expect((await db.bodyWeights.toArray()).map((r) => [r.id, r.userId])).toEqual([
+      [`bw:new-user:${day}`, 'new-user'],
+    ])
+    expect((await db.waterLogs.toArray()).map((r) => [r.id, r.userId])).toEqual([
+      [`w:new-user:${day}`, 'new-user'],
+    ])
+    expect((await db.programs.get('p-gone'))?.deletedAt).toBe(1_000)
   })
 })
