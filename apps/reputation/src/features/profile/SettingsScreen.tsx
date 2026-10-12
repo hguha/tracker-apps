@@ -1,7 +1,8 @@
 // Preferences: units, logging, coaching inputs, appearance.
 
 import { useState } from 'react'
-import { ChevronLeft, Compass, Sparkles, Volume2 } from 'lucide-react'
+import { Bell, ChevronLeft, Compass, Sparkles, Volume2 } from 'lucide-react'
+import { NavRow } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
@@ -10,13 +11,17 @@ import { useDraftInput } from '@/lib/useDraftInput'
 import { playCue, setSoundEnabled, unlockAudio } from '@/features/timer/sounds'
 import { AppTour } from '@/features/onboarding/AppTour'
 import { AppearanceSection } from './AppearanceSection'
+import { RemindersScreen } from '@/features/reminders/RemindersScreen'
+import { describeReminders, readReminders } from '@/features/reminders/reminders'
 import type { DistanceUnit, LengthUnit, Profile, WeightUnit } from '@/domain/types'
 
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [])
   const [showTour, setShowTour] = useState(false)
+  const [isRemindersOpen, setIsRemindersOpen] = useState(false)
 
   if (!profile) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (isRemindersOpen) return <RemindersScreen onBack={() => setIsRemindersOpen(false)} />
 
   return (
     <div className="flex h-full flex-col">
@@ -161,6 +166,15 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         </Card>
 
         <CoachingCard profile={profile} />
+
+        <Card className="p-0">
+          <NavRow
+            icon={<Bell size={17} />}
+            label="Reminders"
+            hint={describeReminders(readReminders())}
+            onClick={() => setIsRemindersOpen(true)}
+          />
+        </Card>
 
         <AppearanceSection
           theme={profile.theme}

@@ -34,6 +34,7 @@ import { useColorScheme } from '@/lib/useColorScheme'
 import { applyStatusBarStyle } from '@/platform/statusBar'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
 import { useSync } from '@/sync/useSync'
+import { useReminderSync } from '@/features/reminders/reminders'
 
 // ECharts is the biggest dependency; lazy so the logging path never downloads it.
 const InsightsScreen = lazy(() =>
@@ -102,6 +103,7 @@ function SignedInApp() {
 
   useSync()
   useDataTransitionToast()
+  useReminderSync(isReady)
 
   useEffect(() => {
     void seedIfNeeded()
