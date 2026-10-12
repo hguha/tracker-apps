@@ -168,6 +168,16 @@ describe('currentTargets', () => {
   })
 })
 
+describe('ensureProfile', () => {
+  it('keeps a default profile local, so a new device can’t overwrite the account’s', async () => {
+    await repo.ensureProfile()
+    expect(await db.outbox.where('table').equals('profiles').count()).toBe(0)
+
+    await repo.saveProfile({ theme: 'slate' })
+    expect(await db.outbox.where('table').equals('profiles').count()).toBe(1)
+  })
+})
+
 describe('claimLocalData', () => {
   it('re-owns device-only rows and re-queues them', async () => {
     await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })

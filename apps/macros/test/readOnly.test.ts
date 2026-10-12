@@ -56,10 +56,10 @@ describe('getProfile', () => {
     expect(await db.profiles.count()).toBe(0)
   })
 
-  it('ensureProfile is what creates and queues the row', async () => {
+  it('ensureProfile creates the row locally without queueing it', async () => {
     await repo.ensureProfile()
     expect(await db.profiles.count()).toBe(1)
-    expect(await db.outbox.count()).toBe(1)
+    expect(await db.outbox.count()).toBe(0)
   })
 
   it('ensureProfile is idempotent', async () => {

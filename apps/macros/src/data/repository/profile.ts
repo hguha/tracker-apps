@@ -1,7 +1,7 @@
 import { dayKey } from '@tracker-engine/core'
 import { syncStamp } from '@tracker-engine/local-first'
 import { db } from '@/db'
-import { enqueue, patch } from '@/data/outbox'
+import { patch } from '@/data/outbox'
 import {
   DEFAULT_REMINDERS,
   type MacroTargets,
@@ -82,7 +82,6 @@ export async function ensureProfile(): Promise<Profile> {
   if (existing) return existing
   const created = defaultProfile(activeUserId)
   await db.profiles.put(created)
-  await enqueue('profiles', created.id)
   return created
 }
 
