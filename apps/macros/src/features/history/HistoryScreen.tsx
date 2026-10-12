@@ -269,7 +269,9 @@ function DayCard({
   const parts: string[] = []
   if (delta !== null) {
     parts.push(
-      delta === 0 ? 'on target' : `${Math.abs(delta)} kcal ${delta > 0 ? 'over' : 'under'}`,
+      delta === 0
+        ? 'on target'
+        : `${Math.abs(delta).toLocaleString()} kcal ${delta > 0 ? 'over' : 'under'}`,
     )
   }
   if (isPartial) parts.push(plural(entries.length, 'match', 'matches'))
