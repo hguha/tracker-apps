@@ -15,6 +15,8 @@
  * `lib/resolveAmount.ts`.
  */
 
+import { GRAMS_PER_OZ } from '@/lib/nutrition'
+
 export type AmountUnit =
   /** Already a mass: convertible with no food-specific knowledge. */
   | 'g'
@@ -58,7 +60,7 @@ export interface ParsedIngredient {
   isToTaste: boolean
 }
 
-const GRAMS_PER: Record<string, number> = { g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237 }
+const GRAMS_PER: Record<string, number> = { g: 1, kg: 1000, oz: GRAMS_PER_OZ, lb: 453.59237 }
 
 /** How each unit is written back out. Short forms, because that is how recipes print them. */
 const UNIT_LABELS: Partial<Record<AmountUnit, [one: string, many: string]>> = {
@@ -267,12 +269,8 @@ function matchAmount(text: string): Amount | null {
   if (number === null) return null
 
   const rest = trimmed.slice(number.length).trim()
-  for (const [word, unit] of UNIT_WORDS) {
-    // Word-boundary, so "1 g" is grams and "1 garlic clove" is not.
-    if (rest === word || (rest.startsWith(word) && /^[ .,]/.test(rest.slice(word.length)))) {
-      return { quantity: number.value, unit }
-    }
-  }
+  const unit = leadingUnit(rest)
+  if (unit) return { quantity: number.value, unit: unit[1] }
   // A bare number with no unit counts things: "1 onion", "9 lasagna noodles".
   return { quantity: number.value, unit: rest.length > 0 ? 'piece' : null }
 }
@@ -320,14 +318,27 @@ function matchQuantity(text: string): { value: number; length: number } | null {
  * dried))"), so this repeats until nothing changes, then sweeps up any unbalanced bracket left over.
  */
 function stripParens(line: string): string {
+  return peelParens(line).replace(/\s+/g, ' ').trim()
+}
+
+function peelParens(line: string, onInner: (inner: string) => void = () => {}): string {
   let text = line
   for (let pass = 0; pass < 5; pass += 1) {
-    const next = text.replace(/\([^()]*\)/g, ' ')
+    const next = text.replace(/\(([^()]*)\)/g, (_match, inner: string) => {
+      onInner(inner)
+      return ' '
+    })
     if (next === text) break
     text = next
   }
-  return text.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.replace(/[()]/g, ' ')
 }
+
+const leadingUnit = (lower: string): [string, AmountUnit] | undefined =>
+  UNIT_WORDS.find(
+    ([word]) =>
+      lower === word || (lower.startsWith(word) && /^[ .,]/.test(lower.slice(word.length))),
+  )
 
 /**
  * The searchable food name: no quantity, no unit, no parentheses, no prep notes.
@@ -341,29 +352,16 @@ function cleanName(line: string): { name: string; note: string } {
 
   // Parentheses hold amounts and asides, never the food itself. Innermost first and repeatedly,
   // because a single pass over a nested pair leaves the outer bracket in the food's name.
-  for (let pass = 0; pass < 5; pass += 1) {
-    const next = text.replace(/\(([^()]*)\)/g, (_match, inner: string) => {
-      const trimmed = inner.trim()
-      if (trimmed) notes.push(trimmed)
-      return ' '
-    })
-    if (next === text) break
-    text = next
-  }
-  // Anything unbalanced the site left behind is punctuation, not part of the food.
-  text = text.replace(/[()]/g, ' ')
+  text = peelParens(text, (inner) => {
+    if (inner.trim()) notes.push(inner.trim())
+  })
 
   // The leading amount, however it was written.
   const lead = matchQuantity(text.trim().toLowerCase())
   if (lead) {
     text = text.trim().slice(lead.length)
-    for (const [word] of UNIT_WORDS) {
-      const lower = text.trim().toLowerCase()
-      if (lower === word || (lower.startsWith(word) && /^[ .,]/.test(lower.slice(word.length)))) {
-        text = text.trim().slice(word.length).replace(/^[.,]/, '')
-        break
-      }
-    }
+    const unit = leadingUnit(text.trim().toLowerCase())
+    if (unit) text = text.trim().slice(unit[0].length).replace(/^[.,]/, '')
   }
 
   for (const word of [...PREP_WORDS].sort((a, b) => b.length - a.length)) {
