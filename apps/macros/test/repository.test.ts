@@ -179,6 +179,20 @@ describe('claimLocalData', () => {
     expect(await db.outbox.count()).toBe(1)
   })
 
+  it('re-keys a claimed weigh-in so a later one that day is the same row', async () => {
+    const day = dayKey(Date.now())
+    await repo.recordWeight(80, day)
+
+    await repo.claimLocalData('real-user')
+    repo.setActiveUserId('real-user')
+    await repo.recordWeight(79.5, day)
+
+    const rows = await db.bodyWeights.toArray()
+    expect(rows.map((row) => [row.id, row.userId, row.kg, row.deletedAt])).toEqual([
+      [`bw:real-user:${day}`, 'real-user', 79.5, null],
+    ])
+  })
+
   it('must run before the owner guard, which would otherwise wipe what it claimed', async () => {
     await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
 

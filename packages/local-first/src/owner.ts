@@ -90,7 +90,12 @@ export function createOwnerGuard(config: OwnerGuardConfig): OwnerGuard {
     assertOwner,
     async adopt(ownerId) {
       const wiped = await assertOwner(ownerId)
-      return { wiped, claimed: await claimLocal(ownerId) }
+      try {
+        return { wiped, claimed: await claimLocal(ownerId) }
+      } catch (error) {
+        console.warn('[owner] claiming device-only rows failed; retrying next launch', error)
+        return { wiped, claimed: 0 }
+      }
     },
     claimLocal,
     setOwner: write,

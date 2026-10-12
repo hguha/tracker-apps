@@ -1,47 +1,43 @@
 import { createOwnerGuard, touch } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import { db, OWNED_TABLES, OWNER_KEY } from '@/db'
+import type { Table } from 'dexie'
 import { enqueue } from '@/data/outbox'
+import { weightIdFor } from './body'
+import type { BodyWeightRow, WaterRow } from '@/domain/types'
 
-export async function claimLocalData(userId: string): Promise<number> {
-  const tables = [
-    ['profiles', db.profiles],
-    ['customFoods', db.customFoods],
-    ['logEntries', db.logEntries],
-    ['bodyWeights', db.bodyWeights],
-    ['recipes', db.recipes],
-    ['mealTemplates', db.mealTemplates],
-    ['programs', db.programs],
-    ['checkIns', db.checkIns],
-  ] as const
-
-  let claimed = 0
-  for (const [table, store] of tables) {
-    if (table === 'profiles') {
-      // The profile's primary key *is* the owner, so it can't be re-owned in place — the row
-      // has to be re-keyed, which means delete and re-insert.
-      const stale = (await db.profiles.toArray()).filter((row) => row.id === LOCAL_USER_ID)
-      for (const row of stale) {
-        const existing = await db.profiles.get(userId)
-        if (!existing) {
-          await db.profiles.put({ ...row, id: userId, ...touch(row.clientRev) })
-          await enqueue('profiles', userId)
-          claimed += 1
-        }
-        await db.profiles.delete(row.id)
+export function claimLocalData(userId: string): Promise<number> {
+  return db.transaction('rw', [...OWNED_TABLES, db.outbox], async () => {
+    let claimed = await claimProfile(userId)
+    for (const [table, store] of [
+      ['customFoods', db.customFoods],
+      ['logEntries', db.logEntries],
+      ['recipes', db.recipes],
+      ['mealTemplates', db.mealTemplates],
+      ['programs', db.programs],
+      ['checkIns', db.checkIns],
+    ] as const) {
+      const rows = await store.where('userId').equals(LOCAL_USER_ID).toArray()
+      for (const row of rows) {
+        await store.update(row.id, { userId, updatedAt: Date.now() })
+        await enqueue(table, row.id)
+        claimed += 1
       }
-      continue
     }
-    const rows = await store.where('userId').equals(LOCAL_USER_ID).toArray()
-    for (const row of rows) {
-      await store.update(row.id, { userId, updatedAt: Date.now() })
-      await enqueue(table, row.id)
-      claimed += 1
-    }
-  }
+    claimed += await rekeyByDay('bodyWeights', db.bodyWeights as Table<BodyWeightRow, string>, userId, weightIdFor)
+    claimed += await rekeyByDay('waterLogs', db.waterLogs as Table<WaterRow, string>, userId, (owner, day) => `w:${owner}:${day}`)
+    return claimed
+  })
+}
 
-  claimed += await claimWater(userId)
-  return claimed
+async function claimProfile(userId: string): Promise<number> {
+  const stale = await db.profiles.get(LOCAL_USER_ID)
+  if (!stale) return 0
+  await db.profiles.delete(LOCAL_USER_ID)
+  if (await db.profiles.get(userId)) return 0
+  await db.profiles.put({ ...stale, id: userId, ...touch(stale.clientRev) })
+  await enqueue('profiles', userId)
+  return 1
 }
 
 /**
@@ -52,20 +48,22 @@ export async function claimLocalData(userId: string): Promise<number> {
  * so the next `addWater` on the same day would compute a *different* id, insert a second row, and hit
  * the server's unique (user_id, day) index. Delete and re-insert, exactly as the profile does.
  */
-async function claimWater(userId: string): Promise<number> {
-  const stale = await db.waterLogs.where('userId').equals(LOCAL_USER_ID).toArray()
+async function rekeyByDay<Row extends { id: string; userId: string; day: string; clientRev: number }>(
+  table: string,
+  store: Table<Row, string>,
+  userId: string,
+  idFor: (owner: string, day: string) => string,
+): Promise<number> {
+  const stale = await store.where('userId').equals(LOCAL_USER_ID).toArray()
   let claimed = 0
   for (const row of stale) {
-    const id = `w:${userId}:${row.day}`
-    const existing = await db.waterLogs.get(id)
-    // A row already under the new owner wins: it belongs to the account, and this one is a local
-    // draft for the same day.
-    if (!existing) {
-      await db.waterLogs.put({ ...row, id, userId, ...touch(row.clientRev) })
-      await enqueue('waterLogs', id)
+    const id = idFor(userId, row.day)
+    if (!(await store.get(id))) {
+      await store.put({ ...row, id, userId, ...touch(row.clientRev) })
+      await enqueue(table, id)
       claimed += 1
     }
-    await db.waterLogs.delete(row.id)
+    await store.delete(row.id)
   }
   return claimed
 }

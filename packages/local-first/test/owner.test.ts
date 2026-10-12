@@ -120,4 +120,25 @@ describe('adopt', () => {
     expect(await g.adopt('local-user')).toEqual({ wiped: false, claimed: 0 })
     expect(claim).not.toHaveBeenCalled()
   })
+
+  it('still signs in when claiming fails, so the next launch can retry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { guard: g } = guard(async () => {
+      throw new Error('constraint')
+    })
+    g.setOwner('local-user')
+    expect(await g.adopt('user-a')).toEqual({ wiped: false, claimed: 0 })
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('refuses to continue when wiping a foreign account fails', async () => {
+    const g = createOwnerGuard({
+      storageKey: 'test.owner',
+      tables: [{ clear: vi.fn(async () => Promise.reject(new Error('locked'))) }],
+      storage: memoryStorage(),
+    })
+    g.setOwner('user-a')
+    await expect(g.adopt('user-b')).rejects.toThrow('locked')
+    expect(g.currentOwner()).toBe('user-a')
+  })
 })
