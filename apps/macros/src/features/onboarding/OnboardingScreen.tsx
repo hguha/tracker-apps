@@ -223,7 +223,7 @@ export function OnboardingScreen() {
               )}
 
               <Picker
-                label="Born"
+                label="Birth year"
                 value={birthYear}
                 onChange={setBirthYear}
                 options={YEAR_RANGE.map((n) => ({

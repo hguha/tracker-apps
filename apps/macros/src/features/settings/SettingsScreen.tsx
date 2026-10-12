@@ -17,6 +17,7 @@ import { useSyncStatus } from '@/sync/useSync'
 import * as repo from '@/data/repository'
 import { useUnits } from '@/features/shared/useUnits'
 import { describeReminders } from '@/data/reminders'
+import { THEME_PRESETS } from '@/lib/theme'
 import type { Profile, Program } from '@/domain/types'
 
 export type SettingsRoute =
@@ -53,6 +54,7 @@ export function SettingsScreen({
 
   return (
     <div className="space-y-3 px-3 py-3">
+      <h1 className="px-1 text-[17px] font-semibold tracking-tight">Settings</h1>
       <Card className="overflow-hidden">
         <button
           onClick={() => onOpen('account')}
@@ -117,7 +119,7 @@ export function SettingsScreen({
           label="Units & appearance"
           hint={
             profile
-              ? `${profile.units === 'metric' ? 'kg' : 'lb'} · ${schemeLabel(profile.colorScheme)} · ${profile.theme}`
+              ? `${profile.units === 'metric' ? 'kg' : 'lb'} · ${schemeLabel(profile.colorScheme)} · ${THEME_PRESETS.find((preset) => preset.id === profile.theme)?.label ?? profile.theme}`
               : ''
           }
           onClick={() => onOpen('appearance')}

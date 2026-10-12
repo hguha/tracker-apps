@@ -60,7 +60,8 @@ function useSync(): SyncStatus {
       await engine.retryDeadLettered()
       await engine.sync()
       setPhase('idle')
-    } catch {
+    } catch (error) {
+      console.warn('[sync] sync now failed', error)
       setPhase('error')
     }
   }, [engine, enabled])
