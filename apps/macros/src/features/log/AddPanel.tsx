@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
 import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
@@ -81,11 +81,16 @@ export function AddPanel({
     String(edit?.start.amount ?? (subject.initialUnitId === GRAMS ? 100 : 1)),
   )
   const [isEdited, setIsEdited] = useState(false)
+  const editedRef = useRef(false)
+  const markEdited = () => {
+    editedRef.current = true
+    setIsEdited(true)
+  }
   const [isSaving, setIsSaving] = useState(false)
 
   const borrowedKey = borrowed === undefined ? 'pending' : (borrowed?.from.id ?? 'none')
   useEffect(() => {
-    if (edit || isEdited || last === undefined || borrowed === undefined) return
+    if (edit || editedRef.current || last === undefined || borrowed === undefined) return
     if (last === null) {
       setUnitId(subject.initialUnitId)
       setAmount(String(subject.initialUnitId === GRAMS ? 100 : 1))
@@ -94,7 +99,7 @@ export function AddPanel({
     const start = startingAmount(subject.units, last)
     setUnitId(start.unitId)
     setAmount(String(start.amount))
-  }, [key, isEdited, last, borrowedKey])
+  }, [key, last, borrowedKey])
 
   const unit = subject.units.find((row) => row.id === unitId) ?? subject.units[0]!
   const typed = Number(amount)
@@ -143,7 +148,7 @@ export function AddPanel({
           .join(' · ')
 
   const nudge = (delta: number) => {
-    setIsEdited(true)
+    markEdited()
     setAmount(String(Math.max(unit.min, Math.round((count + delta) * 100) / 100)))
   }
 
@@ -191,7 +196,7 @@ export function AddPanel({
             step={unit.step}
             value={amount}
             onChange={(event) => {
-              setIsEdited(true)
+              markEdited()
               setAmount(event.target.value)
             }}
             aria-label="Amount"
@@ -210,7 +215,7 @@ export function AddPanel({
           <select
             value={unit.id}
             onChange={(event) => {
-              setIsEdited(true)
+              markEdited()
               const next = subject.units.find((row) => row.id === event.target.value)
               if (!next) return
               // Carry the weight across rather than the number: switching "2 slices" to grams
