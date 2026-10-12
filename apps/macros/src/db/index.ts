@@ -127,7 +127,7 @@ export const db = new MacrosDatabase()
 
 /** Everything a foreign account's sign-in must clear. `foods` is excluded on purpose:
  *  shared reference data, owned by nobody, and expensive to re-seed. */
-const OWNED_TABLES = [
+export const OWNED_TABLES = [
   db.customFoods,
   db.logEntries,
   db.bodyWeights,

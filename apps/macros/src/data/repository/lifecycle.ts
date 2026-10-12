@@ -1,5 +1,5 @@
 import { touch } from '@tracker-engine/local-first'
-import { db, owner } from '@/db'
+import { db, OWNED_TABLES, owner } from '@/db'
 import { enqueue } from '@/data/outbox'
 
 /**
@@ -83,18 +83,5 @@ export const clearDbOwner = (): void => owner.clearOwner()
 
 /** Wipes this device's copy, keeping the seeded food reference data. */
 export async function clearLocalData(): Promise<void> {
-  await Promise.all([
-    db.profiles.clear(),
-    db.customFoods.clear(),
-    db.logEntries.clear(),
-    db.bodyWeights.clear(),
-    db.waterLogs.clear(),
-    db.recipes.clear(),
-    db.mealTemplates.clear(),
-    db.programs.clear(),
-    db.checkIns.clear(),
-    db.outbox.clear(),
-    db.deadLetter.clear(),
-    db.syncState.clear(),
-  ])
+  await Promise.all(OWNED_TABLES.map((table) => table.clear()))
 }
