@@ -185,10 +185,8 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                 className="mt-3 w-full"
                 disabled={sync.phase === 'syncing'}
                 onClick={() => {
-                  void sync.syncNow().then(() => {
-                    toast.show(
-                      sync.pending === 0 ? 'Everything is synced' : 'Sync finished',
-                    )
+                  void sync.syncNow().then((isComplete) => {
+                    toast.show(isComplete ? 'Everything is synced' : 'Some changes didn’t sync yet')
                   })
                 }}
               >
@@ -208,7 +206,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                   className="mt-2 w-full"
                   disabled={sync.phase === 'syncing'}
                   onClick={() => {
-                    void sync.retryFailed().then((count) => {
+                    void sync.retryFailed().then(({ count }) => {
                       toast.show(
                         count > 0
                           ? `Retrying ${count} failed ${count === 1 ? 'change' : 'changes'}…`

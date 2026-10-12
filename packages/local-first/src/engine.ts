@@ -36,7 +36,7 @@ export interface DrainResult {
 }
 
 export class SyncEngine {
-  private draining = false
+  private inFlight: Promise<DrainResult> | null = null
 
   constructor(
     private backend: SyncBackend,
@@ -69,9 +69,16 @@ export class SyncEngine {
    * write can't stall the queue behind it. Re-entrant-safe.
    */
   async drain(now = Date.now()): Promise<DrainResult> {
-    if (this.draining) return { pushed: 0, deadLettered: 0, stoppedBecause: null }
-    this.draining = true
+    if (this.inFlight) return this.inFlight
+    this.inFlight = this.drainOnce(now)
+    try {
+      return await this.inFlight
+    } finally {
+      this.inFlight = null
+    }
+  }
 
+  private async drainOnce(now: number): Promise<DrainResult> {
     let pushed = 0
     let deadLettered = 0
     let stoppedBecause: DrainResult['stoppedBecause'] = null
@@ -84,105 +91,101 @@ export class SyncEngine {
     // an attempt on someone else's problem.
     const blocked = new Set<string>()
 
-    try {
-      const serverAuthored = new Set(this.schema.serverAuthored ?? [])
-      const ready = (await this.deps.outbox.toArray())
-        .filter(isReadyToPush)
-        // Server-authored tables (e.g. bank data pulled via aggregation) are never
-        // pushed — the client doesn't own them. Empty for REPutation.
-        .filter((entry) => !serverAuthored.has(entry.table))
-        .sort((a, b) => this.tableRank(a.table) - this.tableRank(b.table) || a.seq! - b.seq!)
+    const serverAuthored = new Set(this.schema.serverAuthored ?? [])
+    const ready = (await this.deps.outbox.toArray())
+      .filter(isReadyToPush)
+      // Server-authored tables (e.g. bank data pulled via aggregation) are never
+      // pushed — the client doesn't own them. Empty for REPutation.
+      .filter((entry) => !serverAuthored.has(entry.table))
+      .sort((a, b) => this.tableRank(a.table) - this.tableRank(b.table) || a.seq! - b.seq!)
 
-      for (const entry of ready) {
-        if (entry.nextAttemptAt !== undefined && entry.nextAttemptAt > now) {
-          stoppedBecause = 'transient'
-          continue
-        }
+    for (const entry of ready) {
+      if (entry.nextAttemptAt !== undefined && entry.nextAttemptAt > now) {
+        stoppedBecause = 'transient'
+        continue
+      }
 
-        const row = await this.currentRow(entry.table, entry.rowId)
-        // Gone locally — a placeholder that was never filled in, or a discarded
-        // row. There is nothing to send, so stop tracking it.
-        if (row === undefined) {
-          await this.deps.outbox.delete(entry.seq!)
-          syncLog.info(`dropped ${entry.table}/${entry.rowId} — no local row`)
-          continue
-        }
+      const row = await this.currentRow(entry.table, entry.rowId)
+      // Gone locally — a placeholder that was never filled in, or a discarded
+      // row. There is nothing to send, so stop tracking it.
+      if (row === undefined) {
+        await this.deps.outbox.delete(entry.seq!)
+        syncLog.info(`dropped ${entry.table}/${entry.rowId} — no local row`)
+        continue
+      }
 
-        const parentId = this.schema.parentIdOf(entry.table, row)
-        if (parentId !== undefined && rejected.has(parentId)) {
-          rejected.add(entry.rowId)
-          await this.deadLetter(
-            entry,
-            row,
-            `Not sent: its parent row ${parentId} was rejected by the server.`,
-            entry.attempts,
-            now,
-          )
-          deadLettered += 1
-          continue
-        }
-        if (parentId !== undefined && blocked.has(parentId)) {
-          blocked.add(entry.rowId)
-          stoppedBecause = 'transient'
-          syncLog.info(
-            `held ${entry.table}/${entry.rowId} — parent ${parentId} hasn't landed`,
-          )
-          continue
-        }
-
-        const outcome = await this.backend.push({
-          table: entry.table,
-          rowId: entry.rowId,
+      const parentId = this.schema.parentIdOf(entry.table, row)
+      if (parentId !== undefined && rejected.has(parentId)) {
+        rejected.add(entry.rowId)
+        await this.deadLetter(
+          entry,
           row,
-        })
-
-        if (outcome.status === 'ok') {
-          await this.deps.outbox.delete(entry.seq!)
-          pushed += 1
-          syncLog.info(`pushed ${entry.table}/${entry.rowId}`)
-          continue
-        }
-
-        // Every push carries the same token, so one auth failure means they all
-        // fail. Stop the pass and leave the queue intact for after re-auth.
-        if (outcome.status === 'auth') {
-          syncLog.warn(
-            `auth failure on ${entry.table}/${entry.rowId} — pausing for re-auth`,
-            outcome.error,
-          )
-          return { pushed, deadLettered, stoppedBecause: 'auth' }
-        }
-
-        const attempts = entry.attempts + 1
-        // Out of attempts counts as refused: retrying has stopped being a plan.
-        if (outcome.status === 'permanent' || attempts >= MAX_ATTEMPTS) {
-          const reason =
-            outcome.status === 'permanent'
-              ? outcome.error
-              : `still failing after ${attempts} attempts: ${outcome.error}`
-          rejected.add(entry.rowId)
-          await this.deadLetter(entry, row, reason, attempts, now)
-          deadLettered += 1
-          continue
-        }
-
-        // Worth another go later: back it off and let the rest of the pass run.
-        const nextAttemptAt = now + backoffMs(attempts, Math.random())
-        await this.deps.outbox.update(entry.seq!, {
-          attempts,
-          lastError: outcome.error,
-          nextAttemptAt,
-        })
+          `Not sent: its parent row ${parentId} was rejected by the server.`,
+          entry.attempts,
+          now,
+        )
+        deadLettered += 1
+        continue
+      }
+      if (parentId !== undefined && blocked.has(parentId)) {
         blocked.add(entry.rowId)
         stoppedBecause = 'transient'
+        syncLog.info(
+          `held ${entry.table}/${entry.rowId} — parent ${parentId} hasn't landed`,
+        )
+        continue
+      }
+
+      const outcome = await this.backend.push({
+        table: entry.table,
+        rowId: entry.rowId,
+        row,
+      })
+
+      if (outcome.status === 'ok') {
+        await this.deps.outbox.delete(entry.seq!)
+        pushed += 1
+        syncLog.info(`pushed ${entry.table}/${entry.rowId}`)
+        continue
+      }
+
+      // Every push carries the same token, so one auth failure means they all
+      // fail. Stop the pass and leave the queue intact for after re-auth.
+      if (outcome.status === 'auth') {
         syncLog.warn(
-          `transient failure on ${entry.table}/${entry.rowId} (attempt ${attempts}` +
-            `/${MAX_ATTEMPTS}) — retrying in ${Math.round((nextAttemptAt - now) / 1000)}s`,
+          `auth failure on ${entry.table}/${entry.rowId} — pausing for re-auth`,
           outcome.error,
         )
+        return { pushed, deadLettered, stoppedBecause: 'auth' }
       }
-    } finally {
-      this.draining = false
+
+      const attempts = entry.attempts + 1
+      // Out of attempts counts as refused: retrying has stopped being a plan.
+      if (outcome.status === 'permanent' || attempts >= MAX_ATTEMPTS) {
+        const reason =
+          outcome.status === 'permanent'
+            ? outcome.error
+            : `still failing after ${attempts} attempts: ${outcome.error}`
+        rejected.add(entry.rowId)
+        await this.deadLetter(entry, row, reason, attempts, now)
+        deadLettered += 1
+        continue
+      }
+
+      // Worth another go later: back it off and let the rest of the pass run.
+      const nextAttemptAt = now + backoffMs(attempts, Math.random())
+      await this.deps.outbox.update(entry.seq!, {
+        attempts,
+        lastError: outcome.error,
+        nextAttemptAt,
+      })
+      blocked.add(entry.rowId)
+      stoppedBecause = 'transient'
+      syncLog.warn(
+        `transient failure on ${entry.table}/${entry.rowId} (attempt ${attempts}` +
+          `/${MAX_ATTEMPTS}) — retrying in ${Math.round((nextAttemptAt - now) / 1000)}s`,
+        outcome.error,
+      )
     }
 
     if (pushed > 0 || deadLettered > 0) {

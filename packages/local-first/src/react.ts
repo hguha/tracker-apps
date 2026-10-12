@@ -21,8 +21,8 @@ export interface SyncCounts {
 export interface SyncStatus extends SyncCounts {
   enabled: boolean
   phase: SyncPhase
-  syncNow(): Promise<void>
-  retryFailed(): Promise<number>
+  syncNow(): Promise<boolean>
+  retryFailed(): Promise<{ count: number; isComplete: boolean }>
   eraseServerData(): Promise<{ failed: { table: string; error: string }[] }>
   discardLocalChanges(): Promise<{ discarded: number; applied: number }>
   uploadEverything(
@@ -126,9 +126,7 @@ export function createSyncScope(config: SyncScopeConfig) {
       ...counts,
       enabled,
       phase,
-      syncNow: async () => {
-        await run('sync', settle, 0, (remaining) => remaining > 0)
-      },
+      syncNow: async () => (await run('sync', settle, -1, (remaining) => remaining !== 0)) === 0,
       retryFailed: async () => {
         const result = await run(
           'retry',
@@ -137,10 +135,10 @@ export function createSyncScope(config: SyncScopeConfig) {
             const requeued = await engine.retryDeadLettered()
             return { count: claimed + requeued, remaining: await settle(engine) }
           },
-          { count: 0, remaining: 0 },
-          ({ remaining }) => remaining > 0,
+          { count: 0, remaining: -1 },
+          ({ remaining }) => remaining !== 0,
         )
-        return result.count
+        return { count: result.count, isComplete: result.remaining === 0 }
       },
       eraseServerData: () =>
         run(

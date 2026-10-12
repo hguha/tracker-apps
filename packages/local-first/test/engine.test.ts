@@ -136,6 +136,20 @@ describe('SyncEngine (isolated, injected deps)', () => {
     expect(outbox.map((e) => e.table)).toEqual(['feed'])
   })
 
+  it('a drain asked for mid-push waits for that push instead of reporting nothing', async () => {
+    const { schema, stores } = makeSchema()
+    const { deps, enqueue } = memDeps()
+    stores.notes.rows.set('n1', { id: 'n1' })
+    enqueue('notes', 'n1')
+    const engine = new SyncEngine(backend, schema, deps)
+
+    const [first, second] = await Promise.all([engine.drain(), engine.drain()])
+
+    expect(first.pushed).toBe(1)
+    expect(second.pushed).toBe(1)
+    expect(backend.pushed).toHaveLength(1)
+  })
+
   it('dead-letters a row the server rejects permanently', async () => {
     const { schema, stores } = makeSchema()
     const { deps, enqueue, deadLetter } = memDeps()
