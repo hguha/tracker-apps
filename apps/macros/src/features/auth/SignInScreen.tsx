@@ -5,6 +5,8 @@ import { SignInScreen as BaseSignInScreen } from '@tracker-engine/auth/react'
 import { useAuth } from '@/auth/AuthContext'
 import * as repo from '@/data/repository'
 
+export const PRIVACY_URL = 'https://macrocosm.fitness/app/privacy.html'
+
 export function SignInScreen({ onCancel }: { onCancel?: () => void } = {}) {
   const auth = useAuth()
   const isConnectMode = onCancel !== undefined
@@ -20,7 +22,7 @@ export function SignInScreen({ onCancel }: { onCancel?: () => void } = {}) {
       appName="MACROcosm"
       tagline="Log what you eat, and let the numbers find your target."
       icon={Apple}
-      privacyUrl="https://reputation.fitness/app/privacy.html"
+      privacyUrl={PRIVACY_URL}
       onCancel={onCancel}
       localSummary={
         days === undefined ? undefined : `Your ${plural(days, 'day')} of meals`

@@ -1,4 +1,5 @@
 export * from './authScope'
+export * from './AccountScreen'
 export * from './SignInScreen'
 export * from './SetPasswordScreen'
 export * from './useTransitionToast'

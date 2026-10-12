@@ -1357,3 +1357,22 @@ test('a goal can be set by a date, and a date too soon is held to a safe pace', 
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
+
+test('the account screen erases a device-only account only after typing delete', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page)
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /This device only/ }).first().click()
+  await expect(page.getByRole('heading', { name: 'Account' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Erase all data on this device' }).click()
+  const confirm = page.getByRole('button', { name: 'Delete everything' })
+  await expect(confirm).toBeDisabled()
+  await page.getByLabel(/to confirm/).fill('delete')
+  await confirm.click()
+
+  await expect(page.getByRole('button', { name: /Use this device only/ })).toBeVisible()
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
