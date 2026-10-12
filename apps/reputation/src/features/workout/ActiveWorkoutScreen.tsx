@@ -8,6 +8,7 @@ import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
 import { useToast } from '@/components/Toast'
+import { CelebrationOverlay, useCelebrations } from '@tracker-engine/ui'
 import { DragItem, DragList } from '@/components/DragList'
 import { RestTimerBar } from '@/features/timer/RestTimerBar'
 import { useRestTimer } from '@/features/timer/restTimerStore'
@@ -38,6 +39,7 @@ export function ActiveWorkoutScreen({
 }) {
   const toast = useToast()
   const timer = useRestTimer()
+  const celebrations = useCelebrations(null, null)
 
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isFinishOpen, setIsFinishOpen] = useState(false)
@@ -147,11 +149,8 @@ export function ActiveWorkoutScreen({
 
       if (brokenRecords.length > 0) {
         playCue('pr')
-        toast.show(
-          brokenRecords.length === 1
-            ? 'New personal record'
-            : `${brokenRecords.length} new personal records`,
-        )
+        const row = data?.rows.find((r) => r.workoutExercise.exerciseId === exerciseId)
+        celebrations.push(recordCelebration(setId, brokenRecords.length, row?.exercise?.name))
       }
     },
     [
@@ -160,7 +159,7 @@ export function ActiveWorkoutScreen({
       data?.profile.autoStartRest,
       isEditMode,
       timer,
-      toast,
+      celebrations.push,
     ],
   )
 
@@ -410,7 +409,11 @@ export function ActiveWorkoutScreen({
                     onConfirmPlaceholder={(setId, shown) => {
                       void repo.confirmPlaceholder(setId, shown).then((broken) => {
                         playCue(broken.length > 0 ? 'pr' : 'set-logged')
-                        if (broken.length > 0) toast.show('New personal record')
+                        if (broken.length > 0) {
+                          celebrations.push(
+                            recordCelebration(setId, broken.length, row.exercise?.name),
+                          )
+                        }
                       })
                     }}
                     onDuplicateSet={(setId) => {
@@ -615,6 +618,18 @@ export function ActiveWorkoutScreen({
           </button>
         </BottomSheet>
       )}
+      {celebrations.current && (
+        <CelebrationOverlay celebration={celebrations.current} onDone={celebrations.dismiss} />
+      )}
     </div>
   )
+}
+
+function recordCelebration(setId: string, count: number, exerciseName: string | undefined) {
+  return {
+    key: `pr:${setId}`,
+    icons: ['🏆'],
+    title: count === 1 ? 'New personal record' : `${count} new personal records`,
+    subtitle: exerciseName ?? 'Keep it up.',
+  }
 }

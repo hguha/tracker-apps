@@ -14,11 +14,14 @@ import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { ProgressRing } from '@/components/ProgressRing'
 import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
-import { DAY_MS, WEEK_MS, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
+import { DAY_MS, WEEK_MS, dayKey, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
-import { evaluateBadges, homeBadges, type BadgeState } from './badges'
+import { levelFor, nextBadges, type Level } from '@tracker-engine/badges'
+import { CelebrationOverlay, useCelebrations } from '@tracker-engine/ui'
+import { evaluateBadges, type BadgeState } from './badges'
+import { experience, goalWeeksMet } from './progression'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 import {
   conditionLabel,
@@ -114,6 +117,11 @@ export function HomeScreen({
     const totalSets = finished.reduce((total, s) => total + s.setCount, 0)
 
     const badgeStats = await repo.getBadgeStats()
+    const goalWeeks = goalWeeksMet(
+      finished.map((s) => s.workout.startedAt),
+      profile.weekStartsOn,
+      Math.max(1, profile.weeklyWorkoutGoal || 4),
+    )
 
     return {
       profile,
@@ -131,6 +139,7 @@ export function HomeScreen({
       totalVolumeKg,
       totalSets,
       badgeStats,
+      goalWeeks,
       avatar,
     }
   }, [])
@@ -165,6 +174,7 @@ export function HomeScreen({
     totalVolumeKg,
     totalSets,
     badgeStats,
+    goalWeeks,
     avatar,
   } = data
 
@@ -321,7 +331,12 @@ export function HomeScreen({
       )}
 
       {totalWorkouts > 0 && (
-        <BadgeStrip badges={homeBadges(badges)} onSeeAll={onOpenBadges} />
+        <BadgeStrip
+          badges={badges}
+          level={levelFor(experience({ ...badgeStats, goalWeeks }))}
+          owner={session?.userId ?? null}
+          onSeeAll={onOpenBadges}
+        />
       )}
 
       {setsByRegion.size > 0 && (
@@ -437,46 +452,73 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function BadgeStrip({
   badges,
+  level,
+  owner,
   onSeeAll,
 }: {
   badges: BadgeState[]
+  level: Level
+  owner: string | null
   onSeeAll: () => void
 }) {
   const [selected, setSelected] = useState<BadgeState | null>(null)
-  if (badges.length === 0) return null
+  const { current, dismiss } = useCelebrations(
+    owner === null ? null : `reputation.celebrated.${owner}`,
+    { badges, level: level.level, day: dayKey(Date.now()), dayComplete: false },
+  )
   const earned = badges.filter((b) => b.earned).length
+  const upcoming = nextBadges(badges, 4)
+  const progress = (level.xp - level.floor) / (level.next - level.floor)
 
   return (
     <Card className="p-4">
       <button
         onClick={onSeeAll}
-        className="flex w-full items-center justify-between"
-        aria-label="See all badges"
+        className="flex w-full items-center gap-3 text-left"
+        aria-label={`Level ${level.level}, ${earned} badges earned. See all badges`}
       >
-        <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-          Badges
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-[14px] font-bold text-accent-contrast">
+          {level.level}
         </span>
-        <span className="flex items-center gap-1 text-[12px] text-ink-muted">
-          {earned > 0 ? `${earned} earned · ` : ''}See all
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="text-[14px] font-semibold">Level {level.level}</span>
+            <span className="tabular text-[11.5px] text-ink-muted">
+              {level.xp - level.floor} / {level.next - level.floor} XP
+            </span>
+          </span>
+          <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-sunken">
+            <span
+              className="block h-full rounded-full bg-accent transition-[width] duration-500"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </span>
+        </span>
+        <span className="tabular flex shrink-0 items-center gap-0.5 text-[12.5px] text-ink-muted">
+          🏅 {earned}
           <ChevronRight size={15} />
         </span>
       </button>
 
-      <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
-        {badges.map((badge) => (
-          <div key={badge.key} className="w-[76px] shrink-0">
-            <BadgeTile
-              badge={badge}
-              showProgress={!badge.earned}
-              onClick={() => setSelected(badge)}
-            />
+      {upcoming.length > 0 && (
+        <>
+          <p className="mt-3 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+            Next up
+          </p>
+          <div className="mt-2 flex gap-2.5 overflow-x-auto pb-1">
+            {upcoming.map((badge) => (
+              <div key={badge.key} className="w-[76px] shrink-0">
+                <BadgeTile badge={badge} showProgress onClick={() => setSelected(badge)} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {selected && (
         <BadgeDetailSheet badge={selected} onDismiss={() => setSelected(null)} />
       )}
+      {current && <CelebrationOverlay celebration={current} onDone={dismiss} />}
     </Card>
   )
 }
