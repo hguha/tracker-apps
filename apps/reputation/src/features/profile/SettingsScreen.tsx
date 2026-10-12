@@ -1,7 +1,7 @@
 // Preferences: units, logging, coaching inputs, appearance.
 
 import { useState } from 'react'
-import { NavRow, ScreenHeader, SegmentedTabs, useDraftInput } from '@tracker-engine/ui'
+import { NavRow, ScreenHeader, SegmentedTabs, Switch, useDraftInput } from '@tracker-engine/ui'
 import { Bell, Compass, Sparkles, Volume2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
@@ -253,12 +253,7 @@ function ToggleRow({
         <span className="block text-[13.5px] font-medium">{label}</span>
         <span className="block text-[12px] text-ink-muted">{hint}</span>
       </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="size-5 shrink-0 accent-[var(--accent)]"
-      />
+      <Switch isOn={checked} onChange={onChange} label={label} />
     </label>
   )
 }

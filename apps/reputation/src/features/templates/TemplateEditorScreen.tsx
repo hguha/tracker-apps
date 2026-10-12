@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScreenHeader, useDraftInput } from '@tracker-engine/ui'
+import { ScreenHeader, Switch, useDraftInput } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -288,17 +288,14 @@ function ProgressionControl({
               : 'Add weight automatically as you hit the top of the range'}
           </span>
         </span>
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(event) =>
+        <Switch
+          isOn={on}
+          label="Auto-progress"
+          onChange={(isOn) =>
             onChange({
-              progression: event.target.checked
-                ? { kind: 'double', incrementKg: defaultIncrementKg, maxRpe: 8 }
-                : null,
+              progression: isOn ? { kind: 'double', incrementKg: defaultIncrementKg, maxRpe: 8 } : null,
             })
           }
-          className="size-5 shrink-0 accent-[var(--accent)]"
         />
       </label>
 
