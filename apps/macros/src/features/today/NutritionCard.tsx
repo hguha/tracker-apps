@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Card } from '@tracker-engine/ui'
-import { cn } from '@tracker-engine/core'
+import { cn, plural } from '@tracker-engine/core'
 import { dietQuality, type ReferenceSex } from '@/lib/micronutrients'
 import { NutrientRows } from '@/features/shared/NutrientRows'
 import type { LogEntry } from '@/domain/types'
@@ -50,7 +50,7 @@ export function NutritionCard({
             Nutrition
             <span className="font-normal text-ink-muted">
               {' '}
-              · last {dayCount} day{dayCount === 1 ? '' : 's'}
+              · last {plural(dayCount, 'day')}
             </span>
           </div>
           <div className="truncate text-[12.5px] text-ink-muted">{quality.summary}</div>

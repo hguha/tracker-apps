@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { bodyWeightFromKg, cn, convertWeight, signed } from '@tracker-engine/core'
+import { bodyWeightFromKg, cn, convertWeight, plural, signed } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
 import { ChevronDown, Flag, PartyPopper, Target } from 'lucide-react'
@@ -313,7 +313,7 @@ function IntakeBar({ mean, target, days }: { mean: number; target: number; days:
     <div>
       <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
         <span className="text-ink-muted">
-          Eating · last {days} logged day{days === 1 ? '' : 's'}
+          Eating · last {plural(days, 'logged day')}
         </span>
         <span className="tabular font-semibold" style={{ color }}>
           {isClose ? 'On target' : `${Math.abs(gap).toLocaleString()} ${gap > 0 ? 'over' : 'under'}`}

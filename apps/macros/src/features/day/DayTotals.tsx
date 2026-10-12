@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
 import { macroSharePct } from '@/lib/nutrition'
 import { MACRO_BARS, MacroBar } from '@/features/shared/MacroBar'
@@ -35,7 +36,7 @@ export function DayTotals({
           </p>
         </div>
         <p className="tabular text-right text-[12px] text-ink-muted">
-          {meals} meal{meals === 1 ? '' : 's'}
+          {plural(meals, 'meal')}
         </p>
       </div>
 

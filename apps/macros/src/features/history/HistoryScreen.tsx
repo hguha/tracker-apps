@@ -173,7 +173,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
             </p>
             <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
               {grams(averages.proteinMg)}P {grams(averages.carbsMg)}C {grams(averages.fatMg)}F ·{' '}
-              {days.length} day{days.length === 1 ? '' : 's'}
+              {plural(days.length, 'day')}
             </p>
           </Card>
         )}
@@ -247,7 +247,7 @@ function DayCard({
       delta === 0 ? 'on target' : `${Math.abs(delta)} kcal ${delta > 0 ? 'over' : 'under'}`,
     )
   }
-  if (isPartial) parts.push(`${entries.length} match${entries.length === 1 ? '' : 'es'}`)
+  if (isPartial) parts.push(plural(entries.length, 'match', 'matches'))
   // The span, not the meal count: that moved down beside the venue chips, where it fills a line that
   // otherwise held a floating icon and nothing else.
   if (!isPartial && timing.spanMinutes !== null) parts.push(`over ${formatDuration(timing.spanMinutes)}`)
