@@ -81,3 +81,24 @@ test('device-only sign-in reaches the app and can open badges', async ({ page })
     page.getByRole('heading', { name: 'Welcome to REPutation' }),
   ).toBeVisible({ timeout: 20_000 })
 })
+
+test('logging bodyweight shows its smoothed trend on the Body screen', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto('/')
+  await page.getByRole('button', { name: /Use this device only/ }).click()
+  await page.getByRole('button', { name: "Let's set up" }).click({ timeout: 20_000 })
+  const skip = page.getByRole('button', { name: 'Skip for now' })
+  while (await skip.isVisible()) await skip.click()
+  await page.getByRole('button', { name: 'Start logging' }).click()
+  await page.getByRole('button', { name: 'Skip', exact: true }).click()
+
+  await page.getByRole('button', { name: 'More', exact: true }).click()
+  await page.getByRole('button', { name: /^Body/ }).click()
+  await expect(page.getByText('Log your bodyweight to see its trend.')).toBeVisible()
+
+  await page.getByPlaceholder('Log a new value').first().fill('80')
+  await page.getByRole('button', { name: /^Log Bodyweight/i }).click()
+  await expect(page.getByText(/^\d+(\.\d+)? (kg|lb) trend$/)).toBeVisible()
+  expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
+})

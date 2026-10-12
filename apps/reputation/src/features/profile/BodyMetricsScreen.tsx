@@ -11,6 +11,7 @@ import { useToast } from '@/components/Toast'
 import { formatRelativeDay } from '@/lib/dates'
 import { bodyWeightFromKg, lengthFromCm, lengthToCm, weightToKg } from '@/lib/units'
 import { AboutYouCard } from './AboutYouCard'
+import { BodyTrendCard } from './BodyTrendCard'
 
 const QUICK_METRIC_KEYS = ['bodyweight']
 
@@ -139,6 +140,8 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
             ))}
           </div>
         </Card>
+
+        <BodyTrendCard unit={profile.unitWeight} />
 
         <div className="h-4" />
       </div>

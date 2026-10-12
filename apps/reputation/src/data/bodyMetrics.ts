@@ -1,3 +1,4 @@
+import { dailyWeights, scaleRate, weightTrend, type TrendPoint } from '@tracker-engine/body'
 import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import { type MetricDefinition, type MetricEntry } from '@/domain/types'
@@ -59,3 +60,22 @@ export async function addMetricEntry(input: {
 
 // Tombstones finished workouts with no completed set (§6.4.1); these arrive via pull or
 // an interrupted session, never from finishWorkout. In-progress workouts are never touched.
+
+export async function bodyweightTrend(
+  now = Date.now(),
+): Promise<{ trend: TrendPoint[]; kgPerWeek: number | null }> {
+  const entries = await db.metricEntries.where('definitionId').equals('bodyweight').toArray()
+  const trend = weightTrend(
+    dailyWeights(
+      entries.map((entry) => ({
+        id: entry.id,
+        at: entry.measuredAt,
+        kg: entry.value,
+        updatedAt: entry.updatedAt,
+        deletedAt: entry.deletedAt,
+      })),
+      'reputation',
+    ),
+  )
+  return { trend, kgPerWeek: scaleRate(trend, now)?.kgPerWeek ?? null }
+}
