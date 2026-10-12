@@ -3,7 +3,6 @@ import {
   bigThreeTotalKg,
   evaluateBadges,
   groupedBadges,
-  homeBadges,
   type LifetimeStats,
 } from '@/features/home/badges'
 
@@ -165,22 +164,6 @@ describe('non-finite guards (the NaN bug)', () => {
       expect(Number.isFinite(b.fraction)).toBe(true)
       expect(b.detailText).not.toContain('NaN')
     }
-  })
-})
-
-describe('homeBadges', () => {
-  it('shows only badges earned or in progress, hiding untouched ones', () => {
-    // One workout: milestone badges start progressing; a 500-mile cardio badge
-    // stays untouched and should be hidden.
-    const shown = homeBadges(evaluateBadges(stats({ totalWorkouts: 1 })))
-    expect(shown.length).toBeGreaterThan(0)
-    expect(shown.every((b) => b.earned || b.fraction > 0)).toBe(true)
-    expect(shown.some((b) => b.key === 'cardio-500mi')).toBe(false)
-  })
-
-  it('falls back to the single closest badge for a brand-new user', () => {
-    const shown = homeBadges(evaluateBadges(stats()))
-    expect(shown).toHaveLength(1)
   })
 })
 

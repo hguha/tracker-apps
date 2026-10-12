@@ -7,7 +7,6 @@ import {
   evaluateBadges as evaluate,
   groupBadges,
   ratio,
-  startedBadges,
   type Badge as EngineBadge,
   type BadgeState as EngineBadgeState,
 } from '@tracker-engine/badges'
@@ -339,5 +338,4 @@ const GROUP_ORDER: BadgeGroup[] = [
 ]
 
 export const evaluateBadges = (stats: LifetimeStats): BadgeState[] => evaluate(BADGES, stats)
-export const homeBadges = startedBadges<LifetimeStats, BadgeGroup>
 export const groupedBadges = (all: BadgeState[]) => groupBadges(all, GROUP_ORDER)
