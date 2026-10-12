@@ -232,10 +232,16 @@ export function dailyAverage(entries: readonly Pick<LogEntry, 'nutrients' | 'day
  * when the label's calorie figure disagrees with its macros (fibre, sugar alcohols, rounding —
  * they routinely differ by a few percent).
  */
+type MacroKey = 'proteinMg' | 'carbsMg' | 'fatMg'
+
+const macroKcal = (n: Pick<Nutrients, MacroKey>) => ({
+  protein: mgToGrams(n.proteinMg) * 4,
+  carbs: mgToGrams(n.carbsMg) * 4,
+  fat: mgToGrams(n.fatMg) * 9,
+})
+
 export function macroSharePct(n: Nutrients): { proteinMg: number; carbsMg: number; fatMg: number } {
-  const protein = mgToGrams(n.proteinMg) * 4
-  const carbs = mgToGrams(n.carbsMg) * 4
-  const fat = mgToGrams(n.fatMg) * 9
+  const { protein, carbs, fat } = macroKcal(n)
   const total = protein + carbs + fat
   if (total <= 0) return { proteinMg: 0, carbsMg: 0, fatMg: 0 }
   return {
@@ -263,9 +269,7 @@ export function cycleDayTargets(targets: MacroTargets, multiplier: number): Macr
   if (multiplier === 1) return targets
   const kcal = Math.round(targets.kcal * multiplier)
 
-  const proteinKcal = mgToGrams(targets.proteinMg) * 4
-  const carbsKcal = mgToGrams(targets.carbsMg) * 4
-  const fatKcal = mgToGrams(targets.fatMg) * 9
+  const { protein: proteinKcal, carbs: carbsKcal, fat: fatKcal } = macroKcal(targets)
   const flexible = carbsKcal + fatKcal
   if (flexible <= 0) return { ...targets, kcal }
 
@@ -316,13 +320,14 @@ export function splitTargets(
 }
 
 
-export function kcalFromMacros(t: Pick<MacroTargets, 'proteinMg' | 'carbsMg' | 'fatMg'>): number {
-  return Math.round(mgToGrams(t.proteinMg) * 4 + mgToGrams(t.carbsMg) * 4 + mgToGrams(t.fatMg) * 9)
+export function kcalFromMacros(t: Pick<MacroTargets, MacroKey>): number {
+  const { protein, carbs, fat } = macroKcal(t)
+  return Math.round(protein + carbs + fat)
 }
 
 export function withMacro(
   targets: MacroTargets,
-  key: 'proteinMg' | 'carbsMg' | 'fatMg',
+  key: MacroKey,
   grams: number,
 ): MacroTargets {
   const next = { ...targets, [key]: gramsToMg(Math.max(0, grams)) }
@@ -330,19 +335,21 @@ export function withMacro(
 }
 
 export function withCalories(targets: MacroTargets, kcal: number): MacroTargets {
-  const fixedKcal = mgToGrams(targets.proteinMg) * 4 + mgToGrams(targets.fatMg) * 9
+  const { protein, fat } = macroKcal(targets)
+  const fixedKcal = protein + fat
   const carbsMg = gramsToMg(Math.max(0, (kcal - fixedKcal) / 4))
   const next = { ...targets, carbsMg }
   return { ...next, kcal: Math.max(Math.round(kcal), kcalFromMacros(next)) }
 }
 
-export function macroShareOfTargets(t: MacroTargets): Record<'proteinMg' | 'carbsMg' | 'fatMg', number> {
+export function macroShareOfTargets(t: MacroTargets): Record<MacroKey, number> {
   const total = kcalFromMacros(t)
   if (total <= 0) return { proteinMg: 0, carbsMg: 0, fatMg: 0 }
+  const { protein, carbs, fat } = macroKcal(t)
   return {
-    proteinMg: Math.round(((mgToGrams(t.proteinMg) * 4) / total) * 100),
-    carbsMg: Math.round(((mgToGrams(t.carbsMg) * 4) / total) * 100),
-    fatMg: Math.round(((mgToGrams(t.fatMg) * 9) / total) * 100),
+    proteinMg: Math.round((protein / total) * 100),
+    carbsMg: Math.round((carbs / total) * 100),
+    fatMg: Math.round((fat / total) * 100),
   }
 }
 
