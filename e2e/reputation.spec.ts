@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 // Smoke/regression: the app boots (served under /app/), renders its shell, and logs
 // no page errors. Keeps the base-path + PWA wiring honest across refactors.
@@ -82,16 +82,68 @@ test('device-only sign-in reaches the app and can open badges', async ({ page })
   ).toBeVisible({ timeout: 20_000 })
 })
 
-test('logging bodyweight shows its smoothed trend on the Body screen', async ({ page }) => {
-  const errors: string[] = []
-  page.on('pageerror', (e) => errors.push(e.message))
+async function skipSetup(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: /Use this device only/ }).click()
   await page.getByRole('button', { name: "Let's set up" }).click({ timeout: 20_000 })
-  const skip = page.getByRole('button', { name: 'Skip for now' })
-  while (await skip.isVisible()) await skip.click()
-  await page.getByRole('button', { name: 'Start logging' }).click()
-  await page.getByRole('button', { name: 'Skip', exact: true }).click()
+  const tourSkip = page.getByRole('button', { name: 'Skip', exact: true })
+  const next = page.getByRole('button', { name: /^(Skip for now|Almost done|Start logging)$/ })
+  await expect(async () => {
+    if (await next.count()) await next.first().click()
+    await expect(tourSkip).toBeVisible({ timeout: 500 })
+  }).toPass({ timeout: 15_000 })
+  await tourSkip.click()
+}
+
+async function squat(page: Page, pounds: string) {
+  await page.getByRole('button', { name: /Log a workout/ }).first().click()
+  await page.getByRole('button', { name: 'Start an empty workout' }).click()
+  await page.getByRole('button', { name: 'Add exercise' }).click()
+  await page.getByRole('button', { name: /^Back Squat/ }).first().click()
+  await page.getByRole('button', { name: /^Barbell/ }).click()
+  await page.getByLabel('weight in lb').fill(pounds)
+  await page.getByLabel('reps').fill('5')
+  await page.getByLabel('reps').blur()
+}
+
+test('a first workout earns a level and a celebration, and a heavier set a record', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await skipSetup(page)
+
+  await squat(page, '135')
+  await page.getByRole('button', { name: 'Finish workout' }).click()
+  await page.getByRole('button', { name: 'Finish', exact: true }).click()
+  await expect(page.getByRole('status', { name: /badges earned|First Rep/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Level 1, \d+ badges earned/ })).toBeVisible()
+  await expect(page.getByText('Next up')).toBeVisible()
+
+  await squat(page, '185')
+  await expect(page.getByRole('status', { name: /new personal record/ })).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
+})
+
+test('reminders start off and can be switched on in settings', async ({ page }) => {
+  await skipSetup(page)
+
+  await page.getByRole('button', { name: 'More', exact: true }).click()
+  await page.getByRole('button', { name: /Settings/ }).first().click()
+  await page.getByRole('button', { name: /^Reminders\s*Off/ }).click()
+  await expect(page.getByRole('checkbox', { name: 'No workout yet' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Reminders', exact: true }).click()
+  await expect(page.getByRole('checkbox', { name: 'No workout yet' })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Weigh in' })).not.toBeChecked()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await expect(page.getByRole('button', { name: /^Reminders\s*1 on/ })).toBeVisible()
+})
+
+test('logging bodyweight shows its smoothed trend on the Body screen', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await skipSetup(page)
 
   await page.getByRole('button', { name: 'More', exact: true }).click()
   await page.getByRole('button', { name: /^Body/ }).click()
