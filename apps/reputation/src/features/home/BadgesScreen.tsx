@@ -1,9 +1,9 @@
 import { useState } from 'react'
+import { weekStreaks } from '@tracker-engine/core'
 import { ScreenHeader, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { computeStreaks } from './streaks'
 import { evaluateBadges, groupedBadges, type BadgeState } from './badges'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 
@@ -15,7 +15,7 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
     const stats = await repo.getBadgeStats()
     const profile = await repo.getProfile()
 
-    const { currentWeekStreak, bestWeekStreak } = computeStreaks(
+    const { current: currentWeekStreak, best: bestWeekStreak } = weekStreaks(
       finished.map((s) => s.workout.startedAt),
       profile.weekStartsOn,
     )

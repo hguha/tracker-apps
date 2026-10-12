@@ -82,6 +82,40 @@ export function dayStreaks(days: Iterable<string>, now = Date.now()): DayStreaks
   return { current, best }
 }
 
+// Week-streak computation shared by Home and Badges (§5.2.1). Iterates the sorted
+// set of trained weeks rather than a fixed 7-day span, so it stays correct across DST.
+export function weekStreaks(
+  startedAts: Iterable<number>,
+  weekStartsOn: WeekStart,
+  now = Date.now(),
+): DayStreaks {
+  const trained = new Set([...startedAts].map((at) => weekStart(at, weekStartsOn)))
+  if (trained.size === 0) return { current: 0, best: 0 }
+  const weeks = [...trained].sort((a, b) => a - b)
+
+  // A gap wider than ~1.5 weeks resets the run; the tolerance absorbs DST-shifted boundaries.
+  let best = 0
+  let run = 0
+  let prev: number | null = null
+  for (const w of weeks) {
+    run = prev !== null && w - prev <= WEEK_MS * 1.5 ? run + 1 : 1
+    if (run > best) best = run
+    prev = w
+  }
+
+  // Count back from this week while each preceding week was trained; an untrained
+  // current week is skipped, not counted as a break.
+  const thisWeek = weekStart(now, weekStartsOn)
+  let cursor = weekStart(trained.has(thisWeek) ? thisWeek : thisWeek - WEEK_MS, weekStartsOn)
+  let current = 0
+  while (trained.has(cursor)) {
+    current += 1
+    cursor = weekStart(cursor - WEEK_MS, weekStartsOn)
+  }
+
+  return { current, best }
+}
+
 /** The YYYY-MM bucket an ISO date (yyyy-mm-dd) falls in. */
 export function monthKey(isoDate: string): string {
   return isoDate.slice(0, 7)

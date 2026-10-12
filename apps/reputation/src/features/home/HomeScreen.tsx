@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { weekStreaks } from '@tracker-engine/core'
 import { SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -32,7 +33,6 @@ import {
   type RegionInput,
 } from './avatar'
 import { TrainingAvatar } from './TrainingAvatar'
-import { computeStreaks } from './streaks'
 import { getHomeGreeting } from '@/features/coach/encouragement'
 
 export function HomeScreen({
@@ -109,7 +109,7 @@ export function HomeScreen({
       .map((region) => ({ region, lastAt: lastTrainedByRegion.get(region) ?? 0 }))
       .sort((a, b) => a.lastAt - b.lastAt)[0]
 
-    const { currentWeekStreak: streakWeeks, bestWeekStreak } = computeStreaks(
+    const { current: streakWeeks, best: bestWeekStreak } = weekStreaks(
       finished.map((s) => s.workout.startedAt),
       profile.weekStartsOn,
     )
