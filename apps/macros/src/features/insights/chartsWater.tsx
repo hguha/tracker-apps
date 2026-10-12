@@ -73,6 +73,7 @@ export function WaterChart({
                 symbol: 'none',
                 label: {
                   formatter: formatVolume(targetMl, unit),
+                  position: 'insideEndTop',
                   color: tokens.inkMuted,
                   fontSize: 9,
                 },

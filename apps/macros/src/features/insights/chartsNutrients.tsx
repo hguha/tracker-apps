@@ -71,7 +71,12 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
         markLine: {
           silent: true,
           symbol: 'none',
-          label: { formatter: `${referenceG}g`, color: tokens.inkMuted, fontSize: 10 },
+          label: {
+            formatter: `${referenceG}g`,
+            position: 'insideEndTop',
+            color: tokens.inkMuted,
+            fontSize: 10,
+          },
           lineStyle: { color: tokens.on, type: 'dashed' },
           data: [{ yAxis: referenceG }],
         },
