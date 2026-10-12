@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { isBarcodeScanningAvailable } from '@/platform/barcode'
 import * as repo from '@/data/repository'
-import { nutrientsFor, perServing } from '@/lib/nutrition'
+import { nutrientsFor } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { matchesQuery, queryTerms } from '@/lib/foodSearch'
 import { MEAL_LABELS } from '@/lib/meals'
@@ -32,7 +32,7 @@ import { AddPanel } from './AddPanel'
 import { FitsPanel } from './FitsPanel'
 import { AverageRow, DescribeRow, Empty, FoodList, MoreWaysSheet } from './browseRows'
 import { LoggableList } from '@/features/shared/LoggableList'
-import { fromLibrary, fromRecent } from '@/features/shared/loggable'
+import { fromLibrary, fromRecent, fromRecipe } from '@/features/shared/loggable'
 import { WhenLine } from './WhenLine'
 import { CustomFoodPanel } from './CustomFoodPanel'
 import { PhotoPanel } from './PhotoPanel'
@@ -440,13 +440,9 @@ function BrowsePanel({
                   {recipes.length > 0 && (
                     <LoggableList
                       heading="Recipes"
-                      items={recipes.map((recipe) => ({
-                        key: `r:${recipe.id}`,
-                        title: recipe.name,
-                        nutrients: perServing(recipe),
-                        detail: recipe.cuisine ? CUISINE_LABELS[recipe.cuisine] : 'a serving',
-                        loggable: { kind: 'recipe' as const, recipe },
-                      }))}
+                      items={recipes.map((recipe) =>
+                        fromRecipe(recipe, recipe.cuisine ? CUISINE_LABELS[recipe.cuisine] : 'a serving'),
+                      )}
                       onPick={(row) => onOpen(row.loggable)}
                     />
                   )}

@@ -3,13 +3,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
 import { Card, SegmentedTabs, type SegmentedTab } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { dayTotals, mgToGrams, perServing, remaining } from '@/lib/nutrition'
+import { dayTotals, mgToGrams, remaining } from '@/lib/nutrition'
 import { suggestFoods } from '@/lib/suggest'
 import { recommendRecipes } from '@/lib/recommend'
 import { LoggableList } from '@/features/shared/LoggableList'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import { Empty } from './browseRows'
-import type { Loggable, Suggestion } from '@/features/shared/loggable'
+import { fromRecipe, type Loggable, type Suggestion } from '@/features/shared/loggable'
 
 /**
  * What still fits today, from every source that can answer.
@@ -65,14 +65,7 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
       usage: usage ?? new Map(),
       recentCuisines: recentCuisines ?? [],
       today,
-    }).map(({ recipe, why }) => ({
-      key: `r:${recipe.id}`,
-      title: recipe.name,
-      nutrients: perServing(recipe),
-      detail: why,
-      loggable: { kind: 'recipe', recipe },
-      source: 'recipes',
-    }))
+    }).map(({ recipe, why }) => ({ ...fromRecipe(recipe, why), source: 'recipes' }))
 
     const fromFoods: Fit[] = suggestFoods(left, candidates ?? []).map((suggestion) => ({
       key: `f:${suggestion.food.id}`,

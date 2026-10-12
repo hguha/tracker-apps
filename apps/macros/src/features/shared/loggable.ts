@@ -345,16 +345,18 @@ export function fromRecent(item: RecentItem): Repeatable {
   }
 }
 
+export const fromRecipe = (recipe: Recipe, detail: string): Suggestion => ({
+  key: `r:${recipe.id}`,
+  title: recipe.name,
+  nutrients: perServing(recipe),
+  detail,
+  loggable: { kind: 'recipe', recipe },
+})
+
 export function fromLibrary(hit: LibraryHit): Suggestion {
   switch (hit.kind) {
     case 'recipe':
-      return {
-        key: `r:${hit.recipe.id}`,
-        title: hit.name,
-        nutrients: perServing(hit.recipe),
-        detail: 'a serving',
-        loggable: { kind: 'recipe', recipe: hit.recipe },
-      }
+      return fromRecipe(hit.recipe, 'a serving')
     case 'dish':
       return fromRecent(hit.dish)
     case 'quick':
