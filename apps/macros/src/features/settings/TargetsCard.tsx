@@ -58,7 +58,10 @@ export function TargetsCard() {
   if (!program) return null
 
   const rates = RATES[program.goal]
-  const isDated = isByDate || !rates.some((rate) => rate.value === program.ratePctPerWeek)
+  const isDated =
+    isByDate ||
+    program.targetAt !== null ||
+    !rates.some((rate) => rate.value === program.ratePctPerWeek)
   const kcal = profile?.manualTargets ? null : (targets?.kcal ?? null)
   const latestKg = weights?.[weights.length - 1]?.kg ?? null
   // The pace as a weight per week rather than a percentage, which is the form anyone thinks in.
@@ -121,7 +124,10 @@ export function TargetsCard() {
                     return
                   }
                   setIsByDate(false)
-                  void repo.setProgramFields(program.id, { ratePctPerWeek: Number(value) })
+                  void repo.setProgramFields(program.id, {
+                    ratePctPerWeek: Number(value),
+                    targetAt: null,
+                  })
                 }}
               />
               {isDated && <GoalDateField key={program.targetKg ?? 0} program={program} />}
@@ -135,7 +141,6 @@ export function TargetsCard() {
 }
 
 function GoalDateField({ program }: { program: Program }) {
-  const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
   const [pickedDay, setPickedDay] = useState<string | null>(null)
   const [result, setResult] = useState<repo.GoalDateResult | null>(null)
 
@@ -143,8 +148,7 @@ function GoalDateField({ program }: { program: Program }) {
     return <p className="mt-1.5 text-[12px] text-ink-muted">Set a goal weight first.</p>
   }
 
-  const chosenAt = forecast?.chosen.etaAt ?? null
-  const day = pickedDay ?? (chosenAt === null ? '' : dayKey(chosenAt))
+  const day = pickedDay ?? (program.targetAt === null ? '' : dayKey(program.targetAt))
   const pace = result?.kind === 'set' ? result.pace : null
 
   const pick = async (value: string) => {

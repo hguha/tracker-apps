@@ -35,6 +35,7 @@ export const macroSyncSchema: SyncSchema = {
       return {
         ...row,
         targetKg: row.targetKg ?? null,
+        targetAt: row.targetAt ?? null,
         startKg: row.startKg ?? null,
         reachedAt: row.reachedAt ?? null,
       }

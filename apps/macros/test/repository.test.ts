@@ -1313,6 +1313,26 @@ describe('the pace in force', () => {
     expect((await repo.currentTargets())?.kcal).toBeGreaterThanOrEqual(1500)
   })
 
+  it('keeps the goal date and re-paces when the goal weight moves', async () => {
+    const programId = await steadyWithCheckIn()
+    await repo.recordWeight(80, dayKey(Date.now()))
+    await repo.setGoalWeight(programId, 76)
+    await tick()
+    const byAt = Date.now() + 8 * WEEK_MS
+    await repo.setGoalDate(programId, byAt)
+    expect((await repo.activeProgram())?.targetAt).toBe(byAt)
+
+    await tick()
+    await repo.setGoalWeight(programId, 78)
+    const program = await repo.activeProgram()
+    expect(program?.targetAt).toBe(byAt)
+    expect(program?.ratePctPerWeek).toBeGreaterThan(-0.63)
+
+    await tick()
+    await repo.setGoalWeight(programId, null)
+    expect((await repo.activeProgram())?.targetAt).toBeNull()
+  })
+
   it('has no forecast without a goal weight', async () => {
     await steadyWithCheckIn()
     await repo.recordWeight(80, dayKey(Date.now()))

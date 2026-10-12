@@ -1325,7 +1325,7 @@ test('a goal can be set by a date, and a date too soon is held to a safe pace', 
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: /Targets & goal/ }).click()
-  await expect(page.getByLabel('Goal date')).toBeVisible()
+  await expect(page.getByLabel('Goal date')).toHaveValue(inWeeks(1))
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

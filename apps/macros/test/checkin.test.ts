@@ -27,6 +27,7 @@ function program(over: Partial<Program> = {}): Program {
     targetKg: null,
     startKg: null,
     reachedAt: null,
+    targetAt: null,
     createdAt: 0,
     updatedAt: 0,
     deletedAt: null,

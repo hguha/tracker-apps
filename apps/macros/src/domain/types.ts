@@ -307,6 +307,7 @@ export interface Program extends SyncColumns {
    * intended rate (see lib/goal.ts).
    */
   targetKg: number | null
+  targetAt: number | null
   /** The weight trend when the target was set, so progress has a denominator. */
   startKg: number | null
   /** When the target was met, so it can be celebrated once and then moved on from. */

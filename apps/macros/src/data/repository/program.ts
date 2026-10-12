@@ -51,6 +51,7 @@ export async function programHistory(): Promise<Program[]> {
 const withGoalFields = (program: Program): Program => ({
   ...program,
   targetKg: program.targetKg ?? null,
+  targetAt: program.targetAt ?? null,
   startKg: program.startKg ?? null,
   reachedAt: program.reachedAt ?? null,
 })
@@ -75,6 +76,7 @@ export async function startProgram(
     coachingMode: input.coachingMode ?? 'coached',
     cycling: input.cycling ?? null,
     targetKg: input.targetKg ?? null,
+    targetAt: null,
     startKg: trend[trend.length - 1]?.trendKg ?? null,
     reachedAt: null,
     ...syncStamp(),
@@ -95,7 +97,13 @@ export function setProgramFields(
   changes: Partial<
     Pick<
       Program,
-      'ratePctPerWeek' | 'proteinGPerKg' | 'fatMinPctKcal' | 'cycling' | 'targetKg' | 'reachedAt'
+      | 'ratePctPerWeek'
+      | 'proteinGPerKg'
+      | 'fatMinPctKcal'
+      | 'cycling'
+      | 'targetKg'
+      | 'targetAt'
+      | 'reachedAt'
     >
   >,
 ): Promise<void> {
@@ -114,7 +122,12 @@ export async function setGoalWeight(programId: string, targetKg: number | null):
     targetKg,
     startKg: trend[trend.length - 1]?.trendKg ?? null,
     reachedAt: null,
+    ...(targetKg === null && { targetAt: null }),
   })
+  const program = await activeProgram()
+  if (targetKg !== null && program?.id === programId && program.targetAt !== null) {
+    await setGoalDate(programId, program.targetAt)
+  }
 }
 
 export async function alignTargetsToPace(programId: string): Promise<void> {
@@ -448,8 +461,9 @@ export async function setGoalDate(
     floorKcal,
   })
   if (!pace) return { kind: 'past-goal' }
-  if (pace.ratePctPerWeek !== 0) {
-    await patch('programs', programId, { ratePctPerWeek: pace.ratePctPerWeek })
-  }
+  await patch('programs', programId, {
+    targetAt: byAt,
+    ...(pace.ratePctPerWeek !== 0 && { ratePctPerWeek: pace.ratePctPerWeek }),
+  })
   return { kind: 'set', pace }
 }
