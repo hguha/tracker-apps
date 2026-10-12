@@ -48,6 +48,8 @@ export interface SignInActions {
   resendConfirmation(email: string): Promise<SignInResult>
   verifySignupCode(email: string, code: string): Promise<SignInResult>
   verifyRecoveryCode(email: string, code: string): Promise<SignInResult>
+  beginPasswordRecovery(): void
+  clearPasswordRecovery(): void
 }
 
 export interface SignInScreenProps {
@@ -68,12 +70,6 @@ export interface SignInScreenProps {
    * while it's still being counted.
    */
   localSummary?: string
-  /**
-   * Flags password recovery before a reset code is redeemed. Redeeming signs the user in, so
-   * without this they land in the app with the old password still set. Omit in an app with no
-   * set-password step.
-   */
-  recovery?: { begin(): void; clear(): void }
 }
 
 export function SignInScreen({
@@ -84,7 +80,6 @@ export function SignInScreen({
   privacyUrl,
   onCancel,
   localSummary,
-  recovery,
 }: SignInScreenProps) {
   const {
     signInWithEmail,
@@ -462,9 +457,9 @@ export function SignInScreen({
             // otherwise the session would drop them straight into the app with the old
             // password still in place.
             onSubmit: async () => {
-              recovery?.begin()
+              auth.beginPasswordRecovery()
               const result = await verifyRecoveryCode(email, code.trim())
-              if (result.kind !== 'session') recovery?.clear()
+              if (result.kind !== 'session') auth.clearPasswordRecovery()
               return result
             },
             onResend: () => sendPasswordReset(email),

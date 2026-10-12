@@ -6,7 +6,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { seedIfNeeded } from '@/db/seed'
 import * as repo from '@/data/repository'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
-import { ToastProvider, useToast } from '@/components/Toast'
+import { useTransitionToast } from '@tracker-engine/auth/react'
+import { ToastProvider } from '@/components/Toast'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
@@ -345,18 +346,9 @@ function SignedInApp() {
  * line — "where did my workouts go?" is the worst possible surprise in a tracker.
  */
 function useDataTransitionToast(): void {
-  const { dataTransition, clearDataTransition } = useAuth()
-  const toast = useToast()
-
-  useEffect(() => {
-    if (!dataTransition) return
-    if (dataTransition.kind === 'claimed') {
-      toast.show(
-        `Added this device's history to your account — ${dataTransition.rows.toLocaleString()} items now syncing.`,
-      )
-    } else {
-      toast.show('Signed in as a different account, so this device was cleared to match it.')
-    }
-    clearDataTransition()
-  }, [dataTransition, clearDataTransition, toast])
+  useTransitionToast(useAuth(), (transition) =>
+    transition.kind === 'claimed'
+      ? `Added this device's history to your account — ${transition.rows.toLocaleString()} items now syncing.`
+      : 'Signed in as a different account, so this device was cleared to match it.',
+  )
 }

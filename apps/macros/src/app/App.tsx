@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { cn, dayKey } from '@tracker-engine/core'
 import { ToastProvider, useColorScheme } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@tracker-engine/platform'
+import { useTransitionToast } from '@tracker-engine/auth/react'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
@@ -86,7 +87,13 @@ export function App() {
 
 // A signed-out user gets the auth screen and nothing else.
 function AuthGate() {
-  const { session, isLoading, isRecoveringPassword } = useAuth()
+  const auth = useAuth()
+  const { session, isLoading, isRecoveringPassword } = auth
+  useTransitionToast(auth, (transition) =>
+    transition.kind === 'claimed'
+      ? `Added this device's log to your account — ${transition.rows.toLocaleString()} items now syncing.`
+      : 'Signed in as a different account, so this device was cleared to match it.',
+  )
 
   // A reset code signs the user in, so this has to win over the normal app — otherwise
   // arriving from "reset my password" just opens Today with the old password still set.

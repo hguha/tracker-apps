@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
-import { setDbOwner } from '@/db/owner'
+import { setDbOwner } from '@/data/maintenance'
 import * as repo from '@/data/repository'
 import { conversations } from '@/features/coach/history'
 
@@ -1921,6 +1921,26 @@ describe('active user id + local data reset', () => {
     // And it's queued to reach the server.
     const queued = await db.outbox.toArray()
     expect(queued.some((e) => e.table === 'workouts' && e.rowId === workoutId)).toBe(true)
+  })
+
+  it('adoptSession claims device history once, then clears it for a different account', async () => {
+    const A = '88888888-8888-8888-8888-888888888888'
+    const B = '99999999-9999-9999-9999-999999999999'
+    await repo.adoptSession(LOCAL_USER_ID)
+    const workoutId = await repo.startWorkout()
+    await repo.finishWorkout(workoutId)
+
+    setActiveUserId(A)
+    const first = await repo.adoptSession(A)
+    expect(first.wiped).toBe(false)
+    expect(first.claimed).toBeGreaterThan(0)
+    expect((await db.workouts.get(workoutId))?.userId).toBe(A)
+    expect(await repo.adoptSession(A)).toEqual({ wiped: false, claimed: 0 })
+
+    setActiveUserId(B)
+    await seedIfNeeded()
+    expect(await repo.adoptSession(B)).toEqual({ wiped: true, claimed: 0 })
+    expect(await db.workouts.count()).toBe(0)
   })
 
   it('assertDbOwner wipes when a different account owned the local database', async () => {

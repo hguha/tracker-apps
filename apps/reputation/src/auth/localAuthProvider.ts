@@ -1,6 +1,6 @@
 import { LocalAuthProvider as BaseLocalAuthProvider } from '@tracker-engine/auth'
 import { db } from '@/db/database'
-import { clearDbOwner } from '@/db/owner'
+import { clearDbOwner } from '@/data/maintenance'
 
 export class LocalAuthProvider extends BaseLocalAuthProvider {
   constructor() {

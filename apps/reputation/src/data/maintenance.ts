@@ -1,25 +1,27 @@
 // Destructive, whole-database operations: the local wipe and the device-owner
 // guard that stops one account's data being read under another's id.
 
+import { createOwnerGuard } from '@tracker-engine/local-first'
 import { db } from '@/db/database'
-import { getDbOwner, setDbOwner } from '@/db/owner'
 import { LOCAL_USER_ID } from '@/db/seed'
+import { claimLocalData } from './profile'
 
-export async function assertDbOwner(userId: string): Promise<boolean> {
-  const owner = getDbOwner()
-  if (owner === userId) return false
+const owner = createOwnerGuard({
+  storageKey: 'fitnote.dbOwner',
+  tables: [{ clear: () => clearLocalData() }],
+  localUserId: LOCAL_USER_ID,
+  claim: claimLocalData,
+})
 
-  // Only wipe a database that demonstrably belongs to someone else; adopting an unowned one preserves device-only history about to be claimed.
-  const belongsToSomeoneElse = owner !== null && owner !== LOCAL_USER_ID
-  if (belongsToSomeoneElse) {
-    await clearLocalData()
-    setDbOwner(userId)
-    return true
-  }
+export const assertDbOwner = (userId: string): Promise<boolean> => owner.assertOwner(userId)
 
-  setDbOwner(userId)
-  return false
-}
+export const adoptSession = (userId: string) => owner.adopt(userId)
+
+export const getDbOwner = (): string | null => owner.currentOwner()
+
+export const setDbOwner = (userId: string): void => owner.setOwner(userId)
+
+export const clearDbOwner = (): void => owner.clearOwner()
 
 // One-time migration to the base-exercise model. Runs at boot after seedIfNeeded()
 // has inserted the base rows. Repoints every workout/template exercise from an

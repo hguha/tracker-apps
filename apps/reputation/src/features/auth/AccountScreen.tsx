@@ -10,7 +10,6 @@ import {
   Trash2,
 } from 'lucide-react'
 import { db, isReadyToPush } from '@/db/database'
-import { clearDbOwner } from '@/db/owner'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { isBackendConfigured } from '@/backend/supabaseClient'
@@ -48,7 +47,7 @@ export function AccountScreen({
     try {
       await deleteAccount()
       await repo.clearLocalData()
-      clearDbOwner()
+      repo.clearDbOwner()
       setDialog('none')
       setDeleteConfirmation('')
       toast.show('Account deleted')

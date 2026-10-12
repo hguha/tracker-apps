@@ -19,7 +19,11 @@ export interface AuthState<T> {
   signInWithEmail: (email: string) => Promise<SignInResult>
   verifyCode: (email: string, code: string) => Promise<SignInResult>
   continueOffline: (displayName?: string) => Promise<SignInResult>
-  signUpWithPassword: (email: string, password: string) => Promise<SignInResult>
+  signUpWithPassword: (
+    email: string,
+    password: string,
+    displayName?: string,
+  ) => Promise<SignInResult>
   signInWithPassword: (email: string, password: string) => Promise<SignInResult>
   sendPasswordReset: (email: string) => Promise<SignInResult>
   resendConfirmation: (email: string) => Promise<SignInResult>

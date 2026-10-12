@@ -27,10 +27,6 @@ export function SignInScreen({ onCancel }: { onCancel?: () => void } = {}) {
           ? undefined
           : `Your ${workouts} workout${workouts === 1 ? '' : 's'}`
       }
-      recovery={{
-        begin: auth.beginPasswordRecovery,
-        clear: auth.clearPasswordRecovery,
-      }}
     />
   )
 }
