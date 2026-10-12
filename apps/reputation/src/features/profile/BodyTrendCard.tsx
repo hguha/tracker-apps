@@ -7,10 +7,11 @@ import { perWeek } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import type { WeightUnit } from '@/domain/types'
 import { bodyWeightFromKg } from '@/lib/units'
+import { resolveRegionColor } from '@/lib/palette'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { Chart } from '@/features/insights/Chart'
 import { ChartCard } from '@/features/insights/ChartCard'
-import { baseOption, categoryAxis, chrome, valueAxis } from '@/features/insights/chartTheme'
+import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
 
 export function BodyTrendCard({ unit }: { unit: WeightUnit }) {
   const appearance = useAppearanceKey()
@@ -19,7 +20,7 @@ export function BodyTrendCard({ unit }: { unit: WeightUnit }) {
   const show = (kg: number) => bodyWeightFromKg(kg, unit)
 
   const option = useMemo((): EChartsOption => {
-    const c = chrome()
+    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     return {
       ...baseOption(c),
       xAxis: categoryAxis(
