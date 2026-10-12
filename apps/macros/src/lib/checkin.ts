@@ -144,7 +144,7 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
   }
 }
 
-export function isRetunedSince(program: Program, checkIn: CheckIn): boolean {
+function isRetunedSince(program: Program, checkIn: CheckIn): boolean {
   return program.updatedAt > checkIn.updatedAt
 }
 

@@ -27,10 +27,10 @@ export function goalProgress(inputs: {
   return { fraction, remainingKg: trendKg - targetKg, isReached }
 }
 
-export const FLAT_KG_PER_WEEK = 0.05
-export const SCALE_WINDOW_DAYS = 28
+const FLAT_KG_PER_WEEK = 0.05
+const SCALE_WINDOW_DAYS = 28
 export const EATING_WINDOW_DAYS = 14
-export const MIN_EATING_DAYS = 3
+const MIN_EATING_DAYS = 3
 const MIN_WEIGH_INS = 3
 const MIN_SCALE_SPAN_DAYS = 3
 const DAILY_WEIGHT_NOISE_KG = 0.5
@@ -39,12 +39,12 @@ const LOGGING_SLOP_KCAL = 100
 const MAX_ETA_WEEKS = 260
 const PACE_TOLERANCE_PCT = 0.125
 
-export interface RateEstimate {
+interface RateEstimate {
   kgPerWeek: number
   se: number
 }
 
-export interface ScaleRate extends RateEstimate {
+interface ScaleRate extends RateEstimate {
   weighIns: number
   spanDays: number
 }
@@ -84,7 +84,7 @@ export function scaleRate(
   }
 }
 
-export interface EatingRate extends RateEstimate {
+interface EatingRate extends RateEstimate {
   meanIntakeKcal: number
   days: number
 }
@@ -146,17 +146,17 @@ export function rateForKcal(
   return expenditure ? ((dailyKcal - expenditure.kcal) * 7) / energyPerKg : null
 }
 
-export type Confidence = 'low' | 'medium' | 'high'
+type Confidence = 'low' | 'medium' | 'high'
 const UNSAFE_MARGIN_PCT = 0.01
 
-export type PaceCheck = 'matches' | 'custom' | 'off-pace' | 'unsafe'
+type PaceCheck = 'matches' | 'custom' | 'off-pace' | 'unsafe'
 
 export interface RateLine {
   kgPerWeek: number
   etaAt: number | null
 }
 
-export interface LikelyLine extends RateLine {
+interface LikelyLine extends RateLine {
   se: number
   earliestAt: number | null
   latestAt: number | null
