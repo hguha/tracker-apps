@@ -8,6 +8,8 @@ vi.mock('@/backend/supabaseClient', () => ({
 
 const { buildCoachContext, geminiCoachProvider } = await import('@/features/coach/geminiProvider')
 const { mockCoachProvider } = await import('@/features/coach/mockProvider')
+const { coachHistory } = await import('@/data/coachHistory')
+const repo = await import('@/data/repository')
 
 const question: GeminiContent[] = [{ role: 'user', parts: [{ text: 'How is my trend?' }] }]
 
@@ -47,6 +49,15 @@ describe('coach history', () => {
     expect(result.contents.map((turn) => turn.role)).toEqual(['user', 'model', 'user', 'model'])
     expect(result.contents[2]?.parts[0]?.functionResponse?.name).toBe('suggestMeal')
     expect(result.contents.at(-1)).toEqual({ role: 'model', parts: [{ text: 'Here is a dinner.' }] })
+  })
+
+  it('wipes saved conversations when another account signs in here', async () => {
+    const history = coachHistory<string>()
+    repo.setDbOwner('someone-else')
+    await history.save({ id: 'c1', title: 'My diet', contents: question, items: [] })
+
+    expect(await repo.assertDbOwner('real-user')).toBe(true)
+    expect(await history.list()).toEqual([])
   })
 
   it('records the offline answer as the model turn', async () => {

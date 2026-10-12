@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie'
 import type { DeadLetterEntry, OutboxEntry, SyncState } from '@tracker-engine/local-first'
 import { createOwnerGuard } from '@tracker-engine/local-first'
 import { LOCAL_USER_ID } from '@tracker-engine/auth'
+import type { ConversationRow } from '@tracker-engine/ai-coach'
 import { entryChangeTracker } from './entryChanges'
 import type {
   BodyWeightRow,
@@ -34,6 +35,7 @@ class MacrosDatabase extends Dexie {
   outbox!: EntityTable<OutboxEntry, 'seq'>
   deadLetter!: EntityTable<DeadLetterEntry, 'seq'>
   syncState!: EntityTable<SyncState, 'table'>
+  coachConversations!: EntityTable<ConversationRow, 'id'>
 
   constructor(name = DB_NAME) {
     super(name)
@@ -119,6 +121,7 @@ class MacrosDatabase extends Dexie {
             profile.reminders ??= null
           })
       })
+    this.version(6).stores({ coachConversations: 'id, updatedAt' })
     this.use(entryChangeTracker)
   }
 }
@@ -140,6 +143,7 @@ export const OWNED_TABLES = [
   db.outbox,
   db.deadLetter,
   db.syncState,
+  db.coachConversations,
 ]
 
 export const owner = createOwnerGuard({

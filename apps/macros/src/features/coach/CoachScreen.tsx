@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { SlidersHorizontal, Sparkles } from 'lucide-react'
+import type { CoachBackends } from '@tracker-engine/ai-coach'
+import {
+  CoachWorking,
+  Composer,
+  ConversationBar,
+  ConversationsSheet,
+  MessageBubble,
+  useCoachChat,
+} from '@tracker-engine/ai-coach/react'
 import { Button, Card, ScreenHeader, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
+import { coachHistory } from '@/data/coachHistory'
 import { cn } from '@tracker-engine/core'
 import { macroLine } from '@/features/shared/format'
 import { buildCoachContext, geminiCoachProvider } from './geminiProvider'
 import { mockCoachProvider } from './mockProvider'
 import { DietNotesCard } from './DietNotesCard'
-import type { CoachAction, CoachProvider, GeminiContent } from './types'
-
-type Item =
-  | { id: string; role: 'user'; text: string }
-  | { id: string; role: 'assistant'; text: string }
-  | { id: string; role: 'assistant'; action: CoachAction }
+import type { CoachAction } from './types'
 
 const SUGGESTIONS = [
   "What's left for today?",
@@ -21,69 +27,51 @@ const SUGGESTIONS = [
   'Why did my target change?',
 ]
 
+const history = coachHistory<CoachAction>()
+
 export function CoachScreen({ onBack }: { onBack: () => void }) {
   const toast = useToast()
-  const [items, setItems] = useState<Item[]>([])
-  const [contents, setContents] = useState<GeminiContent[]>([])
   const [draft, setDraft] = useState('')
-  const [status, setStatus] = useState<string | null>(null)
-  const [isOffline, setIsOffline] = useState(false)
   const [isEditingNotes, setIsEditingNotes] = useState(false)
+  const [isShowingHistory, setIsShowingHistory] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const backends: CoachBackends<CoachAction> = {
+    isLiveAvailable: () => geminiCoachProvider.isAvailable(),
+    live: async (contents, onTool) =>
+      geminiCoachProvider.chat(contents, await buildCoachContext(), { onTool }),
+    offline: async (contents) => mockCoachProvider.chat(contents, await buildCoachContext()),
+    onLiveError: (detail) => toast.show(`Live coach unavailable — ${detail}`),
+  }
+  const chat = useCoachChat({ backends, store: history })
+  const { items } = chat
+  const saved = useLiveQuery(() => history.list(), [], [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [items, status])
+  }, [items, chat.isPending, chat.toolStatus])
 
-  async function send(text: string) {
-    const trimmed = text.trim()
-    if (!trimmed || status !== null) return
-
-    const nextContents: GeminiContent[] = [
-      ...contents,
-      { role: 'user', parts: [{ text: trimmed }] },
-    ]
-    setItems((current) => [...current, { id: crypto.randomUUID(), role: 'user', text: trimmed }])
-    setContents(nextContents)
+  function send(text: string) {
+    if (!text.trim() || chat.isPending) return
     setDraft('')
-    setStatus('Thinking')
+    void chat.send(text)
+  }
 
-    // Live first, offline as the fallback — a rate-limited free tier is an expected state,
-    // so the user should get an answer rather than an error.
-    let provider: CoachProvider = mockCoachProvider
-    try {
-      if (await geminiCoachProvider.isAvailable()) provider = geminiCoachProvider
-    } catch {
-      provider = mockCoachProvider
-    }
+  function newChat() {
+    chat.newChat()
+    setDraft('')
+  }
 
-    try {
-      const context = await buildCoachContext()
-      const result = await provider.chat(nextContents, context, {
-        onTool: (label) => setStatus(label),
-      })
-      setIsOffline(provider === mockCoachProvider)
-      setContents(result.contents)
-      setItems((current) => [
-        ...current,
-        ...(result.text
-          ? [{ id: crypto.randomUUID(), role: 'assistant' as const, text: result.text }]
-          : []),
-        ...(result.action
-          ? [{ id: crypto.randomUUID(), role: 'assistant' as const, action: result.action }]
-          : []),
-      ])
-    } catch {
-      const fallback = await mockCoachProvider.chat(nextContents, await buildCoachContext())
-      setIsOffline(true)
-      setContents(fallback.contents)
-      setItems((current) => [
-        ...current,
-        { id: crypto.randomUUID(), role: 'assistant', text: fallback.text },
-      ])
-    } finally {
-      setStatus(null)
-    }
+  async function openConversation(id: string) {
+    const conversation = await history.load(id)
+    if (!conversation) return
+    chat.open(conversation)
+    setIsShowingHistory(false)
+  }
+
+  async function removeConversation(id: string) {
+    await history.remove(id)
+    if (id === chat.conversationId) newChat()
   }
 
   return (
@@ -93,7 +81,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
         onBack={onBack}
         action={
           <>
-            {isOffline && (
+            {chat.isOffline && (
               <span className="rounded-full bg-sunken px-2 py-1 text-[11px] font-semibold text-ink-muted">
                 offline
               </span>
@@ -111,6 +99,12 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
             </button>
           </>
         }
+      />
+      <ConversationBar
+        title={items.length > 0 ? chat.title : ''}
+        canStartNew={items.length > 0}
+        onHistory={() => setIsShowingHistory(true)}
+        onNew={newChat}
       />
 
       <div className="flex-1 space-y-2.5 overflow-y-auto px-3 py-3">
@@ -130,7 +124,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
               {SUGGESTIONS.map((suggestion) => (
                 <button
                   key={suggestion}
-                  onClick={() => void send(suggestion)}
+                  onClick={() => send(suggestion)}
                   className="rounded-full bg-sunken px-3 py-1.5 text-left text-[12.5px] text-ink-secondary active:opacity-60"
                 >
                   {suggestion}
@@ -148,59 +142,35 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
               onLogged={(message) => toast.show(message)}
             />
           ) : (
-            <Bubble key={item.id} role={item.role} text={item.text} />
+            <MessageBubble key={item.id} role={item.role} text={item.text} />
           ),
         )}
 
-        {status && (
-          <p className="px-1 text-[12.5px] text-ink-muted">
-            {status}
-            <span className="animate-pulse">…</span>
-          </p>
-        )}
+        <CoachWorking toolStatus={chat.toolStatus} pendingSince={chat.pendingSince} />
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex items-end gap-2 border-t border-line bg-surface px-3 py-2.5 pb-safe">
-        <textarea
-          rows={1}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void send(draft)
-            }
-          }}
-          placeholder="Ask the coach"
-          className="max-h-28 min-w-0 flex-1 resize-none rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
-        />
-        <button
-          onClick={() => void send(draft)}
-          disabled={draft.trim() === '' || status !== null}
-          aria-label="Send"
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-contrast disabled:opacity-40"
-        >
-          <Send size={18} />
-        </button>
-      </div>
-    </div>
-  )
-}
+      <Composer
+        value={draft}
+        onChange={setDraft}
+        onSend={() => send(draft)}
+        isDisabled={chat.isPending}
+        placeholder="Ask the coach"
+      />
 
-function Bubble({ role, text }: { role: 'user' | 'assistant'; text: string }) {
-  return (
-    <div className={cn('flex', role === 'user' ? 'justify-end' : 'justify-start')}>
-      <p
-        className={cn(
-          'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14.5px] leading-relaxed',
-          role === 'user'
-            ? 'bg-accent text-accent-contrast'
-            : 'bg-surface text-ink ring-1 ring-line',
-        )}
-      >
-        {text}
-      </p>
+      {isShowingHistory && (
+        <ConversationsSheet
+          conversations={saved}
+          activeId={chat.conversationId}
+          onOpen={(id) => void openConversation(id)}
+          onDelete={(id) => void removeConversation(id)}
+          onNew={() => {
+            newChat()
+            setIsShowingHistory(false)
+          }}
+          onDismiss={() => setIsShowingHistory(false)}
+        />
+      )}
     </div>
   )
 }
