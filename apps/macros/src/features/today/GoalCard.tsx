@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { bodyWeightFromKg, cn, convertWeight, plural, signed } from '@tracker-engine/core'
+import { bodyWeightFromKg, cn, convertWeight, dayKey, plural, signed } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import { Card } from '@tracker-engine/ui'
 import { ChevronDown, Flag, PartyPopper, Target } from 'lucide-react'
@@ -30,6 +30,12 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   if (!program || !latest) return null
 
   const show = (kg: number) => bodyWeightFromKg(kg, units.weight)
+  const todayRow = weights?.find((row) => row.day === dayKey(Date.now()))
+  const weighedToday = todayRow && (
+    <p className="tabular mt-0.5 text-[12px] text-ink-muted">
+      Weighed in today · {show(todayRow.kg)} {units.weight}
+    </p>
+  )
 
   if (program.targetKg === null) {
     const rate = trendChangePerWeek(trend)
@@ -40,6 +46,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
           {show(latest.trendKg)}
           <span className="text-[13px] font-medium text-ink-muted"> {units.weight} now</span>
         </p>
+        {weighedToday}
         <p className="tabular mt-1 text-[12.5px] text-ink-muted">
           {rate === null
             ? 'Weigh in a few more times to measure your rate.'
@@ -122,6 +129,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
           {units.weight} · {remaining.toFixed(1)} to go
         </span>
       </p>
+      {weighedToday}
 
       {progress.fraction !== null && (
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sunken">

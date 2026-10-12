@@ -116,7 +116,7 @@ export function TodayScreen({
 
       <WaterCard />
 
-      <WeighInCard />
+      {!(program && weights?.some((row) => row.day === today)) && <WeighInCard />}
 
       <GoalCard onOpenTargets={onOpenTargets} />
 

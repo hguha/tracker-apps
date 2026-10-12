@@ -82,7 +82,7 @@ export function WaterCard() {
             onClick={() => add(-smallest)}
             disabled={ml === 0}
             aria-label={`Remove ${steps[0]!.label} of water`}
-            className="flex size-8 items-center justify-center rounded-lg bg-sunken text-ink-secondary disabled:opacity-30 active:opacity-60"
+            className="flex size-8 items-center justify-center rounded-lg border border-line-strong bg-surface text-ink-secondary disabled:opacity-50 active:opacity-60"
           >
             <Minus size={15} />
           </button>
