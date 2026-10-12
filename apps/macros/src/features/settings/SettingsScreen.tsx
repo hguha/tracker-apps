@@ -13,7 +13,7 @@ import {
   Target,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
-import { useSync } from '@/sync/useSync'
+import { useSyncStatus } from '@/sync/useSync'
 import * as repo from '@/data/repository'
 import { useUnits } from '@/features/shared/useUnits'
 import { describeReminders } from '@/data/reminders'
@@ -41,7 +41,7 @@ export function SettingsScreen({
   onOpen: (route: SettingsRoute) => void
 }) {
   const { session } = useAuth()
-  const sync = useSync()
+  const sync = useSyncStatus()
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const recipes = useLiveQuery(() => repo.recipes(), [], [])

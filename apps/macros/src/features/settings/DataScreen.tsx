@@ -7,7 +7,7 @@ import { exportBackup, pickBackupText } from '@tracker-engine/platform'
 import { APP_VERSION } from '@/lib/version'
 import { loadDemoData } from '@/data/demo'
 import * as repo from '@/data/repository'
-import { useSync } from '@/sync/useSync'
+import { useSyncStatus } from '@/sync/useSync'
 import {
   BackupParseError,
   countsOf,
@@ -19,7 +19,7 @@ import {
 
 export function DataScreen({ onBack }: { onBack: () => void }) {
   const toast = useToast()
-  const sync = useSync()
+  const sync = useSyncStatus()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isBusy, setIsBusy] = useState(false)
 

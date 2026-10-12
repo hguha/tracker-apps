@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft } from 'lucide-react'
 import { Button, Card, useToast } from '@tracker-engine/ui'
+import { plural } from '@tracker-engine/core'
 import { isValidPassword, passwordProblem } from '@tracker-engine/auth'
 import { useAuth } from '@/auth/AuthContext'
 import * as repo from '@/data/repository'
+import { useSyncStatus } from '@/sync/useSync'
 
 export function AccountScreen({
   onBack,
@@ -15,6 +17,7 @@ export function AccountScreen({
 }) {
   const toast = useToast()
   const auth = useAuth()
+  const sync = useSyncStatus()
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const [name, setName] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -100,12 +103,21 @@ export function AccountScreen({
           <Card className="p-4">
             <h2 className="text-[15px] font-semibold tracking-tight">Sign out</h2>
             <p className="mt-1 text-[12.5px] text-ink-muted">
-              Your synced data stays on your account. This device&rsquo;s copy is cleared.
+              Your synced data stays on your account.
+              {sync.pending > 0 &&
+                ` ${sync.pending} ${plural(sync.pending, 'change')} haven’t synced yet.`}
             </p>
             <Button
               variant="secondary"
               className="mt-2 w-full"
-              onClick={() => void auth.signOut()}
+              onClick={() => {
+                const ok =
+                  sync.pending === 0 ||
+                  window.confirm(
+                    'Some changes haven’t synced yet. They sync when you sign back in to this account, and are erased if a different account signs in here. Sign out?',
+                  )
+                if (ok) void auth.signOut()
+              }}
             >
               Sign out
             </Button>

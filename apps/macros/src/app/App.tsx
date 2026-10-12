@@ -9,7 +9,7 @@ import { seedFoods } from '@/db/seed'
 import { syncReminders } from '@/data/reminders'
 import { syncHealthWeightsIfEnabled } from '@/data/health'
 import { applyAppearance } from '@/lib/theme'
-import { useSync } from '@/sync/useSync'
+import { SyncScope } from '@/sync/useSync'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
@@ -96,15 +96,17 @@ function AuthGate() {
   // Keyed on the user, so connecting an account remounts and drops the screen state that
   // belonged to the old owner — including the "connect an account" view itself, which would
   // otherwise stay on screen after the sign-in it just completed.
-  return <SignedInApp key={session.userId} />
+  return (
+    <SyncScope key={session.userId}>
+      <SignedInApp />
+    </SyncScope>
+  )
 }
 
 function SignedInApp() {
   const [isReady, setIsReady] = useState(false)
   const [tab, setTab] = useState<TabKey>('today')
   const [view, setView] = useState<View>({ kind: 'tabs' })
-
-  useSync()
 
   // Writes belong in an effect, not a live query: Dexie refuses a readwrite transaction inside
   // a liveQuery context, and a querier that writes would also re-fire on its own writes.

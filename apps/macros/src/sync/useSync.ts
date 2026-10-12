@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { liveQuery } from 'dexie'
 import { db } from '@/db'
@@ -17,7 +26,19 @@ interface SyncStatus {
   syncNow: () => Promise<void>
 }
 
-export function useSync(): SyncStatus {
+const SyncContext = createContext<SyncStatus | null>(null)
+
+export function SyncScope({ children }: { children: ReactNode }) {
+  return createElement(SyncContext.Provider, { value: useSync() }, children)
+}
+
+export function useSyncStatus(): SyncStatus {
+  const status = useContext(SyncContext)
+  if (!status) throw new Error('useSyncStatus needs a SyncScope above it')
+  return status
+}
+
+function useSync(): SyncStatus {
   const { session } = useAuth()
   const [phase, setPhase] = useState<SyncPhase>('idle')
 
