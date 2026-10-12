@@ -2,12 +2,12 @@ import { weekKey } from '@/lib/dates'
 
 export interface ProgressStats {
   totalDaysTrained: number
-  prCount: number
+  recordSessions: number
   goalWeeks: number
 }
 
 export function experience(stats: ProgressStats): number {
-  return stats.totalDaysTrained * 10 + stats.prCount * 5 + stats.goalWeeks * 25
+  return stats.totalDaysTrained * 10 + stats.recordSessions * 5 + stats.goalWeeks * 25
 }
 
 export function goalWeeksMet(
@@ -21,4 +21,12 @@ export function goalWeeksMet(
     perWeek.set(key, (perWeek.get(key) ?? 0) + 1)
   }
   return [...perWeek.values()].filter((count) => count >= weeklyGoal).length
+}
+
+export function shownExperience(storageKey: string | null, earned: number): number {
+  if (storageKey === null) return earned
+  const best = Number(localStorage.getItem(storageKey) ?? 0)
+  if (earned <= best) return best
+  localStorage.setItem(storageKey, String(earned))
+  return earned
 }

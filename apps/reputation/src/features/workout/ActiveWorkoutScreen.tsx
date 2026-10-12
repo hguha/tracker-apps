@@ -614,7 +614,11 @@ export function ActiveWorkoutScreen({
         </BottomSheet>
       )}
       {celebrations.current && (
-        <CelebrationOverlay celebration={celebrations.current} onDone={celebrations.dismiss} />
+        <CelebrationOverlay
+          celebration={celebrations.current}
+          onDone={celebrations.dismiss}
+          placement="top"
+        />
       )}
     </div>
   )

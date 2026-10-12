@@ -24,7 +24,12 @@ export { useDraftInput } from './useDraftInput'
 export { SegmentedTabs, type SegmentedTab } from './SegmentedTabs'
 export { AppearanceCard, type ThemeOption } from './AppearanceCard'
 export { BadgeTile, BadgeDetailSheet, BadgeGrid, type BadgeView } from './Badges'
-export { CelebrationOverlay, useCelebrations, type CelebrationState } from './Celebration'
+export {
+  CelebrationOverlay,
+  quietNextCelebrations,
+  useCelebrations,
+  type CelebrationState,
+} from './Celebration'
 export { TabBar, type TabDefinition } from './TabBar'
 export {
   createAppearance,

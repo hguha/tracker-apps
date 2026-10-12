@@ -2,7 +2,7 @@ import { dayKey } from '@tracker-engine/core'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Download, RefreshCw, Upload } from 'lucide-react'
-import { Button, Card, Screen, useToast } from '@tracker-engine/ui'
+import { Button, Card, quietNextCelebrations, Screen, useToast } from '@tracker-engine/ui'
 import { exportBackup, pickBackupText } from '@tracker-engine/platform'
 import { APP_VERSION } from '@/lib/version'
 import { loadDemoData } from '@/data/demo'
@@ -41,6 +41,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
       )
       if (!ok) return
       await importBackup(backup)
+      quietNextCelebrations()
       toast.show('Backup imported')
       window.location.reload()
     } catch (error) {
@@ -171,6 +172,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               void loadDemoData()
                 .then(({ days, entries }) => {
                   toast.show(`Loaded ${entries} entries across ${days} days`)
+                  quietNextCelebrations()
                   window.location.reload()
                 })
                 .catch(() => toast.show('Could not load the demo data'))

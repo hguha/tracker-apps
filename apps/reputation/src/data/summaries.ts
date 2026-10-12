@@ -7,6 +7,7 @@ import { isCardioPattern } from '@/domain/movement'
 import {
   type DistanceUnit,
   type Exercise,
+  type RecordType,
   type Region,
   type WeightUnit,
   type Workout,
@@ -21,7 +22,12 @@ import {
 } from './coachSummary'
 import { DAY_MS, WEEK_MS, weekOffset } from '@/lib/dates'
 import { composeExerciseName } from '@/lib/labels'
-import { isWorkingSet, volumeLoadKg } from '@/lib/metrics'
+import { effectiveWeightKg, isWorkingSet, volumeLoadKg } from '@/lib/metrics'
+import {
+  countRecordBreakingSessions,
+  progressRecordValues,
+  type SessionRecordValues,
+} from './records'
 import { type SetSignal, sessionTitle } from '@/lib/sessionTitle'
 import { formatDistance, formatWeight } from '@/lib/units'
 import { getProfile } from './profile'
@@ -198,6 +204,7 @@ export interface BadgeStats {
   weekendWorkouts: number
   /** Personal records set, across every record type. */
   prCount: number
+  recordSessions: number
   totalTrainingSeconds: number
   longestWorkoutSeconds: number
   /** Latest bodyweight, for relative-strength badges. 0 when unknown. */
@@ -302,6 +309,32 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     (pr) => pr.deletedAt === null,
   ).length
 
+  const finishedById = new Map(finished.map((w) => [w.id, w]))
+  const exerciseById = new Map(exercises.flatMap((ex) => (ex ? [[ex.id, ex] as const] : [])))
+  const weById = new Map(allWe.map((we) => [we.id, we]))
+  const sessions = new Map<string, SessionRecordValues>()
+  for (const set of allSets) {
+    const we = weById.get(set.workoutExerciseId)
+    const workout = we && finishedById.get(we.workoutId)
+    const exercise = we && exerciseById.get(we.exerciseId)
+    if (!we || !workout || !exercise) continue
+    const id = `${workout.id}:${we.exerciseId}:${we.equipment}`
+    const session = sessions.get(id) ?? {
+      key: `${we.exerciseId}:${we.equipment}`,
+      at: workout.startedAt,
+      values: {},
+    }
+    const effective = effectiveWeightKg(set, exercise, workout.bodyweightKg, we.loadMode)
+    for (const [type, value] of Object.entries(progressRecordValues(set, effective)) as [
+      RecordType,
+      number,
+    ][]) {
+      session.values[type] = Math.max(session.values[type] ?? 0, value)
+    }
+    sessions.set(id, session)
+  }
+  const recordSessions = countRecordBreakingSessions([...sessions.values()])
+
   const profile = await getProfile()
 
   return {
@@ -327,6 +360,7 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     lateWorkouts,
     weekendWorkouts,
     prCount,
+    recordSessions,
     totalTrainingSeconds,
     longestWorkoutSeconds,
     bodyweightKg: profile.bodyweightCacheKg ?? 0,

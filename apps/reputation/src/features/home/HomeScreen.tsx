@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
+import { useSync } from '@/sync/useSync'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { ProgressRing } from '@/components/ProgressRing'
@@ -23,7 +24,7 @@ import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 import { levelFor, nextBadges, type Level } from '@tracker-engine/badges'
 import { CelebrationOverlay, useCelebrations } from '@tracker-engine/ui'
 import { evaluateBadges, type BadgeState } from './badges'
-import { experience, goalWeeksMet } from './progression'
+import { experience, goalWeeksMet, shownExperience } from './progression'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 import {
   conditionLabel,
@@ -194,7 +195,12 @@ export function HomeScreen({
     ...badgeStats,
   })
 
-  const level = levelFor(experience({ ...badgeStats, goalWeeks }))
+  const level = levelFor(
+    shownExperience(
+      session ? `reputation.xp.${session.userId}` : null,
+      experience({ ...badgeStats, goalWeeks }),
+    ),
+  )
 
   const deltaPercent =
     lastWeekVolume > 0
@@ -458,9 +464,11 @@ function Celebrations({
   level: Level
   owner: string | null
 }) {
+  const { hasReconciled } = useSync()
   const { current, dismiss } = useCelebrations(
     owner === null ? null : `reputation.celebrated.${owner}`,
     { badges, level: level.level, day: dayKey(Date.now()), dayComplete: false },
+    { isQuiet: !hasReconciled },
   )
   return current ? <CelebrationOverlay celebration={current} onDone={dismiss} /> : null
 }

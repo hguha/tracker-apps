@@ -3,6 +3,7 @@
 
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { quietNextCelebrations } from '@tracker-engine/ui'
 import { ChevronLeft, Download, RefreshCw, Upload } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
@@ -91,6 +92,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
       )
       if (!ok) return
       await importBackup(backup)
+      quietNextCelebrations()
       toast.show('Backup imported')
       window.location.reload()
     } catch (error) {

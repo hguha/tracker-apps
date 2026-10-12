@@ -31,6 +31,40 @@ export const PROGRESS_RECORD_TYPES: readonly RecordType[] = [
   'max_reps_any_weight',
 ]
 
+export interface SessionRecordValues {
+  key: string
+  at: number
+  values: Partial<Record<RecordType, number>>
+}
+
+export function countRecordBreakingSessions(sessions: readonly SessionRecordValues[]): number {
+  const best = new Map<string, Map<RecordType, number>>()
+  let count = 0
+  for (const session of [...sessions].sort((a, b) => a.at - b.at)) {
+    const prior = best.get(session.key) ?? new Map<RecordType, number>()
+    let isBeaten = false
+    for (const [type, value] of Object.entries(session.values) as [RecordType, number][]) {
+      const previous = prior.get(type)
+      if (previous !== undefined && value > previous) isBeaten = true
+      if (previous === undefined || value > previous) prior.set(type, value)
+    }
+    best.set(session.key, prior)
+    if (isBeaten) count += 1
+  }
+  return count
+}
+
+export function progressRecordValues(
+  set: Pick<WorkoutSet, 'reps' | 'durationSeconds' | 'distanceM'>,
+  weightForRecords: number | null,
+): Partial<Record<RecordType, number>> {
+  const values: Partial<Record<RecordType, number>> = {}
+  for (const [type, value] of perSetRecordValues(set, weightForRecords)) {
+    if (PROGRESS_RECORD_TYPES.includes(type) && isRecordValue(value)) values[type] = value
+  }
+  return values
+}
+
 export interface StalledLift {
   exerciseId: string
   name: string

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { haptic } from '@tracker-engine/platform'
 import {
@@ -32,10 +32,12 @@ export function CelebrationOverlay({
   celebration,
   onDone,
   colors = ACCENT_ONLY,
+  placement = 'bottom',
 }: {
   celebration: Celebration
   onDone: () => void
   colors?: readonly string[]
+  placement?: 'bottom' | 'top'
 }) {
   useEffect(() => {
     haptic([20, 40, 20])
@@ -82,7 +84,7 @@ export function CelebrationOverlay({
         role="status"
         aria-label={celebration.title}
         onClick={onDone}
-        className="te-celebrate-pop pointer-events-auto absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+88px)] mx-auto flex max-w-sm items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-left shadow-xl ring-1 ring-line"
+        className={`te-celebrate-pop pointer-events-auto absolute inset-x-4 ${placement === 'top' ? 'top-[calc(env(safe-area-inset-top)+72px)]' : 'bottom-[calc(env(safe-area-inset-bottom)+88px)]'} mx-auto flex max-w-sm items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-left shadow-xl ring-1 ring-line`}
         style={{ animation: 'te-celebrate-pop 420ms cubic-bezier(.2,.9,.3,1.3) both' }}
       >
         <span className="flex shrink-0 gap-0.5 text-[32px] leading-none">
@@ -118,7 +120,15 @@ function readCelebrated(storageKey: string): Celebrated | null {
   }
 }
 
-export function useCelebrations(storageKey: string | null, now: CelebrationState | null) {
+const QUIET_ONCE_KEY = 'celebrations.quiet-once'
+
+export const quietNextCelebrations = (): void => sessionStorage.setItem(QUIET_ONCE_KEY, '1')
+
+export function useCelebrations(
+  storageKey: string | null,
+  now: CelebrationState | null,
+  { isQuiet = false }: { isQuiet?: boolean } = {},
+) {
   const [queue, setQueue] = useState<Celebration[]>([])
 
   const signature =
@@ -133,15 +143,19 @@ export function useCelebrations(storageKey: string | null, now: CelebrationState
 
   useEffect(() => {
     if (now === null || storageKey === null) return
+    const isQuietOnce = sessionStorage.getItem(QUIET_ONCE_KEY) !== null
+    sessionStorage.removeItem(QUIET_ONCE_KEY)
     const { celebrations, next } = celebrationsSince(readCelebrated(storageKey), now)
     localStorage.setItem(storageKey, JSON.stringify(next))
-    if (celebrations.length > 0) setQueue((current) => [...current, ...celebrations])
-  }, [signature, storageKey])
+    if (!isQuiet && !isQuietOnce && celebrations.length > 0) setQueue((current) => [...current, ...celebrations])
+  }, [signature, storageKey, isQuiet])
 
-  const push = useCallback(
-    (celebration: Celebration) => setQueue((current) => [...current, celebration]),
-    [],
-  )
+  const pushed = useRef(0)
+  const push = useCallback((celebration: Celebration) => {
+    pushed.current += 1
+    const key = `${celebration.key}#${pushed.current}`
+    setQueue((current) => [...current, { ...celebration, key }])
+  }, [])
   const dismiss = useCallback(() => setQueue((current) => current.slice(1)), [])
 
   return { current: queue[0] ?? null, push, dismiss }
