@@ -1,6 +1,7 @@
 import { cn } from '@tracker-engine/core'
 import { AccentPicker } from './AccentPicker'
 import { Card } from './Card'
+import { SectionLabel } from './SectionLabel'
 import type { ColorSchemePreference } from './appearance'
 
 export interface ThemeOption {
@@ -47,9 +48,7 @@ export function AppearanceCard({
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">Appearance</h2>
 
-      <p className="mb-1.5 mt-3 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-        Light or dark
-      </p>
+      <SectionLabel className="mb-1.5 mt-3">Light or dark</SectionLabel>
       <div className="flex gap-1 rounded-lg bg-sunken p-0.5">
         {SCHEMES.map((option) => (
           <button
@@ -57,7 +56,7 @@ export function AppearanceCard({
             onClick={() => onChange({ colorScheme: option.value })}
             className={cn(
               'h-9 flex-1 rounded-md text-[13.5px] font-semibold',
-              colorScheme === option.value ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted',
+              colorScheme === option.value ? 'bg-accent-wash text-accent shadow-sm' : 'text-ink-muted',
             )}
           >
             {option.label}
@@ -65,9 +64,7 @@ export function AppearanceCard({
         ))}
       </div>
 
-      <p className="mb-2 mt-4 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-        Theme
-      </p>
+      <SectionLabel className="mb-2 mt-4">Theme</SectionLabel>
       <div className="grid grid-cols-2 gap-2">
         {themes.map((preset) => (
           <button
@@ -90,9 +87,7 @@ export function AppearanceCard({
         ))}
       </div>
 
-      <p className="mb-2 mt-4 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-        Accent color
-      </p>
+      <SectionLabel className="mb-2 mt-4">Accent color</SectionLabel>
       <AccentPicker
         accentOverride={accentOverride}
         onChange={(next) => onChange({ accentOverride: next })}

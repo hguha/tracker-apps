@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { BadgeDetailSheet, BadgeGrid, Card, Screen, type BadgeView } from '@tracker-engine/ui'
+import { BadgeDetailSheet, BadgeGrid, Card, Screen, SectionLabel, type BadgeView } from '@tracker-engine/ui'
 import { nutritionStats } from '@/data/stats'
 import { evaluateBadges, groupedBadges, type BadgeState } from './catalog'
 
@@ -25,9 +25,7 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
 
       {groupedBadges(all).map((section) => (
         <Card key={section.group} className="p-4">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-            {section.group}
-          </h2>
+          <SectionLabel>{section.group}</SectionLabel>
           <div className="mt-3">
             <BadgeGrid badges={section.badges} onSelect={setSelected} />
           </div>
