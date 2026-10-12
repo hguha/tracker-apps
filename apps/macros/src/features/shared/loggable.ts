@@ -385,9 +385,7 @@ export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
 
   if (loggable.kind === 'recipe') {
     const { recipe } = loggable
-    const foods = await repo.foodsByIds(
-      recipe.ingredients.map((row) => row.foodId).filter((id): id is string => id !== null),
-    )
+    const foods = await repo.foodsByIds(recipe.ingredients.map((row) => row.foodId))
     const share = 1 / Math.max(1, recipe.servings)
     return recipe.ingredients.map((ingredient) => {
       const food = ingredient.foodId === null ? undefined : foods.get(ingredient.foodId)
@@ -402,9 +400,7 @@ export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
   }
 
   const rows = await repo.dishEntries(loggable.dish.dishId)
-  const foods = await repo.foodsByIds(
-    rows.map((row) => row.foodId).filter((id): id is string => id !== null),
-  )
+  const foods = await repo.foodsByIds(rows.map((row) => row.foodId))
   return rows.map((row) => ({
     label: (row.foodId ? foods.get(row.foodId)?.description : null) ?? row.note ?? 'Item',
     grams: row.grams,

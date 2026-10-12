@@ -45,9 +45,7 @@ export function EditEntryScreen({
       subject.kind === 'entry'
         ? [await repo.getEntry(subject.id)].filter((row): row is LogEntry => row !== null)
         : await repo.dishEntries(subject.dishId)
-    const foods = await repo.foodsByIds(
-      rows.map((row) => row.foodId).filter((id): id is string => id !== null),
-    )
+    const foods = await repo.foodsByIds(rows.map((row) => row.foodId))
     const only = rows.length === 1 ? rows[0]! : null
     const food = only?.foodId ? foods.get(only.foodId) : undefined
     const recipeId = rows[0]?.fromRecipeId ?? null

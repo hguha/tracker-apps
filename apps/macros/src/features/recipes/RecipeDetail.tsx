@@ -44,7 +44,7 @@ export function RecipeDetail({
   const [isSaving, setIsSaving] = useState(false)
 
   const foods = useLiveQuery(
-    () => repo.foodsByIds((recipe?.ingredients ?? []).map((i) => i.foodId).filter(isPresent)),
+    () => repo.foodsByIds((recipe?.ingredients ?? []).map((i) => i.foodId)),
     [recipe?.id, recipe?.updatedAt],
     new Map<string, Food>(),
   )
@@ -284,4 +284,3 @@ function Stepper({
   )
 }
 
-const isPresent = (value: string | null): value is string => value !== null

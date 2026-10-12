@@ -48,13 +48,7 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
   const savedIds = profile?.favouriteFoodIds ?? []
   const candidateIds = [...savedIds, ...(frequentIds ?? []).filter((id) => !savedIds.includes(id))]
   const candidates = useLiveQuery(
-    async () => {
-      const found = await repo.foodsByIds(candidateIds)
-      return candidateIds.flatMap((id) => {
-        const food = found.get(id)
-        return food ? [food] : []
-      })
-    },
+    () => repo.foodsInOrder(candidateIds),
     [candidateIds.join(',')],
     [],
   )

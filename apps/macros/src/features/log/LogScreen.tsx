@@ -262,17 +262,7 @@ function BrowsePanel({
    */
   const recipes = useLiveQuery(() => repo.recipes(), [], undefined)
   const recents = useLiveQuery(() => repo.recentItems(), [], undefined)
-  const savedFoods = useLiveQuery(
-    async () => {
-      const found = await repo.foodsByIds(savedIds)
-      return savedIds.flatMap((id) => {
-        const food = found.get(id)
-        return food ? [food] : []
-      })
-    },
-    [savedIds.join(',')],
-    undefined,
-  )
+  const savedFoods = useLiveQuery(() => repo.foodsInOrder(savedIds), [savedIds.join(',')], undefined)
   // Every ticked food's last amount, in one query rather than one per row, so the confirmation bar
   // can show what it is about to commit instead of describing it.
   const lastAmounts = useLiveQuery(

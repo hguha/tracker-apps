@@ -15,7 +15,7 @@ import {
 import { recipeNutrients } from '@/lib/nutrition'
 import { logFood } from './entries'
 import { foodsByIds } from './foods'
-import { activeUserId, alive, isPresent } from './internal'
+import { activeUserId, alive } from './internal'
 
 /**
  * The cuisines of the last few recipe servings, newest first — the variety signal.
@@ -83,7 +83,7 @@ export async function saveRecipe(input: RecipeInput, id = newId()): Promise<stri
     optional: ingredient.optional ?? false,
     amount: ingredient.amount ?? null,
   }))
-  const foods = await foodsByIds(ingredients.map((i) => i.foodId).filter(isPresent))
+  const foods = await foodsByIds(ingredients.map((i) => i.foodId))
   const existing = await db.recipes.get(id)
 
   const recipe: Recipe = {
@@ -178,7 +178,7 @@ export async function logRecipeIngredients(
   { dishId = newId(), source = 'recipe' }: { dishId?: string; source?: EntrySource } = {},
 ): Promise<number> {
   const share = servings / Math.max(1, recipe.servings)
-  const foods = await foodsByIds(recipe.ingredients.map((row) => row.foodId).filter(isPresent))
+  const foods = await foodsByIds(recipe.ingredients.map((row) => row.foodId))
 
   let written = 0
   for (const ingredient of recipe.ingredients) {

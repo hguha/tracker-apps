@@ -19,14 +19,19 @@ export async function getFood(id: string): Promise<Food | undefined> {
   return (await db.foods.get(id)) ?? (await db.customFoods.get(id))
 }
 
-export async function foodsByIds(ids: readonly string[]): Promise<Map<string, Food>> {
-  const unique = [...new Set(ids)]
+export async function foodsByIds(ids: readonly (string | null)[]): Promise<Map<string, Food>> {
+  const unique = [...new Set(ids.filter(isPresent))]
   const [reference, custom] = await Promise.all([
     db.foods.bulkGet(unique),
     db.customFoods.bulkGet(unique),
   ])
   const found = [...reference, ...custom].filter((f): f is Food => f !== undefined)
   return new Map(found.map((f) => [f.id, f]))
+}
+
+export async function foodsInOrder(ids: readonly string[]): Promise<Food[]> {
+  const found = await foodsByIds(ids)
+  return ids.flatMap((id) => found.get(id) ?? [])
 }
 
 export async function findByBarcode(barcode: string): Promise<Food | undefined> {

@@ -122,7 +122,7 @@ export function RecipeEditor({
   }, [])
 
   const foods = useLiveQuery(
-    () => repo.foodsByIds(rows.map((row) => row.foodId).filter(isPresent)),
+    () => repo.foodsByIds(rows.map((row) => row.foodId)),
     [rows.map((row) => row.foodId).join(',')],
     new Map<string, Food>(),
   )
@@ -614,7 +614,6 @@ const fewer = (value: number): number =>
 
 const more = (value: number): number => (value < 1 ? Math.min(1, value + 0.25) : Math.floor(value) + 1)
 
-const isPresent = (value: string | null): value is string => value !== null
 
 function hostOf(url: string): string {
   try {

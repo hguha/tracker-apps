@@ -10,7 +10,7 @@ import { sum as sumNutrients } from '@/lib/nutrition'
 import { queryTerms } from '@/lib/foodSearch'
 import { entriesBetween, type LastAmount } from './entries'
 import { foodsByIds } from './foods'
-import { alive, byRecency, isPresent } from './internal'
+import { alive, byRecency } from './internal'
 
 export async function searchLibrary(query: string, limit = 8): Promise<LibraryHit[]> {
   const terms = queryTerms(query)
@@ -73,7 +73,7 @@ export async function searchHistory(
 
   const from = dayKeyOffset(Date.now(), days)
   const entries = await entriesBetween(from, dayKey(Date.now()))
-  const foods = await foodsByIds(entries.map((entry) => entry.foodId).filter(isPresent))
+  const foods = await foodsByIds(entries.map((entry) => entry.foodId))
   const hits = (text: string) => {
     const lower = text.toLowerCase()
     return terms.every((term) => lower.includes(term))
@@ -261,9 +261,7 @@ export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> 
     else dishRows.set(entry.dishId, [...(dishRows.get(entry.dishId) ?? []), entry])
   }
 
-  const foods = await foodsByIds([
-    ...entries.map((entry) => entry.foodId).filter(isPresent),
-  ])
+  const foods = await foodsByIds(entries.map((entry) => entry.foodId))
   const nameOf = (entry: LogEntry): string =>
     (entry.foodId ? foods.get(entry.foodId)?.description : null) ?? entry.note ?? ''
 
