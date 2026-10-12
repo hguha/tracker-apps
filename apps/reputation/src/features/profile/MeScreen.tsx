@@ -100,7 +100,7 @@ export function MeScreen({
         <NavRow
           icon={<Trophy size={18} />}
           label="Badges"
-          hint="Strength, consistency, and cardio milestones"
+          hint="Milestones you have earned and are close to"
           onClick={onOpenBadges}
         />
       </NavList>
