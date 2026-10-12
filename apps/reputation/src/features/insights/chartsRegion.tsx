@@ -1,7 +1,7 @@
 import { displayWeight } from '@/lib/units'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
-import { baseOption, categoryAxis, chrome, valueAxis } from './chartTheme'
+import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
 import { type InsightsData } from './useInsightsData'
 import { MOVEMENT_PATTERNS, REGIONS, REGION_LABELS } from '@/domain/types'
 import { humanizeSlug } from '@/lib/labels'
@@ -87,7 +87,7 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
         displayWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit),
       ),
     }))
-    const c = chrome()
+    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     const option: EChartsOption = {
       ...baseOption(c),
       legend: {
@@ -96,7 +96,7 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
         itemWidth: 10,
         itemHeight: 10,
         itemGap: 10,
-        textStyle: { color: c.muted, fontSize: 11 },
+        textStyle: { color: c.inkMuted, fontSize: 11 },
       },
       grid: { left: 8, right: 12, top: 12, bottom: 30, containLabel: true },
       xAxis: categoryAxis(c, labels),
@@ -195,7 +195,7 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
       count: data.setsByPattern.get(pattern) ?? 0,
     })).filter((e) => e.count > 0)
     const labels = entries.map((e) => humanizeSlug(e.pattern))
-    const c = chrome()
+    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
@@ -244,7 +244,7 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
       .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
     const labels = entries.map(([eq]) => humanizeSlug(eq))
-    const c = chrome()
+    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },

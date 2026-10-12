@@ -1,7 +1,8 @@
 import { displayWeight, formatDuration } from '@/lib/units'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
-import { baseOption, categoryAxis, chrome, valueAxis } from './chartTheme'
+import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
+import { resolveRegionColor } from '@/lib/palette'
 import { type InsightsData } from './useInsightsData'
 import { Card } from '@/components/Card'
 import { useAppearanceKey } from '@/lib/useColorScheme'
@@ -20,7 +21,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
       displayWeight(data.volumeByWeek.get(week) ?? 0, unit),
     )
     const movingAverage = movingAvg(points)
-    const c = chrome()
+    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     const option: EChartsOption = {
       ...baseOption(c),
       legend: {
@@ -28,7 +29,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
         bottom: 0,
         itemWidth: 12,
         itemHeight: 2,
-        textStyle: { color: c.muted, fontSize: 11 },
+        textStyle: { color: c.inkMuted, fontSize: 11 },
       },
       grid: { left: 8, right: 12, top: 12, bottom: 28, containLabel: true },
       xAxis: categoryAxis(c, labels),
@@ -49,7 +50,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
           data: movingAverage,
           smooth: true,
           symbol: 'none',
-          lineStyle: { width: 2, color: c.muted },
+          lineStyle: { width: 2, color: c.inkMuted },
         },
       ],
     }
@@ -84,7 +85,7 @@ export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
   const { option, labels, counts } = useMemo(() => {
     const labels = weekLabels(data.weeks)
     const counts = data.weeks.map((week) => data.workoutsByWeek.get(week) ?? 0)
-    const c = chrome()
+    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
