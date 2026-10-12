@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { capitalise, plural } from '@tracker-engine/core'
 import { BottomSheet, Button, Card, Screen, useToast } from '@tracker-engine/ui'
-import { Minus, Plus } from 'lucide-react'
+import { ChevronDown, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
@@ -453,9 +453,10 @@ export function RecipeEditor({
       )}
 
       {!log && (
-        <details className="rounded-2xl bg-surface px-4 py-3">
-          <summary className="cursor-pointer text-[13px] font-semibold text-ink-secondary">
+        <details className="group rounded-2xl bg-surface px-4 py-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-[13px] font-semibold text-ink-secondary [&::-webkit-details-marker]:hidden">
             Method & details
+            <ChevronDown size={16} className="text-ink-muted transition-transform group-open:rotate-180" />
           </summary>
           <div className="mt-2.5 space-y-2.5">
             <select
