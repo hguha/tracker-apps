@@ -190,6 +190,37 @@ describe('claimLocalData', () => {
     expect(await db.logEntries.count()).toBe(1)
   })
 
+  it('never claims another real account’s rows', async () => {
+    repo.setActiveUserId('first-user')
+    await repo.saveProfile({ theme: 'slate' })
+    await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
+    await db.outbox.clear()
+
+    expect(await repo.claimLocalData('second-user')).toBe(0)
+    expect((await db.logEntries.toArray())[0]?.userId).toBe('first-user')
+    expect(await db.profiles.get('second-user')).toBeUndefined()
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('gives a second account a clean device when it signs in after the first', async () => {
+    repo.setActiveUserId('first-user')
+    await repo.adoptSession('first-user')
+    await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
+
+    repo.setActiveUserId('second-user')
+    expect(await repo.adoptSession('second-user')).toEqual({ wiped: true, claimed: 0 })
+    expect(await db.logEntries.count()).toBe(0)
+  })
+
+  it('claims device-only rows when a real account signs in', async () => {
+    await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
+    await repo.adoptSession('local-user')
+
+    repo.setActiveUserId('real-user')
+    expect(await repo.adoptSession('real-user')).toEqual({ wiped: false, claimed: 1 })
+    expect((await db.logEntries.toArray())[0]?.userId).toBe('real-user')
+  })
+
   it('wipes a different real account’s rows', async () => {
     repo.setDbOwner('someone-else')
     await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })

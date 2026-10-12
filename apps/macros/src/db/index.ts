@@ -1,7 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { DeadLetterEntry, OutboxEntry, SyncState } from '@tracker-engine/local-first'
-import { createOwnerGuard } from '@tracker-engine/local-first'
-import { LOCAL_USER_ID } from '@tracker-engine/auth'
 import type { ConversationRow } from '@tracker-engine/ai-coach'
 import { entryChangeTracker } from './entryChanges'
 import type {
@@ -19,7 +17,7 @@ import type {
 
 // Load-bearing identifiers — keep stable across releases.
 const DB_NAME = 'macros'
-const OWNER_KEY = 'macros.owner'
+export const OWNER_KEY = 'macros.owner'
 
 class MacrosDatabase extends Dexie {
   foods!: EntityTable<Food, 'id'>
@@ -145,10 +143,3 @@ export const OWNED_TABLES = [
   db.syncState,
   db.coachConversations,
 ]
-
-export const owner = createOwnerGuard({
-  storageKey: OWNER_KEY,
-  tables: OWNED_TABLES,
-  localUserId: LOCAL_USER_ID,
-  // `claim` is wired in data/repository.ts, which owns the write path.
-})

@@ -34,10 +34,21 @@ export interface OwnerGuard {
    * wipes the rows that were just claimed.
    */
   assertOwner(ownerId: string): Promise<boolean>
+  adopt(ownerId: string): Promise<{ wiped: boolean; claimed: number }>
   claimLocal(userId: string): Promise<number>
   setOwner(ownerId: string): void
   clearOwner(): void
   currentOwner(): string | null
+}
+
+export type OwnerTransition = { kind: 'claimed'; rows: number } | { kind: 'wiped-foreign' }
+
+export const ownerTransition = (adopted: {
+  wiped: boolean
+  claimed: number
+}): OwnerTransition | null => {
+  if (adopted.wiped) return { kind: 'wiped-foreign' }
+  return adopted.claimed > 0 ? { kind: 'claimed', rows: adopted.claimed } : null
 }
 
 export function createOwnerGuard(config: OwnerGuardConfig): OwnerGuard {
@@ -62,18 +73,26 @@ export function createOwnerGuard(config: OwnerGuardConfig): OwnerGuard {
     }
   }
 
+  const assertOwner = async (ownerId: string): Promise<boolean> => {
+    const previous = read()
+    if (previous === ownerId) return false
+
+    const isForeign = previous !== null && previous !== localUserId
+    if (isForeign) await Promise.all(config.tables.map((table) => table.clear()))
+    write(ownerId)
+    return isForeign
+  }
+
+  const claimLocal = (userId: string): Promise<number> =>
+    userId === localUserId ? Promise.resolve(0) : (config.claim?.(userId) ?? Promise.resolve(0))
+
   return {
-    async assertOwner(ownerId) {
-      const previous = read()
-      if (previous === ownerId) return false
-
-      const isForeign = previous !== null && previous !== localUserId
-      if (isForeign) await Promise.all(config.tables.map((table) => table.clear()))
-      write(ownerId)
-      return isForeign
+    assertOwner,
+    async adopt(ownerId) {
+      const wiped = await assertOwner(ownerId)
+      return { wiped, claimed: await claimLocal(ownerId) }
     },
-
-    claimLocal: (userId) => config.claim?.(userId) ?? Promise.resolve(0),
+    claimLocal,
     setOwner: write,
     clearOwner: () => write(null),
     currentOwner: read,

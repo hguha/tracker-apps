@@ -71,6 +71,13 @@ describe('claimLocal', () => {
     expect(await g.claimLocal('user-a')).toBe(0)
   })
 
+  it('never claims for the device-only user', async () => {
+    const claim = vi.fn(async () => 5)
+    const { guard: g } = guard(claim)
+    expect(await g.claimLocal('local-user')).toBe(0)
+    expect(claim).not.toHaveBeenCalled()
+  })
+
   it('survives the guard running after a claim, which is the required order', async () => {
     const claim = vi.fn(async () => 5)
     const { guard: g, tables } = guard(claim)
@@ -78,5 +85,39 @@ describe('claimLocal', () => {
     g.setOwner('user-a')
     expect(await g.assertOwner('user-a')).toBe(false)
     expect(tables[0]!.clear).not.toHaveBeenCalled()
+  })
+})
+
+describe('adopt', () => {
+  it('wipes a foreign account before claiming, so nothing of theirs is adopted', async () => {
+    const order: string[] = []
+    const g = createOwnerGuard({
+      storageKey: 'test.owner',
+      tables: [{ clear: vi.fn(async () => void order.push('wipe')) }],
+      claim: async () => {
+        order.push('claim')
+        return 0
+      },
+      storage: memoryStorage(),
+    })
+    g.setOwner('user-a')
+
+    expect(await g.adopt('user-b')).toEqual({ wiped: true, claimed: 0 })
+    expect(order).toEqual(['wipe', 'claim'])
+    expect(g.currentOwner()).toBe('user-b')
+  })
+
+  it('claims device-only rows into the first real account', async () => {
+    const { guard: g, tables } = guard(async () => 3)
+    g.setOwner('local-user')
+    expect(await g.adopt('user-a')).toEqual({ wiped: false, claimed: 3 })
+    expect(tables[0]!.clear).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op claim for the device-only session itself', async () => {
+    const claim = vi.fn(async () => 3)
+    const { guard: g } = guard(claim)
+    expect(await g.adopt('local-user')).toEqual({ wiped: false, claimed: 0 })
+    expect(claim).not.toHaveBeenCalled()
   })
 })

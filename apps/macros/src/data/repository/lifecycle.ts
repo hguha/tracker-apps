@@ -1,13 +1,8 @@
-import { touch } from '@tracker-engine/local-first'
-import { db, OWNED_TABLES, owner } from '@/db'
+import { createOwnerGuard, touch } from '@tracker-engine/local-first'
+import { LOCAL_USER_ID } from '@tracker-engine/auth'
+import { db, OWNED_TABLES, OWNER_KEY } from '@/db'
 import { enqueue } from '@/data/outbox'
 
-/**
- * Re-owns device-only rows for a real account and re-queues them.
- *
- * Must run *before* `owner.assertOwner`, or the guard sees rows belonging to someone else
- * and wipes exactly what was just claimed.
- */
 export async function claimLocalData(userId: string): Promise<number> {
   const tables = [
     ['profiles', db.profiles],
@@ -25,7 +20,7 @@ export async function claimLocalData(userId: string): Promise<number> {
     if (table === 'profiles') {
       // The profile's primary key *is* the owner, so it can't be re-owned in place — the row
       // has to be re-keyed, which means delete and re-insert.
-      const stale = (await db.profiles.toArray()).filter((row) => row.id !== userId)
+      const stale = (await db.profiles.toArray()).filter((row) => row.id === LOCAL_USER_ID)
       for (const row of stale) {
         const existing = await db.profiles.get(userId)
         if (!existing) {
@@ -37,7 +32,7 @@ export async function claimLocalData(userId: string): Promise<number> {
       }
       continue
     }
-    const rows = await store.where('userId').notEqual(userId).toArray()
+    const rows = await store.where('userId').equals(LOCAL_USER_ID).toArray()
     for (const row of rows) {
       await store.update(row.id, { userId, updatedAt: Date.now() })
       await enqueue(table, row.id)
@@ -58,7 +53,7 @@ export async function claimLocalData(userId: string): Promise<number> {
  * the server's unique (user_id, day) index. Delete and re-insert, exactly as the profile does.
  */
 async function claimWater(userId: string): Promise<number> {
-  const stale = await db.waterLogs.where('userId').notEqual(userId).toArray()
+  const stale = await db.waterLogs.where('userId').equals(LOCAL_USER_ID).toArray()
   let claimed = 0
   for (const row of stale) {
     const id = `w:${userId}:${row.day}`
@@ -75,7 +70,16 @@ async function claimWater(userId: string): Promise<number> {
   return claimed
 }
 
+const owner = createOwnerGuard({
+  storageKey: OWNER_KEY,
+  tables: OWNED_TABLES,
+  localUserId: LOCAL_USER_ID,
+  claim: claimLocalData,
+})
+
 export const assertDbOwner = (ownerId: string): Promise<boolean> => owner.assertOwner(ownerId)
+
+export const adoptSession = (ownerId: string) => owner.adopt(ownerId)
 
 export const setDbOwner = (ownerId: string): void => owner.setOwner(ownerId)
 
