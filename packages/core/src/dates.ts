@@ -10,6 +10,7 @@ import {
 export type WeekStart = 0 | 1
 
 // The one place raw millisecond spans live; app architecture checks ban them elsewhere.
+export const SECOND_MS = 1_000
 export const DAY_MS = 86_400_000
 export const WEEK_MS = 604_800_000
 

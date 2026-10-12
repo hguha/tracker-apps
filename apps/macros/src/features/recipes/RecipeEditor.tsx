@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { capitalise, plural } from '@tracker-engine/core'
-import { BottomSheet, Button, Card, Screen, useToast } from '@tracker-engine/ui'
+import { BottomSheet, Button, Card, Screen, useToast, Working } from '@tracker-engine/ui'
 import { ChevronDown, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
@@ -12,13 +12,11 @@ import { macroLine } from '@/features/shared/format'
 import { NumberInput } from '@/features/shared/NumberInput'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { AmountRow } from '@/features/shared/AmountRow'
-import { Working } from '@/features/log/Working'
 import {
   describeComponents,
   describeMeal,
   describePhoto,
   matchDraft,
-  SECOND_MS,
   withoutProduct,
   type FoodDraft,
   type MealEstimate,
@@ -83,7 +81,6 @@ export function RecipeEditor({
   const [notes, setNotes] = useState('')
   const [swapping, setSwapping] = useState<string | null>(null)
   const [asking, setAsking] = useState<Asking | null>(null)
-  const [elapsed, setElapsed] = useState(0)
   const [aiSource, setAiSource] = useState<EntrySource | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -102,15 +99,6 @@ export function RecipeEditor({
     setSource(existing.sourceUrl)
     setRows(rowsFromSaved(existing))
   }, [existing?.id])
-
-  useEffect(() => {
-    if (!asking) return
-    const id = window.setInterval(
-      () => setElapsed(Math.round((Date.now() - asking.startedAt) / SECOND_MS)),
-      SECOND_MS,
-    )
-    return () => window.clearInterval(id)
-  }, [asking?.startedAt])
 
   useEffect(() => {
     if (!start || started.current) return
@@ -153,7 +141,6 @@ export function RecipeEditor({
   async function ask(text: string, read: () => Promise<MealEstimate>, kind: EntrySource) {
     if (asking) return
     setAsking({ phase: 'reading', startedAt: Date.now() })
-    setElapsed(0)
     setError(null)
     const isFresh = name.trim() === '' && rows.length === 0
     if (isFresh && text.trim()) {
@@ -418,7 +405,13 @@ export function RecipeEditor({
         )}
 
         <div className="space-y-2 border-t border-line px-4 py-3">
-          {asking && <Working phase={asking.phase} elapsed={elapsed} />}
+          {asking && (
+            <Working
+              label={asking.phase === 'reading' ? 'Reading what you wrote' : 'Finding the foods'}
+              startedAt={asking.startedAt}
+              slowNote="Still going — the AI is slower when it is busy. Nothing is logged until you confirm."
+            />
+          )}
           <AddIngredient
             recipes={recipes}
             isFirst={isFirst}
