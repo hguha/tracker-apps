@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from '@tracker-engine/core'
 
@@ -19,6 +19,9 @@ export function TabBar<K extends string>({
   onSelect,
   centerLabel,
   onCenter,
+  centerIcon = <Plus size={26} strokeWidth={2.5} />,
+  isCenterPulsing = false,
+  activeFor = {},
 }: {
   left: readonly TabDefinition<K>[]
   right: readonly TabDefinition<K>[]
@@ -26,26 +29,36 @@ export function TabBar<K extends string>({
   onSelect: (tab: K) => void
   centerLabel: string
   onCenter: () => void
+  centerIcon?: ReactNode
+  isCenterPulsing?: boolean
+  activeFor?: Partial<Record<K, K>>
 }) {
+  const lit = activeFor[active] ?? active
   return (
     <nav className="relative border-t border-line bg-surface pb-safe">
       <div className="flex items-stretch">
         {left.map((tab) => (
-          <TabButton key={tab.key} tab={tab} active={active} onSelect={onSelect} />
+          <TabButton key={tab.key} tab={tab} active={lit} onSelect={onSelect} />
         ))}
 
         <div className="relative flex w-16 shrink-0 justify-center">
+          {isCenterPulsing && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-4 size-14 animate-ping rounded-full bg-accent opacity-25"
+            />
+          )}
           <button
             onClick={onCenter}
             aria-label={centerLabel}
             className="relative z-10 -mt-4 flex size-14 items-center justify-center rounded-full bg-accent text-accent-contrast shadow-lg active:brightness-90"
           >
-            <Plus size={26} strokeWidth={2.5} />
+            {centerIcon}
           </button>
         </div>
 
         {right.map((tab) => (
-          <TabButton key={tab.key} tab={tab} active={active} onSelect={onSelect} />
+          <TabButton key={tab.key} tab={tab} active={lit} onSelect={onSelect} />
         ))}
       </div>
     </nav>
