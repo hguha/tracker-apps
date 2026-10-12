@@ -11,6 +11,7 @@ import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import { setDbOwner } from '@/db/owner'
 import * as repo from '@/data/repository'
+import { conversations } from '@/features/coach/history'
 
 beforeEach(async () => {
   // Reset the owner id first, so a test that switched it can't leak into the
@@ -1947,6 +1948,25 @@ describe('active user id + local data reset', () => {
     expect(await db.sets.count()).toBe(0)
     // The shared library survives — it isn't anyone's data.
     expect(await db.exercises.count()).toBeGreaterThan(90)
+  })
+
+  it('assertDbOwner wipes the previous account’s coach conversations', async () => {
+    const A = '88888888-8888-8888-8888-888888888888'
+    const B = '99999999-9999-9999-9999-999999999999'
+    setActiveUserId(A)
+    await seedIfNeeded()
+    await repo.assertDbOwner(A)
+    await conversations.save({
+      id: 'c1',
+      title: 'My knee hurts',
+      contents: [{ role: 'user', parts: [{ text: 'My knee hurts' }] }],
+      items: [{ role: 'user', text: 'My knee hurts' }],
+    })
+
+    setActiveUserId(B)
+    expect(await repo.assertDbOwner(B)).toBe(true)
+
+    expect(await conversations.list()).toEqual([])
   })
 
   it('assertDbOwner keeps data when the same account signs back in', async () => {

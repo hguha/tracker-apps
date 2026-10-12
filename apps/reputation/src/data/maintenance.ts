@@ -49,11 +49,13 @@ export async function clearLocalData(): Promise<void> {
       db.lastPerformance,
       db.placeholderOverrides,
       db.editSnapshots,
+      db.coachConversations,
       db.outbox,
       db.deadLetter,
       db.syncState,
     ],
     async () => {
+      await db.coachConversations.clear()
       await db.workouts.clear()
       await db.workoutExercises.clear()
       await db.sets.clear()
