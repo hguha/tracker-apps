@@ -42,7 +42,9 @@ export function useCoachChat<TAction>({
     store
       .mostRecent()
       .then((stored) => {
-        if (!isCancelled && stored && stored.items.length > 0) open(stored)
+        if (!isCancelled && contentsRef.current.length === 0 && stored && stored.items.length > 0) {
+          open(stored)
+        }
       })
       .catch((error) => console.error('[coach] could not load the last conversation', error))
     return () => {
