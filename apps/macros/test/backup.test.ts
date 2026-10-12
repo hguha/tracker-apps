@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { dayKey } from '@tracker-engine/core'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
@@ -54,7 +54,7 @@ describe('exportToCsv', () => {
 })
 
 describe('importBackup', () => {
-  it('writes nothing when one row in the file is broken', async () => {
+  it('drops a row with no id and imports the rest', async () => {
     const backup = parseBackup(
       JSON.stringify({
         format: JSON.parse(await exportToJson()).format,
@@ -65,8 +65,22 @@ describe('importBackup', () => {
       }),
     )
 
-    await expect(importBackup(backup)).rejects.toThrow()
-    expect(await db.bodyWeights.count()).toBe(0)
+    await importBackup(backup)
+    expect((await db.bodyWeights.toArray()).map((row) => row.id)).toEqual(['bw:a'])
+    expect((await db.outbox.toArray()).map((entry) => entry.rowId)).toEqual(['bw:a'])
+  })
+
+  it('writes nothing when one table fails to import', async () => {
+    const [food] = await repo.searchFoods('chicken breast')
+    await repo.logFood({ food: food!, grams: 100, meal: 'lunch' })
+    const backup = parseBackup(await exportToJson())
+    await db.logEntries.clear()
+    await db.outbox.clear()
+    backup.bodyWeights = [{ ...backup.logEntries[0]!, id: 'bw:x' } as never]
+    vi.spyOn(db.bodyWeights, 'bulkPut').mockRejectedValueOnce(new Error('disk full'))
+
+    await expect(importBackup(backup)).rejects.toThrow('disk full')
+    expect(await db.logEntries.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
   })
 })

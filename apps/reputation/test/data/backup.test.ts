@@ -106,6 +106,27 @@ describe('export → import round-trip', () => {
   })
 })
 
+describe('importBackup sync', () => {
+  it('queues every imported synced row so it reaches the server', async () => {
+    await seedSession()
+    const backup = parseBackup(await exportToJson())
+    await repo.clearLocalData()
+    await db.outbox.clear()
+
+    await importBackup(backup)
+
+    const queued = new Set((await db.outbox.toArray()).map((e) => `${e.table}:${e.rowId}`))
+    const expected = [
+      ...backup.data.workouts.map((r) => `workouts:${r.id}`),
+      ...backup.data.workoutExercises.map((r) => `workoutExercises:${r.id}`),
+      ...backup.data.sets.map((r) => `sets:${r.id}`),
+    ]
+    expect(expected.length).toBeGreaterThan(0)
+    expect(expected.filter((key) => !queued.has(key))).toEqual([])
+    expect([...queued].some((key) => key.startsWith('personalRecords:'))).toBe(false)
+  })
+})
+
 describe('parseBackup validation', () => {
   it('rejects non-JSON', () => {
     expect(() => parseBackup('{not json')).toThrow(BackupParseError)

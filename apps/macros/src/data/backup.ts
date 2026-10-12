@@ -1,4 +1,10 @@
-import { syncStamp } from '@tracker-engine/local-first'
+import {
+  BackupParseError,
+  backupRows,
+  importBackupRows,
+  parseBackupObject,
+  syncStamp,
+} from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue } from '@/data/outbox'
 import { migrateSavedMeals } from '@/data/repository'
@@ -33,7 +39,7 @@ export interface Backup {
   checkIns: CheckIn[]
 }
 
-export class BackupParseError extends Error {}
+export { BackupParseError }
 
 /**
  * A spreadsheet of the log: one row per entry, with the food's name and every macro.
@@ -111,27 +117,20 @@ export async function exportToJson(): Promise<string> {
 }
 
 export function parseBackup(text: string): Backup {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    throw new BackupParseError("That file isn't valid JSON.")
-  }
-  const backup = parsed as Partial<Backup>
-  if (backup.format !== BACKUP_FORMAT) {
-    throw new BackupParseError("That doesn't look like a MACROcosm backup.")
-  }
+  const notOurs = "That doesn't look like a MACROcosm backup."
+  const backup = parseBackupObject(text, notOurs)
+  if (backup.format !== BACKUP_FORMAT) throw new BackupParseError(notOurs)
   return {
     format: BACKUP_FORMAT,
-    exportedAt: backup.exportedAt ?? Date.now(),
-    profiles: backup.profiles ?? [],
-    logEntries: backup.logEntries ?? [],
-    bodyWeights: backup.bodyWeights ?? [],
-    waterLogs: backup.waterLogs ?? [],
-    recipes: backup.recipes ?? [],
-    mealTemplates: backup.mealTemplates ?? [],
-    programs: backup.programs ?? [],
-    checkIns: backup.checkIns ?? [],
+    exportedAt: typeof backup.exportedAt === 'number' ? backup.exportedAt : Date.now(),
+    profiles: backupRows(backup.profiles),
+    logEntries: backupRows(backup.logEntries),
+    bodyWeights: backupRows(backup.bodyWeights),
+    waterLogs: backupRows(backup.waterLogs),
+    recipes: backupRows(backup.recipes),
+    mealTemplates: backupRows(backup.mealTemplates),
+    programs: backupRows(backup.programs),
+    checkIns: backupRows(backup.checkIns),
   }
 }
 
@@ -150,25 +149,22 @@ export function countsOf(backup: Backup) {
  */
 export async function importBackup(backup: Backup): Promise<void> {
   const owner = (await db.profiles.toArray())[0]?.id
-  const tables = [
-    ['logEntries', db.logEntries, backup.logEntries],
-    ['bodyWeights', db.bodyWeights, backup.bodyWeights],
-    ['waterLogs', db.waterLogs, backup.waterLogs],
-    ['recipes', db.recipes, backup.recipes],
-    ['mealTemplates', db.mealTemplates, backup.mealTemplates],
-    ['programs', db.programs, backup.programs],
-    ['checkIns', db.checkIns, backup.checkIns],
-  ] as const
+  // Re-owned to whoever is signed in here, or the rows would be invisible under RLS.
+  const owned = <T>(rows: T[]) =>
+    rows.map((row) => ({ ...row, ...(owner ? { userId: owner } : {}), ...syncStamp() }))
 
-  await db.transaction('rw', [...tables.map(([, store]) => store), db.outbox], async () => {
-    for (const [name, store, rows] of tables) {
-      for (const row of rows) {
-        // Re-owned to whoever is signed in here, or the rows would be invisible under RLS.
-        const owned = { ...row, ...(owner ? { userId: owner } : {}), ...syncStamp() }
-        await (store as unknown as { put(row: unknown): Promise<unknown> }).put(owned)
-        await enqueue(name, row.id)
-      }
-    }
+  await importBackupRows({
+    tables: [
+      { table: 'logEntries', store: db.logEntries, rows: owned(backup.logEntries) },
+      { table: 'bodyWeights', store: db.bodyWeights, rows: owned(backup.bodyWeights) },
+      { table: 'waterLogs', store: db.waterLogs, rows: owned(backup.waterLogs) },
+      { table: 'recipes', store: db.recipes, rows: owned(backup.recipes) },
+      { table: 'mealTemplates', store: db.mealTemplates, rows: owned(backup.mealTemplates) },
+      { table: 'programs', store: db.programs, rows: owned(backup.programs) },
+      { table: 'checkIns', store: db.checkIns, rows: owned(backup.checkIns) },
+    ],
+    inTransaction: (work) => db.transaction('rw', db.tables, work),
+    enqueue,
   })
   await migrateSavedMeals()
 }

@@ -1,7 +1,14 @@
 // Full client-side JSON export/import of a user's data (§11.3, §5.6). Import is
 // additive by key (bulkPut on client ids): idempotent, merges, never deletes omissions.
 
+import {
+  BackupParseError,
+  backupRows,
+  importBackupRows,
+  parseBackupObject,
+} from '@tracker-engine/local-first'
 import { db } from '@/db/database'
+import { enqueue } from './outbox'
 import { getActiveUserId } from '@/db/seed'
 import { RETIRED_BODYWEIGHT_TRACKING } from './migrations/exerciseModel'
 import type {
@@ -108,7 +115,7 @@ export function backupFilename(isoDate: string): string {
   return `fitnote-backup-${isoDate}.json`
 }
 
-export class BackupParseError extends Error {}
+export { BackupParseError }
 
 function isRetiredBodyweightTracking(value: unknown): boolean {
   return typeof value === 'string' && RETIRED_BODYWEIGHT_TRACKING.has(value)
@@ -122,17 +129,7 @@ function normalizeTrackingType(value: unknown): Exercise['trackingType'] {
 
 // Strict about the envelope but lenient about extra fields, so a newer minor still imports.
 export function parseBackup(json: string): BackupFile {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(json)
-  } catch {
-    throw new BackupParseError("That file isn't valid JSON.")
-  }
-
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new BackupParseError('That file is not a REPutation backup.')
-  }
-  const obj = parsed as Record<string, unknown>
+  const obj = parseBackupObject(json, 'That file is not a REPutation backup.')
   if (obj.format !== 'fitnote-backup') {
     throw new BackupParseError('That file is not a REPutation backup.')
   }
@@ -150,14 +147,7 @@ export function parseBackup(json: string): BackupFile {
   // on bulkPut (the key is inline), and a hand-edited file is untrusted input —
   // so keep only rows the DB can actually store rather than trusting the shape.
   const d = obj.data as Record<string, unknown>
-  const rows = <T extends { id: string }>(v: unknown): T[] =>
-    (Array.isArray(v) ? v : []).filter(
-      (r): r is T =>
-        typeof r === 'object' &&
-        r !== null &&
-        typeof (r as { id?: unknown }).id === 'string' &&
-        (r as { id: string }).id !== '',
-    )
+  const rows = backupRows
   const profile = d.profile
   return {
     format: 'fitnote-backup',
@@ -192,40 +182,35 @@ export function parseBackup(json: string): BackupFile {
 // them invisible) but preserves ids, in one transaction so a bad row can't half-write.
 export async function importBackup(file: BackupFile): Promise<BackupCounts> {
   const userId = getActiveUserId()
+  const { data } = file
+  const owned = <T>(rows: T[]) => rows.map((row) => ({ ...row, userId }))
 
-  await db.transaction(
-    'rw',
-    [
-      db.profiles,
-      db.exercises,
-      db.templates,
-      db.templateExercises,
-      db.workouts,
-      db.workoutExercises,
-      db.sets,
-      db.personalRecords,
-      db.metricEntries,
+  // The system library (userId null) is never in the file, so custom exercises
+  // are safe to re-stamp with the active id, as are all other user-scoped rows.
+  await importBackupRows({
+    tables: [
+      {
+        table: 'profiles',
+        store: db.profiles,
+        rows: data.profile ? [{ ...data.profile, id: userId }] : [],
+      },
+      { table: 'exercises', store: db.exercises, rows: owned(data.exercises) },
+      { table: 'templates', store: db.templates, rows: owned(data.templates) },
+      { table: 'templateExercises', store: db.templateExercises, rows: data.templateExercises },
+      { table: 'workouts', store: db.workouts, rows: owned(data.workouts) },
+      { table: 'workoutExercises', store: db.workoutExercises, rows: data.workoutExercises },
+      { table: 'sets', store: db.sets, rows: data.sets },
+      {
+        table: 'personalRecords',
+        store: db.personalRecords,
+        rows: data.personalRecords,
+        isSynced: false,
+      },
+      { table: 'metricEntries', store: db.metricEntries, rows: owned(data.metricEntries) },
     ],
-    async () => {
-      const { data } = file
-
-      if (data.profile) {
-        // Restore the profile wholesale but under this user id.
-        await db.profiles.put({ ...data.profile, id: userId })
-      }
-
-      // The system library (userId null) is never in the file, so custom exercises
-      // are safe to re-stamp with the active id, as are all other user-scoped rows.
-      await db.exercises.bulkPut(data.exercises.map((e) => ({ ...e, userId })))
-      await db.templates.bulkPut(data.templates.map((t) => ({ ...t, userId })))
-      await db.templateExercises.bulkPut(data.templateExercises)
-      await db.workouts.bulkPut(data.workouts.map((w) => ({ ...w, userId })))
-      await db.workoutExercises.bulkPut(data.workoutExercises)
-      await db.sets.bulkPut(data.sets)
-      await db.personalRecords.bulkPut(data.personalRecords)
-      await db.metricEntries.bulkPut(data.metricEntries.map((m) => ({ ...m, userId })))
-    },
-  )
+    inTransaction: (work) => db.transaction('rw', db.tables, work),
+    enqueue,
+  })
 
   return countsOf(file)
 }
