@@ -64,6 +64,39 @@ describe('runToolLoop', () => {
     expect(result.text).toBe('made a plan')
   })
 
+  it('answers every call of a terminal turn so the next turn is valid', async () => {
+    const call = { name: 'make_plan', args: { goal: 'strength' } }
+    const client = fakeClient([
+      { kind: 'toolCalls', text: 'made a plan', calls: [call], modelParts: [{ functionCall: call, thoughtSignature: 'sig' }] },
+    ])
+    const result = await runToolLoop(client, userTurn, config())
+    expect(result.contents).toEqual([
+      ...userTurn,
+      { role: 'model', parts: [{ functionCall: call, thoughtSignature: 'sig' }] },
+      { role: 'user', parts: [{ functionResponse: { name: 'make_plan', response: { shownToUser: true } } }] },
+      { role: 'model', parts: [{ text: 'made a plan' }] },
+    ])
+  })
+
+  it('ends a terminal turn on the answered call when the model said nothing', async () => {
+    const call = { name: 'make_plan', args: {} }
+    const client = fakeClient([{ kind: 'toolCalls', text: '', calls: [call], modelParts: [{ functionCall: call }] }])
+    const result = await runToolLoop(client, userTurn, config())
+    expect(result.contents.at(-1)?.parts[0]?.functionResponse?.name).toBe('make_plan')
+  })
+
+  it('records the fallback as the model turn when the round cap is hit', async () => {
+    const retrieval: EdgeTurn = {
+      kind: 'toolCalls',
+      text: '',
+      calls: [{ name: 'get_history', args: {} }],
+      modelParts: [],
+    }
+    const client = fakeClient([retrieval, retrieval, retrieval, retrieval])
+    const result = await runToolLoop(client, userTurn, config({ maxRounds: 2 }))
+    expect(result.contents.at(-1)).toEqual({ role: 'model', parts: [{ text: 'gave up' }] })
+  })
+
   it('falls back gracefully when the round cap is hit', async () => {
     const retrieval: EdgeTurn = {
       kind: 'toolCalls',

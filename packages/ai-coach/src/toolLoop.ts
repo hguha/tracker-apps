@@ -81,6 +81,13 @@ export async function runToolLoop<TAction>(
     const terminal = turn.calls.find((c) => config.isTerminal(c.name))
     if (terminal) {
       const action = (await config.toAction(terminal.name, terminal.args)) ?? undefined
+      working.push({
+        role: 'user',
+        parts: turn.calls.map((call) => ({
+          functionResponse: { name: call.name, response: { shownToUser: true } },
+        })),
+      })
+      if (turn.text) working.push({ role: 'model', parts: [{ text: turn.text }] })
       return { contents: working, text: turn.text, action }
     }
 
@@ -94,5 +101,6 @@ export async function runToolLoop<TAction>(
     working.push({ role: 'user', parts: responseParts })
   }
 
+  working.push({ role: 'model', parts: [{ text: config.fallbackText }] })
   return { contents: working, text: config.fallbackText }
 }

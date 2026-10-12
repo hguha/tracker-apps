@@ -31,7 +31,7 @@ describe('coach history', () => {
     expect(result.contents[2]?.parts[0]?.functionResponse?.name).toBe('getWeightTrend')
   })
 
-  it('ends an action turn on the reply text, not an unanswered call', async () => {
+  it('answers the action call and ends on the reply text', async () => {
     invoke.mockResolvedValueOnce({
       data: {
         kind: 'toolCalls',
@@ -44,10 +44,9 @@ describe('coach history', () => {
 
     const result = await geminiCoachProvider.chat(question, await buildCoachContext())
 
-    expect(result.contents).toEqual([
-      ...question,
-      { role: 'model', parts: [{ text: 'Here is a dinner.' }] },
-    ])
+    expect(result.contents.map((turn) => turn.role)).toEqual(['user', 'model', 'user', 'model'])
+    expect(result.contents[2]?.parts[0]?.functionResponse?.name).toBe('suggestMeal')
+    expect(result.contents.at(-1)).toEqual({ role: 'model', parts: [{ text: 'Here is a dinner.' }] })
   })
 
   it('records the offline answer as the model turn', async () => {
