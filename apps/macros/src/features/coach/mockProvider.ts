@@ -52,7 +52,7 @@ async function remainingAnswer(): Promise<string> {
   }
   const left = remaining(totals, targets)
   if (left.kcal <= 0) {
-    return `You're ${Math.abs(left.kcal)} kcal over today's ${targets.kcal}. One day doesn't matter; the weekly average is what moves the trend.`
+    return `You're ${Math.abs(left.kcal)} kcal over today's ${targets.kcal.toLocaleString()}. One day doesn't matter; the weekly average is what moves the trend.`
   }
   return `${left.kcal} kcal and ${Math.round(mgToGrams(Math.max(0, left.proteinMg)))} g of protein left today. Protein first — it's the target a deficit squeezes hardest.`
 }
@@ -84,7 +84,7 @@ async function expenditureAnswer(): Promise<string> {
   if (!checkIn) {
     return 'Not enough data to measure your expenditure yet — I need a week with at least four days logged and three weigh-ins.'
   }
-  return `Measured at ${checkIn.expenditureKcal} ± ${checkIn.expenditureSe} kcal/day, from your weight trend and what you logged. That already includes your training, which is why nothing gets added on top for exercise.`
+  return `Measured at ${checkIn.expenditureKcal.toLocaleString()} ± ${checkIn.expenditureSe} kcal/day, from your weight trend and what you logged. That already includes your training, which is why nothing gets added on top for exercise.`
 }
 
 async function summaryAnswer(): Promise<string> {

@@ -26,11 +26,11 @@ export function DayTotals({
     <Card className="p-4">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="tabular text-[30px] font-bold leading-none">{totals.kcal}</p>
+          <p className="tabular text-[30px] font-bold leading-none">{totals.kcal.toLocaleString()}</p>
           <p className="mt-0.5 text-[12px] text-ink-muted">
             {target === null
               ? 'kcal · no target for this day'
-              : `of ${target.kcal} kcal · ${delta === 0 ? 'on target' : `${Math.abs(delta!)} ${delta! > 0 ? 'over' : 'under'}`}`}
+              : `of ${target.kcal.toLocaleString()} kcal · ${delta === 0 ? 'on target' : `${Math.abs(delta!).toLocaleString()} ${delta! > 0 ? 'over' : 'under'}`}`}
           </p>
         </div>
         <p className="tabular text-right text-[12px] text-ink-muted">

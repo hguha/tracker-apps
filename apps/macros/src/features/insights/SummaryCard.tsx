@@ -14,7 +14,7 @@ export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLab
       <h2 className="text-[15px] font-semibold tracking-tight">{rangeLabel}</h2>
       <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
         <Stat label="Days logged">{data.loggedDayCount}</Stat>
-        <Stat label="Average intake">{averageKcal} kcal</Stat>
+        <Stat label="Average intake">{averageKcal.toLocaleString()} kcal</Stat>
         <Stat label="Average protein">{grams(data.nutrition.totals.proteinMg)}</Stat>
         <Stat label="Within 10% of target">
           {data.adherencePct === null ? '—' : `${Math.round(data.adherencePct)}% of days`}
@@ -27,7 +27,7 @@ export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLab
         <Stat label="Expenditure">
           {data.expenditureKcal === null
             ? 'not measured yet'
-            : `${data.expenditureKcal} ± ${data.expenditureSe}`}
+            : `${data.expenditureKcal.toLocaleString()} ± ${data.expenditureSe}`}
         </Stat>
       </dl>
     </Card>

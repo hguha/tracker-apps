@@ -47,9 +47,9 @@ export function BudgetCard({
       <div className="flex items-center gap-4">
         <ProgressRing value={totals.kcal} max={targets?.kcal ?? 0} size={92}>
           <div className="text-center">
-            <div className="tabular text-[20px] font-bold leading-none">{totals.kcal}</div>
+            <div className="tabular text-[20px] font-bold leading-none">{totals.kcal.toLocaleString()}</div>
             <div className="text-[10.5px] text-ink-muted">
-              {targets ? `of ${targets.kcal}` : 'kcal'}
+              {targets ? `of ${targets.kcal.toLocaleString()}` : 'kcal'}
             </div>
           </div>
         </ProgressRing>
@@ -64,8 +64,8 @@ export function BudgetCard({
         <p className="mt-3 flex items-center gap-1.5 text-[13px]">
           <span className="min-w-0 flex-1 text-ink-secondary">
             {left.kcal >= 0
-              ? `${left.kcal} kcal and ${grams(Math.max(0, left.proteinMg))} protein left.`
-              : `${Math.abs(left.kcal)} kcal over target.`}
+              ? `${left.kcal.toLocaleString()} kcal and ${grams(Math.max(0, left.proteinMg))} protein left.`
+              : `${Math.abs(left.kcal).toLocaleString()} kcal over target.`}
           </span>
           <span className="flex shrink-0 items-center gap-0.5 font-semibold text-accent">
             {entries.length === 0 ? 'Start the day' : "Today's food"}

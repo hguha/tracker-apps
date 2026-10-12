@@ -30,9 +30,9 @@ export function CheckInHistory() {
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <div className="tabular text-[14px] font-semibold">{week.targets.kcal}</div>
+              <div className="tabular text-[14px] font-semibold">{week.targets.kcal.toLocaleString()}</div>
               <div className="tabular text-[11.5px] text-ink-muted">
-                exp {week.expenditureKcal} ± {week.expenditureSe}
+                exp {week.expenditureKcal.toLocaleString()} ± {week.expenditureSe}
               </div>
             </div>
           </li>

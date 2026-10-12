@@ -151,7 +151,7 @@ describe('offline coach', () => {
       [{ role: 'user', parts: [{ text: 'what is my tdee?' }] }],
       CONTEXT,
     )
-    expect(result.text).toContain('2500')
+    expect(result.text).toContain('2,500')
     expect(result.text).toMatch(/includes your training/)
   })
 })

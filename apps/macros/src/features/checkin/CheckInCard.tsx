@@ -45,7 +45,7 @@ export function Numbers({ checkIn }: { checkIn: CheckIn }) {
   return (
     <>
       <p className="tabular mt-1 text-[22px] font-bold leading-tight">
-        {checkIn.targets.kcal}
+        {checkIn.targets.kcal.toLocaleString()}
         <span className="text-[13px] font-medium text-ink-muted"> kcal/day</span>
       </p>
       <p className="tabular text-[12.5px] text-ink-muted">

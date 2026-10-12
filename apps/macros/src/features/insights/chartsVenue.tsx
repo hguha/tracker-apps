@@ -57,7 +57,7 @@ function subtitle(venues: VenueSummary, total: number): string | undefined {
     parts.push(`days out ${signed(out)} kcal vs target, days at home ${signed(home)}`)
   } else if (venues.outDays.meanKcal !== null && venues.homeDays.meanKcal !== null) {
     parts.push(
-      `${venues.outDays.meanKcal} kcal on days out, ${venues.homeDays.meanKcal} on days at home`,
+      `${venues.outDays.meanKcal.toLocaleString()} kcal on days out, ${venues.homeDays.meanKcal.toLocaleString()} on days at home`,
     )
   }
   return parts.join(' · ')

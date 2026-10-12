@@ -168,7 +168,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
               {isFiltered ? 'Matching days' : range.label}
             </h2>
             <p className="tabular mt-1 text-[20px] font-bold leading-tight">
-              {averages.kcal}
+              {averages.kcal.toLocaleString()}
               <span className="text-[13px] font-medium text-ink-muted"> kcal/day average</span>
             </p>
             <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
@@ -263,7 +263,7 @@ function DayCard({
             <h2 className="flex-1 truncate text-[15px] font-semibold tracking-tight">
               {formatRelativeDay(dayNoon(day))}
             </h2>
-            <span className="tabular text-[14px] font-semibold">{totals.kcal}</span>
+            <span className="tabular text-[14px] font-semibold">{totals.kcal.toLocaleString()}</span>
             <ChevronRight size={16} className="shrink-0 text-ink-muted" />
           </div>
           <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">{subtitle}</p>

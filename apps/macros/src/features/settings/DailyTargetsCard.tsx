@@ -112,7 +112,7 @@ function Summary({ targets }: { targets: MacroTargets }) {
   return (
     <div className="mt-3">
       <p className="tabular text-[26px] font-bold leading-none">
-        {targets.kcal}
+        {targets.kcal.toLocaleString()}
         <span className="text-[13px] font-medium text-ink-muted"> kcal</span>
       </p>
       <p className="tabular mt-2 flex gap-3 text-[13px]">

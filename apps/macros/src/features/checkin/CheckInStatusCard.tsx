@@ -51,7 +51,7 @@ export function CheckInStatusCard() {
           <div className="mt-3 border-t border-line pt-3">
             <p className="text-[12.5px] text-ink-muted">A run now would set:</p>
             <p className="tabular mt-1 text-[22px] font-bold leading-tight">
-              {status.outcome.draft.targets.kcal}
+              {status.outcome.draft.targets.kcal.toLocaleString()}
               <span className="text-[13px] font-medium text-ink-muted"> kcal/day</span>
             </p>
             <p className="mt-1 text-[12.5px] text-ink-secondary">{describeCheckIn(status.outcome.draft, units.weight)}</p>
@@ -75,7 +75,7 @@ export function CheckInStatusCard() {
               .then((checkIn) =>
                 toast.show(
                   checkIn
-                    ? `Target set to ${checkIn.targets.kcal} kcal`
+                    ? `Target set to ${checkIn.targets.kcal.toLocaleString()} kcal`
                     : 'Not enough data for this week yet',
                 ),
               )

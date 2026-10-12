@@ -1082,7 +1082,7 @@ test('targets can be typed in, and they reach the day', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.getByRole('button', { name: 'Today', exact: true }).click()
-  await expect(page.getByText('of 2550')).toBeVisible()
+  await expect(page.getByText('of 2,550')).toBeVisible()
   await expect(page.getByText('0 / 180g')).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
