@@ -63,7 +63,7 @@ function inchesLabel(totalInches: number): string {
  * First-run setup. Asks only what the first target needs and says why, because the honest
  * answer — "these numbers only seed a guess the app will replace" — is also the reassuring one.
  */
-export function OnboardingScreen({ onDone }: { onDone: () => void }) {
+export function OnboardingScreen() {
   const [step, setStep] = useState<Step>('welcome')
   const [goal, setGoal] = useState<Goal>('lose')
   const [units, setUnits] = useState<UnitSystem>('metric')
@@ -102,8 +102,6 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         birthYear: birthYear ? Number(birthYear) : null,
         sex: sex || null,
         activity,
-        onboardedAt: Date.now(),
-        onboardingVersion: ONBOARDING_VERSION,
       })
       // The weigh-in goes first: `startProgram` captures the trend as the goal's starting point, and
       // with no weight yet that would be null — so a goal set here would have had no denominator and
@@ -119,7 +117,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         targetKg:
           goal !== 'maintain' && goalWeight ? weightToKg(Number(goalWeight), unit.weight) : null,
       })
-      onDone()
+      await repo.saveProfile({ onboardedAt: Date.now(), onboardingVersion: ONBOARDING_VERSION })
     } finally {
       setIsBusy(false)
     }

@@ -174,7 +174,7 @@ function SignedInApp() {
   if (!isReady || appearance === undefined) return <Splash>Setting up…</Splash>
 
   if (appearance.onboardingVersion < ONBOARDING_VERSION) {
-    return <OnboardingScreen onDone={() => setView({ kind: 'tabs' })} />
+    return <OnboardingScreen />
   }
 
   const toTabs = () => setView({ kind: 'tabs' })
