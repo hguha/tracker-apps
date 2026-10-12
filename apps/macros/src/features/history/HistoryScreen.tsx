@@ -24,6 +24,7 @@ import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, searchableNames } from '@/features/shared/entryName'
 import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
+import { RangeFilter } from '@/features/shared/RangeFilter'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
 import { dishGroups, mealGroups } from '@/lib/dayGroups'
 import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
@@ -73,7 +74,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
   const [query, setQuery] = useState('')
   const [meals, setMeals] = useState<string[]>([])
   const [venues, setVenues] = useState<string[]>([])
-  const [openSheet, setOpenSheet] = useState<'range' | 'meal' | 'venue' | null>(null)
+  const [openSheet, setOpenSheet] = useState<'meal' | 'venue' | null>(null)
 
   const range = RANGES.find((option) => option.key === rangeKey)!
   const from = dayKeyOffset(Date.now(), range.days)
@@ -117,7 +118,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
       <div className="space-y-2 border-b border-line bg-surface px-3 py-2">
         <SearchField value={query} onChange={setQuery} placeholder="Search what you ate" />
         <div className="flex gap-1.5 overflow-x-auto">
-          <FilterChipButton label={range.label} isActive onClick={() => setOpenSheet('range')} />
+          <RangeFilter ranges={RANGES} value={rangeKey} onChange={setRangeKey} />
           <FilterChipButton
             label={
               meals.length === 0
@@ -189,19 +190,6 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
           />
         ))}
       </div>
-
-      {openSheet === 'range' && (
-        <FilterSheet
-          title="Date range"
-          singleSelect
-          options={RANGES.map((option) => ({ value: option.key, label: option.label }))}
-          selected={[rangeKey]}
-          onChange={(selected) => {
-            if (selected[0]) setRangeKey(selected[0] as RangeKey)
-          }}
-          onDismiss={() => setOpenSheet(null)}
-        />
-      )}
 
       {openSheet === 'meal' && (
         <FilterSheet

@@ -1,10 +1,5 @@
 import { useState } from 'react'
-import {
-  FilterChipButton,
-  FilterSheet,
-  SegmentedTabs,
-  type SegmentedTab,
-} from '@tracker-engine/ui'
+import { SegmentedTabs, type SegmentedTab } from '@tracker-engine/ui'
 import { TrendingUp } from 'lucide-react'
 import { plural, unitsFor } from '@tracker-engine/core'
 import { IntakeChart } from './IntakeChart'
@@ -18,6 +13,7 @@ import { ConsistencyChart, MealTimingChart, SourceMixChart } from './chartsHabit
 import { FiberChart, NutrientList } from './chartsNutrients'
 import { WaterChart } from './chartsWater'
 import { CuisineMixCard, VenueSplitChart } from './chartsVenue'
+import { RangeFilter } from '@/features/shared/RangeFilter'
 import { useInsightsData } from './useInsightsData'
 
 const RANGES = [
@@ -50,7 +46,6 @@ const TABS: SegmentedTab<TabKey>[] = [
 export function InsightsScreen() {
   const [tab, setTab] = useState<TabKey>('overview')
   const [rangeKey, setRangeKey] = useState<RangeKey>('8w')
-  const [isRangeOpen, setIsRangeOpen] = useState(false)
 
   const range = RANGES.find((option) => option.key === rangeKey)!
   const data = useInsightsData(range.days)
@@ -62,7 +57,7 @@ export function InsightsScreen() {
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
-        <FilterChipButton label={range.label} isActive onClick={() => setIsRangeOpen(true)} />
+        <RangeFilter ranges={RANGES} value={rangeKey} onChange={setRangeKey} />
         <span className="tabular self-center text-[12.5px] text-ink-muted">
           {plural(data.loggedDayCount, 'day')} logged
         </span>
@@ -155,19 +150,6 @@ export function InsightsScreen() {
           </>
         )}
       </div>
-
-      {isRangeOpen && (
-        <FilterSheet
-          title="Date range"
-          singleSelect
-          options={RANGES.map((option) => ({ value: option.key, label: option.label }))}
-          selected={[rangeKey]}
-          onChange={(selected) => {
-            if (selected[0]) setRangeKey(selected[0] as RangeKey)
-          }}
-          onDismiss={() => setIsRangeOpen(false)}
-        />
-      )}
     </div>
   )
 }
