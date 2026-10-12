@@ -170,12 +170,7 @@ export async function executeRetrievalTool(
       return {
         day,
         eaten: describe(totals),
-        targets: targets && {
-          kcal: targets.kcal,
-          proteinG: Math.round(mgToGrams(targets.proteinMg)),
-          carbsG: Math.round(mgToGrams(targets.carbsMg)),
-          fatG: Math.round(mgToGrams(targets.fatMg)),
-        },
+        targets: targets && describe(targets),
         left: targets ? describe(remaining(totals, targets)) : null,
         now: formatClock(minutesIntoDay(Date.now())),
         occasions: eatingOccasions(entries).map((occasion) => ({

@@ -1,8 +1,8 @@
 import { dayKey } from '@tracker-engine/core'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, Download, RefreshCw, Upload } from 'lucide-react'
-import { Button, Card, useToast } from '@tracker-engine/ui'
+import { Download, RefreshCw, Upload } from 'lucide-react'
+import { Button, Card, Screen, useToast } from '@tracker-engine/ui'
 import { exportBackup, pickBackupText } from '@tracker-engine/platform'
 import { APP_VERSION } from '@/lib/version'
 import { loadDemoData } from '@/data/demo'
@@ -54,167 +54,154 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Data &amp; sync</h1>
-      </header>
+    <Screen title="Data & sync" onBack={onBack}>
+      <Card className="p-4">
+        <h2 className="text-[15px] font-semibold tracking-tight">Status</h2>
+        <dl className="mt-2 space-y-1.5 text-[13.5px]">
+          <Row label="Days logged">{counts?.days ?? '—'}</Row>
+          <Row label="Weigh-ins">{counts?.weights ?? '—'}</Row>
+          <Row label="Queued for sync">{sync.pending}</Row>
+          {sync.deadLettered > 0 && <Row label="Failed to sync">{sync.deadLettered}</Row>}
+          <Row label="Sync">
+            {sync.enabled ? 'On — syncs to your account' : 'This device only'}
+          </Row>
+          <Row label="App version">{APP_VERSION}</Row>
+        </dl>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-        <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Status</h2>
-          <dl className="mt-2 space-y-1.5 text-[13.5px]">
-            <Row label="Days logged">{counts?.days ?? '—'}</Row>
-            <Row label="Weigh-ins">{counts?.weights ?? '—'}</Row>
-            <Row label="Queued for sync">{sync.pending}</Row>
-            {sync.deadLettered > 0 && <Row label="Failed to sync">{sync.deadLettered}</Row>}
-            <Row label="Sync">
-              {sync.enabled ? 'On — syncs to your account' : 'This device only'}
-            </Row>
-            <Row label="App version">{APP_VERSION}</Row>
-          </dl>
-
-          {sync.enabled && (
-            <Button
-              variant="secondary"
-              className="mt-3 w-full"
-              disabled={sync.phase === 'syncing'}
-              onClick={() => void sync.syncNow().then(() => toast.show('Synced'))}
-            >
-              <RefreshCw size={16} />
-              {sync.phase === 'syncing' ? 'Syncing…' : 'Sync now'}
-            </Button>
-          )}
-          {!sync.enabled && (
-            <p className="mt-2 text-[12.5px] text-ink-muted">
-              Everything stays on this device. Food lookups still work — only your own data
-              stays local.
-            </p>
-          )}
-        </Card>
-
-        <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Backup</h2>
-          <div className="mt-2 flex gap-2">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              disabled={isBusy}
-              onClick={() => {
-                void exportToJson()
-                  .then((json) =>
-                    exportBackup(json, `macrocosm-${dayKey(Date.now())}.json`),
-                  )
-                  .then((shared) => shared && toast.show('Backup saved'))
-              }}
-            >
-              <Download size={16} />
-              Export
-            </Button>
-            <Button
-              variant="secondary"
-              className="flex-1"
-              disabled={isBusy}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={16} />
-              Import
-            </Button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            className="hidden"
-            onChange={(event) => void handleImport(event.target.files?.[0])}
-          />
+        {sync.enabled && (
+          <Button
+            variant="secondary"
+            className="mt-3 w-full"
+            disabled={sync.phase === 'syncing'}
+            onClick={() => void sync.syncNow().then(() => toast.show('Synced'))}
+          >
+            <RefreshCw size={16} />
+            {sync.phase === 'syncing' ? 'Syncing…' : 'Sync now'}
+          </Button>
+        )}
+        {!sync.enabled && (
           <p className="mt-2 text-[12.5px] text-ink-muted">
-            Logs, weigh-ins, recipes and check-ins as JSON.
+            Everything stays on this device. Food lookups still work — only your own data
+            stays local.
           </p>
+        )}
+      </Card>
 
+      <Card className="p-4">
+        <h2 className="text-[15px] font-semibold tracking-tight">Backup</h2>
+        <div className="mt-2 flex gap-2">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={isBusy}
+            onClick={() => {
+              void exportToJson()
+                .then((json) =>
+                  exportBackup(json, `macrocosm-${dayKey(Date.now())}.json`),
+                )
+                .then((shared) => shared && toast.show('Backup saved'))
+            }}
+          >
+            <Download size={16} />
+            Export
+          </Button>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={isBusy}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={16} />
+            Import
+          </Button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(event) => void handleImport(event.target.files?.[0])}
+        />
+        <p className="mt-2 text-[12.5px] text-ink-muted">
+          Logs, weigh-ins, recipes and check-ins as JSON.
+        </p>
+
+        <Button
+          variant="secondary"
+          className="mt-2 w-full"
+          disabled={isBusy}
+          onClick={() => {
+            void exportToCsv()
+              .then((csv) =>
+                exportBackup(
+                  csv,
+                  `macrocosm-log-${dayKey(Date.now())}.csv`,
+                  'Food log',
+                ),
+              )
+              .then((shared) => shared && toast.show('CSV saved'))
+          }}
+        >
+          <Download size={16} />
+          Export a spreadsheet (CSV)
+        </Button>
+        <p className="mt-1.5 text-[12px] text-ink-muted">
+          One row per item, for reading. Only JSON can be imported.
+        </p>
+      </Card>
+
+      {import.meta.env.DEV && (
+        <Card className="p-4">
+          <h2 className="text-[15px] font-semibold tracking-tight">Demo data</h2>
+          <p className="mt-1 text-[12.5px] text-ink-muted">
+            Five weeks of sample logs and weigh-ins.
+          </p>
           <Button
             variant="secondary"
             className="mt-2 w-full"
             disabled={isBusy}
             onClick={() => {
-              void exportToCsv()
-                .then((csv) =>
-                  exportBackup(
-                    csv,
-                    `macrocosm-log-${dayKey(Date.now())}.csv`,
-                    'Food log',
-                  ),
-                )
-                .then((shared) => shared && toast.show('CSV saved'))
+              setIsBusy(true)
+              void loadDemoData()
+                .then(({ days, entries }) => {
+                  toast.show(`Loaded ${entries} entries across ${days} days`)
+                  window.location.reload()
+                })
+                .catch(() => toast.show('Could not load the demo data'))
+                .finally(() => setIsBusy(false))
             }}
           >
-            <Download size={16} />
-            Export a spreadsheet (CSV)
-          </Button>
-          <p className="mt-1.5 text-[12px] text-ink-muted">
-            One row per item, for reading. Only JSON can be imported.
-          </p>
-        </Card>
-
-        {import.meta.env.DEV && (
-          <Card className="p-4">
-            <h2 className="text-[15px] font-semibold tracking-tight">Demo data</h2>
-            <p className="mt-1 text-[12.5px] text-ink-muted">
-              Five weeks of sample logs and weigh-ins.
-            </p>
-            <Button
-              variant="secondary"
-              className="mt-2 w-full"
-              disabled={isBusy}
-              onClick={() => {
-                setIsBusy(true)
-                void loadDemoData()
-                  .then(({ days, entries }) => {
-                    toast.show(`Loaded ${entries} entries across ${days} days`)
-                    window.location.reload()
-                  })
-                  .catch(() => toast.show('Could not load the demo data'))
-                  .finally(() => setIsBusy(false))
-              }}
-            >
-              {isBusy ? 'Loading…' : 'Load demo data'}
-            </Button>
-          </Card>
-        )}
-
-        <Card className="p-4">
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => void repo.saveProfile({ onboardingVersion: 0 })}
-          >
-            Replay setup
+            {isBusy ? 'Loading…' : 'Load demo data'}
           </Button>
         </Card>
+      )}
 
-        <Card className="p-4">
-          <h2 className="text-[15px] font-semibold tracking-tight">Reset</h2>
-          <button
-            onClick={() => {
-              if (!window.confirm('Clear this device’s copy? Synced data can be pulled back.')) {
-                return
-              }
-              void repo.clearLocalData().then(() => window.location.reload())
-            }}
-            className="mt-2 w-full py-2 text-[14px] font-semibold active:opacity-60"
-            style={{ color: 'var(--status-critical)' }}
-          >
-            Clear local data on this device
-          </button>
-        </Card>
-      </div>
-    </div>
+      <Card className="p-4">
+        <Button
+          variant="secondary"
+          className="w-full"
+          onClick={() => void repo.saveProfile({ onboardingVersion: 0 })}
+        >
+          Replay setup
+        </Button>
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="text-[15px] font-semibold tracking-tight">Reset</h2>
+        <button
+          onClick={() => {
+            if (!window.confirm('Clear this device’s copy? Synced data can be pulled back.')) {
+              return
+            }
+            void repo.clearLocalData().then(() => window.location.reload())
+          }}
+          className="mt-2 w-full py-2 text-[14px] font-semibold active:opacity-60"
+          style={{ color: 'var(--status-critical)' }}
+        >
+          Clear local data on this device
+        </button>
+      </Card>
+    </Screen>
   )
 }
 

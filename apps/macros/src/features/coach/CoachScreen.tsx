@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Send, SlidersHorizontal, Sparkles } from 'lucide-react'
-import { Button, Card, useToast } from '@tracker-engine/ui'
+import { Send, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Button, Card, ScreenHeader, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@tracker-engine/core'
 import { grams } from '@/features/shared/format'
@@ -88,32 +88,30 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Coach</h1>
-        {isOffline && (
-          <span className="rounded-full bg-sunken px-2 py-1 text-[11px] font-semibold text-ink-muted">
-            offline
-          </span>
-        )}
-        <button
-          onClick={() => setIsEditingNotes((current) => !current)}
-          aria-label="What the coach should know"
-          aria-expanded={isEditingNotes}
-          className={cn(
-            'flex size-10 shrink-0 items-center justify-center rounded-lg active:bg-sunken',
-            isEditingNotes ? 'text-accent' : 'text-ink-secondary',
-          )}
-        >
-          <SlidersHorizontal size={19} />
-        </button>
-      </header>
+      <ScreenHeader
+        title="Coach"
+        onBack={onBack}
+        action={
+          <>
+            {isOffline && (
+              <span className="rounded-full bg-sunken px-2 py-1 text-[11px] font-semibold text-ink-muted">
+                offline
+              </span>
+            )}
+            <button
+              onClick={() => setIsEditingNotes((current) => !current)}
+              aria-label="What the coach should know"
+              aria-expanded={isEditingNotes}
+              className={cn(
+                'flex size-10 shrink-0 items-center justify-center rounded-lg active:bg-sunken',
+                isEditingNotes ? 'text-accent' : 'text-ink-secondary',
+              )}
+            >
+              <SlidersHorizontal size={19} />
+            </button>
+          </>
+        }
+      />
 
       <div className="flex-1 space-y-2.5 overflow-y-auto px-3 py-3">
         {isEditingNotes && <DietNotesCard />}
