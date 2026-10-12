@@ -20,24 +20,19 @@ export function BodyTrendCard({ unit }: { unit: WeightUnit }) {
 
   const option = useMemo((): EChartsOption => {
     const c = chrome()
-    const pad = unit === 'kg' ? 1 : 2
     return {
       ...baseOption(c),
       xAxis: categoryAxis(
         c,
         trend.map((point) => format(dayNoon(point.day), 'MMM d')),
       ),
-      yAxis: {
-        ...valueAxis(c, { name: unit }),
-        min: (extent: { min: number }) => Math.floor(extent.min - pad),
-        max: (extent: { max: number }) => Math.ceil(extent.max + pad),
-      },
+      yAxis: { ...valueAxis(c), scale: true, minInterval: 1 },
       series: [
         {
           name: 'Weighed',
           type: 'scatter',
           symbolSize: 5,
-          itemStyle: { color: c.plot, opacity: 0.4 },
+          itemStyle: { color: c.plot, opacity: 0.55 },
           data: trend.map((point) => show(point.kg)),
         },
         {
