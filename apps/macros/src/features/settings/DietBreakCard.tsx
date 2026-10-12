@@ -1,9 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
+import { defaultRate } from '@/features/shared/pace'
 import type { Goal } from '@/domain/types'
 
-const RESUME_RATE: Record<Exclude<Goal, 'maintain'>, number> = { lose: -0.5, gain: 0.25 }
 
 /**
  * A diet break: maintenance for a while, on purpose.
@@ -54,7 +54,7 @@ export function DietBreakCard() {
               variant={previous?.goal === goal ? 'primary' : 'secondary'}
               className="flex-1"
               onClick={() =>
-                void start(goal, previous?.goal === goal ? previous.ratePctPerWeek : RESUME_RATE[goal])
+                void start(goal, previous?.goal === goal ? previous.ratePctPerWeek : defaultRate(goal))
               }
             >
               {goal === 'lose' ? 'Resume losing' : 'Resume building'}

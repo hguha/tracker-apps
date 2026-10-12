@@ -19,3 +19,5 @@ export const RATES: Record<Goal, { value: number; label: string }[]> = {
 export function paceLabel(goal: Goal, ratePctPerWeek: number): string | null {
   return RATES[goal].find((rate) => rate.value === ratePctPerWeek)?.label ?? null
 }
+
+export const defaultRate = (goal: Goal): number => RATES[goal][goal === 'maintain' ? 0 : 1]!.value

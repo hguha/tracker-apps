@@ -15,7 +15,7 @@ import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { mgToGrams } from '@/lib/nutrition'
 import { useUnits } from '@/features/shared/useUnits'
-import { RATES } from '@/features/shared/pace'
+import { defaultRate, RATES } from '@/features/shared/pace'
 import { arrivalDay } from '@/features/shared/goalText'
 import type { CoachingMode, Goal, Program } from '@/domain/types'
 
@@ -81,10 +81,9 @@ export function TargetsCard() {
               onChange={(goal) => {
                 if (!goal) return
                 setIsByDate(false)
-                const rate = RATES[goal][goal === 'maintain' ? 0 : 1]?.value ?? 0
                 void repo.startProgram({
                   goal,
-                  ratePctPerWeek: rate,
+                  ratePctPerWeek: defaultRate(goal),
                   proteinGPerKg: program.proteinGPerKg,
                   fatMinPctKcal: program.fatMinPctKcal,
                   coachingMode: program.coachingMode,
@@ -250,21 +249,12 @@ export function TargetRulesCard() {
               label="Weekly check-in"
               hint={MODES.find((mode) => mode.id === program.coachingMode)?.blurb ?? ''}
             >
-              <div className="flex gap-1.5">
-                {MODES.map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => void repo.setCoachingMode(program.id, mode.id)}
-                    className={
-                      program.coachingMode === mode.id
-                        ? 'flex-1 rounded-xl bg-accent py-2 text-[13px] font-semibold text-accent-contrast'
-                        : 'flex-1 rounded-xl bg-sunken py-2 text-[13px] text-ink-secondary'
-                    }
-                  >
-                    {mode.label}
-                  </button>
-                ))}
-              </div>
+              <PillSelect
+                value={program.coachingMode}
+                isRequired
+                options={MODES.map((mode) => ({ value: mode.id, label: mode.label }))}
+                onChange={(mode) => mode && void repo.setCoachingMode(program.id, mode)}
+              />
             </Field>
 
             <p className="text-[12px] text-ink-muted">

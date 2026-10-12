@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { Activity, Apple, ArrowLeft, Ruler, Scale, Target, Utensils } from 'lucide-react'
 import { cn, lengthFromCm, lengthToCm, unitsFor, weightToKg } from '@tracker-engine/core'
-import { Button } from '@tracker-engine/ui'
+import { Button, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { ActivityPicker } from '@/features/shared/ActivityPicker'
+import { defaultRate } from '@/features/shared/pace'
 import { ONBOARDING_VERSION, type ActivityLevel, type Goal, type UnitSystem } from '@/domain/types'
 
-const GOALS: { id: Goal; label: string; blurb: string; rate: number }[] = [
-  { id: 'lose', label: 'Lose fat', blurb: 'About 0.5% of bodyweight a week.', rate: -0.5 },
-  { id: 'maintain', label: 'Maintain', blurb: 'Hold steady and eat consistently.', rate: 0 },
-  { id: 'gain', label: 'Build', blurb: 'A slow surplus, about 0.25% a week.', rate: 0.25 },
+const GOALS: { id: Goal; label: string; blurb: string }[] = [
+  { id: 'lose', label: 'Lose fat', blurb: 'About 0.5% of bodyweight a week.' },
+  { id: 'maintain', label: 'Maintain', blurb: 'Hold steady and eat consistently.' },
+  { id: 'gain', label: 'Build', blurb: 'A slow surplus, about 0.25% a week.' },
 ]
 
 type Step = 'welcome' | 'goal' | 'units' | 'about' | 'activity' | 'weight' | 'done'
@@ -108,7 +109,7 @@ export function OnboardingScreen() {
       // no progress bar, which is exactly what "I set one and it wasn't there" looked like.
       if (weight) await repo.recordWeight(weightToKg(Number(weight), unit.weight))
 
-      const rate = GOALS.find((g) => g.id === goal)?.rate ?? 0
+      const rate = defaultRate(goal)
       await repo.startProgram({
         goal,
         ratePctPerWeek: rate,
@@ -183,28 +184,15 @@ export function OnboardingScreen() {
             title="Which units?"
             blurb="Everything is stored the same way underneath, so you can change this later without anything moving."
           >
-            <div className="flex gap-2">
-              {(
-                [
-                  { id: 'metric' as const, label: 'Metric', hint: 'kg · cm' },
-                  { id: 'imperial' as const, label: 'Imperial', hint: 'lb · ft/in' },
-                ]
-              ).map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => setUnits(option.id)}
-                  className={cn(
-                    'flex-1 rounded-xl py-3 text-[14px]',
-                    option.id === units
-                      ? 'bg-accent font-semibold text-accent-contrast'
-                      : 'bg-sunken text-ink-secondary',
-                  )}
-                >
-                  {option.label}
-                  <span className="mt-0.5 block text-[11.5px] opacity-80">{option.hint}</span>
-                </button>
-              ))}
-            </div>
+            <PillSelect
+              value={units}
+              isRequired
+              onChange={(value) => value && setUnits(value)}
+              options={[
+                { value: 'metric', label: 'Metric · kg, cm' },
+                { value: 'imperial', label: 'Imperial · lb, ft/in' },
+              ]}
+            />
             <Button size="lg" className="mt-4 w-full" onClick={next}>
               Continue
             </Button>
@@ -248,23 +236,16 @@ export function OnboardingScreen() {
               {/* Two options is a pair of buttons, not a dropdown you have to open to see. */}
               <div>
                 <span className="block text-[11px] text-ink-muted">Sex</span>
-                <div className="mt-0.5 flex gap-2">
-                  {(['female', 'male'] as const).map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setSex(option)}
-                      aria-pressed={sex === option}
-                      className={cn(
-                        'h-11 flex-1 rounded-xl text-[14px] capitalize',
-                        sex === option
-                          ? 'bg-accent font-semibold text-accent-contrast'
-                          : 'bg-sunken text-ink-secondary',
-                      )}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
+                <PillSelect
+                  className="mt-0.5"
+                  value={sex}
+                  isRequired
+                  onChange={(value) => value && setSex(value)}
+                  options={[
+                    { value: 'female', label: 'Female' },
+                    { value: 'male', label: 'Male' },
+                  ]}
+                />
                 <p className="mt-1 text-[11.5px] text-ink-muted">
                   Only used for the first estimate, and for the iron and fibre references.
                 </p>

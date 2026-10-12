@@ -1,7 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Card } from '@tracker-engine/ui'
+import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { formatClock, formatDuration } from '@/lib/mealTiming'
+import { formatClock, formatDuration, parseClock } from '@/lib/mealTiming'
+
+const ANYTIME = 'anytime'
 
 /** Common windows, so nobody has to think in minutes-from-midnight. */
 const PRESETS: { label: string; startMinute: number; endMinute: number }[] = [
@@ -30,39 +32,31 @@ export function EatingWindowCard() {
         Shows a fasting timer and whether you&rsquo;re inside your window. Targets don&rsquo;t change.
       </p>
 
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
-        <button
-          onClick={() => void repo.saveProfile({ eatingWindow: null })}
-          className={
-            current === null
-              ? 'rounded-full bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-contrast'
-              : 'rounded-full bg-sunken px-3 py-1.5 text-[13px] text-ink-secondary'
-          }
-        >
-          I eat whenever
-        </button>
-        {PRESETS.map((preset) => {
-          const isActive =
-            current?.startMinute === preset.startMinute && current?.endMinute === preset.endMinute
-          return (
-            <button
-              key={preset.label}
-              onClick={() =>
-                void repo.saveProfile({
-                  eatingWindow: { startMinute: preset.startMinute, endMinute: preset.endMinute },
-                })
-              }
-              className={
-                isActive
-                  ? 'rounded-full bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-contrast'
-                  : 'rounded-full bg-sunken px-3 py-1.5 text-[13px] text-ink-secondary'
-              }
-            >
-              {preset.label}
-            </button>
-          )
-        })}
-      </div>
+      <PillSelect
+        className="mt-2.5"
+        layout="wrap"
+        isRequired
+        value={
+          current === null
+            ? ANYTIME
+            : (PRESETS.find(
+                (preset) =>
+                  preset.startMinute === current.startMinute && preset.endMinute === current.endMinute,
+              )?.label ?? null)
+        }
+        onChange={(label) => {
+          const preset = PRESETS.find((option) => option.label === label)
+          void repo.saveProfile({
+            eatingWindow: preset
+              ? { startMinute: preset.startMinute, endMinute: preset.endMinute }
+              : null,
+          })
+        }}
+        options={[
+          { value: ANYTIME, label: 'I eat whenever' },
+          ...PRESETS.map((preset) => ({ value: preset.label, label: preset.label })),
+        ]}
+      />
 
       {current && (
         <>
@@ -109,9 +103,8 @@ function TimeField({
         type="time"
         value={formatClock(minute)}
         onChange={(event) => {
-          const [hours, minutes] = event.target.value.split(':').map(Number)
-          if (hours === undefined || Number.isNaN(hours)) return
-          onChange(hours * 60 + (minutes ?? 0))
+          const next = parseClock(event.target.value)
+          if (next !== null) onChange(next)
         }}
         className="tabular mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none"
       />

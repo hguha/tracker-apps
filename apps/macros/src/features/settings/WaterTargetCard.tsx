@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cn, formatVolume } from '@tracker-engine/core'
-import { Card } from '@tracker-engine/ui'
+import { formatVolume } from '@tracker-engine/core'
+import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { useUnits } from '@/features/shared/useUnits'
 
 /** Round numbers in both systems, so neither reads as a converted approximation of the other. */
 const METRIC_TARGETS = [1500, 2000, 2500, 3000]
 const IMPERIAL_TARGETS = [1420, 1893, 2366, 2839] // 48, 64, 80, 96 fl oz
+const NONE = 'none'
 
 export function WaterTargetCard() {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
@@ -22,41 +23,17 @@ export function WaterTargetCard() {
       <p className="mt-1 text-[12.5px] text-ink-muted">
         Without one, Today fills against two litres.
       </p>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
-        <Pill isActive={current === null} onClick={() => void repo.setWaterTarget(null)}>
-          None
-        </Pill>
-        {options.map((ml) => (
-          <Pill key={ml} isActive={current === ml} onClick={() => void repo.setWaterTarget(ml)}>
-            {formatVolume(ml, units.volume)}
-          </Pill>
-        ))}
-      </div>
+      <PillSelect
+        className="mt-2.5"
+        layout="wrap"
+        isRequired
+        value={current === null ? NONE : String(current)}
+        onChange={(value) => void repo.setWaterTarget(value === NONE ? null : Number(value))}
+        options={[
+          { value: NONE, label: 'None' },
+          ...options.map((ml) => ({ value: String(ml), label: formatVolume(ml, units.volume) })),
+        ]}
+      />
     </Card>
-  )
-}
-
-function Pill({
-  isActive,
-  onClick,
-  children,
-}: {
-  isActive: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={isActive}
-      className={cn(
-        'tabular rounded-full px-3 py-1.5 text-[13px]',
-        isActive
-          ? 'bg-accent font-semibold text-accent-contrast'
-          : 'bg-sunken text-ink-secondary',
-      )}
-    >
-      {children}
-    </button>
   )
 }
