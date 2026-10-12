@@ -154,3 +154,24 @@ test('logging bodyweight shows its smoothed trend on the Body screen', async ({ 
   await expect(page.getByText(/^\d+(\.\d+)? (kg|lb) trend$/)).toBeVisible()
   expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
 })
+
+test('the offline coach answers and keeps the conversation', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await skipSetup(page)
+
+  await page.getByRole('button', { name: 'More', exact: true }).click()
+  await page.getByText('Coach', { exact: true }).click()
+  await page.getByRole('button', { name: 'What should I focus on next?' }).click()
+  const question = page.getByRole('paragraph').filter({ hasText: 'What should I focus on next?' })
+  await expect(question).toBeVisible()
+  await expect(page.locator('p.whitespace-pre-wrap')).toHaveCount(2)
+
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByText('Coach', { exact: true }).click()
+  await expect(question).toBeVisible()
+  await page.getByRole('button', { name: 'New' }).click()
+  await expect(page.getByRole('button', { name: 'What should I focus on next?' })).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
+})

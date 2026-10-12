@@ -252,6 +252,34 @@ test('a food the databases do not have can be entered and logged offline', async
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
 
+test('the coach keeps a conversation and can start a new one', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+
+  const openCoach = async () => {
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('button', { name: /^Coach Ask about your own numbers/ }).click()
+  }
+  await openCoach()
+  await page.getByRole('button', { name: /What's left for today\?/ }).click()
+  const question = page.getByRole('paragraph').filter({ hasText: "What's left for today?" })
+  await expect(question).toBeVisible()
+  await expect(page.locator('p.whitespace-pre-wrap')).toHaveCount(2)
+
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
+  await openCoach()
+  await expect(question).toBeVisible()
+
+  await page.getByRole('button', { name: 'History' }).click()
+  await expect(page.getByRole('heading', { name: 'Conversations' })).toBeVisible()
+  await page.getByRole('button', { name: 'New' }).last().click()
+  await expect(question).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: /Ask about your own numbers/ })).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
 test('every tab and the coach render without errors', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
