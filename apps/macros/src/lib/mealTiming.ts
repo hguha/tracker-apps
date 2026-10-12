@@ -182,3 +182,12 @@ function unwrap(window: EatingWindow, now: number): { end: number; adjusted: num
     adjusted: crossesMidnight && minute < window.endMinute ? minute + 24 * 60 : minute,
   }
 }
+
+export function atOnDay(day: string | undefined): number {
+  if (!day) return Date.now()
+  const now = new Date()
+  const midnight = Date.parse(`${day}T00:00:00`)
+  return Number.isFinite(midnight)
+    ? midnight + (now.getHours() * 60 + now.getMinutes()) * 60_000
+    : Date.now()
+}

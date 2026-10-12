@@ -21,7 +21,7 @@ import {
 import * as repo from '@/data/repository'
 import { dayTotals } from '@/lib/nutrition'
 import { mealGroups, type DishGroup, type MealGroup } from '@/lib/dayGroups'
-import { dayTiming, formatDuration } from '@/lib/mealTiming'
+import { atOnDay, dayTiming, formatDuration } from '@/lib/mealTiming'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { entryName } from '@/features/shared/entryName'
 import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
@@ -279,16 +279,6 @@ function PastItems({
   const settled = useDebouncedValue(query)
   const items = useLiveQuery(() => repo.searchHistory(settled), [settled], undefined)
 
-  // The clock time now, on that date: a meal added to last Tuesday happened at *some* hour, and
-  // stamping it midnight would file it before breakfast.
-  const at = () => {
-    const now = new Date()
-    const midnight = Date.parse(`${day}T00:00:00`)
-    return Number.isFinite(midnight)
-      ? midnight + (now.getHours() * 60 + now.getMinutes()) * 60_000
-      : Date.now()
-  }
-
   if (items === undefined) return null
   if (items.length === 0) {
     return (
@@ -303,7 +293,7 @@ function PastItems({
       heading="One tap, as you last had it"
       items={items.map(fromRecent)}
       onPick={(repeat) => {
-        const when = at()
+        const when = atOnDay(day)
         onLog(
           () =>
             repeat.logAgain({

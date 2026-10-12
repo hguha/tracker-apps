@@ -21,6 +21,7 @@ import { nutrientsFor, perServing } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { matchesQuery, queryTerms } from '@/lib/foodSearch'
 import { MEAL_LABELS } from '@/lib/meals'
+import { atOnDay } from '@/lib/mealTiming'
 import { amountGrams } from '@/features/shared/format'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
@@ -526,14 +527,4 @@ function BrowsePanel({
       )}
     </div>
   )
-}
-
-/** The same time of day, on another date. */
-function atOnDay(day: string | undefined): number {
-  if (!day) return Date.now()
-  const now = new Date()
-  const at = Date.parse(`${day}T00:00:00`)
-  return Number.isFinite(at)
-    ? at + (now.getHours() * 60 + now.getMinutes()) * 60_000
-    : Date.now()
 }
