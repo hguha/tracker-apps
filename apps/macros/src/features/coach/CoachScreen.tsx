@@ -3,7 +3,7 @@ import { Send, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Button, Card, ScreenHeader, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { cn } from '@tracker-engine/core'
-import { grams } from '@/features/shared/format'
+import { macroLine } from '@/features/shared/format'
 import { buildCoachContext, geminiCoachProvider } from './geminiProvider'
 import { mockCoachProvider } from './mockProvider'
 import { DietNotesCard } from './DietNotesCard'
@@ -220,9 +220,7 @@ function ActionCard({
       <Card className="p-4">
         <h3 className="text-[14.5px] font-semibold tracking-tight">{action.description}</h3>
         <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-          {Math.round(action.grams)}g · {action.nutrients.kcal} kcal ·{' '}
-          {grams(action.nutrients.proteinMg)}P {grams(action.nutrients.carbsMg)}C{' '}
-          {grams(action.nutrients.fatMg)}F
+          {Math.round(action.grams)}g · {action.nutrients.kcal} kcal · {macroLine(action.nutrients)}
         </p>
         <Button
           className="mt-3 w-full"
@@ -253,8 +251,7 @@ function ActionCard({
         <h3 className="text-[14.5px] font-semibold tracking-tight">{action.name}</h3>
         <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
           {action.servings === 1 ? 'One serving' : `${action.servings} servings`} ·{' '}
-          {action.nutrients.kcal} kcal · {grams(action.nutrients.proteinMg)}P{' '}
-          {grams(action.nutrients.carbsMg)}C {grams(action.nutrients.fatMg)}F
+          {action.nutrients.kcal} kcal · {macroLine(action.nutrients)}
         </p>
         <Button
           className="mt-3 w-full"
@@ -279,8 +276,7 @@ function ActionCard({
     <Card className="p-4">
       <h3 className="text-[14.5px] font-semibold tracking-tight">{action.title}</h3>
       <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-        {action.nutrients.kcal} kcal · {grams(action.nutrients.proteinMg)}P{' '}
-        {grams(action.nutrients.carbsMg)}C {grams(action.nutrients.fatMg)}F
+        {action.nutrients.kcal} kcal · {macroLine(action.nutrients)}
       </p>
       <ul className="mt-2 divide-y divide-line">
         {action.items.map((item) => (

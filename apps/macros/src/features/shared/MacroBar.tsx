@@ -1,5 +1,5 @@
 import { cn } from '@tracker-engine/core'
-import { mgToGrams } from '@/lib/nutrition'
+import { macroSharePct, mgToGrams } from '@/lib/nutrition'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 
 /**
@@ -119,13 +119,13 @@ export function MacroBars({
   eaten,
   adding = null,
   targets,
-  shares,
+  shares = macroSharePct(eaten),
   className,
 }: {
   eaten: Nutrients
   adding?: Nutrients | null
   targets: MacroTargets | null
-  shares: Record<MacroKey, number>
+  shares?: Record<MacroKey, number>
   className?: string
 }) {
   return (

@@ -20,7 +20,7 @@ import { ChevronRight } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
-import { grams } from '@/features/shared/format'
+import { macroLine } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, searchableNames } from '@/features/shared/entryName'
 import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
@@ -172,8 +172,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
               <span className="text-[13px] font-medium text-ink-muted"> kcal/day average</span>
             </p>
             <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-              {grams(averages.proteinMg)}P {grams(averages.carbsMg)}C {grams(averages.fatMg)}F ·{' '}
-              {plural(days.length, 'day')}
+              {macroLine(averages)} · {plural(days.length, 'day')}
             </p>
           </Card>
         )}

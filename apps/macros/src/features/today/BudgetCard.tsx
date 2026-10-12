@@ -1,10 +1,9 @@
 import { Card, ProgressRing } from '@tracker-engine/ui'
 import { ChevronRight, Moon, Utensils } from 'lucide-react'
 import { grams } from '@/features/shared/format'
-import { macroSharePct } from '@/lib/nutrition'
 import { formatClock, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import type { EatingWindow, LogEntry, MacroTargets, Nutrients } from '@/domain/types'
-import { MACRO_BARS, MacroBar } from '@/features/shared/MacroBar'
+import { MacroBars } from '@/features/shared/MacroBar'
 
 /**
  * The day's budget: what's gone, what's left, and — only for people who keep an eating window —
@@ -38,7 +37,6 @@ export function BudgetCard({
   onFix: () => void
   onOpenDay: () => void
 }) {
-  const shares = macroSharePct(totals)
 
   return (
     <Card className="p-0">
@@ -56,18 +54,7 @@ export function BudgetCard({
           </div>
         </ProgressRing>
 
-        <div className="flex-1 space-y-1.5">
-          {MACRO_BARS.map((macro) => (
-            <MacroBar
-              key={macro.key}
-              label={macro.label}
-              eatenMg={totals[macro.key]}
-              targetMg={targets?.[macro.key] ?? 0}
-              sharePct={shares[macro.key]}
-              color={macro.color}
-            />
-          ))}
-        </div>
+        <MacroBars eaten={totals} targets={targets} className="flex-1" />
       </div>
 
       {left && targets ? (

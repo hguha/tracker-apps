@@ -1,7 +1,6 @@
 import { plural } from '@tracker-engine/core'
 import { Card } from '@tracker-engine/ui'
-import { macroSharePct } from '@/lib/nutrition'
-import { MACRO_BARS, MacroBar } from '@/features/shared/MacroBar'
+import { MacroBars } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 
 /**
@@ -22,7 +21,6 @@ export function DayTotals({
   meals: number
 }) {
   const delta = target ? totals.kcal - target.kcal : null
-  const shares = macroSharePct(totals)
 
   return (
     <Card className="p-4">
@@ -40,18 +38,7 @@ export function DayTotals({
         </p>
       </div>
 
-      <div className="mt-3 space-y-1.5">
-        {MACRO_BARS.map((macro) => (
-          <MacroBar
-            key={macro.key}
-            label={macro.label}
-            eatenMg={totals[macro.key]}
-            targetMg={target?.[macro.key] ?? 0}
-            sharePct={shares[macro.key]}
-            color={macro.color}
-          />
-        ))}
-      </div>
+      <MacroBars eaten={totals} targets={target} className="mt-3" />
     </Card>
   )
 }
