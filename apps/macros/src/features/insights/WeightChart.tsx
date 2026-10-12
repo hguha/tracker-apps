@@ -3,7 +3,7 @@ import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { DAY_MS, WEEK_MS, bodyWeightFromKg, dayKey, dayNoon } from '@tracker-engine/core'
 import type { TrendPoint } from '@tracker-engine/body'
 import { useUnits } from '@/features/shared/useUnits'
-import { arrivalDay, perWeek, timeUntil } from '@/features/shared/goalText'
+import { arrivalDay, perWeek, timeUntil } from '@tracker-engine/body'
 import type { GoalForecast, RateLine } from '@/lib/goal'
 import { chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
 

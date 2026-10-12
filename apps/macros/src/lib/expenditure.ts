@@ -1,4 +1,4 @@
-import { trendChangePerWeek, type TrendPoint } from '@tracker-engine/body'
+import { restingKcal, trendChangePerWeek, type TrendPoint } from '@tracker-engine/body'
 import type { ActivityLevel, Goal, Program } from '@/domain/types'
 
 /**
@@ -185,11 +185,7 @@ export function estimateInitialExpenditure(input: {
   sex: 'male' | 'female'
   activity: ActivityLevel | null
 }): ExpenditureState {
-  const bmr =
-    10 * input.kg +
-    6.25 * input.heightCm -
-    5 * input.age +
-    (input.sex === 'male' ? 5 : -161)
+  const bmr = restingKcal(input)
   const factor = ACTIVITY_FACTORS[input.activity ?? 'moderate']
   // A wide error bar, because this is a population average standing in for one person. Wider still
   // when nobody has said how active they are, since that is a whole bucket of uncertainty on top.

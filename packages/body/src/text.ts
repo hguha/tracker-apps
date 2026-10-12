@@ -1,4 +1,11 @@
-import { DAY_MS, WEEK_MS, convertWeight, formatRelativeDay, signed, type WeightUnit } from '@tracker-engine/core'
+import {
+  DAY_MS,
+  WEEK_MS,
+  convertWeight,
+  formatRelativeDay,
+  signed,
+  type WeightUnit,
+} from '@tracker-engine/core'
 
 export const arrivalDay = (at: number, now = Date.now()): string => formatRelativeDay(at, now)
 

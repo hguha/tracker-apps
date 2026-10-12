@@ -3,8 +3,8 @@ import { DAY_MS } from '@tracker-engine/core'
 /**
  * A weigh-in, one per calendar day. Shared because bodyweight is the join key between the
  * training and nutrition apps: volume for a bodyweight lift needs it, and so does every
- * calorie target. Each app stores its own rows; this owns the definition and the
- * reconciliation, so there is one truth about what a weight *is*.
+ * calorie target. Each app stores its own rows; this owns the definition, so there is one
+ * truth about what a weight *is*.
  */
 export interface BodyWeight {
   id: string
@@ -15,28 +15,6 @@ export interface BodyWeight {
   source: string
   updatedAt: number
   deletedAt: number | null
-}
-
-/**
- * Merges two apps' weigh-ins. One row per day wins on `updatedAt` — the same
- * last-write-wins rule the sync engine already applies, so a weight typed in either app
- * behaves identically. Tombstones win at equal time, since deleting is the more
- * deliberate act.
- */
-export function reconcile(...sources: readonly BodyWeight[][]): BodyWeight[] {
-  const byDay = new Map<string, BodyWeight>()
-  for (const row of sources.flat()) {
-    const held = byDay.get(row.day)
-    if (!held) {
-      byDay.set(row.day, row)
-      continue
-    }
-    if (row.updatedAt > held.updatedAt) byDay.set(row.day, row)
-    else if (row.updatedAt === held.updatedAt && row.deletedAt !== null) byDay.set(row.day, row)
-  }
-  return [...byDay.values()]
-    .filter((row) => row.deletedAt === null)
-    .sort((a, b) => a.day.localeCompare(b.day))
 }
 
 export interface TrendPoint {

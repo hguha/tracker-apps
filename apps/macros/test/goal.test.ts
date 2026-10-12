@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DAY_MS, WEEK_MS, dayKey } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend, type BodyWeight, type TrendPoint } from '@tracker-engine/body'
-import {
-  blendRates,
-  eatingRate,
-  etaAt,
-  goalForecast,
-  goalProgress,
-  rateForKcal,
-  scaleRate,
-} from '@/lib/goal'
+import { blendRates, eatingRate, goalForecast, rateForKcal } from '@/lib/goal'
 import { estimateInitialExpenditure, targetKcal } from '@/lib/expenditure'
 
 const NOW = Date.parse('2026-10-04T12:00:00')
@@ -45,66 +37,6 @@ function intakeDays(kcal: number, days = 14, swing = 150) {
     kcal: kcal + ((i % 3) - 1) * swing,
   }))
 }
-
-describe('goalProgress', () => {
-  const losing = { goal: 'lose' as const, targetKg: 75, startKg: 85, trendKg: 80 }
-
-  it('reports the fraction of the way from where the goal was set', () => {
-    expect(goalProgress(losing).fraction).toBeCloseTo(0.5, 3)
-  })
-
-  it('knows when a losing goal is met, and a gaining one', () => {
-    expect(goalProgress({ ...losing, trendKg: 74.8 }).isReached).toBe(true)
-    expect(goalProgress({ ...losing, trendKg: 75.2 }).isReached).toBe(false)
-    expect(
-      goalProgress({ goal: 'gain', targetKg: 85, startKg: 80, trendKg: 85.1 }).isReached,
-    ).toBe(true)
-  })
-
-  it('never reports a maintain program as reached', () => {
-    expect(
-      goalProgress({ goal: 'maintain', targetKg: 80, startKg: 80, trendKg: 80 }).isReached,
-    ).toBe(false)
-  })
-
-  it('has no fraction without a start weight', () => {
-    expect(goalProgress({ ...losing, startKg: null }).fraction).toBeNull()
-  })
-
-  it('reports remaining as signed, so past-the-target reads as past', () => {
-    expect(goalProgress({ ...losing, trendKg: 74 }).remainingKg).toBeCloseTo(-1)
-  })
-})
-
-describe('scaleRate', () => {
-  it('reads the true slope without the EWMA lag the old endpoint rate had', () => {
-    const trend = weightTrend(weighIns(80, { days: 10, kgPerWeek: -0.6, noisy: false }))
-    expect(scaleRate(trend, NOW)!.kgPerWeek).toBeCloseTo(-0.6, 2)
-    expect(trendChangePerWeek(trend)!).toBeGreaterThan(-0.3)
-  })
-
-  it('ignores weigh-ins from before the behaviour being measured began', () => {
-    const trend = weightTrend(weighIns(80, { flatDays: 120, days: 21, kgPerWeek: -0.6, noisy: false }))
-    const since = NOW - 21 * DAY_MS - DAY_MS / 2
-    expect(scaleRate(trend, NOW, since)!.kgPerWeek).toBeCloseTo(-0.6, 2)
-    expect(scaleRate(trend, NOW)!.kgPerWeek).toBeGreaterThan(-0.6)
-  })
-
-  it('needs at least three weigh-ins across a few days', () => {
-    expect(scaleRate(weightTrend(weighIns(80, { days: 2, kgPerWeek: -1 })), NOW)).toBeNull()
-    expect(scaleRate(weightTrend(weighIns(80, { days: 3, kgPerWeek: -1 })), NOW)).toBeNull()
-    expect(scaleRate(weightTrend(weighIns(80, { days: 5, kgPerWeek: -1 })), NOW)).not.toBeNull()
-  })
-
-  it('grows more certain with more weigh-ins over a longer span', () => {
-    const few = scaleRate(weightTrend(weighIns(80, { days: 7, kgPerWeek: -0.5 })), NOW)!
-    const many = scaleRate(weightTrend(weighIns(80, { days: 28, kgPerWeek: -0.5 })), NOW)!
-    const sparse = scaleRate(weightTrend(weighIns(80, { days: 28, kgPerWeek: -0.5, every: 4 })), NOW)!
-    expect(many.se).toBeLessThan(few.se)
-    expect(many.se).toBeLessThan(sparse.se)
-    expect(many.weighIns).toBe(28)
-  })
-})
 
 describe('eatingRate', () => {
   const expenditure = { kcal: 2500, se: 100 }
@@ -145,18 +77,6 @@ describe('blendRates', () => {
     expect(blendRates(null, { kgPerWeek: -0.5, se: 0.3 })!.scaleWeight).toBe(0)
     expect(blendRates({ kgPerWeek: -0.5, se: 0.3 }, null)!.scaleWeight).toBe(1)
     expect(blendRates(null, null)).toBeNull()
-  })
-})
-
-describe('etaAt', () => {
-  it('divides the distance by the rate', () => {
-    expect(weeksFromNow(etaAt(-2, -0.5, NOW))).toBeCloseTo(4)
-  })
-
-  it('refuses a date when flat, going the wrong way, or beyond five years', () => {
-    expect(etaAt(-2, -0.01, NOW)).toBeNull()
-    expect(etaAt(-2, 0.4, NOW)).toBeNull()
-    expect(etaAt(-30, -0.06, NOW)).toBeNull()
   })
 })
 

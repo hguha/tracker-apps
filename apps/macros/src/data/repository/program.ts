@@ -22,7 +22,8 @@ import {
   type CheckInOutcome,
 } from '@/lib/checkin'
 import { kcalPerKg, type ExpenditureState, type IntakeDay } from '@/lib/expenditure'
-import { kcalFloor, paceForDate, safeMaxPct, type DatedPace } from '@/lib/pace'
+import type { DatedPace } from '@tracker-engine/body'
+import { kcalFloor, paceForDate, safeMaxPct } from '@/lib/pace'
 import { EATING_WINDOW_DAYS, goalForecast, type GoalForecast } from '@/lib/goal'
 import { weights } from './body'
 import { entriesBetween } from './entries'

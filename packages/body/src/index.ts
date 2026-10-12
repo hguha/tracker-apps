@@ -1,1 +1,6 @@
 export * from './weight'
+export * from './daily'
+export * from './goal'
+export * from './pace'
+export * from './text'
+export * from './energy'

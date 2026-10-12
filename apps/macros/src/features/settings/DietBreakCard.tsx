@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { defaultRate } from '@/features/shared/pace'
+import { defaultRate } from '@tracker-engine/body'
 import type { Goal } from '@/domain/types'
 
 

@@ -1,4 +1,5 @@
 import { dayKey } from '@tracker-engine/core'
+import { earliestPerDay } from '@tracker-engine/body'
 import { syncStamp } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue, patch } from '@/data/outbox'
@@ -72,14 +73,8 @@ interface WeightImport {
  *    back out — a consistent time of day matters more than which time.
  */
 export async function importWeights(samples: readonly WeightImport[]): Promise<number> {
-  const earliestPerDay = new Map<string, WeightImport>()
-  for (const sample of samples) {
-    const current = earliestPerDay.get(sample.day)
-    if (!current || sample.at < current.at) earliestPerDay.set(sample.day, sample)
-  }
-
   let imported = 0
-  for (const sample of earliestPerDay.values()) {
+  for (const sample of earliestPerDay(samples)) {
     const existing = await db.bodyWeights.get(weightIdFor(activeUserId, sample.day))
     if (existing && existing.deletedAt === null && existing.source !== HEALTH_SOURCE) continue
     if (existing?.kg === sample.kg && existing.source === HEALTH_SOURCE) continue

@@ -1,33 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { reconcile, trendChangePerWeek, weightTrend, type BodyWeight } from '../src/weight'
+import { trendChangePerWeek, weightTrend, type BodyWeight } from '../src/weight'
 
 function w(day: string, kg: number, extra: Partial<BodyWeight> = {}): BodyWeight {
   return { id: day, day, kg, source: 'macros', updatedAt: 1, deletedAt: null, ...extra }
 }
-
-describe('reconcile', () => {
-  it('keeps one row per day, newest write winning', () => {
-    const merged = reconcile(
-      [w('2026-09-01', 80, { updatedAt: 10, source: 'macros' })],
-      [w('2026-09-01', 81, { updatedAt: 20, source: 'reputation' })],
-    )
-    expect(merged).toHaveLength(1)
-    expect(merged[0]).toMatchObject({ kg: 81, source: 'reputation' })
-  })
-
-  it('lets a tombstone win a tie, since deleting is the deliberate act', () => {
-    const merged = reconcile(
-      [w('2026-09-01', 80, { updatedAt: 10 })],
-      [w('2026-09-01', 80, { updatedAt: 10, deletedAt: 99 })],
-    )
-    expect(merged).toEqual([])
-  })
-
-  it('sorts by day across sources', () => {
-    const merged = reconcile([w('2026-09-03', 80)], [w('2026-09-01', 81), w('2026-09-02', 82)])
-    expect(merged.map((r) => r.day)).toEqual(['2026-09-01', '2026-09-02', '2026-09-03'])
-  })
-})
 
 describe('weightTrend', () => {
   it('smooths a spike instead of following it', () => {

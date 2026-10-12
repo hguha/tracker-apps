@@ -1,3 +1,4 @@
+import type { Goal } from '@tracker-engine/body'
 export interface SyncColumns {
   createdAt: number
   updatedAt: number
@@ -277,7 +278,7 @@ export interface MealTemplate extends SyncColumns {
   nutrients: Nutrients
 }
 
-export type Goal = 'lose' | 'gain' | 'maintain'
+export type { Goal }
 export type CoachingMode = 'coached' | 'collaborative' | 'manual'
 
 /** Per-weekday multipliers for calorie cycling, Sunday first. Must average 1. */

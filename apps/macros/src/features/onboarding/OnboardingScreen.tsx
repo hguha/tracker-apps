@@ -4,7 +4,7 @@ import { cn, lengthFromCm, lengthToCm, unitsFor, weightToKg } from '@tracker-eng
 import { Button, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { ActivityPicker } from '@/features/shared/ActivityPicker'
-import { defaultRate } from '@/features/shared/pace'
+import { defaultRate } from '@tracker-engine/body'
 import { ONBOARDING_VERSION, type ActivityLevel, type Goal, type UnitSystem } from '@/domain/types'
 
 const GOALS: { id: Goal; label: string; blurb: string }[] = [
