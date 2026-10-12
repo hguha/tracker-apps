@@ -86,3 +86,46 @@ export function etaAt(neededKg: number, kgPerWeek: number, now: number): number 
   const weeks = neededKg / kgPerWeek
   return weeks > MAX_ETA_WEEKS ? null : now + weeks * WEEK_MS
 }
+
+export interface ScaleOutlook {
+  goal: Goal
+  progress: GoalProgress
+  rate: ScaleRate | null
+  isWrongWay: boolean
+  likelyAt: number | null
+  earliestAt: number | null
+  latestAt: number | null
+}
+
+export const goalDirection = (fromKg: number, targetKg: number): Goal =>
+  targetKg < fromKg ? 'lose' : targetKg > fromKg ? 'gain' : 'maintain'
+
+export function scaleOutlook(inputs: {
+  targetKg: number
+  startKg: number | null
+  trend: readonly TrendPoint[]
+  now: number
+}): ScaleOutlook | null {
+  const { targetKg, startKg, trend, now } = inputs
+  const latest = trend[trend.length - 1]
+  if (!latest) return null
+  const goal = goalDirection(startKg ?? latest.trendKg, targetKg)
+  const progress = goalProgress({ goal, targetKg, startKg, trendKg: latest.trendKg })
+  const rate = scaleRate(trend, now)
+  const neededKg = targetKg - latest.trendKg
+  const toward = Math.sign(neededKg)
+  const isMoving = rate !== null && Math.abs(rate.kgPerWeek) >= FLAT_KG_PER_WEEK
+  const isWrongWay =
+    !progress.isReached && isMoving && toward !== 0 && Math.sign(rate.kgPerWeek) === -toward
+  const forecastAt = (kgPerWeek: number) =>
+    progress.isReached || isWrongWay ? null : etaAt(neededKg, kgPerWeek, now)
+  return {
+    goal,
+    progress,
+    rate,
+    isWrongWay,
+    likelyAt: rate && forecastAt(rate.kgPerWeek),
+    earliestAt: rate && forecastAt(rate.kgPerWeek + toward * rate.se),
+    latestAt: rate && forecastAt(rate.kgPerWeek - toward * rate.se),
+  }
+}

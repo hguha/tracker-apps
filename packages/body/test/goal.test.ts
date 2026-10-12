@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DAY_MS, WEEK_MS, dayKey } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend, type BodyWeight } from '../src/weight'
-import { etaAt, goalProgress, scaleRate } from '../src/goal'
+import { etaAt, goalProgress, scaleOutlook, scaleRate } from '../src/goal'
 
 const NOW = Date.parse('2026-10-04T12:00:00')
 const weeksFromNow = (at: number | null) => (at === null ? null : (at - NOW) / WEEK_MS)
@@ -98,5 +98,37 @@ describe('etaAt', () => {
     expect(etaAt(-2, -0.01, NOW)).toBeNull()
     expect(etaAt(-2, 0.4, NOW)).toBeNull()
     expect(etaAt(-30, -0.06, NOW)).toBeNull()
+  })
+})
+
+describe('scaleOutlook', () => {
+  const losing = weightTrend(weighIns(84, { days: 28, kgPerWeek: -0.5, noisy: false }))
+  const latestKg = losing[losing.length - 1]!.trendKg
+
+  it('takes the direction from where the goal was set and forecasts from the scale', () => {
+    const outlook = scaleOutlook({ targetKg: 78, startKg: 84, trend: losing, now: NOW })!
+    expect(outlook.goal).toBe('lose')
+    expect(outlook.progress.isReached).toBe(false)
+    expect(outlook.isWrongWay).toBe(false)
+    expect(outlook.likelyAt).not.toBeNull()
+    expect(outlook.earliestAt!).toBeLessThanOrEqual(outlook.likelyAt!)
+    expect(outlook.latestAt === null || outlook.latestAt >= outlook.likelyAt!).toBe(true)
+  })
+
+  it('flags a trend moving away from the goal and gives no date', () => {
+    const outlook = scaleOutlook({ targetKg: 90, startKg: 84, trend: losing, now: NOW })!
+    expect(outlook.goal).toBe('gain')
+    expect(outlook.isWrongWay).toBe(true)
+    expect(outlook.likelyAt).toBeNull()
+  })
+
+  it('reports a reached goal with nothing left to forecast', () => {
+    const outlook = scaleOutlook({ targetKg: latestKg + 1, startKg: 84, trend: losing, now: NOW })!
+    expect(outlook.progress.isReached).toBe(true)
+    expect(outlook.likelyAt).toBeNull()
+  })
+
+  it('needs at least one weigh-in', () => {
+    expect(scaleOutlook({ targetKg: 78, startKg: null, trend: [], now: NOW })).toBeNull()
   })
 })
