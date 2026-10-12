@@ -53,9 +53,9 @@ async function remainingAnswer(): Promise<string> {
   }
   const left = remaining(totals, targets)
   if (left.kcal <= 0) {
-    return `You're ${Math.abs(left.kcal)} kcal over today's ${targets.kcal.toLocaleString()}. One day doesn't matter; the weekly average is what moves the trend.`
+    return `You're ${Math.abs(left.kcal).toLocaleString()} kcal over today's ${targets.kcal.toLocaleString()}. One day doesn't matter; the weekly average is what moves the trend.`
   }
-  return `${left.kcal} kcal and ${Math.round(mgToGrams(Math.max(0, left.proteinMg)))} g of protein left today. Protein first — it's the target a deficit squeezes hardest.`
+  return `${left.kcal.toLocaleString()} kcal and ${Math.round(mgToGrams(Math.max(0, left.proteinMg)))} g of protein left today. Protein first — it's the target a deficit squeezes hardest.`
 }
 
 async function weightAnswer(): Promise<string> {
@@ -90,5 +90,5 @@ async function expenditureAnswer(): Promise<string> {
 
 async function summaryAnswer(): Promise<string> {
   const totals = dayTotals(await repo.entriesForDay(dayKey(Date.now())))
-  return `I'm the offline coach, so I answer from your own numbers rather than a conversation. Today: ${totals.kcal} kcal, ${Math.round(mgToGrams(totals.proteinMg))} g protein. Ask me about what's left, your weight trend, protein, or your expenditure.`
+  return `I'm the offline coach, so I answer from your own numbers rather than a conversation. Today: ${totals.kcal.toLocaleString()} kcal, ${Math.round(mgToGrams(totals.proteinMg))} g protein. Ask me about what's left, your weight trend, protein, or your expenditure.`
 }
