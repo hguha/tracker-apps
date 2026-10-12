@@ -328,7 +328,7 @@ test('a recipe can be built, browsed, and logged a serving at a time', async ({ 
 
   // The list is sortable and filterable, and the cuisine came through.
   await expect(page.getByRole('heading', { name: 'Your library', level: 1 })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Suggested' })).toBeVisible()
+  await expect(page.getByLabel('Sort recipes')).toHaveValue('suggested')
   await expect(page.getByRole('button', { name: /Cuisine/ })).toBeVisible()
   await expect(page.getByText('Italian').first()).toBeVisible()
 

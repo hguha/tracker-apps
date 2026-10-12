@@ -8,8 +8,6 @@ import {
   FilterSheet,
   Screen,
   SearchField,
-  SegmentedTabs,
-  type SegmentedTab,
 } from '@tracker-engine/ui'
 import { Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -23,7 +21,7 @@ import type { CuisineKey, Recipe } from '@/domain/types'
 
 type SortKey = 'suggested' | 'name' | 'often' | 'recent' | 'light'
 
-const SORTS: SegmentedTab<SortKey>[] = [
+const SORTS: { key: SortKey; label: string }[] = [
   { key: 'suggested', label: 'Suggested' },
   { key: 'often', label: 'Most cooked' },
   { key: 'recent', label: 'Newest' },
@@ -143,8 +141,23 @@ export function RecipesScreen({
             placeholder="Search recipes and ingredients"
           />
 
-          {available.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto">
+          <div className="flex gap-1.5 overflow-x-auto">
+            <label className="relative shrink-0 rounded-full border border-line px-3 py-1.5 text-[13px] font-medium text-ink-secondary">
+              {SORTS.find((option) => option.key === sort)?.label} ▾
+              <select
+                aria-label="Sort recipes"
+                value={sort}
+                onChange={(event) => setSort(event.target.value as SortKey)}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              >
+                {SORTS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {available.length > 0 && (
               <FilterChipButton
                 label={
                   cuisines.length === 0
@@ -156,21 +169,19 @@ export function RecipesScreen({
                 isActive={cuisines.length > 0}
                 onClick={() => setIsSheetOpen(true)}
               />
-              {isFiltered && (
-                <button
-                  onClick={() => {
-                    setQuery('')
-                    setCuisines([])
-                  }}
-                  className="shrink-0 px-2 text-[13px] font-semibold text-accent"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          )}
-
-          <SegmentedTabs tabs={SORTS} active={sort} onSelect={setSort} />
+            )}
+            {isFiltered && (
+              <button
+                onClick={() => {
+                  setQuery('')
+                  setCuisines([])
+                }}
+                className="shrink-0 px-2 text-[13px] font-semibold text-accent"
+              >
+                Clear
+              </button>
+            )}
+          </div>
 
           {order.length === 0 ? (
             <Card className="p-4 text-center text-[13.5px] text-ink-muted">
