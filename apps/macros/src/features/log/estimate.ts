@@ -183,7 +183,7 @@ function toProduct(raw: RawProduct | null): FoodDraft | null {
     fiberG: optional(raw.fiberG),
     sugarG: optional(raw.sugarG),
     satFatG: optional(raw.satFatG),
-    sodiumMg: raw.sodiumMg === undefined || raw.sodiumMg === null ? null : Math.round(positive(raw.sodiumMg)),
+    sodiumMg: optional(raw.sodiumMg, (value) => Math.round(positive(value))),
     note: [source, TRUST[confidence]].filter(Boolean).join(' · '),
   }
 }
@@ -195,8 +195,8 @@ function positive(value: unknown): number {
 
 const round1 = (value: unknown): number => Math.round(positive(value) * 10) / 10
 
-const optional = (value: unknown): number | null =>
-  value === undefined || value === null ? null : round1(value)
+const optional = (value: unknown, convert: (value: unknown) => number = round1): number | null =>
+  value === undefined || value === null ? null : convert(value)
 
 export async function describeMeal(description: string): Promise<MealEstimate> {
   return runDescribe({ mode: 'estimate', description: description.trim() }, description.trim())

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { SearchField } from '@tracker-engine/ui'
 import { Loader2, Plus } from 'lucide-react'
-import { portionWithGrams } from '@/features/shared/format'
+import { servingLine } from '@/features/shared/format'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import * as repo from '@/data/repository'
 import { isAverage } from '@/lib/averageFood'
@@ -77,9 +77,7 @@ export function FoodSearchPicker({
                   <span className="min-w-0 flex-1 truncate text-[13.5px]">
                     {food.description}
                     {isAverage(food) && <span className="font-semibold text-accent"> · average</span>}
-                    {food.portions.length > 0 && (
-                      <span className="text-ink-muted"> · {portionWithGrams(food.portions[0]!)}</span>
-                    )}
+                    <span className="text-ink-muted"> · {servingLine(food)}</span>
                   </span>
                 </button>
               </li>

@@ -1,3 +1,4 @@
+import { capitalise } from '@tracker-engine/core'
 import { mgToGrams } from '@/lib/nutrition'
 import type { Nutrients } from '@/domain/types'
 
@@ -165,10 +166,8 @@ function summarize(
   const parts: string[] = []
   if (short.length > 0) parts.push(`low on ${list(short.map((s) => s.label.toLowerCase()))}`)
   if (over.length > 0) parts.push(`high on ${list(over.map((s) => s.label.toLowerCase()))}`)
-  return capitalize(parts.join(', '))
+  return capitalise(parts.join(', '))
 }
-
-const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
 function list(items: string[]): string {
   if (items.length <= 1) return items[0] ?? ''

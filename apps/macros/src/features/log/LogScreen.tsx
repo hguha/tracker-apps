@@ -1,3 +1,4 @@
+import { capitalise } from '@tracker-engine/core'
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -536,5 +537,3 @@ function atOnDay(day: string | undefined): number {
     ? at + (now.getHours() * 60 + now.getMinutes()) * 60_000
     : Date.now()
 }
-
-const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)

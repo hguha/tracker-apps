@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
-import { Button, useToast } from '@tracker-engine/ui'
+import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
 import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { dayTotals, macroSharePct, scale, sum } from '@/lib/nutrition'
 import { MacroBar, MACRO_BARS } from '@/features/shared/MacroBar'
-import { SplitRing } from '@/features/shared/SplitRing'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import {
   describeLoggable,
@@ -391,7 +390,14 @@ function DayPreview({
     <div className="rounded-2xl bg-surface p-3">
       <div className="flex items-center gap-3.5">
         {targets ? (
-          <SplitRing before={already.kcal} adding={added} max={targets.kcal}>
+          <ProgressRing
+            value={after.kcal}
+            from={already.kcal}
+            max={targets.kcal}
+            size={84}
+            strokeWidth={10}
+            color={after.kcal > targets.kcal ? 'var(--target-over)' : 'var(--accent)'}
+          >
             <div className="text-center">
               <div
                 className={`tabular font-bold leading-none text-accent ${added >= 1000 ? 'text-[14px]' : 'text-[17px]'}`}
@@ -400,7 +406,7 @@ function DayPreview({
               </div>
               <div className="text-[10px] text-ink-muted">kcal</div>
             </div>
-          </SplitRing>
+          </ProgressRing>
         ) : (
           <div className="shrink-0">
             <p className="text-[11px] text-ink-muted">Your day with this</p>

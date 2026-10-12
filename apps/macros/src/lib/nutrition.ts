@@ -37,21 +37,19 @@ interface ServingPanel {
 
 export function per100FromPanel(panel: ServingPanel, servingGrams: number): Nutrients {
   const per100 = (value: number) => per100FromServing(value, servingGrams)
-  const optionalGrams = (value: number | null | undefined) =>
-    value === null || value === undefined ? null : gramsToMg(per100(value))
+  const optional = (value: number | null | undefined, convert: (per: number) => number) =>
+    value === null || value === undefined ? null : convert(per100(value))
+  const grams = (value: number | null | undefined) => optional(value, gramsToMg)
   return {
     ...EMPTY_NUTRIENTS,
     kcal: Math.round(per100(panel.kcal)),
     proteinMg: gramsToMg(per100(panel.proteinG)),
     carbsMg: gramsToMg(per100(panel.carbsG)),
     fatMg: gramsToMg(per100(panel.fatG)),
-    fiberMg: optionalGrams(panel.fiberG),
-    sugarMg: optionalGrams(panel.sugarG),
-    satFatMg: optionalGrams(panel.satFatG),
-    sodiumMg:
-      panel.sodiumMg === null || panel.sodiumMg === undefined
-        ? null
-        : Math.round(per100(panel.sodiumMg)),
+    fiberMg: grams(panel.fiberG),
+    sugarMg: grams(panel.sugarG),
+    satFatMg: grams(panel.satFatG),
+    sodiumMg: optional(panel.sodiumMg, Math.round),
   }
 }
 

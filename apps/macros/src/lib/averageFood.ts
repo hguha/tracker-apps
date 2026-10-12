@@ -1,3 +1,4 @@
+import { capitalise } from '@tracker-engine/core'
 import { householdPortions, median, medianNutrients, portionFor } from '@/lib/nutrition'
 import { matchesQuery, normalizeQuery, queryTerms } from '@/lib/foodSearch'
 import { namesIngredient } from '@/lib/ingredientMatch'
@@ -74,5 +75,3 @@ function sharedPortions(pool: readonly Food[]): FoodPortion[] {
     ? shared.map((portion, index) => ({ ...portion, isDefault: index === 0 }))
     : [{ id: 'avg-serving', label: '1 serving', grams: Math.round(serving), isDefault: true }, ...shared]
 }
-
-const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)

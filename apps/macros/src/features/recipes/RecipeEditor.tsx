@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { plural } from '@tracker-engine/core'
+import { capitalise, plural } from '@tracker-engine/core'
 import { BottomSheet, Button, Card, Screen, useToast } from '@tracker-engine/ui'
 import { Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -613,8 +613,6 @@ const fewer = (value: number): number =>
   value > 1 ? Math.max(1, Math.ceil(value) - 1) : Math.max(0.25, value - 0.25)
 
 const more = (value: number): number => (value < 1 ? Math.min(1, value + 0.25) : Math.floor(value) + 1)
-
-const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
 
 const isPresent = (value: string | null): value is string => value !== null
 

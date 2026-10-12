@@ -16,6 +16,8 @@ export function ProgressRing({
   trackColor = 'var(--surface-sunken)',
   /** Progress arc color. */
   color = 'var(--accent)',
+  from = 0,
+  fromColor = `color-mix(in srgb, ${color} 32%, transparent)`,
   children,
 }: {
   value: number
@@ -24,12 +26,29 @@ export function ProgressRing({
   strokeWidth?: number
   trackColor?: string
   color?: string
+  from?: number
+  fromColor?: string
   children?: ReactNode
 }) {
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
-  const fraction = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0
-  const dashOffset = circumference * (1 - fraction)
+  const share = (amount: number) => (max > 0 ? Math.min(1, Math.max(0, amount / max)) : 0)
+  const base = share(from)
+  const fraction = share(value)
+  const arc = (start: number, end: number, stroke: string, cap: 'round' | 'butt') => (
+    <circle
+      cx={size / 2}
+      cy={size / 2}
+      r={radius}
+      fill="none"
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      strokeLinecap={cap}
+      strokeDasharray={`${(end - start) * circumference} ${circumference}`}
+      strokeDashoffset={-start * circumference}
+      className="transition-[stroke-dasharray,stroke-dashoffset] duration-500 ease-out"
+    />
+  )
 
   return (
     <div
@@ -45,18 +64,8 @@ export function ProgressRing({
           stroke={trackColor}
           strokeWidth={strokeWidth}
         />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-          className="transition-[stroke-dashoffset] duration-500 ease-out"
-        />
+        {base > 0 && arc(0, base, fromColor, 'butt')}
+        {fraction > base && arc(base, fraction, color, base > 0 ? 'butt' : 'round')}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {children}
