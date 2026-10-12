@@ -4,6 +4,7 @@ import {
   dayKey,
   dayKeyOffset,
   dayNoon,
+  dayStart,
   formatRelativeDay,
   groupBy,
   plural,
@@ -12,14 +13,17 @@ import {
   Card,
   FilterChipButton,
   FilterSheet,
+  MonthCalendar,
   SearchField,
   SegmentedTabs,
+  type CalendarDay,
   type SegmentedTab,
 } from '@tracker-engine/ui'
 import { ChevronRight } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
+import { WEEK_STARTS_ON } from '@/lib/checkin'
 import { macroLine } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
 import { entryName, searchableNames } from '@/features/shared/entryName'
@@ -54,10 +58,12 @@ type RangeKey = (typeof RANGES)[number]['key']
  * is what the Insights charts are for.
  */
 type SortKey = 'newest' | 'oldest'
+type ViewKey = SortKey | 'calendar'
 
-const SORTS: SegmentedTab<SortKey>[] = [
+const VIEWS: SegmentedTab<ViewKey>[] = [
   { key: 'newest', label: 'Newest' },
   { key: 'oldest', label: 'Oldest' },
+  { key: 'calendar', label: 'Calendar' },
 ]
 
 /**
@@ -70,7 +76,7 @@ const SORTS: SegmentedTab<SortKey>[] = [
 export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void }) {
   const today = dayKey(Date.now())
   const [rangeKey, setRangeKey] = useState<RangeKey>('30d')
-  const [sort, setSort] = useState<SortKey>('newest')
+  const [view, setView] = useState<ViewKey>('newest')
   const [query, setQuery] = useState('')
   const [meals, setMeals] = useState<string[]>([])
   const [venues, setVenues] = useState<string[]>([])
@@ -106,7 +112,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
   const byDay = groupBy(matching, (entry) => entry.day)
 
   const days = [...byDay.keys()].sort((a, b) =>
-    sort === 'newest' ? b.localeCompare(a) : a.localeCompare(b),
+    view === 'oldest' ? a.localeCompare(b) : b.localeCompare(a),
   )
 
   const targets = useLiveQuery(() => repo.targetsByDay(days), [days.join(',')], new Map())
@@ -154,7 +160,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
             </button>
           )}
         </div>
-        <SegmentedTabs tabs={SORTS} active={sort} onSelect={setSort} />
+        <SegmentedTabs tabs={VIEWS} active={view} onSelect={setView} />
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 pb-8">
@@ -177,17 +183,28 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
           </Card>
         )}
 
-        {days.map((day) => (
-          <DayCard
-            key={day}
-            day={day}
-            entries={byDay.get(day) ?? []}
-            foods={foods ?? new Map()}
-            target={targets?.get(day) ?? null}
-            isPartial={isFiltered}
-            onOpen={() => onOpenDay(day)}
+        {view === 'calendar' && isLoaded && (
+          <MonthCalendar
+            days={calendarDays(byDay)}
+            weekStartsOn={WEEK_STARTS_ON}
+            selectedDay={null}
+            onSelectDay={(at) => at !== null && onOpenDay(dayKey(at))}
+            earliestAt={dayNoon(from)}
           />
-        ))}
+        )}
+
+        {view !== 'calendar' &&
+          days.map((day) => (
+            <DayCard
+              key={day}
+              day={day}
+              entries={byDay.get(day) ?? []}
+              foods={foods ?? new Map()}
+              target={targets?.get(day) ?? null}
+              isPartial={isFiltered}
+              onOpen={() => onOpenDay(day)}
+            />
+          ))}
       </div>
 
       {openSheet === 'meal' && (
@@ -213,6 +230,15 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
         />
       )}
     </div>
+  )
+}
+
+function calendarDays(byDay: ReadonlyMap<string, LogEntry[]>): Map<number, CalendarDay> {
+  return new Map(
+    [...byDay].map(([day, entries]) => [
+      dayStart(dayNoon(day)),
+      { label: `${dayTotals(entries).kcal.toLocaleString()} kcal`, dots: ['var(--accent)'] },
+    ]),
   )
 }
 

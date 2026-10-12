@@ -33,7 +33,7 @@ import type { CheckIn, MacroTargets, Profile, Program } from '@/domain/types'
  */
 
 /** Weeks start Monday, so a weekend of eating lands in the week it belonged to. */
-const WEEK_STARTS_ON: WeekStart = 1
+export const WEEK_STARTS_ON: WeekStart = 1
 
 export interface CheckInInputs {
   now: number

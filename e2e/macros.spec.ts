@@ -1246,6 +1246,26 @@ async function logChickenAndOpenTheDay(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
 }
 
+test('history has a calendar, and a day in it opens that day', async ({ page }) => {
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page, { facts: false, weight: '' })
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('chicken breast')
+  await page.getByRole('button', { name: /Chicken breast/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  await page.getByRole('button', { name: new RegExp(`^${today}, [\\d,]+ kcal$`) }).click()
+
+  await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Chicken breast/ }).first()).toBeVisible()
+
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})
+
 test('a logged food is edited on the screen it was added with', async ({ page }) => {
   const errors = await bootWithoutErrors(page)
   await completeOnboarding(page, { facts: false, weight: '' })
