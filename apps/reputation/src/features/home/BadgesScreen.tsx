@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -52,14 +53,12 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-        {!badges ? (
-          <div className="p-6 text-ink-muted">Loading…</div>
-        ) : (
+        {badges &&
           sections.map((section) => (
             <Card key={section.group} className="p-4">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+              <SectionLabel>
                 {section.group}
-              </p>
+              </SectionLabel>
               <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-4">
                 {section.badges.map((badge) => (
                   <BadgeTile
@@ -71,8 +70,7 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
                 ))}
               </div>
             </Card>
-          ))
-        )}
+          ))}
         <div className="h-4" />
       </div>
 

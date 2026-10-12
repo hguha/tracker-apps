@@ -114,7 +114,7 @@ export function HistoryScreen({
     setVisibleCount(PAGE_SIZE)
   }, [query, regionFilter, exerciseFilter, selectedDay])
 
-  if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (!data) return null
 
   if (data.summaries.length === 0) {
     return (

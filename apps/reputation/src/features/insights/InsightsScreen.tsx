@@ -47,7 +47,7 @@ export function InsightsScreen() {
 
   const data = useInsightsData(filters)
 
-  if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (!data) return null
 
   const hasAnyHistory = data.exerciseOptions.length > 0
 

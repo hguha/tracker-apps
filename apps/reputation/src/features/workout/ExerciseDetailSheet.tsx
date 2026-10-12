@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, Trash2, Undo2, X } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -368,9 +369,9 @@ export function ExerciseDetailSheet({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+      <SectionLabel className="mb-2">
         {title}
-      </p>
+      </SectionLabel>
       {children}
     </div>
   )

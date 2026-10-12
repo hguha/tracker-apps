@@ -80,11 +80,7 @@ function AuthGate() {
   if (isRecoveringPassword) return <SetPasswordScreen />
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-ink-muted">
-        Loading…
-      </div>
-    )
+    return <div className="h-full" aria-busy="true" />
   }
 
   if (!session) return <SignInScreen />

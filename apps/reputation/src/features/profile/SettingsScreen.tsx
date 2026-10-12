@@ -20,7 +20,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [showTour, setShowTour] = useState(false)
   const [isRemindersOpen, setIsRemindersOpen] = useState(false)
 
-  if (!profile) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (!profile) return null
   if (isRemindersOpen) return <RemindersScreen onBack={() => setIsRemindersOpen(false)} />
 
   return (

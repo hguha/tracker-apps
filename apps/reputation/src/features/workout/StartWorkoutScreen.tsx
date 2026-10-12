@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -100,7 +101,7 @@ export function StartWorkoutScreen({
 
         {shownTemplates.length > 0 && (
           <Card className="overflow-hidden">
-            <SectionLabel>Templates</SectionLabel>
+            <SectionLabel className="px-4 pt-3.5 pb-1">Templates</SectionLabel>
             {shownTemplates.map(({ template, exerciseCount }) => (
               <button
                 key={template.id}
@@ -125,7 +126,7 @@ export function StartWorkoutScreen({
 
         {shownRecent.length > 0 && (
           <Card className="overflow-hidden">
-            <SectionLabel>{q ? 'Matching workouts' : 'Do one again'}</SectionLabel>
+            <SectionLabel className="px-4 pt-3.5 pb-1">{q ? 'Matching workouts' : 'Do one again'}</SectionLabel>
             {shownRecent.map((summary) => (
               <button
                 key={summary.workout.id}
@@ -196,13 +197,5 @@ export function StartWorkoutScreen({
         />
       )}
     </div>
-  )
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="px-4 pt-3.5 pb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-      {children}
-    </p>
   )
 }

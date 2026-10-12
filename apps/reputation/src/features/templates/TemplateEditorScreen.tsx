@@ -41,7 +41,7 @@ export function TemplateEditorScreen({
     return { template, profile, rows: withMeta }
   }, [templateId])
 
-  if (data === undefined) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (data === undefined) return null
   if (data === null) {
     return (
       <div className="p-6">

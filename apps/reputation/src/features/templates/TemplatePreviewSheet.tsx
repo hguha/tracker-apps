@@ -47,7 +47,7 @@ export function TemplatePreviewSheet({
       </div>
 
       {!preview ? (
-        <p className="px-5 py-8 text-center text-ink-muted">Loading…</p>
+        <div className="h-20" aria-busy="true" />
       ) : (
         <div className="divide-y divide-line px-5">
           {preview.exercises.map((exercise, index) => (

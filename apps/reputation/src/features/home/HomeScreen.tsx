@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ChevronRight,
@@ -156,7 +157,7 @@ export function HomeScreen({
     }
   }, [finishedCount])
 
-  if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (!data) return null
 
   const {
     profile,
@@ -296,9 +297,9 @@ export function HomeScreen({
                   {streakWeeks} week streak
                 </p>
               )}
-              <p className="mt-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+              <SectionLabel className="mt-1">
                 Volume this week
-              </p>
+              </SectionLabel>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-[24px] font-bold leading-tight tracking-tight">
                   {displayWeight(thisWeekVolume, unit).toLocaleString()}
@@ -339,9 +340,9 @@ export function HomeScreen({
 
       {setsByRegion.size > 0 && (
         <Card className="p-4">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+          <SectionLabel>
             Sets by body part
-          </p>
+          </SectionLabel>
           <div className="mt-3 space-y-2">
             {REGIONS.filter((region) => setsByRegion.has(region)).map((region) => {
               const count = setsByRegion.get(region) ?? 0
@@ -371,9 +372,9 @@ export function HomeScreen({
 
       {neglected && neglected.lastAt > 0 && (
         <Card className="p-4">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+          <SectionLabel>
             Least recently trained
-          </p>
+          </SectionLabel>
           <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[15px]">
             <span
               className="size-2.5 shrink-0 rounded-full"
@@ -390,9 +391,9 @@ export function HomeScreen({
 
       {recent.length > 0 && (
         <Card className="overflow-hidden">
-          <p className="px-4 pt-3.5 pb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+          <SectionLabel className="px-4 pt-3.5 pb-1">
             Recent
-          </p>
+          </SectionLabel>
           {recent.map((summary) => (
             <button
               key={summary.workout.id}

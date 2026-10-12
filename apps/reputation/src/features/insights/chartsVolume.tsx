@@ -1,4 +1,5 @@
 import { displayWeight, formatDuration } from '@/lib/units'
+import { SectionLabel } from '@tracker-engine/ui'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
 import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
@@ -130,10 +131,10 @@ export function SummaryCard({
   const unit = data.profile.unitWeight
   return (
     <Card className="p-4">
-      <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+      <SectionLabel>
         {/* "All time" isn't a duration, so it can't take a "Last" prefix. */}
         {rangeLabel === 'All time' ? 'All time' : `Last ${rangeLabel.toLowerCase()}`}
-      </p>
+      </SectionLabel>
       <p className="mt-1 text-[36px] font-bold leading-none tracking-tight">
         {displayWeight(data.totalVolumeKg, unit).toLocaleString()}
         <span className="ml-1.5 text-[15px] font-semibold text-ink-muted">
