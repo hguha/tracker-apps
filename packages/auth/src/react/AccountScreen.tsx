@@ -184,7 +184,9 @@ export function AccountScreen({
           onDismiss={() => setDialog('none')}
           confirmLabel={unsyncedChanges > 0 ? 'Sign out anyway' : 'Sign out'}
           confirmVariant={unsyncedChanges > 0 ? 'danger' : 'primary'}
-          onConfirm={() => void auth.signOut()}
+          onConfirm={() =>
+            void auth.signOut().catch((error) => console.warn('[auth] sign-out failed', error))
+          }
         >
           {unsyncedChanges > 0 ? (
             <p className="text-[14px] text-ink-secondary">
@@ -192,7 +194,7 @@ export function AccountScreen({
                 {plural(unsyncedChanges, 'change')} haven’t synced yet.
               </span>{' '}
               They stay on this device and sync when you sign back in to this account. Signing
-              in to a different account here erases them.
+              in to a different account here, or using this device only, erases them.
             </p>
           ) : (
             <p className="text-[14px] text-ink-secondary">

@@ -196,7 +196,12 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
         <h2 className="text-[15px] font-semibold tracking-tight">Reset</h2>
         <button
           onClick={() => {
-            if (!window.confirm('Clear this device’s copy? Synced data can be pulled back.')) {
+            const warning = !sync.enabled
+              ? 'Erase everything on this device? Nothing is stored anywhere else, so this cannot be undone.'
+              : sync.pending > 0
+                ? `Clear this device’s copy? ${sync.pending} unsynced ${sync.pending === 1 ? 'change is' : 'changes are'} lost; synced data comes back on the next sync.`
+                : 'Clear this device’s copy? Synced data comes back on the next sync.'
+            if (!window.confirm(warning)) {
               return
             }
             void repo.clearLocalData().then(() => window.location.reload())

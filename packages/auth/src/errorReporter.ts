@@ -56,7 +56,7 @@ export function createErrorReporter(config: {
         context,
         message,
         stack: truncate(error instanceof Error ? error.stack : null, MAX_STACK_LEN),
-        url: typeof window === 'undefined' ? null : window.location.href,
+        url: typeof window === 'undefined' ? null : window.location.origin + window.location.pathname,
         user_agent: typeof navigator === 'undefined' ? null : navigator.userAgent.slice(0, 500),
       })
       if (insertError) console.warn('[errors] report rejected', insertError.message)

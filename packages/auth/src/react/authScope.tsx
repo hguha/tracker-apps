@@ -75,9 +75,14 @@ export function createAuthScope<T>(config: AuthScopeConfig<T>) {
 
     useEffect(() => {
       let cancelled = false
+      let appliedOwner: string | null = null
 
       const apply = async (next: Session | null) => {
         const ownerId = next && !next.isLocal ? next.userId : localUserId
+        const isAccountSwitch =
+          appliedOwner !== null && appliedOwner !== localUserId && appliedOwner !== ownerId
+        appliedOwner = ownerId
+        if (isAccountSwitch) setSession(null)
         const result = (await config.applySession?.(ownerId, next)) ?? null
         if (cancelled) return
         setSession(next)

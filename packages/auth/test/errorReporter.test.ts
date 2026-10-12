@@ -32,6 +32,21 @@ describe('createErrorReporter', () => {
     })
   })
 
+  it('never stores sign-in tokens or codes from the page address', async () => {
+    vi.stubGlobal('window', {
+      location: {
+        href: 'https://app.example/app/?code=secret#access_token=t&refresh_token=r',
+        origin: 'https://app.example',
+        pathname: '/app/',
+      },
+    })
+    const { client, insert } = clientWith('u1')
+    await createErrorReporter({ client: () => client, appVersion: '1' }).reportError('x', 'e')
+    vi.unstubAllGlobals()
+
+    expect(insert.mock.calls[0]![0]).toMatchObject({ url: 'https://app.example/app/' })
+  })
+
   it('sends nothing without a signed-in user', async () => {
     const { client, insert } = clientWith(null)
     await createErrorReporter({ client: () => client, appVersion: '1' }).reportError('x', 'e')
