@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SegmentedTabs } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   CalendarDays,
@@ -22,7 +23,6 @@ import { useToast } from '@/components/Toast'
 import { dayStart, formatDayHeading, formatTimeOfDay } from '@/lib/dates'
 import { formatDisplayWeight, formatDuration } from '@/lib/units'
 import { regionVar } from '@/lib/palette'
-import { cn } from '@/lib/cn'
 import { HistoryCalendar } from './HistoryCalendar'
 import { WorkoutPreviewSheet } from '@/features/workout/WorkoutPreviewSheet'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
@@ -142,18 +142,14 @@ export function HistoryScreen({
 
   return (
     <div className="px-3 py-3">
-      <div className="mb-2.5 flex gap-1 rounded-xl bg-sunken p-1">
-        <ViewToggle
-          active={view === 'list'}
-          icon={<List size={15} />}
-          label="List"
-          onClick={() => setView('list')}
-        />
-        <ViewToggle
-          active={view === 'calendar'}
-          icon={<CalendarDays size={15} />}
-          label="Calendar"
-          onClick={() => setView('calendar')}
+      <div className="mb-2.5">
+        <SegmentedTabs
+          tabs={[
+            { key: 'list', label: 'List', icon: <List size={15} /> },
+            { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={15} /> },
+          ]}
+          active={view}
+          onSelect={setView}
         />
       </div>
 
@@ -411,31 +407,6 @@ export function HistoryScreen({
         </BottomSheet>
       )}
     </div>
-  )
-}
-
-function ViewToggle({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean
-  icon: React.ReactNode
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[13.5px] font-semibold',
-        active ? 'bg-surface text-ink shadow-sm' : 'text-ink-secondary',
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   )
 }
 

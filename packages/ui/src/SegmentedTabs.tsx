@@ -20,12 +20,14 @@ export function SegmentedTabs<K extends string>({
   active,
   onSelect,
   variant = 'pill',
+  size = 'md',
 }: {
   tabs: readonly SegmentedTab<K>[]
   active: K
   onSelect: (key: K) => void
   /** `pill` for a sunken track (toggle), `underline` for section navigation. */
   variant?: 'pill' | 'underline'
+  size?: 'md' | 'sm'
 }) {
   if (variant === 'underline') {
     return (
@@ -54,14 +56,22 @@ export function SegmentedTabs<K extends string>({
   }
 
   return (
-    <div className="flex gap-1 rounded-xl bg-sunken p-1">
+    <div
+      className={cn(
+        'bg-sunken',
+        size === 'sm' ? 'inline-flex gap-0.5 rounded-lg p-0.5' : 'flex gap-1 rounded-xl p-1',
+      )}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.key}
           onClick={() => onSelect(tab.key)}
           aria-pressed={active === tab.key}
           className={cn(
-            'flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold',
+            'flex items-center justify-center gap-1.5 font-semibold',
+            size === 'sm'
+              ? 'h-7 rounded-md px-2.5 text-[12px]'
+              : 'h-9 flex-1 rounded-lg text-[13px]',
             active === tab.key ? 'bg-accent-wash text-accent shadow-sm' : 'text-ink-muted',
           )}
         >

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { SearchField } from '@tracker-engine/ui'
+import { SearchField, SegmentedTabs } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -181,22 +181,12 @@ export function ExercisePicker({
             <span className="text-[12px] text-ink-muted">
               {results.length} {results.length === 1 ? 'movement' : 'movements'}
             </span>
-            <div className="flex gap-0.5 rounded-lg bg-sunken p-0.5 text-[12px] font-semibold">
-              {(['recent', 'name'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setSort(mode)}
-                  className={cn(
-                    'rounded-md px-2.5 py-1',
-                    sort === mode
-                      ? 'bg-surface text-ink shadow-sm'
-                      : 'text-ink-secondary',
-                  )}
-                >
-                  {mode === 'name' ? 'A–Z' : 'Recent'}
-                </button>
-              ))}
-            </div>
+            <SegmentedTabs
+              size="sm"
+              tabs={[{ key: 'recent', label: 'Recent' }, { key: 'name', label: 'A–Z' }]}
+              active={sort}
+              onSelect={setSort}
+            />
           </div>
         )}
 

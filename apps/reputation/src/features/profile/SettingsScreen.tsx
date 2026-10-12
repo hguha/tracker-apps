@@ -1,7 +1,7 @@
 // Preferences: units, logging, coaching inputs, appearance.
 
 import { useState } from 'react'
-import { NavRow, ScreenHeader, useDraftInput } from '@tracker-engine/ui'
+import { NavRow, ScreenHeader, SegmentedTabs, useDraftInput } from '@tracker-engine/ui'
 import { Bell, Compass, Sparkles, Volume2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
@@ -277,20 +277,12 @@ function UnitToggle<T extends string>({
   return (
     <div className="flex items-center justify-between">
       <span className="text-[13.5px] font-medium">{label}</span>
-      <div className="flex gap-1 rounded-lg bg-sunken p-0.5">
-        {options.map((option) => (
-          <button
-            key={option}
-            onClick={() => onChange(option)}
-            className={cn(
-              'h-8 rounded-md px-3.5 text-[13px] font-semibold',
-              value === option ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted',
-            )}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs
+        size="sm"
+        tabs={options.map((option) => ({ key: option, label: option }))}
+        active={value}
+        onSelect={onChange}
+      />
     </div>
   )
 }

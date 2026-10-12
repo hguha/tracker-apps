@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { SearchField } from '@tracker-engine/ui'
+import { SearchField, SegmentedTabs } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { cn } from '@/lib/cn'
 import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
 import { MovementList } from '@/components/MovementList'
 import { type Region } from '@/domain/types'
@@ -144,20 +143,12 @@ export function ExerciseLibraryScreen({ onBack }: { onBack?: () => void }) {
               </button>
             )}
           </span>
-          <div className="flex gap-0.5 rounded-lg bg-sunken p-0.5 text-[12px] font-semibold">
-            {(['name', 'recent'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setSort(mode)}
-                className={cn(
-                  'rounded-md px-2.5 py-1',
-                  sort === mode ? 'bg-surface text-ink shadow-sm' : 'text-ink-secondary',
-                )}
-              >
-                {mode === 'name' ? 'A–Z' : 'Recent'}
-              </button>
-            ))}
-          </div>
+          <SegmentedTabs
+              size="sm"
+              tabs={[{ key: 'name', label: 'A–Z' }, { key: 'recent', label: 'Recent' }]}
+              active={sort}
+              onSelect={setSort}
+            />
         </div>
 
         <Card className="overflow-hidden">
