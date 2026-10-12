@@ -62,7 +62,7 @@ export function SegmentedTabs<K extends string>({
           aria-pressed={active === tab.key}
           className={cn(
             'flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold',
-            active === tab.key ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted',
+            active === tab.key ? 'bg-accent-wash text-accent shadow-sm' : 'text-ink-muted',
           )}
         >
           {tab.icon}

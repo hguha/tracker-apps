@@ -26,7 +26,13 @@ const VISIBLE_MS = 5000
 /** Past this much horizontal travel, releasing dismisses. */
 const DISMISS_THRESHOLD = 64
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({
+  children,
+  placement = 'top',
+}: {
+  children: ReactNode
+  placement?: 'top' | 'bottom'
+}) {
   const [messages, setMessages] = useState<ToastMessage[]>([])
   const nextId = useRef(0)
   const timers = useRef(new Map<number, number>())
@@ -58,16 +64,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center px-4 pt-safe">
+      <div
+        className={
+          placement === 'top'
+            ? 'pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center px-4 pt-safe'
+            : 'pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+80px)] z-[60] flex flex-col items-center px-4'
+        }
+      >
         {messages.map((message) => (
-          <Toast key={message.id} message={message} onDismiss={() => dismiss(message.id)} />
+          <Toast
+            key={message.id}
+            message={message}
+            awayIsUp={placement === 'top'}
+            onDismiss={() => dismiss(message.id)}
+          />
         ))}
       </div>
     </ToastContext.Provider>
   )
 }
 
-function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss: () => void }) {
+function Toast({
+  message,
+  awayIsUp,
+  onDismiss,
+}: {
+  message: ToastMessage
+  awayIsUp: boolean
+  onDismiss: () => void
+}) {
   const [offset, setOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
@@ -97,7 +122,7 @@ function Toast({ message, onDismiss }: { message: ToastMessage; onDismiss: () =>
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
       // An upward flick also dismisses, since the toast sits at the top.
       axis.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical'
-      if (axis.current === 'vertical' && dy < -6) {
+      if (axis.current === 'vertical' && (awayIsUp ? dy < -6 : dy > 6)) {
         start.current = null
         leave(0)
         return

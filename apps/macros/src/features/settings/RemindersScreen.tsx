@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Card, Screen } from '@tracker-engine/ui'
+import { Card, Screen, Switch } from '@tracker-engine/ui'
 import { isNativePlatform } from '@tracker-engine/platform'
 import * as repo from '@/data/repository'
 import { syncReminders } from '@/data/reminders'
@@ -44,22 +44,11 @@ export function RemindersScreen({ onBack }: { onBack: () => void }) {
             </p>
           </div>
           {profile && (
-            <button
-              onClick={() => save(config ? null : DEFAULT_REMINDERS)}
-              aria-label="Reminders"
-              aria-pressed={config !== null && config !== undefined}
-              className={cn(
-                'h-7 w-12 shrink-0 rounded-full p-0.5 transition-colors',
-                config ? 'bg-accent' : 'bg-sunken',
-              )}
-            >
-              <span
-                className={cn(
-                  'block size-6 rounded-full bg-surface shadow-sm transition-transform',
-                  config && 'translate-x-5',
-                )}
-              />
-            </button>
+            <Switch
+              label="Reminders"
+              isOn={Boolean(config)}
+              onChange={(isOn) => save(isOn ? DEFAULT_REMINDERS : null)}
+            />
           )}
         </div>
       </Card>

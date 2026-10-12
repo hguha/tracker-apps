@@ -75,7 +75,7 @@ type View =
 export function App() {
   return (
     <AuthProviderScope>
-      <ToastProvider>
+      <ToastProvider placement="bottom">
         <Suspense fallback={<div className="h-full bg-page" />}>
           <AuthGate />
         </Suspense>
