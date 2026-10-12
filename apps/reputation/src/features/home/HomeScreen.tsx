@@ -193,6 +193,8 @@ export function HomeScreen({
     ...badgeStats,
   })
 
+  const level = levelFor(experience({ ...badgeStats, goalWeeks }))
+
   const deltaPercent =
     lastWeekVolume > 0
       ? Math.round(((thisWeekVolume - lastWeekVolume) / lastWeekVolume) * 100)
@@ -330,13 +332,9 @@ export function HomeScreen({
         </Card>
       )}
 
+      <Celebrations badges={badges} level={level} owner={session?.userId ?? null} />
       {totalWorkouts > 0 && (
-        <BadgeStrip
-          badges={badges}
-          level={levelFor(experience({ ...badgeStats, goalWeeks }))}
-          owner={session?.userId ?? null}
-          onSeeAll={onOpenBadges}
-        />
+        <BadgeStrip badges={badges} level={level} onSeeAll={onOpenBadges} />
       )}
 
       {setsByRegion.size > 0 && (
@@ -450,22 +448,32 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function BadgeStrip({
+function Celebrations({
   badges,
   level,
   owner,
-  onSeeAll,
 }: {
   badges: BadgeState[]
   level: Level
   owner: string | null
-  onSeeAll: () => void
 }) {
-  const [selected, setSelected] = useState<BadgeState | null>(null)
   const { current, dismiss } = useCelebrations(
     owner === null ? null : `reputation.celebrated.${owner}`,
     { badges, level: level.level, day: dayKey(Date.now()), dayComplete: false },
   )
+  return current ? <CelebrationOverlay celebration={current} onDone={dismiss} /> : null
+}
+
+function BadgeStrip({
+  badges,
+  level,
+  onSeeAll,
+}: {
+  badges: BadgeState[]
+  level: Level
+  onSeeAll: () => void
+}) {
+  const [selected, setSelected] = useState<BadgeState | null>(null)
   const earned = badges.filter((b) => b.earned).length
   const upcoming = nextBadges(badges, 4)
   const progress = (level.xp - level.floor) / (level.next - level.floor)
@@ -518,7 +526,6 @@ function BadgeStrip({
       {selected && (
         <BadgeDetailSheet badge={selected} onDismiss={() => setSelected(null)} />
       )}
-      {current && <CelebrationOverlay celebration={current} onDone={dismiss} />}
     </Card>
   )
 }
