@@ -8,11 +8,12 @@ import {
   type LogEntry,
   type MealSlot,
   type Nutrients,
+  type SyncColumns,
   type Venue,
 } from '@/domain/types'
 import { nutrientsFor, portionFor, scale as scaleNutrients } from '@/lib/nutrition'
 import { adoptAverage, getFood } from './foods'
-import { activeUserId, alive, byRecency, isLater, nextSortIndex } from './internal'
+import { activeUserId, alive, isLater, nextSortIndex } from './internal'
 
 /** Every surviving entry. Only for lifetime aggregates — screens read a window. */
 export function allEntries(): Promise<LogEntry[]> {
@@ -76,17 +77,8 @@ export interface LastAmount {
   portionCount: number | null
 }
 
-export async function lastAmountFor(foodId: string): Promise<LastAmount | null> {
-  const rows = await db.logEntries.where('foodId').equals(foodId).filter(alive).toArray()
-  const usable = rows.filter((row) => row.grams > 0).sort(byRecency)
-  const latest = usable[usable.length - 1]
-  if (!latest) return null
-  return {
-    grams: latest.grams,
-    portionId: latest.portionId,
-    portionCount: latest.portionCount,
-  }
-}
+export const lastAmountFor = async (foodId: string): Promise<LastAmount | null> =>
+  (await lastAmountsFor([foodId])).get(foodId) ?? null
 
 /** The same, for a whole list — one pass instead of a query per food. */
 export async function lastAmountsFor(
@@ -168,13 +160,10 @@ export async function logFood(input: LogFoodInput): Promise<string> {
   const grams = input.grams ?? (portion ? portion.grams * count : 100)
   const eatenAt = input.eatenAt ?? Date.now()
 
-  const entry: LogEntry = {
-    id: newId(),
-    userId: activeUserId,
+  return insertEntry({
     day: input.day ?? dayKey(eatenAt),
     eatenAt,
     meal: input.meal,
-    sortIndex: nextSortIndex(eatenAt),
     foodId: food.id,
     recipeId: null,
     quickAdd: null,
@@ -189,12 +178,7 @@ export async function logFood(input: LogFoodInput): Promise<string> {
     estimate: input.estimate ?? null,
     venue: input.venue ?? null,
     note: input.note ?? '',
-    ...syncStamp(),
-  }
-
-  await db.logEntries.put(entry)
-  await enqueue('logEntries', entry.id)
-  return entry.id
+  })
 }
 
 export async function logQuickAdd(
@@ -204,13 +188,10 @@ export async function logQuickAdd(
   eatenAt = Date.now(),
   venue: Venue | null = null,
 ): Promise<string> {
-  const entry: LogEntry = {
-    id: newId(),
-    userId: activeUserId,
+  return insertEntry({
     day: dayKey(eatenAt),
     eatenAt,
     meal,
-    sortIndex: nextSortIndex(eatenAt),
     foodId: null,
     recipeId: null,
     quickAdd: { ...EMPTY_NUTRIENTS, ...nutrients },
@@ -225,6 +206,17 @@ export async function logQuickAdd(
     estimate: null,
     venue,
     note: label,
+  })
+}
+
+async function insertEntry(
+  fields: Omit<LogEntry, 'id' | 'userId' | 'sortIndex' | keyof SyncColumns>,
+): Promise<string> {
+  const entry: LogEntry = {
+    ...fields,
+    id: newId(),
+    userId: activeUserId,
+    sortIndex: nextSortIndex(fields.eatenAt),
     ...syncStamp(),
   }
   await db.logEntries.put(entry)
@@ -398,14 +390,11 @@ export async function relogEntries(
   const dishIds = new Map<string, string>()
   for (const entry of entries) {
     const eatenAt = into.at ?? Date.parse(`${day}T00:00:00`) + minutesIntoDay(entry.eatenAt) * 60_000
-    const copy: LogEntry = {
+    await insertEntry({
       ...entry,
-      id: newId(),
-      userId: activeUserId,
       day,
       meal: into.meal ?? entry.meal,
       eatenAt,
-      sortIndex: nextSortIndex(eatenAt),
       grams: entry.grams * multiple,
       nutrients: scaleNutrients(entry.nutrients, multiple),
       quickAdd: entry.quickAdd === null ? null : scaleNutrients(entry.quickAdd, multiple),
@@ -414,10 +403,7 @@ export async function relogEntries(
       // The old venue carries over unless told otherwise: repeating Friday's takeaway is still
       // takeaway, and that is the more often correct guess than blanking it.
       venue: into.venue === undefined ? entry.venue : into.venue,
-      ...syncStamp(),
-    }
-    await db.logEntries.put(copy)
-    await enqueue('logEntries', copy.id)
+    })
   }
   return entries.length
 }
@@ -450,9 +436,7 @@ export async function logDishAgain(
   dishId: string,
   into: { meal?: MealSlot; at?: number; multiple?: number } = {},
 ): Promise<number> {
-  const rows = (await db.logEntries.where('dishId').equals(dishId).filter(alive).toArray()).sort(
-    (a, b) => a.sortIndex - b.sortIndex,
-  )
+  const rows = await dishEntries(dishId)
   if (rows.length === 0) return 0
   return relogEntries(rows, { at: into.at ?? Date.now(), meal: into.meal, multiple: into.multiple })
 }
@@ -465,7 +449,7 @@ export async function dishEntries(dishId: string): Promise<LogEntry[]> {
 
 /** Removes a whole dish — every row it was logged as, in one action. */
 export async function deleteDish(dishId: string): Promise<number> {
-  const rows = await db.logEntries.where('dishId').equals(dishId).filter(alive).toArray()
+  const rows = await dishEntries(dishId)
   for (const row of rows) await patch('logEntries', row.id, { deletedAt: Date.now() })
   return rows.length
 }
