@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
     "@supabase/supabase-js": "^2.112.1",
     "@tracker-engine/core": "*",
     "@tracker-engine/platform": "*",

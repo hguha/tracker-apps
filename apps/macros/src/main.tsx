@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from '@tracker-engine/ui'
+import { installAuthDeepLinks } from '@tracker-engine/auth'
+import { getSupabase } from './backend/supabaseClient'
 import { App } from './app/App'
 import { applyDefaultAppearance } from './lib/theme'
 import { clearLocalData } from './data/repository'
@@ -13,6 +15,7 @@ import './styles/index.css'
 applyDefaultAppearance()
 void registerServiceWorker()
 installGlobalErrorHandlers()
+installAuthDeepLinks(getSupabase)
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Root element missing from index.html')
