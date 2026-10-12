@@ -1,8 +1,9 @@
 import { plural } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { shortDay, useChartTokens } from './chartTokens'
-import type { InsightsDay } from './useInsightsData'
+import { categoryAxis, shortDay, targetMark, useChartTokens, valueAxis } from './chartTokens'
+import { RankedBars } from './RankedBars'
+import { meanKcal, type InsightsDay } from './useInsightsData'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -13,17 +14,8 @@ export function ProteinChart({ days }: { days: InsightsDay[] }) {
   const option: EChartsOption = {
     animation: false,
     grid: { left: 40, right: 12, top: 12, bottom: 24 },
-    xAxis: {
-      type: 'category',
-      data: days.map((day) => shortDay(day.day)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10, formatter: '{value}g' },
-    },
+    xAxis: categoryAxis(tokens, days.map((day) => shortDay(day.day))),
+    yAxis: valueAxis(tokens, { axisLabel: { formatter: '{value}g' } }),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -33,10 +25,8 @@ export function ProteinChart({ days }: { days: InsightsDay[] }) {
         data: days.map((day) => ({
           value: Math.round(day.protein),
           itemStyle: {
-            color:
-              day.targetProtein !== null && day.protein < day.targetProtein
-                ? tokens.inkMuted
-                : tokens.protein,
+            color: tokens.protein,
+            opacity: day.targetProtein !== null && day.protein < day.targetProtein ? 0.45 : 1,
           },
         })),
       },
@@ -44,7 +34,7 @@ export function ProteinChart({ days }: { days: InsightsDay[] }) {
         name: 'Floor',
         type: 'line',
         step: 'middle',
-        showSymbol: false,
+        ...targetMark(days.length),
         lineStyle: { color: tokens.on, type: 'dashed', width: 1.5 },
         data: days.map((day) => (day.targetProtein === null ? null : Math.round(day.targetProtein))),
       },
@@ -101,18 +91,12 @@ export function AdherenceChart({ days }: { days: InsightsDay[] }) {
   const option: EChartsOption = {
     animation: false,
     grid: { left: 30, right: 12, top: 12, bottom: 40 },
-    xAxis: {
-      type: 'category',
-      data: buckets.map((bucket) => bucket.label),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 9, rotate: 35 },
-    },
-    yAxis: {
-      type: 'value',
-      minInterval: 1,
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
+    xAxis: categoryAxis(
+      tokens,
+      buckets.map((bucket) => bucket.label),
+      { fontSize: 9, rotate: 35 },
+    ),
+    yAxis: valueAxis(tokens, { minInterval: 1 }),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -156,23 +140,13 @@ export function WeekdayChart({ days }: { days: InsightsDay[] }) {
   const averages = totals.map((bucket) =>
     bucket.count === 0 ? null : Math.round(bucket.sum / bucket.count),
   )
-  const overall =
-    days.length === 0 ? 0 : Math.round(days.reduce((sum, day) => sum + day.kcal, 0) / days.length)
+  const overall = meanKcal(days)
 
   const option: EChartsOption = {
     animation: false,
     grid: { left: 44, right: 12, top: 12, bottom: 24 },
-    xAxis: {
-      type: 'category',
-      data: WEEKDAYS,
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
+    xAxis: categoryAxis(tokens, WEEKDAYS),
+    yAxis: valueAxis(tokens),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -183,7 +157,12 @@ export function WeekdayChart({ days }: { days: InsightsDay[] }) {
         markLine: {
           silent: true,
           symbol: 'none',
-          label: { formatter: 'average', color: tokens.inkMuted, fontSize: 10 },
+          label: {
+            formatter: 'average',
+            position: 'insideEndTop',
+            color: tokens.inkMuted,
+            fontSize: 10,
+          },
           lineStyle: { color: tokens.inkMuted, type: 'dashed' },
           data: [{ yAxis: overall }],
         },
@@ -218,33 +197,7 @@ export function TopFoodsChart({
 }: {
   topFoods: { name: string; kcal: number; entries: number }[]
 }) {
-  const tokens = useChartTokens()
   const total = topFoods.reduce((sum, food) => sum + food.kcal, 0)
-
-  const option: EChartsOption = {
-    animation: false,
-    grid: { left: 120, right: 30, top: 8, bottom: 24 },
-    xAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'category',
-      data: topFoods.map((food) => truncate(food.name)).reverse(),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 9.5 },
-    },
-    tooltip: { trigger: 'axis' },
-    series: [
-      {
-        type: 'bar',
-        barMaxWidth: 14,
-        itemStyle: { color: tokens.accent },
-        data: topFoods.map((food) => food.kcal).reverse(),
-      },
-    ],
-  }
 
   return (
     <ChartCard
@@ -257,7 +210,13 @@ export function TopFoodsChart({
         rows: topFoods.map((food) => [food.name, food.kcal, food.entries]),
       }}
     >
-      <Chart option={option} ariaLabel="Foods contributing the most calories" />
+      <RankedBars
+        labels={topFoods.map((food) => truncate(food.name))}
+        values={topFoods.map((food) => food.kcal)}
+        gridLeft={120}
+        labelFontSize={9.5}
+        ariaLabel="Foods contributing the most calories"
+      />
     </ChartCard>
   )
 }

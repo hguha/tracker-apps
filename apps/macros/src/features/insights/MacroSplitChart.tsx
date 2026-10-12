@@ -1,13 +1,12 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { shortDay, useChartTokens } from './chartTokens'
+import { categoryAxis, chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
 import type { InsightsDay } from './useInsightsData'
 
 /** Where the calories came from, day by day. Stacked grams rather than percentages: grams are
  *  what the targets are set in, so the chart and the target speak the same units. */
 export function MacroSplitChart({ days }: { days: InsightsDay[] }) {
   const tokens = useChartTokens()
-  const recent = days
 
   const series = (
     [
@@ -21,24 +20,15 @@ export function MacroSplitChart({ days }: { days: InsightsDay[] }) {
     stack: 'macros',
     barMaxWidth: 14,
     itemStyle: { color },
-    data: recent.map((d) => Math.round(d[key])),
+    data: days.map((d) => Math.round(d[key])),
   }))
 
   const option: EChartsOption = {
     animation: false,
     grid: { left: 40, right: 12, top: 28, bottom: 24 },
-    legend: { textStyle: { color: tokens.inkMuted, fontSize: 10 }, top: 0, itemHeight: 8 },
-    xAxis: {
-      type: 'category',
-      data: recent.map((d) => shortDay(d.day)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10, formatter: '{value}g' },
-    },
+    legend: chartLegend(tokens),
+    xAxis: categoryAxis(tokens, days.map((d) => shortDay(d.day))),
+    yAxis: valueAxis(tokens, { axisLabel: { formatter: '{value}g' } }),
     tooltip: { trigger: 'axis' },
     series,
   }
@@ -47,11 +37,11 @@ export function MacroSplitChart({ days }: { days: InsightsDay[] }) {
     <ChartCard
       title="Macros"
       subtitle="Grams per day"
-      isEmpty={recent.length === 0}
+      isEmpty={days.length === 0}
       emptyMessage="Log a few days to see this."
       table={{
         columns: ['Day', 'Protein', 'Carbs', 'Fat'],
-        rows: recent.map((d) => [
+        rows: days.map((d) => [
           d.day,
           Math.round(d.protein),
           Math.round(d.carbs),

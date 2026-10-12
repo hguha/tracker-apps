@@ -6,8 +6,7 @@ import {
   type SegmentedTab,
 } from '@tracker-engine/ui'
 import { TrendingUp } from 'lucide-react'
-import { unitsFor } from '@tracker-engine/core'
-import { kcalPerKg } from '@/lib/expenditure'
+import { plural, unitsFor } from '@tracker-engine/core'
 import { IntakeChart } from './IntakeChart'
 import { WeightChart } from './WeightChart'
 import { MacroSplitChart } from './MacroSplitChart'
@@ -55,10 +54,6 @@ export function InsightsScreen() {
 
   const range = RANGES.find((option) => option.key === rangeKey)!
   const data = useInsightsData(range.days)
-  const energyPerKg = kcalPerKg(
-    data.program?.goal ?? 'maintain',
-    data.program?.ratePctPerWeek ?? 0,
-  )
 
   return (
     <div className="flex h-full flex-col">
@@ -69,7 +64,7 @@ export function InsightsScreen() {
       <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
         <FilterChipButton label={range.label} isActive onClick={() => setIsRangeOpen(true)} />
         <span className="tabular self-center text-[12.5px] text-ink-muted">
-          {data.loggedDayCount} day{data.loggedDayCount === 1 ? '' : 's'} logged
+          {plural(data.loggedDayCount, 'day')} logged
         </span>
       </div>
 
@@ -120,7 +115,7 @@ export function InsightsScreen() {
                   days={data.days}
                   trend={data.trend}
                   expenditureKcal={data.expenditureKcal}
-                  energyPerKg={energyPerKg}
+                  energyPerKg={data.energyPerKg}
                 />
                 <CheckInHistory />
               </>

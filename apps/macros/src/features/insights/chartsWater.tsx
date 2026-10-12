@@ -1,7 +1,13 @@
 import type { EChartsOption } from 'echarts'
-import { formatVolume, litresFromMl, volumeFromMl, type VolumeUnit } from '@tracker-engine/core'
+import {
+  formatVolume,
+  litresFromMl,
+  plural,
+  volumeFromMl,
+  type VolumeUnit,
+} from '@tracker-engine/core'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { shortDay, useChartTokens } from './chartTokens'
+import { categoryAxis, shortDay, useChartTokens, valueAxis } from './chartTokens'
 import type { WaterDay } from './useInsightsData'
 
 /**
@@ -35,21 +41,13 @@ export function WaterChart({
   const option: EChartsOption = {
     animation: false,
     grid: { left: 40, right: 12, top: 12, bottom: 24 },
-    xAxis: {
-      type: 'category',
-      data: days.map((day) => shortDay(day.day)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
+    xAxis: categoryAxis(tokens, days.map((day) => shortDay(day.day))),
+    yAxis: valueAxis(tokens, {
+      max: (extent) => Math.max(extent.max, targetMl === null ? 0 : toDisplay(targetMl)),
       axisLabel: {
-        color: tokens.inkMuted,
-        fontSize: 10,
         formatter: (value: number) => `${unit === 'floz' ? Math.round(value) : value}${axisSuffix}`,
       },
-    },
+    }),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -92,9 +90,8 @@ export function WaterChart({
       subtitle={
         mean === null
           ? undefined
-          : `${formatVolume(Math.round(mean), unit)} a day across ${logged.length} logged day${
-              logged.length === 1 ? '' : 's'
-            }` + (targetMl === null ? '' : ` · target hit on ${hit}`)
+          : `${formatVolume(Math.round(mean), unit)} a day across ${plural(logged.length, 'logged day')}` +
+            (targetMl === null ? '' : ` · target hit on ${hit}`)
       }
       isEmpty={logged.length === 0}
       emptyMessage="Nothing logged yet — the glass on Today is where it goes in."

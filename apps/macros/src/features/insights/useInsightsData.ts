@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset, groupBy } from '@tracker-engine/core'
-import { trendChangePerWeek, weightTrend, type TrendPoint } from '@tracker-engine/body'
+import { weightTrend, type TrendPoint } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import {
   dailyAverageCovered,
@@ -15,14 +15,7 @@ import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
 import { cuisineMix, venueSummary, type CuisineShare, type VenueSummary } from '@/lib/patterns'
 import { entryName, foodIdsOf } from '@/features/shared/entryName'
 import type { GoalForecast } from '@/lib/goal'
-import type {
-  CheckIn,
-  CuisineKey,
-  LogEntry,
-  MacroTargets,
-  Profile,
-  Program,
-} from '@/domain/types'
+import type { CuisineKey, LogEntry, MacroTargets, Profile, Program } from '@/domain/types'
 
 /**
  * Everything the Insights charts read, computed once.
@@ -57,19 +50,16 @@ export interface WaterDay {
 }
 
 export interface InsightsData {
-  isLoading: boolean
   days: InsightsDay[]
   water: WaterDay[]
   trend: TrendPoint[]
-  ratePerWeek: number | null
   windows: ExpenditureWindow[]
   expenditureKcal: number | null
   expenditureSe: number | null
-  checkIns: CheckIn[]
+  energyPerKg: number
   program: Program | undefined
   forecast: GoalForecast | null
   profile: Profile | undefined
-  targets: MacroTargets | null
   /** Per-day average over the window, with per-nutrient coverage — see `sumCovered`. */
   nutrition: CoveredNutrients
   loggedDayCount: number
@@ -96,11 +86,9 @@ export function useInsightsData(windowDays: number): InsightsData {
 
   const entries = useLiveQuery(() => repo.entriesBetween(from, today), [from, today], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], undefined)
-  const checkIns = useLiveQuery(() => repo.checkIns(), [], [])
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], undefined)
 
   const byDay = useMemo(() => groupBy(entries ?? [], (entry) => entry.day), [entries])
@@ -193,7 +181,6 @@ export function useInsightsData(windowDays: number): InsightsData {
   const last = trend[trend.length - 1]
 
   return {
-    isLoading: entries === undefined || weights === undefined || waterRows === undefined,
     days,
     /**
      * The union of days with food and days with water, so a day of only water still appears.
@@ -208,15 +195,13 @@ export function useInsightsData(windowDays: number): InsightsData {
         ml: (waterRows ?? []).find((row) => row.day === day)?.ml ?? null,
       })),
     trend,
-    ratePerWeek: trendChangePerWeek(trend),
     windows,
     expenditureKcal: expenditure?.kcal ?? null,
     expenditureSe: expenditure?.se ?? null,
-    checkIns: checkIns ?? [],
     program,
     forecast: forecast ?? null,
+    energyPerKg,
     profile,
-    targets,
     nutrition: dailyAverageCovered(entries ?? []),
     loggedDayCount: dayKeys.length,
     kcalByHour,
@@ -240,3 +225,6 @@ export function useInsightsData(windowDays: number): InsightsData {
           100,
   }
 }
+
+export const meanKcal = (days: readonly InsightsDay[]): number =>
+  days.length === 0 ? 0 : Math.round(days.reduce((sum, day) => sum + day.kcal, 0) / days.length)

@@ -3,7 +3,7 @@ import type { TrendPoint } from '@tracker-engine/body'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { convertWeight } from '@tracker-engine/core'
 import { useUnits } from '@/features/shared/useUnits'
-import { shortDay, useChartTokens } from './chartTokens'
+import { categoryAxis, chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
 import type { ExpenditureWindow } from '@/lib/expenditure'
 import type { InsightsDay } from './useInsightsData'
 
@@ -19,19 +19,9 @@ export function ExpenditureChart({ windows }: { windows: ExpenditureWindow[] }) 
   const option: EChartsOption = {
     animation: false,
     grid: { left: 48, right: 12, top: 28, bottom: 24 },
-    legend: { textStyle: { color: tokens.inkMuted, fontSize: 10 }, top: 0, itemHeight: 8 },
-    xAxis: {
-      type: 'category',
-      data: windows.map((window) => shortDay(window.weekStart)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
+    legend: chartLegend(tokens),
+    xAxis: categoryAxis(tokens, windows.map((window) => shortDay(window.weekStart))),
+    yAxis: valueAxis(tokens, { scale: true }),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -112,22 +102,9 @@ export function BalanceChart({
   const option: EChartsOption = {
     animation: false,
     grid: { left: 44, right: 12, top: 28, bottom: 24 },
-    legend: { textStyle: { color: tokens.inkMuted, fontSize: 10 }, top: 0, itemHeight: 8 },
-    xAxis: {
-      type: 'category',
-      data: rows.map((row) => shortDay(row.day)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: {
-        color: tokens.inkMuted,
-        fontSize: 10,
-        formatter: `{value} ${units.weight}`,
-      },
-    },
+    legend: chartLegend(tokens),
+    xAxis: categoryAxis(tokens, rows.map((row) => shortDay(row.day))),
+    yAxis: valueAxis(tokens, { axisLabel: { formatter: `{value} ${units.weight}` } }),
     tooltip: { trigger: 'axis' },
     series: [
       {

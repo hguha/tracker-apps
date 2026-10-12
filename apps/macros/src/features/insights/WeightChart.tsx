@@ -1,11 +1,11 @@
 import type { EChartsOption, LineSeriesOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { WEEK_MS, bodyWeightFromKg, dayKey, dayNoon } from '@tracker-engine/core'
+import { DAY_MS, WEEK_MS, bodyWeightFromKg, dayKey, dayNoon } from '@tracker-engine/core'
 import type { TrendPoint } from '@tracker-engine/body'
 import { useUnits } from '@/features/shared/useUnits'
 import { arrivalDay, perWeek, timeUntil } from '@/features/shared/goalText'
 import type { GoalForecast, RateLine } from '@/lib/goal'
-import { shortDay, useChartTokens } from './chartTokens'
+import { chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
 
 const PROJECTION_HORIZON_WEEKS = 26
 
@@ -37,6 +37,8 @@ export function WeightChart({
   const likely = projection(forecast?.likely ?? null)
   const onTarget = projection(forecast?.onTarget ?? null)
   const hasProjection = likely.length > 0 || onTarget.length > 0
+  const goal = targetKg === null ? null : show(targetKg)
+  const pad = units.weight === 'kg' ? 2 : 5
 
   const projectedSeries = (
     name: string,
@@ -56,11 +58,10 @@ export function WeightChart({
   const option: EChartsOption = {
     animation: false,
     grid: { left: 44, right: 12, top: hasProjection ? 28 : 12, bottom: 24 },
-    legend: hasProjection
-      ? { textStyle: { color: tokens.inkMuted, fontSize: 10 }, top: 0, itemHeight: 8 }
-      : undefined,
+    legend: hasProjection ? chartLegend(tokens) : undefined,
     xAxis: {
       type: 'time',
+      minInterval: DAY_MS,
       axisLine: { lineStyle: { color: tokens.axis } },
       axisLabel: {
         color: tokens.inkMuted,
@@ -70,23 +71,18 @@ export function WeightChart({
       },
       splitLine: { show: false },
     },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: {
-        color: tokens.inkMuted,
-        fontSize: 10,
-        formatter: `{value} ${units.weight}`,
-      },
-    },
+    yAxis: valueAxis(tokens, {
+      min: (extent) => Math.floor(Math.min(extent.min, goal ?? extent.min) - pad),
+      max: (extent) => Math.ceil(Math.max(extent.max, goal ?? extent.max) + pad),
+      axisLabel: { formatter: `{value} ${units.weight}` },
+    }),
     tooltip: { trigger: 'axis' },
     series: [
       {
         name: 'Weighed',
         type: 'scatter',
         symbolSize: 4,
-        itemStyle: { color: tokens.inkMuted, opacity: 0.5 },
+        itemStyle: { color: tokens.accent, opacity: 0.45 },
         data: trend.map((p) => [dayNoon(p.day), show(p.kg)]),
       },
       {
@@ -104,13 +100,13 @@ export function WeightChart({
                 silent: true,
                 symbol: 'none',
                 label: {
-                  formatter: `Goal ${show(targetKg)}`,
+                  formatter: `Goal ${goal}`,
                   color: tokens.inkMuted,
                   fontSize: 10,
                   position: 'insideStartTop',
                 },
                 lineStyle: { color: tokens.on, type: 'dashed', width: 1 },
-                data: [{ yAxis: show(targetKg) }],
+                data: [{ yAxis: goal! }],
               },
       },
       ...(likely.length > 0 ? [projectedSeries('Likely', likely, tokens.accent, 'dashed')] : []),

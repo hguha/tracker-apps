@@ -5,7 +5,7 @@ import { nutrientTargets, type ReferenceSex } from '@/lib/micronutrients'
 import { NutrientRows } from '@/features/shared/NutrientRows'
 import type { LogEntry } from '@/domain/types'
 import { mgToGrams, type CoveredNutrients } from '@/lib/nutrition'
-import { shortDay, useChartTokens } from './chartTokens'
+import { categoryAxis, shortDay, useChartTokens, valueAxis } from './chartTokens'
 import type { InsightsDay } from './useInsightsData'
 
 export function NutrientList(props: {
@@ -45,17 +45,11 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
   const option: EChartsOption = {
     animation: false,
     grid: { left: 36, right: 12, top: 12, bottom: 24 },
-    xAxis: {
-      type: 'category',
-      data: days.map((day) => shortDay(day.day)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10, formatter: '{value}g' },
-    },
+    xAxis: categoryAxis(tokens, days.map((day) => shortDay(day.day))),
+    yAxis: valueAxis(tokens, {
+      max: (extent) => Math.max(extent.max, referenceG),
+      axisLabel: { formatter: '{value}g' },
+    }),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -67,7 +61,7 @@ export function FiberChart({ days, sex }: { days: InsightsDay[]; sex: ReferenceS
             : {
                 value: Math.round(day.fiber),
                 itemStyle: {
-                  color: day.fiber >= referenceG ? tokens.on : tokens.inkMuted,
+                  color: day.fiber >= referenceG ? tokens.on : tokens.carbs,
                   // Hollow when only part of the day reported fibre: the bar is a floor, and a solid
                   // one would claim the day fell short when the database simply didn't say.
                   opacity: day.fiberCoverage >= MIN_COVERAGE ? 1 : 0.4,

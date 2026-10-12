@@ -1,10 +1,9 @@
 import { plural, signed } from '@tracker-engine/core'
-import type { EChartsOption } from 'echarts'
-import { Chart, ChartCard } from '@tracker-engine/ui/charts'
+import { ChartCard } from '@tracker-engine/ui/charts'
 import { Card } from '@tracker-engine/ui'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { venueLabel } from '@/features/shared/venue'
-import { useChartTokens } from './chartTokens'
+import { RankedBars } from './RankedBars'
 import type { CuisineShare, VenueSummary } from '@/lib/patterns'
 
 /** Below this share of occasions recorded, the split is a sample rather than a pattern. */
@@ -18,42 +17,8 @@ const THIN = 40
  * is a finding — and it's the reason this field is worth tapping.
  */
 export function VenueSplitChart({ venues }: { venues: VenueSummary }) {
-  const tokens = useChartTokens()
   const recorded = venues.breakdown.filter((row) => row.venue !== null)
   const total = recorded.reduce((sum, row) => sum + row.occasions, 0)
-
-  const option: EChartsOption = {
-    animation: false,
-    grid: { left: 78, right: 44, top: 8, bottom: 24 },
-    xAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'category',
-      data: recorded.map((row) => venueLabel(row.venue)).reverse(),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    tooltip: { trigger: 'axis' },
-    series: [
-      {
-        name: 'Occasions',
-        type: 'bar',
-        barMaxWidth: 16,
-        itemStyle: { color: tokens.accent },
-        label: {
-          show: true,
-          position: 'right',
-          color: tokens.inkMuted,
-          fontSize: 10,
-          formatter: (params) => `${recorded[recorded.length - 1 - params.dataIndex]?.meanKcal ?? 0} kcal avg`,
-        },
-        data: recorded.map((row) => row.occasions).reverse(),
-      },
-    ],
-  }
 
   return (
     <ChartCard
@@ -66,7 +31,16 @@ export function VenueSplitChart({ venues }: { venues: VenueSummary }) {
         rows: recorded.map((row) => [venueLabel(row.venue), row.occasions, row.meanKcal]),
       }}
     >
-      <Chart option={option} ariaLabel="Eating occasions by where they happened" />
+      <RankedBars
+        labels={recorded.map((row) => venueLabel(row.venue))}
+        values={recorded.map((row) => row.occasions)}
+        name="Occasions"
+        gridLeft={78}
+        gridRight={44}
+        barMaxWidth={16}
+        barLabel={(index) => `${recorded[index]?.meanKcal ?? 0} kcal avg`}
+        ariaLabel="Eating occasions by where they happened"
+      />
     </ChartCard>
   )
 }
@@ -115,7 +89,7 @@ export function CuisineMixCard({ cuisines }: { cuisines: CuisineShare[] }) {
     <Card className="p-4">
       <h2 className="text-[15px] font-semibold tracking-tight">What you cook</h2>
       <p className="mt-0.5 text-[12.5px] text-ink-muted">
-        {total} recipe serving{total === 1 ? '' : 's'} over the window
+        {plural(total, 'recipe serving')} over the window
       </p>
       <ul className="mt-2.5 space-y-2">
         {cuisines.map((row) => (

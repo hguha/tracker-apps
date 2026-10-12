@@ -1,7 +1,8 @@
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { formatClock } from '@/lib/mealTiming'
-import { shortDay, useChartTokens } from './chartTokens'
+import { categoryAxis, chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
+import { RankedBars } from './RankedBars'
 import type { EatingWindow } from '@/domain/types'
 import type { InsightsDay } from './useInsightsData'
 
@@ -25,17 +26,12 @@ export function MealTimingChart({
   const option: EChartsOption = {
     animation: false,
     grid: { left: 44, right: 12, top: 12, bottom: 24 },
-    xAxis: {
-      type: 'category',
-      data: kcalByHour.map((_, hour) => `${String(hour).padStart(2, '0')}`),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 9, interval: 2 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
+    xAxis: categoryAxis(
+      tokens,
+      kcalByHour.map((_, hour) => `${String(hour).padStart(2, '0')}`),
+      { fontSize: 9, interval: 2 },
+    ),
+    yAxis: valueAxis(tokens),
     tooltip: { trigger: 'axis' },
     series: [
       {
@@ -94,29 +90,11 @@ export function ConsistencyChart({ days }: { days: InsightsDay[] }) {
   const option: EChartsOption = {
     animation: false,
     grid: { left: 40, right: 40, top: 28, bottom: 24 },
-    legend: { textStyle: { color: tokens.inkMuted, fontSize: 10 }, top: 0, itemHeight: 8 },
-    xAxis: {
-      type: 'category',
-      data: days.map((day) => shortDay(day.day)),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
+    legend: chartLegend(tokens),
+    xAxis: categoryAxis(tokens, days.map((day) => shortDay(day.day))),
     yAxis: [
-      {
-        type: 'value',
-        name: 'meals',
-        nameTextStyle: { color: tokens.inkMuted, fontSize: 9 },
-        minInterval: 1,
-        splitLine: { lineStyle: { color: tokens.gridline } },
-        axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-      },
-      {
-        type: 'value',
-        name: 'span (h)',
-        nameTextStyle: { color: tokens.inkMuted, fontSize: 9 },
-        splitLine: { show: false },
-        axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-      },
+      valueAxis(tokens, { name: 'meals', minInterval: 1 }),
+      valueAxis(tokens, { name: 'span (h)', gridlines: false }),
     ],
     tooltip: { trigger: 'axis' },
     series: [
@@ -200,33 +178,7 @@ export function SourceMixChart({
 }: {
   sourceCounts: { source: string; count: number }[]
 }) {
-  const tokens = useChartTokens()
   const total = sourceCounts.reduce((sum, row) => sum + row.count, 0)
-
-  const option: EChartsOption = {
-    animation: false,
-    grid: { left: 84, right: 30, top: 8, bottom: 24 },
-    xAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: tokens.gridline } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    yAxis: {
-      type: 'category',
-      data: sourceCounts.map((row) => SOURCE_LABELS[row.source] ?? row.source).reverse(),
-      axisLine: { lineStyle: { color: tokens.axis } },
-      axisLabel: { color: tokens.inkMuted, fontSize: 10 },
-    },
-    tooltip: { trigger: 'axis' },
-    series: [
-      {
-        type: 'bar',
-        barMaxWidth: 14,
-        itemStyle: { color: tokens.accent },
-        data: sourceCounts.map((row) => row.count).reverse(),
-      },
-    ],
-  }
 
   return (
     <ChartCard
@@ -239,7 +191,12 @@ export function SourceMixChart({
         rows: sourceCounts.map((row) => [SOURCE_LABELS[row.source] ?? row.source, row.count]),
       }}
     >
-      <Chart option={option} ariaLabel="Items logged by method" />
+      <RankedBars
+        labels={sourceCounts.map((row) => SOURCE_LABELS[row.source] ?? row.source)}
+        values={sourceCounts.map((row) => row.count)}
+        gridLeft={84}
+        ariaLabel="Items logged by method"
+      />
     </ChartCard>
   )
 }

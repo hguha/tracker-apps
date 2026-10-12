@@ -2,15 +2,12 @@ import { Card } from '@tracker-engine/ui'
 import { convertWeight, signed } from '@tracker-engine/core'
 import { grams } from '@/features/shared/format'
 import { useUnits } from '@/features/shared/useUnits'
-import type { InsightsData } from './useInsightsData'
+import { meanKcal, type InsightsData } from './useInsightsData'
 
 /** The window in five numbers, so the charts below have something to be read against. */
 export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLabel: string }) {
   const units = useUnits()
-  const averageKcal =
-    data.days.length === 0
-      ? 0
-      : Math.round(data.days.reduce((sum, day) => sum + day.kcal, 0) / data.days.length)
+  const averageKcal = meanKcal(data.days)
 
   return (
     <Card className="p-4">
