@@ -123,3 +123,4 @@ export function countBadge<S extends Stats, G extends string>(
       `${Math.min(pick(stats), target).toLocaleString()} / ${target.toLocaleString()}${unit}`,
   }
 }
+export * from './progression'

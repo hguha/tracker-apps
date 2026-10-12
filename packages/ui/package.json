@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tracker-engine/badges": "*",
     "@tracker-engine/core": "*",
     "@tracker-engine/platform": "*",
     "echarts": "^6.1.0",

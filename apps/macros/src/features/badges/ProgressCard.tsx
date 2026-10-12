@@ -1,21 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { cn } from '@tracker-engine/core'
-import { Card, ProgressRing } from '@tracker-engine/ui'
+import { levelFor, nextBadges } from '@tracker-engine/badges'
+import { Card, CelebrationOverlay, ProgressRing, useCelebrations } from '@tracker-engine/ui'
 import { Check, ChevronRight, Droplet, Drumstick, Scale, Utensils } from 'lucide-react'
 import { nutritionStats } from '@/data/stats'
 import { evaluateBadges } from './catalog'
-import { CelebrationOverlay } from './CelebrationOverlay'
-import {
-  celebrationsSince,
-  experience,
-  levelFor,
-  nextBadges,
-  type Celebrated,
-  type Celebration,
-  type DailyGoal,
-  type DailyGoalKey,
-} from './progression'
+import { experience, type DailyGoal, type DailyGoalKey } from './progression'
 
 const GOAL_ICONS: Record<DailyGoalKey, typeof Utensils> = {
   log: Utensils,
@@ -24,16 +14,13 @@ const GOAL_ICONS: Record<DailyGoalKey, typeof Utensils> = {
   weigh: Scale,
 }
 
-const storageKey = (owner: string) => `macros.celebrated.${owner}`
-
-function readCelebrated(owner: string): Celebrated | null {
-  try {
-    const raw = localStorage.getItem(storageKey(owner))
-    return raw ? (JSON.parse(raw) as Celebrated) : null
-  } catch {
-    return null
-  }
-}
+const CONFETTI = [
+  'var(--accent)',
+  'var(--macro-protein)',
+  'var(--macro-carbs)',
+  'var(--macro-fat)',
+  'var(--macro-fiber)',
+]
 
 export function ProgressCard({
   owner,
@@ -47,25 +34,14 @@ export function ProgressCard({
   onOpenBadges: () => void
 }) {
   const stats = useLiveQuery(() => nutritionStats(), [], undefined)
-  const [queue, setQueue] = useState<Celebration[]>([])
 
   const badges = stats ? evaluateBadges(stats) : []
   const level = stats ? levelFor(experience(stats)) : null
   const dayComplete = goals !== null && goals.length > 0 && goals.every((goal) => goal.done)
-
-  useEffect(() => {
-    if (!stats || !level || goals === null || owner === null) return
-    const { celebrations, next } = celebrationsSince(readCelebrated(owner), {
-      badges,
-      level: level.level,
-      day,
-      dayComplete,
-    })
-    localStorage.setItem(storageKey(owner), JSON.stringify(next))
-    if (celebrations.length > 0) setQueue((current) => [...current, ...celebrations])
-  }, [stats, goals === null, dayComplete, day, owner])
-
-  const dismiss = useCallback(() => setQueue((current) => current.slice(1)), [])
+  const { current, dismiss } = useCelebrations(
+    owner === null ? null : `macros.celebrated.${owner}`,
+    level && goals !== null ? { badges, level: level.level, day, dayComplete } : null,
+  )
 
   if (!stats || !level) return null
   const earned = badges.filter((badge) => badge.earned).length
@@ -153,7 +129,7 @@ export function ProgressCard({
         </div>
       )}
 
-      {queue[0] && <CelebrationOverlay celebration={queue[0]} onDone={dismiss} />}
+      {current && <CelebrationOverlay celebration={current} onDone={dismiss} colors={CONFETTI} />}
     </Card>
   )
 }

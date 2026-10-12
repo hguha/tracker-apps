@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateBadges } from '@/features/badges/catalog'
-import {
-  celebrationsSince,
-  dailyGoals,
-  experience,
-  levelFor,
-  nextBadges,
-} from '@/features/badges/progression'
+import { celebrationsSince, levelFor, nextBadges } from '@tracker-engine/badges'
+import { dailyGoals, experience } from '@/features/badges/progression'
 import type { NutritionStats } from '@/domain/types'
 
 const stats = (over: Partial<NutritionStats> = {}): NutritionStats => ({
