@@ -54,6 +54,11 @@ export function CoachChat({
   // the in-workout chat rebuilds each send since the live session changes.
   const contextRef = useRef<CoachContext | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const coachNotes = useLiveQuery(() => repo.getProfile().then((p) => p.coachNotes), [])
+
+  useEffect(() => {
+    contextRef.current = null
+  }, [coachNotes])
 
   async function contextForTurn(): Promise<CoachContext> {
     if (variant === 'sheet' || contextRef.current === null) {

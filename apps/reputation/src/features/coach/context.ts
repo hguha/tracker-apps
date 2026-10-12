@@ -6,7 +6,14 @@ import * as repo from '@/data/repository'
 import { computeTrainingPatterns } from '@/data/patterns'
 import { composeExerciseName } from '@/lib/labels'
 import { weekOffset } from '@/lib/dates'
-import { displayWeight, displayWeightOrNull, formatWeight, lengthFromCm } from '@/lib/units'
+import {
+  bodyWeightFromKg,
+  convertWeight,
+  displayWeight,
+  displayWeightOrNull,
+  formatWeight,
+  lengthFromCm,
+} from '@/lib/units'
 import type { WeightUnit } from '@/domain/types'
 
 export const COACH_CONTEXT_VERSION = 1
@@ -39,6 +46,10 @@ export interface CoachContext {
     height: number | null
     heightUnit: 'in' | 'cm'
     trainingGoal: string
+    coachNotes: string
+    goalWeight: number | null
+    bodyweightTrend: number | null
+    bodyweightPerWeek: number | null
   }
   patterns: {
     totalSessions: number
@@ -99,11 +110,13 @@ export async function buildCoachContext(
 
   // Aggregate rollup for key lifts + region sets only — volume comes from the
   // summaries (volumeLoadKg), since the rollup's volume ignores bodyweight work.
-  const [summary, finishedSummaries, templates] = await Promise.all([
+  const [summary, finishedSummaries, templates, body] = await Promise.all([
     repo.getCoachSummary(),
     repo.listFinishedWorkoutSummaries(150),
     repo.listTemplates(),
+    repo.bodyweightTrend(),
   ])
+  const latestTrend = body.trend.at(-1)
 
   const finished = (await repo.listWorkouts(500)).filter((w) => w.endedAt !== null)
   const patterns = computeTrainingPatterns(finished)
@@ -176,6 +189,14 @@ export async function buildCoachContext(
           : Math.round(lengthFromCm(profile.heightCm, profile.unitLength) * 10) / 10,
       heightUnit: profile.unitLength,
       trainingGoal: profile.trainingGoal ?? '',
+      coachNotes: profile.coachNotes,
+      goalWeight:
+        profile.goalWeightKg === null ? null : bodyWeightFromKg(profile.goalWeightKg, unit),
+      bodyweightTrend: latestTrend ? bodyWeightFromKg(latestTrend.trendKg, unit) : null,
+      bodyweightPerWeek:
+        body.kgPerWeek === null
+          ? null
+          : Math.round(convertWeight(body.kgPerWeek, unit) * 100) / 100,
     },
     patterns: {
       totalSessions: patterns.totalSessions,
