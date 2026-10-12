@@ -27,6 +27,8 @@ export function FoodsTab({ onAdd }: { onAdd: () => void }) {
   const { results, isSearching } = useFoodSearch(query, { branded: true })
   const own = useLiveQuery(() => repo.customFoods(), [], undefined)
   const [open, setOpen] = useState<string | null>(null)
+  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
+  const targets = nutrientTargets(profile?.sex ?? null)
 
   const isBrowsing = trimmed.length < 2
   const shown: Food[] = isBrowsing ? (own ?? []) : results
@@ -57,12 +59,13 @@ export function FoodsTab({ onAdd }: { onAdd: () => void }) {
               : 'Nothing matched.'}
         </Card>
       ) : (
-        <Card className="p-0">
+        <Card className="overflow-hidden p-0">
           <ul className="divide-y divide-line">
             {shown.map((food) => (
               <FoodRow
                 key={food.id}
                 food={food}
+                targets={targets}
                 isOpen={open === food.id}
                 onToggle={() => setOpen((current) => (current === food.id ? null : food.id))}
               />
@@ -85,16 +88,16 @@ export function FoodsTab({ onAdd }: { onAdd: () => void }) {
  */
 function FoodRow({
   food,
+  targets,
   isOpen,
   onToggle,
 }: {
   food: Food
+  targets: ReturnType<typeof nutrientTargets>
   isOpen: boolean
   onToggle: () => void
 }) {
   const toast = useToast()
-  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  const targets = nutrientTargets(profile?.sex ?? null)
 
   return (
     <li>
