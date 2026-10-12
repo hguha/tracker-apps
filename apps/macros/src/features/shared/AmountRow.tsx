@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
+import { NumberInput } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
-import { NumberInput } from '@/features/shared/NumberInput'
 import { GRAMS, OUNCES, measuresFor, readableUnitId } from '@/features/shared/loggable'
 import { GRAMS_PER_OZ } from '@/lib/nutrition'
 import type { Food } from '@/domain/types'
@@ -52,6 +52,7 @@ export function AmountRow({
         <NumberInput
           value={grams / unit.grams}
           onValue={(value) => onGrams(Math.round(value * unit.grams))}
+          tolerance={0.5 / unit.grams}
           aria-label={`Amount of ${title}`}
           className="tabular w-16 shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-right text-[13.5px] outline-none"
         />

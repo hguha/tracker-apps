@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Minus, Plus } from 'lucide-react'
-import { Button, Card, SegmentedTabs } from '@tracker-engine/ui'
+import { Button, Card, NumberInput, SegmentedTabs } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { macroShareOfTargets, mgToGrams, withCalories, withMacro } from '@/lib/nutrition'
-import { NumberInput } from '@/features/shared/NumberInput'
 import type { MacroTargets } from '@/domain/types'
 
 type Mode = 'auto' | 'custom'

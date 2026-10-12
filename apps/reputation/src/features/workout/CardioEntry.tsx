@@ -2,6 +2,7 @@
 // Intervals are still `sets` rows underneath, so nothing downstream changes.
 
 import { Plus, Trash2 } from 'lucide-react'
+import { useDraftInput } from '@tracker-engine/ui'
 import type {
   DistanceUnit,
   Exercise,
@@ -19,7 +20,6 @@ import {
   weightFromKg,
   weightToKg,
 } from '@/lib/units'
-import { useDraftInput } from '@/lib/useDraftInput'
 import { parseDuration } from './SetRow'
 
 export interface CardioEntryProps {

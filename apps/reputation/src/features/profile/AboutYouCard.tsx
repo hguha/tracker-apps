@@ -2,9 +2,9 @@
 // lifting experience. Lives on the Body screen next to measurements; all optional.
 
 import * as repo from '@/data/repository'
+import { useDraftInput } from '@tracker-engine/ui'
 import { Card } from '@/components/Card'
 import { PillSelect } from '@/components/PillSelect'
-import { useDraftInput } from '@/lib/useDraftInput'
 import { lengthFromCm, lengthToCm, parseNumber } from '@/lib/units'
 import type { Profile } from '@/domain/types'
 

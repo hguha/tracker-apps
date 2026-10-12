@@ -1,6 +1,7 @@
 // Typing a value logs the set — there is no confirm step (§6.2).
 
 import { Copy, Trash2, Trophy } from 'lucide-react'
+import { useDraftInput } from '@tracker-engine/ui'
 import type {
   DistanceUnit,
   Exercise,
@@ -11,7 +12,6 @@ import type {
 } from '@/domain/types'
 import { SwipeableRow, useRowTap } from '@/components/SwipeableRow'
 import { cn } from '@/lib/cn'
-import { useDraftInput } from '@/lib/useDraftInput'
 import {
   distanceFromM,
   distanceToM,

@@ -1105,6 +1105,12 @@ test('targets can be typed in, and they reach the day', async ({ page }) => {
   await expect(page.getByLabel('Calories', { exact: true })).toHaveValue('2570')
   await page.getByRole('button', { name: 'Less Protein' }).click()
 
+  await page.getByLabel('Protein', { exact: true }).focus()
+  await page.getByRole('button', { name: 'More Protein' }).dispatchEvent('click')
+  await expect(page.getByLabel('Protein', { exact: true })).toHaveValue('185')
+  await page.getByRole('button', { name: 'Less Protein' }).dispatchEvent('click')
+  await expect(page.getByLabel('Protein', { exact: true })).toHaveValue('180')
+
   await page.getByRole('button', { name: 'Save targets' }).click()
   await expect(page.getByRole('button', { name: 'Save targets' })).toHaveCount(0)
 

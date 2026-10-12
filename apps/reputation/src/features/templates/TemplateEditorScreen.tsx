@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScreenHeader } from '@tracker-engine/ui'
+import { ScreenHeader, useDraftInput } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -9,7 +9,6 @@ import { DragItem, DragList } from '@/components/DragList'
 import { ExercisePicker } from '@/features/workout/ExercisePicker'
 import { regionVar } from '@/lib/palette'
 import { parseNumber, weightFromKg, weightToKg } from '@/lib/units'
-import { useDraftInput } from '@/lib/useDraftInput'
 import type { Equipment, LoadMode, TemplateExercise, WeightUnit } from '@/domain/types'
 
 export function TemplateEditorScreen({

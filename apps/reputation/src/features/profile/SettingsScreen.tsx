@@ -1,13 +1,12 @@
 // Preferences: units, logging, coaching inputs, appearance.
 
 import { useState } from 'react'
-import { NavRow, ScreenHeader } from '@tracker-engine/ui'
+import { NavRow, ScreenHeader, useDraftInput } from '@tracker-engine/ui'
 import { Bell, Compass, Sparkles, Volume2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
-import { useDraftInput } from '@/lib/useDraftInput'
 import { playCue, setSoundEnabled, unlockAudio } from '@/features/timer/sounds'
 import { AppTour } from '@/features/onboarding/AppTour'
 import { AppearanceSection } from './AppearanceSection'

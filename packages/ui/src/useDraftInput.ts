@@ -1,27 +1,27 @@
-// Local draft that isn't clobbered by the liveQuery refetch a write triggers:
-// adopts external changes only while unfocused, and commits on blur only if the
-// value actually changed. The caller parses the raw draft string.
-
-import { useEffect, useRef, useState, type FocusEvent, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FocusEvent } from 'react'
 
 export function useDraftInput({
   value,
   onCommit,
-  // Commit on every keystroke instead of on blur.
   commitOnChange = false,
-  // Select contents on focus, so a tap overwrites rather than appends.
   selectOnFocus = false,
+  isEcho = () => true,
 }: {
   value: string
   onCommit: (draft: string) => void
   commitOnChange?: boolean
   selectOnFocus?: boolean
+  isEcho?: (draft: string, value: string) => boolean
 }) {
   const [draft, setDraft] = useState(value)
   const isFocused = useRef(false)
+  const isEchoRef = useRef(isEcho)
+  isEchoRef.current = isEcho
 
   useEffect(() => {
-    if (!isFocused.current) setDraft(value)
+    setDraft((current) =>
+      isFocused.current && isEchoRef.current(current, value) ? current : value,
+    )
   }, [value])
 
   const inputProps = {
@@ -37,6 +37,7 @@ export function useDraftInput({
     onBlur: () => {
       isFocused.current = false
       if (!commitOnChange && draft !== value) onCommit(draft)
+      if (commitOnChange) setDraft(value)
     },
   }
 
