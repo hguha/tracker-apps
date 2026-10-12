@@ -1,5 +1,6 @@
+import { cn } from '@tracker-engine/core'
 import { mgToGrams } from '@/lib/nutrition'
-import type { Nutrients } from '@/domain/types'
+import type { MacroTargets, Nutrients } from '@/domain/types'
 
 /**
  * Progress toward one macro target — one bar, thick enough to hold its own numbers.
@@ -114,12 +115,44 @@ export function MacroBar({
   )
 }
 
+export function MacroBars({
+  eaten,
+  adding = null,
+  targets,
+  shares,
+  className,
+}: {
+  eaten: Nutrients
+  adding?: Nutrients | null
+  targets: MacroTargets | null
+  shares: Record<MacroKey, number>
+  className?: string
+}) {
+  return (
+    <div className={cn('space-y-1.5', className)}>
+      {MACRO_BARS.map((macro) => (
+        <MacroBar
+          key={macro.key}
+          label={macro.label}
+          eatenMg={eaten[macro.key]}
+          addingMg={adding?.[macro.key] ?? 0}
+          targetMg={targets?.[macro.key] ?? 0}
+          sharePct={shares[macro.key]}
+          color={macro.color}
+        />
+      ))}
+    </div>
+  )
+}
+
+type MacroKey = keyof Pick<Nutrients, 'proteinMg' | 'carbsMg' | 'fatMg'>
+
 export const MACRO_BARS = [
   { key: 'proteinMg', label: 'Protein', color: 'var(--macro-protein)' },
   { key: 'carbsMg', label: 'Carbs', color: 'var(--macro-carbs)' },
   { key: 'fatMg', label: 'Fat', color: 'var(--macro-fat)' },
 ] as const satisfies readonly {
-  key: keyof Pick<Nutrients, 'proteinMg' | 'carbsMg' | 'fatMg'>
+  key: MacroKey
   label: string
   color: string
 }[]

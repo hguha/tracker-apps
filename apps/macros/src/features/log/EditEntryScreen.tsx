@@ -171,8 +171,8 @@ function Editor({
 
   if (rows.length === 1 && first.quickAdd !== null) {
     return (
-      <div className="space-y-3 pt-3">
-        <div className="px-3">{when}</div>
+      <div className="pt-3">
+        <div className="px-4">{when}</div>
         <QuickAddPanel
           target={{ meal, at, venue: first.venue }}
           onDone={onClose}
@@ -203,8 +203,8 @@ function Editor({
     const loggable: Loggable = { kind: 'food', food }
     const units = describeLoggable(loggable, borrowed).units
     return (
-      <div className="space-y-3 pt-3">
-        {when && <div className="px-3">{when}</div>}
+      <div className="pt-3">
+        {when && <div className="px-4">{when}</div>}
         <AddPanel
           loggable={loggable}
           target={{ meal, at, venue: first.venue }}
@@ -246,8 +246,8 @@ function Editor({
   }
 
   return (
-    <div className="space-y-3 pt-3">
-      {when && <div className="px-3">{when}</div>}
+    <div className="pt-3">
+      {when && <div className="px-4">{when}</div>}
       <AddPanel
         loggable={loggable}
         target={{ meal, at, venue: first.venue }}

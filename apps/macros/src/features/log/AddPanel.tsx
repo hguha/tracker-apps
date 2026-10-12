@@ -6,7 +6,7 @@ import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { dayTotals, macroSharePct, scale, sum } from '@/lib/nutrition'
-import { MacroBar, MACRO_BARS } from '@/features/shared/MacroBar'
+import { MacroBars } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import {
   describeLoggable,
@@ -423,19 +423,13 @@ function DayPreview({
         </div>
       </div>
 
-      <div className="mt-3 space-y-1.5">
-        {MACRO_BARS.map((macro) => (
-          <MacroBar
-            key={macro.key}
-            label={macro.label}
-            eatenMg={already[macro.key]}
-            addingMg={adding?.[macro.key] ?? 0}
-            targetMg={targets?.[macro.key] ?? 0}
-            sharePct={shares[macro.key]}
-            color={macro.color}
-          />
-        ))}
-      </div>
+      <MacroBars
+        eaten={already}
+        adding={adding}
+        targets={targets}
+        shares={shares}
+        className="mt-3"
+      />
     </div>
   )
 }
