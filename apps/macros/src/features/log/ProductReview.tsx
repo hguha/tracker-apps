@@ -15,14 +15,12 @@ export function ProductReview({
   onDone,
   onEdit,
   onRefine,
-  isRefining = false,
 }: {
   product: FoodDraft
   target: LogTarget
   onDone: () => void
   onEdit: () => void
   onRefine: (extra: string) => void
-  isRefining?: boolean
 }) {
   const toast = useToast()
   const [isSaving, setIsSaving] = useState(false)
@@ -78,7 +76,7 @@ export function ProductReview({
         Change the numbers
       </button>
 
-      <Refine onRefine={onRefine} isBusy={isRefining} placeholder="Not that one? e.g. the large size" />
+      <Refine onRefine={onRefine} isBusy={false} placeholder="Not that one? e.g. the large size" />
     </div>
   )
 }

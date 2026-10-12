@@ -61,14 +61,6 @@ export function MoreWaysSheet({
   )
 }
 
-function Heading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="px-4 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-      {children}
-    </h2>
-  )
-}
-
 export function Empty({ children }: { children: React.ReactNode }) {
   return <Card className="p-4 text-center text-[13px] text-ink-muted">{children}</Card>
 }
@@ -80,9 +72,7 @@ export function FoodList({
   onToggle,
   saved,
   lastAmounts,
-  emptyLabel,
   footer = null,
-  heading,
   isRemovable = false,
 }: {
   foods: readonly Food[]
@@ -93,10 +83,8 @@ export function FoodList({
   saved: readonly string[]
   /** Only populated for ticked foods, which is the only place the number is committed blind. */
   lastAmounts: ReadonlyMap<string, LastAmount>
-  emptyLabel: string
   /** Shown under the rows — a "still searching" line, so results never have to disappear. */
   footer?: React.ReactNode
-  heading?: string
   /**
    * Whether a swipe offers to unsave. On for the Saved list, where getting rid of something is half
    * of what the list is visited for; off in search results, where nothing is being kept yet.
@@ -104,11 +92,8 @@ export function FoodList({
   isRemovable?: boolean
 }) {
   return (
-    <Card className="p-0">
-      {heading !== undefined && <Heading>{heading}</Heading>}
-      {foods.length === 0 && footer === null ? (
-        <p className="px-4 py-6 text-center text-[13.5px] text-ink-muted">{emptyLabel}</p>
-      ) : (
+    <Card className="overflow-hidden p-0">
+      {foods.length > 0 && (
         <ul className="divide-y divide-line">
           {foods.map((food) => {
             const isPicked = picked.some((row) => row.id === food.id)

@@ -247,7 +247,7 @@ function trendOn(trend: readonly TrendPoint[], day: string): number | null {
   return latest
 }
 
-async function targetsForDay(day: string): Promise<MacroTargets | null> {
+export async function targetsForDay(day: string): Promise<MacroTargets | null> {
   return (await targetsByDay([day])).get(day) ?? null
 }
 

@@ -78,7 +78,7 @@ export function DayScreen({
   const loaded = useEntriesWithFoods(day, day)
   const entries = loaded?.entries
   const foods = loaded?.foods ?? new Map<string, Food>()
-  const target = useLiveQuery(async () => (await repo.targetsByDay([day])).get(day) ?? null, [day], null)
+  const target = useLiveQuery(() => repo.targetsForDay(day), [day], null)
 
   // The snapshot is taken per day and only once, so switching days with the arrows re-arms Revert
   // for the new day rather than carrying the old one's state across.

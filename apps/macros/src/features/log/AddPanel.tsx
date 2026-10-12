@@ -116,21 +116,7 @@ export function AddPanel({
    * a perfectly good target two taps away on Today.
    */
   const dayEntries = useLiveQuery(() => repo.entriesForDay(day), [day], undefined)
-  /**
-   * The same target the home screen shows.
-   *
-   * `targetsByDay` is check-in-governed and returns null for a day no check-in has covered yet —
-   * which is every day of the first week. Using it here showed the no-target fallback on a screen
-   * where the ring was the point, while Today two taps away showed "of 1,988". `currentTargets` is
-   * what Today reads, so for today it is the answer; a past day keeps the target that governed it.
-   */
-  const isToday = day === dayKey(Date.now())
-  const targets = useLiveQuery(
-    async () =>
-      isToday ? await repo.currentTargets() : ((await repo.targetsByDay([day])).get(day) ?? null),
-    [day, isToday],
-    undefined,
-  )
+  const targets = useLiveQuery(() => repo.targetsForDay(day), [day], undefined)
   const parts = useLiveQuery(() => partsOf(loggable), [key], undefined)
 
   const isDayLoaded = dayEntries !== undefined && targets !== undefined

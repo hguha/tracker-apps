@@ -395,7 +395,6 @@ function BrowsePanel({
               onToggle={toggle}
               saved={savedIds}
               lastAmounts={lastAmounts ?? new Map()}
-              emptyLabel=""
               footer={isSearching ? <SearchingRow /> : null}
             />
           )}
@@ -469,8 +468,7 @@ function BrowsePanel({
                       onToggle={toggle}
                       saved={savedIds}
                       lastAmounts={lastAmounts ?? new Map()}
-                      emptyLabel=""
-                      isRemovable
+                              isRemovable
                     />
                   )}
                 </>

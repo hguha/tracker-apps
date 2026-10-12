@@ -1,18 +1,15 @@
 import { Card } from '@tracker-engine/ui'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
-import { SwipeRow, type SwipeAction } from '@/features/shared/SwipeRow'
 import type { Suggestion } from './loggable'
 
 function LoggableRow<T extends Suggestion>({
   suggestion,
   onPick,
-  actions,
 }: {
   suggestion: T
   onPick: (suggestion: T) => void
-  actions?: readonly SwipeAction[]
 }) {
-  const body = (
+  return (
     <button
       onClick={() => onPick(suggestion)}
       className="w-full px-4 py-2.5 text-left active:bg-sunken"
@@ -29,22 +26,19 @@ function LoggableRow<T extends Suggestion>({
       )}
     </button>
   )
-  return actions && actions.length > 0 ? <SwipeRow actions={actions}>{body}</SwipeRow> : body
 }
 
 export function LoggableList<T extends Suggestion>({
   items,
   onPick,
   heading,
-  actionsFor,
 }: {
   items: readonly T[]
   onPick: (suggestion: T) => void
   heading?: string
-  actionsFor?: (suggestion: T) => readonly SwipeAction[]
 }) {
   return (
-    <Card className="p-0">
+    <Card className="overflow-hidden p-0">
       {heading && (
         <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
           {heading}
@@ -53,11 +47,7 @@ export function LoggableList<T extends Suggestion>({
       <ul className="divide-y divide-line">
         {items.map((suggestion) => (
           <li key={suggestion.key}>
-            <LoggableRow
-              suggestion={suggestion}
-              onPick={onPick}
-              actions={actionsFor?.(suggestion)}
-            />
+            <LoggableRow suggestion={suggestion} onPick={onPick} />
           </li>
         ))}
       </ul>
