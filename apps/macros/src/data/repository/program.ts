@@ -128,13 +128,15 @@ export function markGoalReached(programId: string, at = Date.now()): Promise<voi
   return patch('programs', programId, { reachedAt: at })
 }
 
+const newestFirst = (a: CheckIn, b: CheckIn): number => b.weekStart.localeCompare(a.weekStart)
+
 export function checkIns(): Promise<CheckIn[]> {
   return db.checkIns.filter(alive).toArray()
 }
 
 export async function latestCheckIn(): Promise<CheckIn | undefined> {
   const all = await checkIns()
-  return all.sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
+  return all.sort(newestFirst)[0]
 }
 
 type CheckInInput = Omit<
@@ -186,7 +188,7 @@ export async function targetsByDay(
 ): Promise<Map<string, MacroTargets | null>> {
   const applied = (await checkIns())
     .filter((c) => c.status === 'applied')
-    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
+    .sort(newestFirst)
   const program = await activeProgram()
   const profile = await getProfile()
   // Smoothed once. Inside the loop this was O(days × weigh-ins) for every day before the first
@@ -315,7 +317,7 @@ async function draftCheckIn(
     prior:
       all
         .filter((c) => c.status === 'applied' && c.weekStart < week)
-        .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0] ?? null,
+        .sort(newestFirst)[0] ?? null,
   })
 }
 
@@ -356,7 +358,7 @@ export async function checkInStatus(now = Date.now()): Promise<CheckInStatus> {
 export async function pendingCheckIn(): Promise<CheckIn | undefined> {
   return (await checkIns())
     .filter((c) => c.status === 'proposed')
-    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
+    .sort(newestFirst)[0]
 }
 
 export function applyCheckIn(id: string): Promise<void> {
@@ -417,7 +419,7 @@ async function expenditureNow(
 ): Promise<ExpenditureState | null> {
   const inForce = (await checkIns())
     .filter((c) => c.status === 'applied')
-    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]
+    .sort(newestFirst)[0]
   return inForce
     ? { kcal: inForce.expenditureKcal, se: inForce.expenditureSe }
     : coldStartExpenditure(profile, trendKg, now)
