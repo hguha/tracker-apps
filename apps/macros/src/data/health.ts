@@ -32,7 +32,7 @@ export async function syncHealthWeightsIfEnabled(): Promise<void> {
   if (!isHealthSyncOn()) return
   try {
     await syncHealthWeights()
-  } catch {
-    // ignored
+  } catch (error) {
+    console.warn('[health] weight import failed', error)
   }
 }

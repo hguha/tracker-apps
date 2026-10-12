@@ -88,6 +88,7 @@ export function TargetsCard() {
                   proteinGPerKg: program.proteinGPerKg,
                   fatMinPctKcal: program.fatMinPctKcal,
                   coachingMode: program.coachingMode,
+                  cycling: program.cycling,
                   // A goal weight survives a change of direction — someone switching from lose to
                   // maintain still knows what number they were after.
                   targetKg: goal === 'maintain' ? null : program.targetKg,
