@@ -3,7 +3,7 @@ import { getSupabase } from '@/backend/supabaseClient'
 import { mapOffProduct, mapOffSearch, type OffProduct } from '@/lib/openFoodFacts'
 import * as repo from '@/data/repository'
 import { normalizeQuery } from '@/lib/foodSearch'
-import type { Food } from '@/domain/types'
+import type { Food, SyncColumns } from '@/domain/types'
 
 /**
  * Resolving a barcode, cheapest source first.
@@ -66,14 +66,14 @@ export async function searchRemote(
   const q = normalizeQuery(query)
   if (q.length < 2) return []
 
-  const client = getSupabase()
-  if (!client) return []
   try {
-    const { data, error } = await client.functions.invoke<{
-      foods?: Food[]
-      products?: OffProduct[]
-    }>('foods', { body: { op: 'search', q, limit, generic: !branded } })
-    if (error) return []
+    const data = await invokeFoods<{ foods?: Food[]; products?: OffProduct[] }>({
+      op: 'search',
+      q,
+      limit,
+      generic: !branded,
+    })
+    if (!data) return []
 
     const stamp = syncStamp()
     const found = [
@@ -98,14 +98,10 @@ export async function fetchFoodParts(foodId: string): Promise<FoodParts | null> 
   const cached = partsById.get(foodId)
   if (cached !== undefined) return cached
 
-  const client = getSupabase()
-  if (!client) return null
   try {
-    const { data, error } = await client.functions.invoke<FoodParts>('foods', {
-      body: { op: 'parts', id: foodId },
-    })
+    const data = await invokeFoods<FoodParts>({ op: 'parts', id: foodId })
     const found =
-      error || !data || ((data.parts ?? []).length === 0 && !data.text)
+      !data || ((data.parts ?? []).length === 0 && !data.text)
         ? null
         : { parts: data.parts ?? [], text: data.text ?? null }
     partsById.set(foodId, found)
@@ -120,20 +116,23 @@ async function cacheAll(foods: Food[]): Promise<Food[]> {
   return foods
 }
 
-async function fromBackend(barcode: string): Promise<Omit<Food, keyof SyncCols> | null> {
+async function invokeFoods<T>(body: Record<string, unknown>): Promise<T | null> {
   const client = getSupabase()
   if (!client) return null
+  const { data, error } = await client.functions.invoke<T>('foods', { body })
+  return error ? null : data
+}
+
+async function fromBackend(barcode: string): Promise<Omit<Food, keyof SyncColumns> | null> {
   try {
-    const { data, error } = await client.functions.invoke<{ food: Food | null }>('foods', {
-      body: { op: 'barcode', code: barcode },
-    })
-    return error ? null : (data?.food ?? null)
+    const data = await invokeFoods<{ food: Food | null }>({ op: 'barcode', code: barcode })
+    return data?.food ?? null
   } catch {
     return null
   }
 }
 
-async function fromOpenFoodFacts(barcode: string): Promise<Omit<Food, keyof SyncCols> | null> {
+async function fromOpenFoodFacts(barcode: string): Promise<Omit<Food, keyof SyncColumns> | null> {
   try {
     const response = await fetch(
       `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json`,
@@ -148,9 +147,7 @@ async function fromOpenFoodFacts(barcode: string): Promise<Omit<Food, keyof Sync
   }
 }
 
-type SyncCols = { createdAt: number; updatedAt: number; deletedAt: number | null; clientRev: number }
-
-async function cache(food: Omit<Food, keyof SyncCols>): Promise<Food> {
+async function cache(food: Omit<Food, keyof SyncColumns>): Promise<Food> {
   const row = { ...food, ...syncStamp() } as Food
   await repo.putFoods([row])
   return row

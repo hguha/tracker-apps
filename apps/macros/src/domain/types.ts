@@ -1,4 +1,4 @@
-interface SyncColumns {
+export interface SyncColumns {
   createdAt: number
   updatedAt: number
   deletedAt: number | null

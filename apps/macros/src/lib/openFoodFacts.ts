@@ -1,4 +1,4 @@
-import { EMPTY_NUTRIENTS, type Food, type FoodPortion, type Nutrients } from '@/domain/types'
+import { EMPTY_NUTRIENTS, type Food, type FoodPortion, type Nutrients, type SyncColumns } from '@/domain/types'
 import { gramsToMg } from '@/lib/nutrition'
 
 /**
@@ -20,7 +20,7 @@ export interface OffProduct {
   nutriments?: Record<string, unknown>
 }
 
-export function mapOffProduct(product: OffProduct): Omit<Food, keyof SyncCols> | null {
+export function mapOffProduct(product: OffProduct): Omit<Food, keyof SyncColumns> | null {
   const n = product.nutriments ?? {}
   const kcal = num(n['energy-kcal_100g'])
   const protein = num(n['proteins_100g'])
@@ -65,11 +65,9 @@ export function mapOffProduct(product: OffProduct): Omit<Food, keyof SyncCols> |
   }
 }
 
-type SyncCols = { createdAt: number; updatedAt: number; deletedAt: number | null; clientRev: number }
-
 /** Maps a search response, dropping every product too incomplete to log honestly. */
-export function mapOffSearch(products: readonly OffProduct[]): Omit<Food, keyof SyncCols>[] {
-  const mapped: Omit<Food, keyof SyncCols>[] = []
+export function mapOffSearch(products: readonly OffProduct[]): Omit<Food, keyof SyncColumns>[] {
+  const mapped: Omit<Food, keyof SyncColumns>[] = []
   for (const product of products) {
     const food = mapOffProduct(product)
     if (food) mapped.push(food)
