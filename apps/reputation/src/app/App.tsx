@@ -34,7 +34,7 @@ import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
 import { useColorScheme } from '@/lib/useColorScheme'
 import { applyStatusBarStyle } from '@/platform/statusBar'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
-import { useSync } from '@/sync/useSync'
+import { SyncScope } from '@/sync/useSync'
 import { useReminderSync } from '@/features/reminders/reminders'
 
 // ECharts is the biggest dependency; lazy so the logging path never downloads it.
@@ -90,7 +90,11 @@ function AuthGate() {
   if (!session) return <SignInScreen />
 
   // Keyed on the user, so switching accounts remounts and discards prior state.
-  return <SignedInApp key={session.userId} />
+  return (
+    <SyncScope key={session.userId}>
+      <SignedInApp />
+    </SyncScope>
+  )
 }
 
 function SignedInApp() {
@@ -102,7 +106,6 @@ function SignedInApp() {
   // Shown once immediately after finishing onboarding; re-openable in Settings.
   const [showTour, setShowTour] = useState(false)
 
-  useSync()
   useDataTransitionToast()
   useReminderSync(isReady)
 

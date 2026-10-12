@@ -6,7 +6,8 @@
   "description": "Domain-agnostic local-first sync: outbox drain, delta pull, dead-letter, backoff, and a Supabase backend. Driven by an injected SyncSchema + SyncDeps.",
   "exports": {
     ".": "./src/index.ts",
-    "./columnCase": "./src/columnCase.ts"
+    "./columnCase": "./src/columnCase.ts",
+    "./react": "./src/react.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -17,6 +18,15 @@
   },
   "devDependencies": {
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@types/react": "^19.2.17"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }

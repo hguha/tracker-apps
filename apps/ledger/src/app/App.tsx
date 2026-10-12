@@ -8,7 +8,7 @@ import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import { ToastProvider } from '@tracker-engine/ui'
 import { applyAppearance } from '@/lib/theme'
 import { useColorScheme } from '@/lib/useColorScheme'
-import { useSync } from '@/sync/useSync'
+import { SyncScope, useSync } from '@/sync/useSync'
 import type { ColorSchemePreference } from '@/domain/types'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
@@ -48,7 +48,11 @@ function AuthGate() {
   if (!session) return <SignInScreen />
 
   // Keyed on the user, so switching accounts remounts and discards prior state.
-  return <SignedInApp key={session.userId} />
+  return (
+    <SyncScope key={session.userId}>
+      <SignedInApp />
+    </SyncScope>
+  )
 }
 
 function SignedInApp() {

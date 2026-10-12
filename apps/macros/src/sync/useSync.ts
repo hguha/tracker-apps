@@ -1,120 +1,44 @@
-import {
-  createContext,
-  createElement,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { liveQuery } from 'dexie'
+import { isReadyToPush } from '@tracker-engine/local-first'
+import { createSyncScope } from '@tracker-engine/local-first/react'
 import { db } from '@/db'
-import { migrateSavedMeals } from '@/data/repository'
+import { claimLocalData, migrateSavedMeals } from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { MacroSyncEngine } from './engine'
 import { syncBackend } from './backend'
 
-type SyncPhase = 'idle' | 'syncing' | 'error'
-
-interface SyncStatus {
-  pending: number
-  deadLettered: number
-  enabled: boolean
-  phase: SyncPhase
-  syncNow: () => Promise<void>
-}
-
-const SyncContext = createContext<SyncStatus | null>(null)
-
-export function SyncScope({ children }: { children: ReactNode }) {
-  return createElement(SyncContext.Provider, { value: useSync() }, children)
-}
-
-export function useSyncStatus(): SyncStatus {
-  const status = useContext(SyncContext)
-  if (!status) throw new Error('useSyncStatus needs a SyncScope above it')
-  return status
-}
-
-function useSync(): SyncStatus {
-  const { session } = useAuth()
-  const [phase, setPhase] = useState<SyncPhase>('idle')
-
-  const engine = useMemo(() => {
+export const { SyncScope, useSyncStatus } = createSyncScope({
+  tag: 'sync',
+  createEngine: () => {
     const backend = syncBackend()
     return backend ? new MacroSyncEngine(backend) : null
-  }, [])
-
-  // A device-only session has no JWT, so there is nothing to sync it to.
-  const enabled = engine !== null && session != null && !session.isLocal
-
-  const pending = useLiveQuery(() => db.outbox.count(), [], 0)
-  const deadLettered = useLiveQuery(() => db.deadLetter.count(), [], 0)
-
-  const syncNow = useCallback(async () => {
-    if (!engine || !enabled) return
-    setPhase('syncing')
-    try {
-      await engine.retryDeadLettered()
-      await engine.sync()
-      setPhase('idle')
-    } catch (error) {
-      console.warn('[sync] sync now failed', error)
-      setPhase('error')
-    }
-  }, [engine, enabled])
-
-  // Push on every outbox write; reconcile on open, foreground and coming back online.
-  // Never on a timer, so a backgrounded app costs nothing.
-  useEffect(() => {
-    if (!engine || !enabled) return
-    let cancelled = false
-    let draining = false
-    const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
-
-    const push = () => {
-      if (cancelled || draining || isOffline()) return
-      draining = true
-      void engine
-        .drainUntilSettled()
-        .catch((error) => console.warn('[sync] drain threw', error))
-        .finally(() => {
-          draining = false
-        })
-    }
-
-    const reconcile = () => {
-      if (cancelled || isOffline()) return
-      void engine
-        .sync()
-        .then(() => migrateSavedMeals())
-        .catch((error) => console.warn('[sync] reconcile threw', error))
-    }
-
-    reconcile()
-
-    const subscription = liveQuery(() => db.outbox.count()).subscribe({
-      next: (count) => {
-        if (count > 0) push()
+  },
+  useSyncingUserId: () => {
+    const { session } = useAuth()
+    return session && !session.isLocal ? session.userId : null
+  },
+  useCounts: () =>
+    useLiveQuery(
+      async () => {
+        const queued = await db.outbox.toArray()
+        const ready = queued.filter(isReadyToPush).length
+        return {
+          pending: ready,
+          deferred: queued.length - ready,
+          deadLettered: await db.deadLetter.count(),
+        }
       },
+      [],
+      { pending: 0, deferred: 0, deadLettered: 0 },
+    ),
+  observeOutbox: (onCount) => {
+    const subscription = liveQuery(() => db.outbox.count()).subscribe({
+      next: onCount,
       error: (error) => console.warn('[sync] outbox observer failed', error),
     })
-
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') reconcile()
-    }
-    window.addEventListener('online', reconcile)
-    document.addEventListener('visibilitychange', onVisible)
-
-    return () => {
-      cancelled = true
-      subscription.unsubscribe()
-      window.removeEventListener('online', reconcile)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [enabled, engine])
-
-  return { pending: pending ?? 0, deadLettered: deadLettered ?? 0, enabled, phase, syncNow }
-}
+    return () => subscription.unsubscribe()
+  },
+  claimOwnership: claimLocalData,
+  afterReconcile: migrateSavedMeals,
+})

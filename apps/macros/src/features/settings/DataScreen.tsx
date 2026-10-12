@@ -73,7 +73,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
             variant="secondary"
             className="mt-3 w-full"
             disabled={sync.phase === 'syncing'}
-            onClick={() => void sync.syncNow().then(() => toast.show('Synced'))}
+            onClick={() => void sync.retryFailed().then(() => toast.show('Synced'))}
           >
             <RefreshCw size={16} />
             {sync.phase === 'syncing' ? 'Syncing…' : 'Sync now'}
