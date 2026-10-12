@@ -182,13 +182,15 @@ function split(kcal: number, trendKg: number, program: Program): MacroTargets {
   return splitTargets(kcal, trendKg, program.proteinGPerKg, program.fatMinPctKcal)
 }
 
+export const trendDirection = (kgPerWeek: number): 'rising' | 'falling' | 'flat' =>
+  kgPerWeek > 0.05 ? 'rising' : kgPerWeek < -0.05 ? 'falling' : 'flat'
+
 export function describeCheckIn(
   checkIn: Pick<CheckInDraft, 'trendChangeKgPerWeek' | 'expenditureKcal' | 'expenditureSe'>,
   unit: WeightUnit,
 ): string {
   const rate = checkIn.trendChangeKgPerWeek
-  const direction = rate > 0.05 ? 'rising' : rate < -0.05 ? 'falling' : 'flat'
-  return `Weight ${direction} at ${signed(convertWeight(rate, unit), 2)} ${unit}/week · burning ${checkIn.expenditureKcal} ± ${checkIn.expenditureSe} kcal/day`
+  return `Weight ${trendDirection(rate)} at ${signed(convertWeight(rate, unit), 2)} ${unit}/week · burning ${checkIn.expenditureKcal} ± ${checkIn.expenditureSe} kcal/day`
 }
 
 /** Why the number moved, in one sentence. A target nobody understands is a target nobody keeps. */
@@ -197,11 +199,9 @@ function explain(
   trendChangeKgPerWeek: number,
   program: Program,
 ): string {
-  const direction =
-    trendChangeKgPerWeek > 0.05 ? 'rising' : trendChangeKgPerWeek < -0.05 ? 'falling' : 'flat'
   const goalWord =
     program.goal === 'lose' ? 'losing' : program.goal === 'gain' ? 'gaining' : 'holding'
-  return `Weight ${direction} at ${signed(trendChangeKgPerWeek, 2)} kg/week; expenditure measured at ${expenditure.kcal} ± ${expenditure.se} kcal/day. Target set for ${goalWord}.`
+  return `Weight ${trendDirection(trendChangeKgPerWeek)} at ${signed(trendChangeKgPerWeek, 2)} kg/week; expenditure measured at ${expenditure.kcal} ± ${expenditure.se} kcal/day. Target set for ${goalWord}.`
 }
 
 /**

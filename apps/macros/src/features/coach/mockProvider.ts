@@ -2,6 +2,7 @@ import { dayKey, signed } from '@tracker-engine/core'
 import { bodyWeightFromKg, convertWeight, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
+import { trendDirection } from '@/lib/checkin'
 import { dayTotals, mgToGrams, remaining } from '@/lib/nutrition'
 import { withReply, type CoachChatResult, type CoachProvider, type GeminiContent } from './types'
 
@@ -62,7 +63,7 @@ async function weightAnswer(): Promise<string> {
   const latest = trend[trend.length - 1]
   if (!latest) return 'No weigh-ins yet. Weigh in most mornings and I can measure what you burn.'
   const rate = trendChangePerWeek(trend)
-  const direction = rate === null ? 'holding' : rate > 0.05 ? 'rising' : rate < -0.05 ? 'falling' : 'flat'
+  const direction = rate === null ? 'holding' : trendDirection(rate)
   // The offline coach speaks the user's units too, or it contradicts every card on Today.
   const { weight } = unitsFor((await repo.getProfile()).units)
   return `Trend is ${bodyWeightFromKg(latest.trendKg, weight)} ${weight} and ${direction}${
