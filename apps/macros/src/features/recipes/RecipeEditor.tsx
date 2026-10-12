@@ -7,7 +7,7 @@ import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { parseQuantity } from '@/lib/parseQuantity'
-import { grams } from '@/features/shared/format'
+import { macroLine } from '@/features/shared/format'
 import { NumberInput } from '@/features/shared/NumberInput'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
 import { AmountRow } from '@/features/shared/AmountRow'
@@ -455,7 +455,7 @@ export function RecipeEditor({
           </p>
           <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
             {servings > 1 ? 'Each: ' : ''}
-            {grams(each.proteinMg)}P {grams(each.carbsMg)}C {grams(each.fatMg)}F
+            {macroLine(each)}
           </p>
           {notes && <p className="mt-1.5 text-[12px] text-ink-muted">{notes}</p>}
         </Card>

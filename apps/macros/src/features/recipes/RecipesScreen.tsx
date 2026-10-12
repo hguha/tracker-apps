@@ -16,7 +16,7 @@ import * as repo from '@/data/repository'
 import { dayTotals, perServing, remaining } from '@/lib/nutrition'
 import { CUISINE_LABELS, cuisineLabel } from '@/lib/cuisine'
 import { cuisinesPresent, recommendRecipes } from '@/lib/recommend'
-import { grams } from '@/features/shared/format'
+import { macroLine } from '@/features/shared/format'
 import { RecipeDetail } from './RecipeDetail'
 import { RecipeEditor } from './RecipeEditor'
 import type { CuisineKey, Recipe } from '@/domain/types'
@@ -199,7 +199,7 @@ export function RecipesScreen({
                         </span>
                         <span className="tabular mt-0.5 block text-[12px] text-ink-muted">
                           {why ??
-                            `${each.kcal} kcal each · ${grams(each.proteinMg)}P ${grams(each.carbsMg)}C ${grams(each.fatMg)}F`}
+                            `${each.kcal} kcal each · ${macroLine(each)}`}
                         </span>
                         <span className="block text-[11.5px] text-ink-muted">
                           makes {recipe.servings}

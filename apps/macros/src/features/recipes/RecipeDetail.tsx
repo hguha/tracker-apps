@@ -11,7 +11,7 @@ import { ExternalLink, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { perServing, scale } from '@/lib/nutrition'
 import { cuisineLabel } from '@/lib/cuisine'
-import { grams, ingredientAmount } from '@/features/shared/format'
+import { ingredientAmount, macroLine } from '@/features/shared/format'
 import { useUnits } from '@/features/shared/useUnits'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { MealPicker } from '@/features/log/MealPicker'
@@ -110,8 +110,7 @@ export function RecipeDetail({
           <span className="text-[13px] font-medium text-ink-muted"> kcal per serving</span>
         </p>
         <p className="tabular mt-1 text-[13px] text-ink-muted">
-          {grams(each.proteinMg)}P {grams(each.carbsMg)}C {grams(each.fatMg)}F · makes{' '}
-          {recipe.servings}
+          {macroLine(each)} · makes {recipe.servings}
         </p>
         <p className="mt-2 text-[12.5px] text-ink-muted">
           {[
@@ -139,10 +138,7 @@ export function RecipeDetail({
           />
           <p className="tabular min-w-0 flex-1 text-[13px]">
             <span className="font-semibold">{portion.kcal} kcal</span>
-            <span className="text-ink-muted">
-              {' '}
-              · {grams(portion.proteinMg)}P {grams(portion.carbsMg)}C {grams(portion.fatMg)}F
-            </span>
+            <span className="text-ink-muted"> · {macroLine(portion)}</span>
           </p>
         </div>
 

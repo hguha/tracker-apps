@@ -4,7 +4,7 @@ import { Button, Card, SearchField, useToast } from '@tracker-engine/ui'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@tracker-engine/core'
-import { grams } from '@/features/shared/format'
+import { macroLine } from '@/features/shared/format'
 import { formatAmount, nutrientTargets } from '@/lib/micronutrients'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
@@ -107,8 +107,7 @@ function FoodRow({
           <span className="block truncate text-[14px]">{food.description}</span>
           <span className="tabular block truncate text-[12px] text-ink-muted">
             {food.brand ? `${food.brand} · ` : ''}
-            {food.per100.kcal} kcal / 100 g · {grams(food.per100.proteinMg)}P{' '}
-            {grams(food.per100.carbsMg)}C {grams(food.per100.fatMg)}F
+            {food.per100.kcal} kcal / 100 g · {macroLine(food.per100)}
           </span>
         </span>
         <ChevronDown

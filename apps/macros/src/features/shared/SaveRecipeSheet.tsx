@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { plural } from '@tracker-engine/core'
 import { BottomSheet, Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { grams } from '@/features/shared/format'
+import { macroLine } from '@/features/shared/format'
 import { dayTotals } from '@/lib/nutrition'
 import type { LogEntry } from '@/domain/types'
 
@@ -24,8 +24,7 @@ export function SaveRecipeSheet({
     <BottomSheet onDismiss={onDismiss} panelClassName="p-4">
       <h2 className="text-[16px] font-semibold tracking-tight">Save as a recipe</h2>
       <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-        {plural(entries.length, 'item')} · {totals.kcal} kcal ·{' '}
-        {grams(totals.proteinMg)}P {grams(totals.carbsMg)}C {grams(totals.fatMg)}F
+        {plural(entries.length, 'item')} · {totals.kcal} kcal · {macroLine(totals)}
       </p>
 
       <input
