@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { ScreenHeader } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, Dumbbell, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Dumbbell, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -41,23 +42,19 @@ export function TemplatesScreen({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Templates</h1>
-        <button
-          onClick={() => void createAndEdit()}
-          aria-label="New template"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-accent active:bg-accent-wash"
-        >
-          <Plus size={22} />
-        </button>
-      </header>
+      <ScreenHeader
+        title="Templates"
+        onBack={onBack}
+        action={
+          <button
+            onClick={() => void createAndEdit()}
+            aria-label="New template"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-accent active:bg-accent-wash"
+          >
+            <Plus size={22} />
+          </button>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {data && data.length === 0 && (

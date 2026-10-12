@@ -2,7 +2,7 @@
 // untagged exercise would silently vanish from every region breakdown.
 
 import { useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ScreenHeader } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { Button } from '@/components/Button'
 import { cn } from '@/lib/cn'
@@ -68,18 +68,7 @@ export function NewExerciseForm({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-page">
-      <header className="flex items-center gap-2 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onCancel}
-          aria-label="Back"
-          className="flex size-10 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">
-          {exercise ? 'Edit exercise' : 'New exercise'}
-        </h1>
-      </header>
+      <ScreenHeader title={exercise ? 'Edit exercise' : 'New exercise'} onBack={onCancel} />
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
         <Field label="Name">

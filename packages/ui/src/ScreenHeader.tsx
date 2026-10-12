@@ -13,7 +13,7 @@ export function ScreenHeader({
   onBack,
   action,
 }: {
-  title: string
+  title: ReactNode
   onBack: () => void
   action?: ReactNode
 }) {
@@ -26,7 +26,11 @@ export function ScreenHeader({
       >
         <ChevronLeft size={22} />
       </button>
-      <h1 className="flex-1 truncate text-[16px] font-semibold tracking-tight">{title}</h1>
+      {typeof title === 'string' ? (
+        <h1 className="flex-1 truncate text-[16px] font-semibold tracking-tight">{title}</h1>
+      ) : (
+        <div className="min-w-0 flex-1">{title}</div>
+      )}
       {action}
     </header>
   )
@@ -39,7 +43,7 @@ export function Screen({
   action,
   children,
 }: {
-  title: string
+  title: ReactNode
   onBack: () => void
   action?: ReactNode
   children: ReactNode

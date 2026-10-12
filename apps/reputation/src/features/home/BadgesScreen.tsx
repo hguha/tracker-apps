@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { SectionLabel } from '@tracker-engine/ui'
+import { ScreenHeader, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { computeStreaks } from './streaks'
@@ -36,21 +35,17 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-10 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Badges</h1>
-        {badges && (
-          <span className="pr-2 text-[13px] text-ink-muted">
-            {earnedCount} of {badges.length}
-          </span>
-        )}
-      </header>
+      <ScreenHeader
+        title="Badges"
+        onBack={onBack}
+        action={
+          badges && (
+            <span className="pr-2 text-[13px] text-ink-muted">
+              {earnedCount} of {badges.length}
+            </span>
+          )
+        }
+      />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {badges &&

@@ -2,8 +2,9 @@
 // suppresses the timers but leaves every mutation available.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ScreenHeader } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, FileText, MoreHorizontal, Plus, Sparkles } from 'lucide-react'
+import { FileText, MoreHorizontal, Plus, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -300,51 +301,47 @@ export function ActiveWorkoutScreen({
 
   return (
     <div className="flex h-full flex-col">
-      {/* pt-safe like every other full-screen header — this screen renders outside the
-          tab shell's padded <main>. */}
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={isEditMode ? () => void handleLeaveEditing() : onExit}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[16px] font-semibold tracking-tight">
-            {displayTitle}
-          </h1>
-          <p className="flex items-center gap-1.5 text-[12px] text-ink-muted">
-            {template && (
-              <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-accent">
-                <FileText size={10} />
-                {template.name}
+      <ScreenHeader
+        onBack={isEditMode ? () => void handleLeaveEditing() : onExit}
+        title={
+          <>
+            <h1 className="truncate text-[16px] font-semibold tracking-tight">{displayTitle}</h1>
+            <p className="flex items-center gap-1.5 text-[12px] text-ink-muted">
+              {template && (
+                <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-accent">
+                  <FileText size={10} />
+                  {template.name}
+                </span>
+              )}
+              <span className="truncate">
+                {isEditMode
+                  ? `${loggedSetCount} sets · editing`
+                  : `${elapsedLabel} · ${loggedSetCount} sets`}
               </span>
+            </p>
+          </>
+        }
+        action={
+          <>
+            {!isEditMode && (
+              <button
+                onClick={() => setIsCoachOpen(true)}
+                aria-label="Ask the coach"
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-accent active:bg-sunken"
+              >
+                <Sparkles size={19} />
+              </button>
             )}
-            <span className="truncate">
-              {isEditMode
-                ? `${loggedSetCount} sets · editing`
-                : `${elapsedLabel} · ${loggedSetCount} sets`}
-            </span>
-          </p>
-        </div>
-        {!isEditMode && (
-          <button
-            onClick={() => setIsCoachOpen(true)}
-            aria-label="Ask the coach"
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-accent active:bg-sunken"
-          >
-            <Sparkles size={19} />
-          </button>
-        )}
-        <button
-          onClick={() => setIsMenuOpen(true)}
-          aria-label="Workout options"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <MoreHorizontal size={20} />
-        </button>
-      </header>
+            <button
+              onClick={() => setIsMenuOpen(true)}
+              aria-label="Workout options"
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
+            >
+              <MoreHorizontal size={20} />
+            </button>
+          </>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto px-2.5 py-2.5">
         {rows.length === 0 && (

@@ -1,8 +1,8 @@
 // Preferences: units, logging, coaching inputs, appearance.
 
 import { useState } from 'react'
-import { Bell, ChevronLeft, Compass, Sparkles, Volume2 } from 'lucide-react'
-import { NavRow } from '@tracker-engine/ui'
+import { NavRow, ScreenHeader } from '@tracker-engine/ui'
+import { Bell, Compass, Sparkles, Volume2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
@@ -25,16 +25,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Settings</h1>
-      </header>
+      <ScreenHeader title="Settings" onBack={onBack} />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <Card className="p-4">

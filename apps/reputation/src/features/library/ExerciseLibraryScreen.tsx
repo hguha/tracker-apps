@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
+import { SearchField } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, Plus, Search, X } from 'lucide-react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
@@ -109,20 +110,7 @@ export function ExerciseLibraryScreen({ onBack }: { onBack?: () => void }) {
             Exercise library
           </h1>
         </div>
-        <div className="flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
-          <Search size={17} className="shrink-0 text-ink-muted" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search exercises"
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-muted"
-          />
-          {query && (
-            <button onClick={() => setQuery('')} aria-label="Clear search">
-              <X size={17} className="text-ink-muted" />
-            </button>
-          )}
-        </div>
+        <SearchField value={query} onChange={setQuery} placeholder="Search exercises" />
       </div>
 
       <ExerciseFilterPills

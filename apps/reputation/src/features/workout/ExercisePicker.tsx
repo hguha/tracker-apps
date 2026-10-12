@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { SearchField } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Search, X } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
@@ -146,21 +147,7 @@ export function ExercisePicker({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-page">
       <div className="flex items-center gap-2 border-b border-line bg-surface px-3 py-2 pt-safe">
-        <div className="flex h-11 flex-1 items-center gap-2 rounded-xl bg-sunken px-3">
-          <Search size={17} className="shrink-0 text-ink-muted" />
-          <input
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search exercises"
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-muted"
-          />
-          {query && (
-            <button onClick={() => setQuery('')} aria-label="Clear search">
-              <X size={17} className="text-ink-muted" />
-            </button>
-          )}
-        </div>
+        <SearchField autoFocus value={query} onChange={setQuery} placeholder="Search exercises" className="flex-1" />
         <button
           onClick={onDismiss}
           className="h-11 px-2 text-[15px] font-semibold text-accent"

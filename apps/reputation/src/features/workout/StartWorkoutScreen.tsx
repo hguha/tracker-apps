@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { SectionLabel } from '@tracker-engine/ui'
+import { ScreenHeader, SearchField, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronLeft, ChevronRight, Search, Sparkles, X } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { playCue } from '@/features/timer/sounds'
 import { Button } from '@/components/Button'
@@ -67,16 +67,7 @@ export function StartWorkoutScreen({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onCancel}
-          aria-label="Back"
-          className="flex size-10 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">Log a workout</h1>
-      </header>
+      <ScreenHeader title="Log a workout" onBack={onCancel} />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <Button size="lg" className="w-full" onClick={() => void startEmpty()}>
@@ -84,20 +75,7 @@ export function StartWorkoutScreen({
           Start an empty workout
         </Button>
 
-        <div className="flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
-          <Search size={17} className="shrink-0 text-ink-muted" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search to repeat a workout"
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-muted"
-          />
-          {query && (
-            <button onClick={() => setQuery('')} aria-label="Clear search">
-              <X size={17} className="text-ink-muted" />
-            </button>
-          )}
-        </div>
+        <SearchField value={query} onChange={setQuery} placeholder="Search to repeat a workout" />
 
         {shownTemplates.length > 0 && (
           <Card className="overflow-hidden">

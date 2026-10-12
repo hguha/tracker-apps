@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react'
+import { cn } from '@tracker-engine/core'
 
 /** A search box with a clear button. 16px text, because anything smaller makes iOS zoom. */
 export function SearchField({
@@ -6,14 +7,16 @@ export function SearchField({
   onChange,
   placeholder,
   autoFocus = false,
+  className,
 }: {
   value: string
   onChange: (value: string) => void
   placeholder: string
   autoFocus?: boolean
+  className?: string
 }) {
   return (
-    <div className="flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
+    <div className={cn('flex h-11 items-center gap-2 rounded-xl bg-sunken px-3', className)}>
       <Search size={17} className="shrink-0 text-ink-muted" />
       <input
         autoFocus={autoFocus}
