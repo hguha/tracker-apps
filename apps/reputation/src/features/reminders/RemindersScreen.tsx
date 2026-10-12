@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cn } from '@tracker-engine/core'
+import { cn, formatClock, parseClock } from '@tracker-engine/core'
 import { isNativePlatform } from '@tracker-engine/platform'
 import { Card, Screen, Switch } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
@@ -13,14 +13,6 @@ import {
 } from './reminders'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-const toClock = (minute: number) =>
-  `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
-
-const fromClock = (value: string): number | null => {
-  const match = /^(\d{2}):(\d{2})$/.exec(value)
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null
-}
 
 export function RemindersScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [])
@@ -139,10 +131,10 @@ function Row({
         <span className="min-w-0 flex-1 truncate text-[14px]">{label}</span>
         <input
           type="time"
-          value={toClock(minute)}
+          value={formatClock(minute)}
           disabled={!enabled}
           onChange={(event) => {
-            const next = fromClock(event.target.value)
+            const next = parseClock(event.target.value)
             if (next !== null) onChange({ minute: next, enabled })
           }}
           aria-label={`${label} time`}

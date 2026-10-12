@@ -1,9 +1,9 @@
 import { runToolLoop } from '@tracker-engine/ai-coach'
-import { dayKey } from '@tracker-engine/core'
+import { dayKey, formatClock } from '@tracker-engine/core'
 import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams } from '@/lib/nutrition'
-import { eatingOccasions, formatClock, minutesIntoDay } from '@/lib/mealTiming'
+import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
 import {
   executeRetrievalTool,
   isActionTool,

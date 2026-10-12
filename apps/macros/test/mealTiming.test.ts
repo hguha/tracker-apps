@@ -1,13 +1,6 @@
+import { formatClock, parseClock } from '@tracker-engine/core'
 import { describe, expect, it } from 'vitest'
-import {
-  dayTiming,
-  eatingOccasions,
-  formatClock,
-  formatDuration,
-  parseClock,
-  windowProgress,
-  windowState,
-} from '@/lib/mealTiming'
+import { dayTiming, eatingOccasions, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import { EMPTY_NUTRIENTS, type LogEntry } from '@/domain/types'
 
 const day = '2026-09-07'

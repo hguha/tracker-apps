@@ -1,6 +1,6 @@
+import { formatClock } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
-import { formatClock } from '@/lib/mealTiming'
 import { categoryAxis, chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
 import { RankedBars } from './RankedBars'
 import type { EatingWindow } from '@/domain/types'

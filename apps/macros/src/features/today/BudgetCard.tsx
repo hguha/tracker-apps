@@ -1,7 +1,8 @@
+import { formatClock } from '@tracker-engine/core'
 import { Card, ProgressRing } from '@tracker-engine/ui'
 import { ChevronRight, Moon, Utensils } from 'lucide-react'
 import { grams } from '@/features/shared/format'
-import { formatClock, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
+import { formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import type { EatingWindow, LogEntry, MacroTargets, Nutrients } from '@/domain/types'
 import { MacroBars } from '@/features/shared/MacroBar'
 

@@ -169,3 +169,25 @@ export function fromDateTimeInputValue(value: string): number {
 }
 
 export const dayNoon = (day: string): number => Date.parse(`${day}T12:00:00`)
+
+export function formatClock(minute: number): string {
+  const hours = Math.floor(minute / 60) % 24
+  const minutes = Math.round(minute % 60)
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+/**
+ * The inverse of `formatClock`: "07:30" back to minutes from midnight.
+ *
+ * Exists so a reminder time can be an `<input type="time">` — whose value format is exactly what
+ * `formatClock` already emits — instead of a row of preset pills. The presets were the problem: five
+ * half-hourly options per meal meant nobody whose lunch is at 12:15 could be reminded about it.
+ */
+export function parseClock(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return null
+  return hours * 60 + minutes
+}

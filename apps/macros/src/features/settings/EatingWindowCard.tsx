@@ -1,7 +1,8 @@
+import { formatClock, parseClock } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { formatClock, formatDuration, parseClock } from '@/lib/mealTiming'
+import { formatDuration } from '@/lib/mealTiming'
 
 const ANYTIME = 'anytime'
 

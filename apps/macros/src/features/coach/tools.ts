@@ -1,16 +1,9 @@
 import type { ToolDeclaration } from '@tracker-engine/ai-coach'
-import {
-  bodyWeightFromKg,
-  convertWeight,
-  dayKey,
-  dayKeyOffset,
-  groupBy,
-  unitsFor,
-} from '@tracker-engine/core'
+import { bodyWeightFromKg, convertWeight, dayKey, dayKeyOffset, formatClock, groupBy, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale } from '@/lib/nutrition'
-import { dayTiming, eatingOccasions, formatClock, minutesIntoDay, windowState } from '@/lib/mealTiming'
+import { dayTiming, eatingOccasions, minutesIntoDay, windowState } from '@/lib/mealTiming'
 import { cuisineMix, venueSummary, type DaySide } from '@/lib/patterns'
 import type { CoachAction } from './types'
 import { MEAL_SLOTS, type MealSlot } from '@/domain/types'
