@@ -142,8 +142,8 @@ export function DayScreen({
           {timing.firstAt === null
             ? 'Nothing logged'
             : timing.spanMinutes === null
-              ? formatTimeOfDay(timing.firstAt)
-              : `${formatTimeOfDay(timing.firstAt)}–${formatTimeOfDay(timing.lastAt!)} · ${formatDuration(timing.spanMinutes)}`}
+              ? `Ate at ${formatTimeOfDay(timing.firstAt)}`
+              : `Eating ${formatTimeOfDay(timing.firstAt)}–${formatTimeOfDay(timing.lastAt!)} · ${formatDuration(timing.spanMinutes)}`}
         </span>
         <button
           onClick={() => setDay(dayKeyOffset(dayNoon(day), -1))}
