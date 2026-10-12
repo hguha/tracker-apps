@@ -3,7 +3,7 @@ import { dayKey } from '@tracker-engine/core'
 import { db } from '@/db'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
-import { exportToCsv } from '@/data/backup'
+import { exportToCsv, exportToJson, importBackup, parseBackup } from '@/data/backup'
 import { EMPTY_NUTRIENTS } from '@/domain/types'
 
 beforeEach(async () => {
@@ -50,5 +50,23 @@ describe('exportToCsv', () => {
     )
     const row = (await exportToCsv()).split('\n')[1]!
     expect(row.split(',').at(-2)).toBe('')
+  })
+})
+
+describe('importBackup', () => {
+  it('writes nothing when one row in the file is broken', async () => {
+    const backup = parseBackup(
+      JSON.stringify({
+        format: JSON.parse(await exportToJson()).format,
+        bodyWeights: [
+          { id: 'bw:a', day: '2026-10-01', kg: 80 },
+          { day: '2026-10-02', kg: 79 },
+        ],
+      }),
+    )
+
+    await expect(importBackup(backup)).rejects.toThrow()
+    expect(await db.bodyWeights.count()).toBe(0)
+    expect(await db.outbox.count()).toBe(0)
   })
 })

@@ -160,13 +160,15 @@ export async function importBackup(backup: Backup): Promise<void> {
     ['checkIns', db.checkIns, backup.checkIns],
   ] as const
 
-  for (const [name, store, rows] of tables) {
-    for (const row of rows) {
-      // Re-owned to whoever is signed in here, or the rows would be invisible under RLS.
-      const owned = { ...row, ...(owner ? { userId: owner } : {}), ...syncStamp() }
-      await (store as unknown as { put(row: unknown): Promise<unknown> }).put(owned)
-      await enqueue(name, row.id)
+  await db.transaction('rw', [...tables.map(([, store]) => store), db.outbox], async () => {
+    for (const [name, store, rows] of tables) {
+      for (const row of rows) {
+        // Re-owned to whoever is signed in here, or the rows would be invisible under RLS.
+        const owned = { ...row, ...(owner ? { userId: owner } : {}), ...syncStamp() }
+        await (store as unknown as { put(row: unknown): Promise<unknown> }).put(owned)
+        await enqueue(name, row.id)
+      }
     }
-  }
+  })
   await migrateSavedMeals()
 }
