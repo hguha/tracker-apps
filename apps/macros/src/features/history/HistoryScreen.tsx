@@ -115,7 +115,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
 
   return (
     <div className="flex h-full flex-col">
-      <div className="space-y-2 border-b border-line bg-surface px-3 py-2">
+      <div className="space-y-2 border-b border-line bg-surface px-3 pb-2 pt-safe">
         <SearchField value={query} onChange={setQuery} placeholder="Search what you ate" />
         <div className="flex gap-1.5 overflow-x-auto">
           <RangeFilter ranges={RANGES} value={rangeKey} onChange={setRangeKey} />

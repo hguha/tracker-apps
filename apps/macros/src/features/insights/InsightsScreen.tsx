@@ -52,7 +52,7 @@ export function InsightsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-line bg-surface px-2 py-1.5">
+      <div className="border-b border-line bg-surface px-1 pb-1.5 pt-safe">
         <SegmentedTabs tabs={TABS} active={tab} onSelect={setTab} variant="underline" />
       </div>
 
