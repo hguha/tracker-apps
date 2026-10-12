@@ -6,6 +6,8 @@
 /* Shared UI kit lives outside this app's tree (node_modules is not auto-scanned),
    so point Tailwind at it or its class names won't be generated. */
 @source '../../../../packages/ui/src';
+@source '../../../../packages/ai-coach/src/react';
+@source '../../../../packages/auth/src/react';
 
 /* Expose the tokens to Tailwind so `bg-surface`, `text-muted` etc. work. */
 @theme inline {
