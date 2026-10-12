@@ -4,8 +4,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SupabaseAuthProvider as CoreSupabaseAuthProvider } from '@tracker-engine/auth'
 
+export const NATIVE_REDIRECT_URL = 'fitnote://auth-callback'
+
 export class SupabaseAuthProvider extends CoreSupabaseAuthProvider {
   constructor(client: SupabaseClient) {
-    super(client, { nativeRedirectUrl: 'fitnote://auth-callback' })
+    super(client, { nativeRedirectUrl: NATIVE_REDIRECT_URL })
   }
 }

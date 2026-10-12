@@ -17,19 +17,9 @@ export function createSupabaseClient(config: SupabaseClientConfig): SupabaseClie
       autoRefreshToken: true,
       // Reads the magic link's auth params on landing and fires SIGNED_IN.
       detectSessionInUrl: true,
-      // Implicit flow is more robust under a subpath deploy than PKCE's code-exchange step.
-      flowType: 'implicit',
+      flowType: 'pkce',
       storageKey: config.storageKey,
     },
-  })
-
-  // Strip the consumed auth hash: a leftover used token fails on the next reload and
-  // clears the session. Done on SIGNED_IN rather than immediately so it can't race the read.
-  client.auth.onAuthStateChange((event) => {
-    if (event !== 'SIGNED_IN') return
-    if (typeof window === 'undefined') return
-    if (!window.location.hash.includes('access_token')) return
-    window.history.replaceState(null, '', window.location.pathname + window.location.search)
   })
 
   return client
