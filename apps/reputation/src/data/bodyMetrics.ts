@@ -1,10 +1,17 @@
-import { dailyWeights, scaleRate, weightTrend, type TrendPoint } from '@tracker-engine/body'
+import {
+  dailyWeights,
+  scaleOutlook,
+  scaleRate,
+  weightTrend,
+  type ScaleOutlook,
+  type TrendPoint,
+} from '@tracker-engine/body'
 import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import { type MetricDefinition, type MetricEntry } from '@/domain/types'
 import { backfillWorkoutBodyweights } from './bodyweightBackfill'
 import { enqueue, newId } from './outbox'
-import { updateProfile } from './profile'
+import { getProfile, updateProfile } from './profile'
 
 export async function listMetricDefinitions(): Promise<MetricDefinition[]> {
   return db.metricDefinitions.toArray()
@@ -78,4 +85,20 @@ export async function bodyweightTrend(
     ),
   )
   return { trend, kgPerWeek: scaleRate(trend, now)?.kgPerWeek ?? null }
+}
+
+export async function setGoalWeight(kg: number | null, now = Date.now()): Promise<void> {
+  const latest = kg === null ? undefined : (await bodyweightTrend(now)).trend.at(-1)
+  await updateProfile({ goalWeightKg: kg, goalStartKg: latest?.trendKg ?? null })
+}
+
+export async function bodyGoalOutlook(now = Date.now()): Promise<ScaleOutlook | null> {
+  const [profile, { trend }] = await Promise.all([getProfile(), bodyweightTrend(now)])
+  if (profile.goalWeightKg === null) return null
+  return scaleOutlook({
+    targetKg: profile.goalWeightKg,
+    startKg: profile.goalStartKg,
+    trend,
+    now,
+  })
 }

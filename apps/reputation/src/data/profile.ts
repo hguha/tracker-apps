@@ -71,6 +71,12 @@ export async function claimLocalData(newUserId: string): Promise<number> {
           experienceLevel: existing?.experienceLevel ?? localProfile.experienceLevel ?? null,
           trainingDaysPerWeek:
             existing?.trainingDaysPerWeek ?? localProfile.trainingDaysPerWeek ?? null,
+          goalWeightKg: existing?.goalWeightKg ?? localProfile.goalWeightKg ?? null,
+          goalStartKg:
+            existing?.goalWeightKg != null
+              ? (existing.goalStartKg ?? null)
+              : (localProfile.goalStartKg ?? null),
+          coachNotes: localProfile.coachNotes || (existing?.coachNotes ?? ''),
           onboardedAt: existing?.onboardedAt ?? localProfile.onboardedAt ?? null,
           id: newUserId,
           updatedAt: now,

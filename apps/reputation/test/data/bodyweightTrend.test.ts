@@ -36,3 +36,41 @@ describe('bodyweightTrend', () => {
     expect(kgPerWeek!).toBeCloseTo(-0.7, 0)
   })
 })
+
+describe('goal weight', () => {
+  async function weighDaily(fromKg: number, kgPerDay: number, days = 15) {
+    for (let day = 0; day < days; day += 1) {
+      await repo.addMetricEntry({
+        definitionId: 'bodyweight',
+        value: fromKg + day * kgPerDay,
+        measuredAt: NOW - (days - 1 - day) * DAY_MS,
+      })
+    }
+  }
+
+  it('has no outlook until a goal is set', async () => {
+    await weighDaily(80, -0.1)
+    expect(await repo.bodyGoalOutlook(NOW)).toBeNull()
+  })
+
+  it('records where the goal was set from and forecasts toward it', async () => {
+    await weighDaily(80, -0.1)
+    await repo.setGoalWeight(75, NOW)
+
+    const profile = await repo.getProfile()
+    expect(profile.goalWeightKg).toBe(75)
+    expect(profile.goalStartKg).toBeGreaterThan(78)
+
+    const outlook = await repo.bodyGoalOutlook(NOW)
+    expect(outlook?.goal).toBe('lose')
+    expect(outlook?.likelyAt).not.toBeNull()
+  })
+
+  it('clears both the goal and its starting point', async () => {
+    await weighDaily(80, -0.1)
+    await repo.setGoalWeight(75, NOW)
+    await repo.setGoalWeight(null, NOW)
+    const profile = await repo.getProfile()
+    expect([profile.goalWeightKg, profile.goalStartKg]).toEqual([null, null])
+  })
+})

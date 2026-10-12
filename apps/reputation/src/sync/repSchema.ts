@@ -68,6 +68,9 @@ export const repSyncSchema: SyncSchema = {
         birthYear: row.birthYear ?? null,
         experienceLevel: row.experienceLevel ?? null,
         trainingDaysPerWeek: row.trainingDaysPerWeek ?? null,
+        goalWeightKg: row.goalWeightKg ?? null,
+        goalStartKg: row.goalStartKg ?? null,
+        coachNotes: row.coachNotes ?? '',
         onboardedAt: row.onboardedAt ?? null,
         onboardingVersion: row.onboardingVersion ?? 0,
       }

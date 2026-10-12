@@ -131,6 +131,9 @@ async function seedProfile(): Promise<void> {
     if (existing.birthYear === undefined) backfill.birthYear = null
     if (existing.experienceLevel === undefined) backfill.experienceLevel = null
     if (existing.trainingDaysPerWeek === undefined) backfill.trainingDaysPerWeek = null
+    if (existing.goalWeightKg === undefined) backfill.goalWeightKg = null
+    if (existing.goalStartKg === undefined) backfill.goalStartKg = null
+    if (existing.coachNotes === undefined) backfill.coachNotes = ''
     // An existing local profile predates onboarding; treat it as done.
     if (existing.onboardedAt === undefined) backfill.onboardedAt = Date.now()
     // 0 trails the current ONBOARDING_VERSION, so existing accounts replay the
@@ -160,6 +163,9 @@ async function seedProfile(): Promise<void> {
     birthYear: null,
     experienceLevel: null,
     trainingDaysPerWeek: null,
+    goalWeightKg: null,
+    goalStartKg: null,
+    coachNotes: '',
     onboardedAt: null,
     onboardingVersion: 0,
     theme: 'default',

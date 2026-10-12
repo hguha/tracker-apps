@@ -144,6 +144,9 @@ export interface Profile extends SyncColumns {
   birthYear: number | null
   experienceLevel: 'beginner' | 'intermediate' | 'advanced' | null
   trainingDaysPerWeek: number | null
+  goalWeightKg: number | null
+  goalStartKg: number | null
+  coachNotes: string
   // Null until first-run setup completes. On the profile so it follows the
   // account across devices rather than re-running per device (§11.1.3).
   onboardedAt: number | null

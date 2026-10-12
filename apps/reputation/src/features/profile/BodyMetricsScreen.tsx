@@ -12,6 +12,7 @@ import { formatRelativeDay } from '@/lib/dates'
 import { bodyWeightFromKg, lengthFromCm, lengthToCm, weightToKg } from '@/lib/units'
 import { AboutYouCard } from './AboutYouCard'
 import { BodyTrendCard } from './BodyTrendCard'
+import { GoalWeightCard } from './GoalWeightCard'
 
 const QUICK_METRIC_KEYS = ['bodyweight']
 
@@ -38,7 +39,7 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
     }
   }, [])
 
-  if (!data) return <div className="p-6 text-ink-muted">Loading…</div>
+  if (!data) return null
   const { profile, quick } = data
 
   function toCanonical(unitType: string, raw: number): number {
@@ -141,6 +142,7 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
           </div>
         </Card>
 
+        <GoalWeightCard profile={profile} />
         <BodyTrendCard unit={profile.unitWeight} />
 
         <div className="h-4" />

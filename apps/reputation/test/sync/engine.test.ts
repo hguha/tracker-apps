@@ -697,6 +697,9 @@ describe('delta pull (§5.5)', () => {
     // undefined off a pre-migration server row.
     expect(profile?.heightCm).toBeNull()
     expect(profile?.trainingGoal).toBe('')
+    expect(profile?.goalWeightKg).toBeNull()
+    expect(profile?.goalStartKg).toBeNull()
+    expect(profile?.coachNotes).toBe('')
   })
 
   it('propagates a tombstone — a deleted row stays filtered out', async () => {
