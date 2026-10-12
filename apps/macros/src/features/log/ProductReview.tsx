@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useBusy } from '@/features/shared/useBusy'
 import { PencilLine } from 'lucide-react'
 import { Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
@@ -23,13 +23,11 @@ export function ProductReview({
   onRefine: (extra: string) => void
 }) {
   const toast = useToast()
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, run] = useBusy()
   const nutrients = per100FromPanel(product, product.servingGrams)
 
-  async function log() {
-    if (isSaving) return
-    setIsSaving(true)
-    try {
+  const log = () =>
+    run(async () => {
       const id = await repo.saveCustomFood(asFood(product))
       const food = await repo.getFood(id)
       if (!food) return
@@ -38,10 +36,7 @@ export function ProductReview({
       await subject.log(unit, 1, target)
       toast.show(`${product.name} logged, and saved to your foods`)
       onDone()
-    } finally {
-      setIsSaving(false)
-    }
-  }
+    })
 
   return (
     <div className="space-y-3">

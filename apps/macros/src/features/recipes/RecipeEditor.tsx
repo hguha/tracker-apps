@@ -7,6 +7,7 @@ import * as repo from '@/data/repository'
 import { nutrientsFor, recipeNutrients, scale } from '@/lib/nutrition'
 import { CUISINE_LABELS } from '@/lib/cuisine'
 import { parseQuantity } from '@/lib/parseQuantity'
+import { useBusy } from '@/features/shared/useBusy'
 import { macroLine } from '@/features/shared/format'
 import { NumberInput } from '@/features/shared/NumberInput'
 import { FoodSearchPicker } from '@/features/shared/FoodSearchPicker'
@@ -86,7 +87,7 @@ export function RecipeEditor({
   const [aiSource, setAiSource] = useState<EntrySource | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, busy] = useBusy()
   const [pastMeals, setPastMeals] = useState<{ count: number; before: Recipe } | null>(null)
   const started = useRef(false)
 
@@ -252,16 +253,6 @@ export function RecipeEditor({
     tags,
     sourceUrl: source,
   })
-
-  async function busy(work: () => Promise<void>) {
-    if (isSaving) return
-    setIsSaving(true)
-    try {
-      await work()
-    } finally {
-      setIsSaving(false)
-    }
-  }
 
   async function persist(updatePast: boolean) {
     const before = pastMeals?.before ?? existing

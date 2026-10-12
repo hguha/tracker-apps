@@ -3,6 +3,7 @@ import { Button, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-eng
 import * as repo from '@/data/repository'
 import { per100FromPanel, per100FromServing } from '@/lib/nutrition'
 import type { Food } from '@/domain/types'
+import { useBusy } from '@/features/shared/useBusy'
 import type { FoodDraft } from './estimate'
 
 /**
@@ -58,7 +59,7 @@ export function CustomFoodPanel({
     satFat: text(draft?.satFatG),
     sodium: text(draft?.sodiumMg),
   })
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, run] = useBusy()
 
   const servingGrams = Number(serving) || 0
   const kcal = Number(fields.kcal) || 0
@@ -71,9 +72,8 @@ export function CustomFoodPanel({
     basis === 'hundred' ? number(value) : per100FromServing(number(value), servingGrams)
 
   async function save() {
-    if (isSaving || !canSave) return
-    setIsSaving(true)
-    try {
+    if (!canSave) return
+    await run(async () => {
       const id = await repo.saveCustomFood({
         description: name,
         brand,
@@ -97,9 +97,7 @@ export function CustomFoodPanel({
       const saved = await repo.getFood(id)
       toast.show(`Saved ${name.trim()}`)
       if (saved) onSaved(saved)
-    } finally {
-      setIsSaving(false)
-    }
+    })
   }
 
   return (

@@ -6,6 +6,7 @@ import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { dayTotals, macroSharePct, scale, sum } from '@/lib/nutrition'
+import { useBusy } from '@/features/shared/useBusy'
 import { MacroBars } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import {
@@ -86,7 +87,7 @@ export function AddPanel({
     editedRef.current = true
     setIsEdited(true)
   }
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, run] = useBusy()
 
   const borrowedKey = borrowed === undefined ? 'pending' : (borrowed?.from.id ?? 'none')
   useEffect(() => {
@@ -136,16 +137,6 @@ export function AddPanel({
   const nudge = (delta: number) => {
     markEdited()
     setAmount(String(Math.max(unit.min, Math.round((count + delta) * 100) / 100)))
-  }
-
-  async function run(action: () => Promise<void>) {
-    if (isSaving) return
-    setIsSaving(true)
-    try {
-      await action()
-    } finally {
-      setIsSaving(false)
-    }
   }
 
   async function log() {

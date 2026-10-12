@@ -4,6 +4,7 @@ import * as repo from '@/data/repository'
 import { gramsToMg, mgToGrams } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Nutrients } from '@/domain/types'
 import type { LogTarget } from '@/features/shared/target'
+import { useBusy } from '@/features/shared/useBusy'
 import { EditActions } from './EditActions'
 
 interface QuickEdit {
@@ -40,7 +41,7 @@ export function QuickAddPanel({
         }
       : { kcal: '', protein: '', carbs: '', fat: '' },
   )
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, run] = useBusy()
 
   const numbers = {
     kcal: Number(fields.kcal) || 0,
@@ -51,20 +52,9 @@ export function QuickAddPanel({
 
   const whole = (): Nutrients => ({ ...(edit?.nutrients ?? EMPTY_NUTRIENTS), ...numbers })
 
-  async function run(action: () => Promise<void>) {
-    if (isSaving) return
-    setIsSaving(true)
-    try {
-      await action()
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   async function log() {
-    if (isSaving || numbers.kcal <= 0) return
-    setIsSaving(true)
-    try {
+    if (numbers.kcal <= 0) return
+    await run(async () => {
       await repo.logQuickAdd(
         { ...EMPTY_NUTRIENTS, ...numbers },
         target.meal,
@@ -74,9 +64,7 @@ export function QuickAddPanel({
       )
       toast.show('Logged')
       onDone()
-    } finally {
-      setIsSaving(false)
-    }
+    })
   }
 
   return (
