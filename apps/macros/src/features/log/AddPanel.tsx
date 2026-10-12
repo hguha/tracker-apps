@@ -134,6 +134,13 @@ export function AddPanel({
   const after = adding ? sum([already, adding]) : already
 
   const isLastTime = last !== undefined && last !== null && !isEdited
+  const summary = unit.summaryAt(count)
+  const amountNote =
+    count === 0
+      ? 'Pick an amount'
+      : [!unit.label.endsWith(summary) && summary, isLastTime && 'what you had last time']
+          .filter(Boolean)
+          .join(' · ')
 
   const nudge = (delta: number) => {
     setIsEdited(true)
@@ -233,18 +240,7 @@ export function AddPanel({
         )}
       </div>
 
-      {(count === 0 || isLastTime || !unit.label.endsWith(unit.summaryAt(count))) && (
-        <p className="tabular text-[12.5px] text-ink-muted">
-          {count === 0
-            ? 'Pick an amount'
-            : [
-                !unit.label.endsWith(unit.summaryAt(count)) && unit.summaryAt(count),
-                isLastTime && 'what you had last time',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-        </p>
-      )}
+      {amountNote && <p className="tabular text-[12.5px] text-ink-muted">{amountNote}</p>}
 
       {isDayLoaded ? (
         <DayPreview already={already} adding={adding} after={after} targets={targets ?? null} />
