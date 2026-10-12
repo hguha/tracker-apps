@@ -155,6 +155,32 @@ test('logging bodyweight shows its smoothed trend on the Body screen', async ({ 
   expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
 })
 
+test('a goal weight is kept on the Body screen and shows how far is left', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await skipSetup(page)
+
+  await page.getByRole('button', { name: 'More', exact: true }).click()
+  await page.getByRole('button', { name: /^Body/ }).click()
+  await page.getByPlaceholder('Log a new value').first().fill('180')
+  await page.getByRole('button', { name: /^Log Bodyweight/i }).click()
+
+  const goal = page.getByLabel('Goal weight')
+  await goal.fill('170')
+  await goal.blur()
+  await expect(page.getByText(/^10\.0 lb to go/)).toBeVisible()
+  await expect(page.getByText('Weigh in a few more times for a forecast')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: /^Body/ }).click()
+  await expect(page.getByLabel('Goal weight')).toHaveValue('170')
+
+  await page.getByLabel('Goal weight').fill('')
+  await page.getByLabel('Goal weight').blur()
+  await expect(page.getByText(/lb to go/)).toHaveCount(0)
+  expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
+})
+
 test('the offline coach answers and keeps the conversation', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
