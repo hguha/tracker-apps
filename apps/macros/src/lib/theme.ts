@@ -1,4 +1,4 @@
-import { createAppearance } from '@tracker-engine/ui'
+import { createAppearance, sharedThemes } from '@tracker-engine/ui'
 import type { ThemePreset } from '@/domain/types'
 
 /**
@@ -12,11 +12,7 @@ import type { ThemePreset } from '@/domain/types'
  */
 export const THEME_PRESETS: { id: ThemePreset; label: string; swatch: string }[] = [
   { id: 'default', label: 'Sunset', swatch: '#a84818' },
-  { id: 'slate', label: 'Slate', swatch: '#4a41c4' },
-  { id: 'forest', label: 'Forest', swatch: '#1c6d40' },
-  { id: 'ocean', label: 'Ocean', swatch: '#0c6f79' },
-  { id: 'crimson', label: 'Crimson', swatch: '#a81f37' },
-  { id: 'mono', label: 'Mono', swatch: '#171717' },
+  ...sharedThemes('slate', 'forest', 'ocean', 'crimson', 'mono'),
 ]
 
 export const { applyAppearance, applyDefaultAppearance } = createAppearance({

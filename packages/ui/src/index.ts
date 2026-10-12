@@ -26,6 +26,9 @@ export { TabBar, type TabDefinition } from './TabBar'
 export {
   createAppearance,
   resolveScheme,
+  SHARED_THEME_PRESETS,
+  sharedThemes,
+  type SharedThemeId,
   syncThemeColor,
   type AppearanceSettings,
   type ColorScheme,

@@ -16,6 +16,22 @@ export interface ThemePreset {
   swatch: string
 }
 
+export const SHARED_THEME_PRESETS = [
+  { id: 'slate', label: 'Slate', swatch: '#4a41c4' },
+  { id: 'forest', label: 'Forest', swatch: '#1c6d40' },
+  { id: 'ocean', label: 'Ocean', swatch: '#0c6f79' },
+  { id: 'sunset', label: 'Sunset', swatch: '#b34c19' },
+  { id: 'crimson', label: 'Crimson', swatch: '#a81f37' },
+  { id: 'mono', label: 'Mono', swatch: '#171717' },
+] as const
+
+export type SharedThemeId = (typeof SHARED_THEME_PRESETS)[number]['id']
+
+export const sharedThemes = <const Id extends SharedThemeId>(...ids: Id[]) =>
+  SHARED_THEME_PRESETS.filter((preset): preset is Extract<(typeof SHARED_THEME_PRESETS)[number], { id: Id }> =>
+    (ids as readonly string[]).includes(preset.id),
+  )
+
 export interface AppearanceSettings {
   /** Loosely typed: it round-trips through storage, where an older build may have written
    *  a name this one doesn't know. Unknown values fall back to the first preset. */
