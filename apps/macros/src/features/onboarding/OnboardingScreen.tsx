@@ -237,13 +237,13 @@ export function OnboardingScreen() {
               <div>
                 <span className="block text-[11px] text-ink-muted">Sex</span>
                 <PillSelect
-                  className="mt-0.5"
+                  className="mt-0.5 capitalize"
                   value={sex}
                   isRequired
                   onChange={(value) => value && setSex(value)}
                   options={[
-                    { value: 'female', label: 'Female' },
-                    { value: 'male', label: 'Male' },
+                    { value: 'female', label: 'female' },
+                    { value: 'male', label: 'male' },
                   ]}
                 />
                 <p className="mt-1 text-[11.5px] text-ink-muted">
