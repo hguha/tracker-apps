@@ -22,7 +22,8 @@ import { dailyAverage, dayTotals } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, formatDuration } from '@/lib/mealTiming'
 import { grams } from '@/features/shared/format'
 import { MEAL_LABELS } from '@/lib/meals'
-import { entryName, foodIdsOf, searchableNames } from '@/features/shared/entryName'
+import { entryName, searchableNames } from '@/features/shared/entryName'
+import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
 import { dishGroups, mealGroups } from '@/lib/dayGroups'
 import { VENUE_ICONS, VENUE_LONG, venueLabel } from '@/features/shared/venue'
@@ -84,13 +85,10 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
    * showed **"Nothing logged yet."** for the first frame — a flat statement that the diary is empty,
    * on the screen whose whole job is the diary.
    */
-  const entries = useLiveQuery(() => repo.entriesBetween(from, today), [from, today], undefined)
-  const foods = useLiveQuery(
-    async () => repo.foodsByIds(foodIdsOf(entries ?? [])),
-    [entries],
-    new Map<string, Food>(),
-  )
-  const isLoaded = entries !== undefined
+  const loaded = useEntriesWithFoods(from, today)
+  const entries = loaded?.entries
+  const foods = loaded?.foods
+  const isLoaded = loaded !== undefined
 
   // Filters apply to entries first, so a day only appears when something in it matches — the
   // alternative (filter the days, show every entry) makes a search result lie about its own hits.

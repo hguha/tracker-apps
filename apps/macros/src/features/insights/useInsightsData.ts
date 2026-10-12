@@ -13,7 +13,8 @@ import { groupByWeek } from '@/lib/checkin'
 import { filterExpenditure, kcalPerKg, windowEstimate, type ExpenditureWindow } from '@/lib/expenditure'
 import { eatingOccasions, minutesIntoDay } from '@/lib/mealTiming'
 import { cuisineMix, venueSummary, type CuisineShare, type VenueSummary } from '@/lib/patterns'
-import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { entryName } from '@/features/shared/entryName'
+import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
 import type { GoalForecast } from '@/lib/goal'
 import type { CuisineKey, LogEntry, MacroTargets, Profile, Program } from '@/domain/types'
 
@@ -84,7 +85,9 @@ export function useInsightsData(windowDays: number): InsightsData {
   const from = dayKeyOffset(Date.now(), windowDays - 1)
   const today = dayKey(Date.now())
 
-  const entries = useLiveQuery(() => repo.entriesBetween(from, today), [from, today], undefined)
+  const loaded = useEntriesWithFoods(from, today)
+  const entries = loaded?.entries
+  const foods = loaded?.foods
   const weights = useLiveQuery(() => repo.weights(), [], undefined)
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
@@ -149,12 +152,6 @@ export function useInsightsData(windowDays: number): InsightsData {
     const hour = new Date(entry.eatenAt).getHours()
     kcalByHour[hour] = (kcalByHour[hour] ?? 0) + entry.nutrients.kcal
   }
-
-  const foods = useLiveQuery(
-    () => repo.foodsByIds(foodIdsOf(entries ?? [])),
-    [entries],
-    undefined,
-  )
 
   const contribution = new Map<string, { kcal: number; entries: number }>()
   for (const entry of entries ?? []) {

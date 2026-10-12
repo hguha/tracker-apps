@@ -23,7 +23,8 @@ import { dayTotals } from '@/lib/nutrition'
 import { mealGroups, type DishGroup, type MealGroup } from '@/lib/dayGroups'
 import { dayTiming, formatDuration } from '@/lib/mealTiming'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
-import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { entryName } from '@/features/shared/entryName'
+import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
 import { useDebouncedValue } from '@/features/shared/useDebouncedValue'
 import { MacroNumbers } from '@/features/shared/MacroNumbers'
 import { LoggableList } from '@/features/shared/LoggableList'
@@ -74,22 +75,7 @@ export function DayScreen({
   const [find, setFind] = useState('')
 
   const today = dayKey(Date.now())
-  /**
-   * The rows and their foods in one query, not two.
-   *
-   * As two, the names arrived a render later than the rows — so every row briefly read "Food", which
-   * is `entryName`'s fallback for a food that genuinely isn't cached. A flicker showing the *wrong*
-   * word is worse than a slower first paint, and the second query only started once the first had
-   * resolved anyway, so nothing is lost by asking for both together.
-   */
-  const loaded = useLiveQuery(
-    async () => {
-      const rows = await repo.entriesForDay(day)
-      return { entries: rows, foods: await repo.foodsByIds(foodIdsOf(rows)) }
-    },
-    [day],
-    undefined,
-  )
+  const loaded = useEntriesWithFoods(day, day)
   const entries = loaded?.entries
   const foods = loaded?.foods ?? new Map<string, Food>()
   const target = useLiveQuery(async () => (await repo.targetsByDay([day])).get(day) ?? null, [day], null)

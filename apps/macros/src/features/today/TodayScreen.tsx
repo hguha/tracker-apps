@@ -6,7 +6,7 @@ import { dailyAverageCovered, dayTotals, remaining } from '@/lib/nutrition'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
 import { ProgressCard } from '@/features/badges/ProgressCard'
 import { dailyGoals } from '@/features/badges/progression'
-import { foodIdsOf } from '@/features/shared/entryName'
+import { useEntriesWithFoods } from '@/features/shared/useEntriesWithFoods'
 import type { BodyWeightRow, Food, MealSlot, Profile } from '@/domain/types'
 import { BudgetCard } from './BudgetCard'
 import { GoalCard } from './GoalCard'
@@ -37,15 +37,7 @@ export function TodayScreen({
 }) {
   const today = dayKey(Date.now())
 
-  // Rows and their names together — see DayScreen for why they can't be two queries.
-  const loaded = useLiveQuery(
-    async () => {
-      const rows = await repo.entriesForDay(today)
-      return { entries: rows, foods: await repo.foodsByIds(foodIdsOf(rows)) }
-    },
-    [today],
-    undefined,
-  )
+  const loaded = useEntriesWithFoods(today, today)
   const entries = loaded?.entries ?? []
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
