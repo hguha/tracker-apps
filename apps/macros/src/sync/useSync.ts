@@ -57,6 +57,7 @@ function useSync(): SyncStatus {
     if (!engine || !enabled) return
     setPhase('syncing')
     try {
+      await engine.retryDeadLettered()
       await engine.sync()
       setPhase('idle')
     } catch {
