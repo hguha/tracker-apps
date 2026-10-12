@@ -10,7 +10,7 @@ import {
   type Profile,
   type Program,
 } from '@/domain/types'
-import { cycleDayTargets } from '@/lib/nutrition'
+import { cycleDayTargets, withCalories } from '@/lib/nutrition'
 import { multiplierForDay } from '@/lib/cycling'
 import {
   buildCheckIn,
@@ -22,7 +22,7 @@ import {
   type CheckInOutcome,
 } from '@/lib/checkin'
 import { kcalPerKg, type ExpenditureState, type IntakeDay } from '@/lib/expenditure'
-import { kcalFloor, paceForDate, type DatedPace } from '@/lib/pace'
+import { kcalFloor, paceForDate, safeMaxPct, type DatedPace } from '@/lib/pace'
 import { EATING_WINDOW_DAYS, goalForecast, type GoalForecast } from '@/lib/goal'
 import { weights } from './body'
 import { entriesBetween } from './entries'
@@ -194,12 +194,14 @@ export async function targetsByDay(
   const trend = weightTrend(await weights())
 
   const out = new Map<string, MacroTargets | null>()
-  // Cycling redistributes a week's calories without changing its total, so it's applied on top of
-  // whatever the check-in set rather than being part of it.
-  const cycled = (day: string, targets: MacroTargets | null) =>
-    targets === null
-      ? null
-      : cycleDayTargets(targets, multiplierForDay(program?.cycling ?? null, day))
+  const floor = kcalFloor(profile.sex)
+  const forDay = (day: string, targets: MacroTargets | null, minimumKcal: number) => {
+    if (targets === null) return null
+    const cycled = cycleDayTargets(targets, multiplierForDay(program?.cycling ?? null, day))
+    return program?.goal === 'lose' && cycled.kcal < minimumKcal
+      ? withCalories(cycled, minimumKcal)
+      : cycled
+  }
 
   for (const day of days) {
     // Typed-in targets win outright, from the day they were set. Not cycled either: calorie cycling
@@ -213,21 +215,24 @@ export async function targetsByDay(
     const inForce = applied.find((c) => c.weekStart < week)
     if (inForce) {
       const isRetuned = program !== undefined && day >= dayKey(program.updatedAt)
-      out.set(day, cycled(day, isRetuned ? targetsInForce(inForce, program, kcalFloor(profile.sex)) : inForce.targets))
+      out.set(
+        day,
+        forDay(
+          day,
+          isRetuned ? targetsInForce(inForce, program, floor) : inForce.targets,
+          Math.min(floor, inForce.expenditureKcal),
+        ),
+      )
       continue
     }
     // Before the first check-in, the cold-start estimate — from the weight known *then*, so a
     // day early in a cut isn't judged against the target its final weight would imply.
     const trendKg = trendOn(trend, day)
-    out.set(
-      day,
-      cycled(
-        day,
-        program && trendKg !== null
-          ? initialTargetsFromTrend(program, profile, trendKg, dayNoon(day))
-          : null,
-      ),
-    )
+    const initial =
+      program && trendKg !== null
+        ? initialTargetsFromTrend(program, profile, trendKg, dayNoon(day))
+        : null
+    out.set(day, forDay(day, initial, Math.min(floor, initial?.kcal ?? 0)))
   }
   return out
 }
@@ -362,29 +367,44 @@ export function declineCheckIn(id: string): Promise<void> {
   return patch('checkIns', id, { status: 'declined' })
 }
 
-export async function goalOutlook(now = Date.now()): Promise<GoalForecast | null> {
+async function goalBasis(now: number) {
   const program = await activeProgram()
   if (!program || program.targetKg === null) return null
-  const trend = weightTrend(await weights())
+  const [rows, profile] = await Promise.all([weights(), getProfile()])
+  const trend = weightTrend(rows)
   const latest = trend[trend.length - 1]
   if (!latest) return null
-
-  const profile = await getProfile()
   const expenditure = await expenditureNow(profile, latest.trendKg, now)
+  const floorKcal = kcalFloor(profile.sex)
+  return { program, targetKg: program.targetKg, trend, latest, profile, expenditure, floorKcal }
+}
+
+export async function goalOutlook(now = Date.now()): Promise<GoalForecast | null> {
+  const basis = await goalBasis(now)
+  if (!basis) return null
+  const { program, targetKg, trend, latest, profile, expenditure, floorKcal } = basis
   const today = dayKey(now)
-  const targets = await targetsForDay(today)
+  const [targets, intake] = await Promise.all([
+    targetsForDay(today),
+    intakeByDay(dayKeyOffset(now, EATING_WINDOW_DAYS), dayKeyOffset(now, 1)),
+  ])
 
   return goalForecast({
     goal: program.goal,
-    targetKg: program.targetKg,
+    targetKg,
     trend,
-    intake: await intakeByDay(dayKeyOffset(now, EATING_WINDOW_DAYS), dayKeyOffset(now, 1)),
+    intake,
     expenditure,
     energyPerKg: kcalPerKg(program.goal, program.ratePctPerWeek),
     targetKcal: targets?.kcal ?? null,
     isCustomTarget: profile.manualTargets !== null && today >= profile.manualTargets.fromDay,
     ratePctPerWeek: program.ratePctPerWeek,
-    floorKcal: kcalFloor(profile.sex),
+    safeMaxPct: safeMaxPct({
+      goal: program.goal,
+      trendKg: latest.trendKg,
+      expenditureKcal: expenditure?.kcal ?? null,
+      floorKcal,
+    }),
     behaviourSince: program.startedAt,
     now,
   })
@@ -403,28 +423,31 @@ async function expenditureNow(
     : coldStartExpenditure(profile, trendKg, now)
 }
 
+export type GoalDateResult =
+  | { kind: 'set'; pace: DatedPace }
+  | { kind: 'needs-weigh-in' }
+  | { kind: 'past-goal' }
+
 export async function setGoalDate(
   programId: string,
   byAt: number,
   now = Date.now(),
-): Promise<DatedPace | null> {
-  const program = await activeProgram()
-  if (!program || program.id !== programId || program.targetKg === null) return null
-  const trend = weightTrend(await weights())
-  const latest = trend[trend.length - 1]
-  if (!latest) return null
-  const profile = await getProfile()
+): Promise<GoalDateResult> {
+  const basis = await goalBasis(now)
+  if (!basis || basis.program.id !== programId) return { kind: 'needs-weigh-in' }
+  const { program, targetKg, latest, expenditure, floorKcal } = basis
   const pace = paceForDate({
     goal: program.goal,
     trendKg: latest.trendKg,
-    targetKg: program.targetKg,
+    targetKg,
     byAt,
     now,
-    expenditureKcal: (await expenditureNow(profile, latest.trendKg, now))?.kcal ?? null,
-    sex: profile.sex,
+    expenditureKcal: expenditure?.kcal ?? null,
+    floorKcal,
   })
-  if (pace && pace.ratePctPerWeek !== 0) {
+  if (!pace) return { kind: 'past-goal' }
+  if (pace.ratePctPerWeek !== 0) {
     await patch('programs', programId, { ratePctPerWeek: pace.ratePctPerWeek })
   }
-  return pace
+  return { kind: 'set', pace }
 }

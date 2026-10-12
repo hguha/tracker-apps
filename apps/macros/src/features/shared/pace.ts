@@ -1,4 +1,3 @@
-import { signed } from '@tracker-engine/core'
 import type { Goal } from '@/domain/types'
 
 /** %/week of bodyweight. Named rather than free-numeric, because the difference between −0.5
@@ -20,6 +19,3 @@ export const RATES: Record<Goal, { value: number; label: string }[]> = {
 export function paceLabel(goal: Goal, ratePctPerWeek: number): string | null {
   return RATES[goal].find((rate) => rate.value === ratePctPerWeek)?.label ?? null
 }
-
-export const paceName = (goal: Goal, ratePctPerWeek: number): string =>
-  paceLabel(goal, ratePctPerWeek) ?? `${signed(ratePctPerWeek, 2)}%/wk`

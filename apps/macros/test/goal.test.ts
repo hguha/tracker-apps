@@ -177,7 +177,7 @@ describe('goalForecast', () => {
     sex: 'male',
     activity: 'moderate',
   })
-  const fastKcal = targetKcal(expenditure, { goal: 'lose', ratePctPerWeek: -0.75 }, startKg)
+  const fastKcal = targetKcal(expenditure, { goal: 'lose', ratePctPerWeek: -0.75 }, startKg, 0)
 
   const forecastFor = (trend: TrendPoint[], over: Partial<Parameters<typeof goalForecast>[0]> = {}) =>
     goalForecast({
@@ -188,6 +188,7 @@ describe('goalForecast', () => {
       expenditure,
       energyPerKg: 7700,
       targetKcal: fastKcal,
+      safeMaxPct: 1,
       isCustomTarget: false,
       ratePctPerWeek: -0.75,
       now: NOW,
@@ -239,9 +240,14 @@ describe('goalForecast', () => {
 
   it('flags a target that implies a different pace from the one chosen', () => {
     const trend = weightTrend(weighIns(startKg, { days: 10, kgPerWeek: -0.3 }))
-    const steadyKcal = targetKcal(expenditure, { goal: 'lose', ratePctPerWeek: -0.5 }, startKg)
+    const steadyKcal = targetKcal(expenditure, { goal: 'lose', ratePctPerWeek: -0.5 }, startKg, 0)
     expect(forecastFor(trend, { targetKcal: steadyKcal + 150 }).pace).toBe('off-pace')
     expect(forecastFor(trend, { targetKcal: fastKcal + 40 }).pace).toBe('matches')
+  })
+
+  it('says when the chosen pace is faster than the safe limit', () => {
+    const trend = weightTrend(weighIns(startKg, { days: 10, kgPerWeek: -0.3 }))
+    expect(forecastFor(trend, { safeMaxPct: 0.5 }).pace).toBe('unsafe')
   })
 
   it('says custom targets are in charge whenever they are on', () => {
@@ -269,6 +275,7 @@ describe('goalForecast', () => {
         targetKcal: null,
         isCustomTarget: false,
         ratePctPerWeek: -0.75,
+        safeMaxPct: 1,
         now: NOW,
       }),
     ).toBeNull()

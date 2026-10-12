@@ -253,13 +253,13 @@ describe('targets in force after the pace changes', () => {
 
   it('keeps the stored targets while the program is unchanged since the check-in', () => {
     const checkIn = applied()
-    expect(targetsInForce(checkIn, program({ ratePctPerWeek: -0.75, updatedAt: 50 }))).toBe(
+    expect(targetsInForce(checkIn, program({ ratePctPerWeek: -0.75, updatedAt: 50 }), 0)).toBe(
       checkIn.targets,
     )
   })
 
   it('re-derives from the measured expenditure the moment the pace changes', () => {
-    const fast = targetsInForce(applied(), program({ ratePctPerWeek: -0.75, updatedAt: 200 }))
+    const fast = targetsInForce(applied(), program({ ratePctPerWeek: -0.75, updatedAt: 200 }), 0)
     expect(fast.kcal).toBe(2500 - 660)
     expect(fast.proteinMg).toBe(144_000)
   })

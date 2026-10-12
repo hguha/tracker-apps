@@ -137,14 +137,16 @@ export function targetKcal(
   expenditure: ExpenditureState,
   program: Pick<Program, 'goal' | 'ratePctPerWeek'>,
   trendKg: number,
-  floorKcal = 0,
+  floorKcal: number,
 ): number {
   if (program.goal === 'maintain') return expenditure.kcal
   const kgPerWeek = (program.ratePctPerWeek / 100) * trendKg
   const dailyDelta = (kgPerWeek * kcalPerKg(program.goal, program.ratePctPerWeek)) / 7
-  const kcal = Math.round(expenditure.kcal + dailyDelta)
-  return program.goal === 'lose' ? Math.max(floorKcal, kcal) : kcal
+  return floored(Math.round(expenditure.kcal + dailyDelta), program.goal, expenditure.kcal, floorKcal)
 }
+
+export const floored = (kcal: number, goal: Goal, expenditureKcal: number, floorKcal: number): number =>
+  goal === 'lose' ? Math.max(Math.min(floorKcal, expenditureKcal), kcal) : kcal
 
 /** Clamps movement so one noisy week can't whipsaw the target. */
 export function stepToward(current: number, proposed: number): number {

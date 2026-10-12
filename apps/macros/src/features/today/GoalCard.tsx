@@ -7,7 +7,7 @@ import { ChevronDown, Flag, PartyPopper, Target } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { goalProgress, type GoalForecast } from '@/lib/goal'
 import { useUnits } from '@/features/shared/useUnits'
-import { paceLabel, paceName } from '@/features/shared/pace'
+import { paceLabel } from '@/features/shared/pace'
 import { arrivalDay, arrivalRange, perWeek, timeUntil } from '@/features/shared/goalText'
 import type { WeightUnit } from '@tracker-engine/core'
 import type { Program } from '@/domain/types'
@@ -234,7 +234,7 @@ function ForecastDetail({
   unit: WeightUnit
 }) {
   const { likely, onTarget, eating, scale } = forecast
-  const pace = paceName(program.goal, program.ratePctPerWeek)
+  const pace = paceLabel(program.goal, program.ratePctPerWeek) ?? `${signed(program.ratePctPerWeek, 2)}%/wk`
 
   return (
     <>
@@ -348,14 +348,13 @@ function PaceNotice({
   unit: WeightUnit
 }) {
   if (forecast.pace === 'matches') return null
-  if (forecast.pace === 'floor') {
+  if (forecast.pace === 'unsafe') {
     return (
       <p
         className="rounded-xl border px-3 py-2 text-[12.5px]"
         style={{ borderColor: 'var(--confidence-medium)' }}
       >
-        Held at {forecast.onTarget?.targetKcal.toLocaleString()} kcal, the safe minimum, so your{' '}
-        {pace} pace is slower here.
+        Your {pace} pace would go below the safe minimum, so calories are held there.
       </p>
     )
   }

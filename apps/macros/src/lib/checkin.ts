@@ -11,13 +11,14 @@ import {
 import { weightTrend, type BodyWeight } from '@tracker-engine/body'
 import {
   estimateInitialExpenditure,
+  type ExpenditureState,
   filterExpenditure,
+  floored,
+  type IntakeDay,
   kcalPerKg,
   stepToward,
   targetKcal,
   windowEstimate,
-  type ExpenditureState,
-  type IntakeDay,
 } from '@/lib/expenditure'
 import { splitTargets } from '@/lib/nutrition'
 import { kcalFloor } from '@/lib/pace'
@@ -117,7 +118,12 @@ export function buildCheckIn(inputs: CheckInInputs): CheckInOutcome {
   const trendKg = thisWeek.trendKg
   const floor = kcalFloor(inputs.profile.sex)
   const proposed = targetKcal(expenditure, program, trendKg, floor)
-  const kcal = prior ? stepToward(targetsInForce(prior, program, floor).kcal, proposed) : proposed
+  const kcal = floored(
+    prior ? stepToward(targetsInForce(prior, program, floor).kcal, proposed) : proposed,
+    program.goal,
+    expenditure.kcal,
+    floor,
+  )
 
   return {
     kind: 'ready',
@@ -145,7 +151,7 @@ export function isRetunedSince(program: Program, checkIn: CheckIn): boolean {
 export function targetsInForce(
   checkIn: CheckIn,
   program: Program | null | undefined,
-  floorKcal = 0,
+  floorKcal: number,
 ): MacroTargets {
   if (!program || !isRetunedSince(program, checkIn)) return checkIn.targets
   const expenditure = { kcal: checkIn.expenditureKcal, se: checkIn.expenditureSe }

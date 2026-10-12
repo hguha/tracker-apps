@@ -17,7 +17,6 @@ import { mgToGrams } from '@/lib/nutrition'
 import { useUnits } from '@/features/shared/useUnits'
 import { RATES } from '@/features/shared/pace'
 import { arrivalDay } from '@/features/shared/goalText'
-import type { DatedPace } from '@/lib/pace'
 import type { CoachingMode, Goal, Program } from '@/domain/types'
 
 const BY_DATE = 'date'
@@ -137,20 +136,21 @@ export function TargetsCard() {
 
 function GoalDateField({ program }: { program: Program }) {
   const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
-  const [picked, setPicked] = useState<{ day: string; pace?: DatedPace | null } | null>(null)
+  const [pickedDay, setPickedDay] = useState<string | null>(null)
+  const [result, setResult] = useState<repo.GoalDateResult | null>(null)
 
   if (program.targetKg === null) {
     return <p className="mt-1.5 text-[12px] text-ink-muted">Set a goal weight first.</p>
   }
 
   const chosenAt = forecast?.chosen.etaAt ?? null
-  const day = picked?.day ?? (chosenAt === null ? '' : dayKey(chosenAt))
-  const pace = picked?.pace
+  const day = pickedDay ?? (chosenAt === null ? '' : dayKey(chosenAt))
+  const pace = result?.kind === 'set' ? result.pace : null
 
   const pick = async (value: string) => {
     if (!value) return
-    setPicked({ day: value })
-    setPicked({ day: value, pace: await repo.setGoalDate(program.id, dayNoon(value)) })
+    setPickedDay(value)
+    setResult(await repo.setGoalDate(program.id, dayNoon(value)))
   }
 
   return (
@@ -163,8 +163,11 @@ function GoalDateField({ program }: { program: Program }) {
         onChange={(event) => void pick(event.target.value)}
         className="tabular mt-1.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
       />
-      {pace === null && (
+      {result?.kind === 'past-goal' && (
         <p className="mt-1 text-[12px] text-ink-muted">You&rsquo;re already past your goal weight.</p>
+      )}
+      {result?.kind === 'needs-weigh-in' && (
+        <p className="mt-1 text-[12px] text-ink-muted">Weigh in first.</p>
       )}
       {pace?.isTooSoon && (
         <p className="mt-1 text-[12px]" style={{ color: 'var(--confidence-medium)' }}>

@@ -481,6 +481,45 @@ describe('cycling applies to the day, not the week', () => {
   })
 })
 
+describe('the calorie floor on a cut', () => {
+  const checkInAt = async (kcal: number) =>
+    repo.saveCheckIn({
+      weekStart: '2026-08-31',
+      expenditureKcal: 2200,
+      expenditureSe: 100,
+      trendKg: 80,
+      trendChangeKgPerWeek: -0.4,
+      meanIntakeKcal: 2100,
+      daysLogged: 7,
+      kcalPerKg: 7700,
+      targets: { kcal, proteinMg: 150_000, carbsMg: 100_000, fatMg: 45_000 },
+      status: 'applied',
+      note: '',
+    })
+
+  it('holds a low cycling day at the floor', async () => {
+    const programId = await repo.startProgram({
+      goal: 'lose',
+      ratePctPerWeek: -0.5,
+      proteinGPerKg: 1.8,
+      fatMinPctKcal: 25,
+    })
+    await checkInAt(1505)
+    await repo.setProgramFields(programId, {
+      cycling: { multipliers: multipliersForHighDays([6])! },
+    })
+    const days = await repo.targetsByDay(['2026-09-09'])
+    expect(days.get('2026-09-09')!.kcal).toBeGreaterThanOrEqual(1500)
+  })
+
+  it('raises a stored target from before the floor existed', async () => {
+    await repo.startProgram({ goal: 'lose', ratePctPerWeek: -0.5, proteinGPerKg: 1.8, fatMinPctKcal: 25 })
+    await checkInAt(1250)
+    const days = await repo.targetsByDay(['2026-09-09'])
+    expect(days.get('2026-09-09')!.kcal).toBe(1500)
+  })
+})
+
 describe('your own foods', () => {
   it('is searchable and loggable like any other food', async () => {
     const id = await repo.saveCustomFood({
@@ -1260,15 +1299,17 @@ describe('the pace in force', () => {
     await tick()
 
     const byDate = await repo.setGoalDate(programId, Date.now() + 8 * WEEK_MS)
-    expect(byDate).toEqual({ ratePctPerWeek: -0.63, isTooSoon: false, earliestAt: null })
+    expect(byDate).toEqual({
+      kind: 'set',
+      pace: { ratePctPerWeek: -0.63, isTooSoon: false, earliestAt: null },
+    })
     expect((await repo.activeProgram())?.ratePctPerWeek).toBe(-0.63)
     expect((await repo.currentTargets())?.kcal).toBeLessThan(2060)
     expect((await repo.goalOutlook())?.pace).toBe('matches')
 
     await tick()
     const tooSoon = await repo.setGoalDate(programId, Date.now() + WEEK_MS)
-    expect(tooSoon?.isTooSoon).toBe(true)
-    expect(tooSoon?.ratePctPerWeek).toBe(-1)
+    expect(tooSoon).toMatchObject({ kind: 'set', pace: { isTooSoon: true, ratePctPerWeek: -1 } })
     expect((await repo.currentTargets())?.kcal).toBeGreaterThanOrEqual(1500)
   })
 

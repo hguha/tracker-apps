@@ -2,23 +2,21 @@ import { WEEK_MS } from '@tracker-engine/core'
 import { KCAL_PER_KG_FAT } from '@/lib/expenditure'
 import type { Goal, Profile } from '@/domain/types'
 
-export const MAX_LOSS_PCT_PER_WEEK = 1
-export const MAX_GAIN_PCT_PER_WEEK = 0.5
-export const KCAL_FLOOR = { female: 1200, male: 1500 } as const
+const MAX_LOSS_PCT_PER_WEEK = 1
+const MAX_GAIN_PCT_PER_WEEK = 0.5
 
-export const kcalFloor = (sex: Profile['sex']): number =>
-  sex === 'female' ? KCAL_FLOOR.female : KCAL_FLOOR.male
+export const kcalFloor = (sex: Profile['sex']): number => (sex === 'female' ? 1200 : 1500)
 
 export function safeMaxPct(inputs: {
   goal: Goal
   trendKg: number
   expenditureKcal: number | null
-  sex: Profile['sex']
+  floorKcal: number
 }): number {
   if (inputs.goal === 'maintain') return 0
   if (inputs.goal === 'gain') return MAX_GAIN_PCT_PER_WEEK
   if (inputs.expenditureKcal === null) return MAX_LOSS_PCT_PER_WEEK
-  const deficitRoom = inputs.expenditureKcal - kcalFloor(inputs.sex)
+  const deficitRoom = inputs.expenditureKcal - inputs.floorKcal
   const floorPct = ((deficitRoom * 7) / KCAL_PER_KG_FAT / inputs.trendKg) * 100
   return Math.max(0, Math.min(MAX_LOSS_PCT_PER_WEEK, floorPct))
 }
@@ -38,7 +36,7 @@ export function paceForDate(inputs: {
   byAt: number
   now: number
   expenditureKcal: number | null
-  sex: Profile['sex']
+  floorKcal: number
 }): DatedPace | null {
   const direction = inputs.goal === 'lose' ? -1 : inputs.goal === 'gain' ? 1 : 0
   const neededKg = inputs.targetKg - inputs.trendKg

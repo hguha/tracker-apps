@@ -116,18 +116,18 @@ describe('filterExpenditure', () => {
 
 describe('targetKcal', () => {
   it('equals expenditure when maintaining', () => {
-    expect(targetKcal({ kcal: 2500, se: 100 }, { goal: 'maintain', ratePctPerWeek: 0 }, 80)).toBe(2500)
+    expect(targetKcal({ kcal: 2500, se: 100 }, { goal: 'maintain', ratePctPerWeek: 0 }, 80, 0)).toBe(2500)
   })
 
   it('sits below expenditure for a deficit', () => {
     expect(
-      targetKcal({ kcal: 2500, se: 100 }, { goal: 'lose', ratePctPerWeek: -0.5 }, 80),
+      targetKcal({ kcal: 2500, se: 100 }, { goal: 'lose', ratePctPerWeek: -0.5 }, 80, 0),
     ).toBeLessThan(2500)
   })
 
   it('sits above expenditure for a surplus', () => {
     expect(
-      targetKcal({ kcal: 2500, se: 100 }, { goal: 'gain', ratePctPerWeek: 0.25 }, 80),
+      targetKcal({ kcal: 2500, se: 100 }, { goal: 'gain', ratePctPerWeek: 0.25 }, 80, 0),
     ).toBeGreaterThan(2500)
   })
 })

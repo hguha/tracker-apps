@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WEEK_MS } from '@tracker-engine/core'
 import { kcalFloor, paceForDate, safeMaxPct } from '@/lib/pace'
-import { targetKcal } from '@/lib/expenditure'
+import { floored, targetKcal } from '@/lib/expenditure'
 
 const NOW = Date.parse('2026-10-04T12:00:00')
 const base = {
@@ -10,7 +10,7 @@ const base = {
   targetKg: 90,
   now: NOW,
   expenditureKcal: 3000,
-  sex: 'male' as const,
+  floorKcal: kcalFloor('male'),
 }
 
 describe('paceForDate', () => {
@@ -39,11 +39,11 @@ describe('paceForDate', () => {
       trendKg: 60,
       targetKg: 55,
       expenditureKcal: 1800,
-      sex: 'female',
+      floorKcal: kcalFloor('female'),
       byAt: NOW + 2 * WEEK_MS,
     })
     expect(pace?.isTooSoon).toBe(true)
-    const kcal = targetKcal({ kcal: 1800, se: 0 }, { goal: 'lose', ratePctPerWeek: pace!.ratePctPerWeek }, 60)
+    const kcal = targetKcal({ kcal: 1800, se: 0 }, { goal: 'lose', ratePctPerWeek: pace!.ratePctPerWeek }, 60, kcalFloor('female'))
     expect(kcal).toBeGreaterThanOrEqual(kcalFloor('female'))
     expect(pace!.ratePctPerWeek).toBeLessThan(0)
   })
@@ -66,7 +66,7 @@ describe('paceForDate', () => {
 describe('safeMaxPct', () => {
   it('uses the stricter floor when sex is unknown', () => {
     expect(kcalFloor(null)).toBe(1500)
-    expect(safeMaxPct({ goal: 'lose', trendKg: 100, expenditureKcal: null, sex: null })).toBe(1)
+    expect(safeMaxPct({ goal: 'lose', trendKg: 100, expenditureKcal: null, floorKcal: kcalFloor(null) })).toBe(1)
   })
 })
 
@@ -81,5 +81,17 @@ describe('the calorie floor holds for every losing pace', () => {
     const program = { goal: 'gain' as const, ratePctPerWeek: 0.25 }
     expect(targetKcal({ kcal: 1400, se: 100 }, program, 60, 1500)).toBeLessThan(1500 + 1000)
     expect(targetKcal({ kcal: 1400, se: 100 }, program, 60, 1500)).toBeGreaterThan(1400)
+  })
+})
+
+describe('the floor never turns a cut into a surplus', () => {
+  it('stops at maintenance when maintenance is under the floor', () => {
+    const program = { goal: 'lose' as const, ratePctPerWeek: -0.5 }
+    expect(targetKcal({ kcal: 1420, se: 100 }, program, 70, kcalFloor(null))).toBe(1420)
+  })
+
+  it('holds a stepped target at the floor too', () => {
+    expect(floored(1400, 'lose', 2000, 1500)).toBe(1500)
+    expect(floored(1400, 'gain', 2000, 1500)).toBe(1400)
   })
 })
