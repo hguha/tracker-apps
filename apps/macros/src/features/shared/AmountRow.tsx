@@ -59,7 +59,7 @@ export function AmountRow({
           value={unit.id}
           onChange={(event) => setUnitId(event.target.value)}
           aria-label={`Unit for ${title}`}
-          className="max-w-[150px] shrink-0 rounded-lg bg-sunken py-1.5 pl-1.5 text-[12px] text-ink-secondary outline-none"
+          className="w-[148px] shrink-0 rounded-lg bg-sunken py-1.5 pl-1.5 text-[12px] text-ink-secondary outline-none"
         >
           {units.map((option) => (
             <option key={option.id} value={option.id}>
