@@ -1,12 +1,16 @@
 import { dayKey } from '@tracker-engine/core'
 import {
+  DAYS_AHEAD,
+  dayAt,
+  reminderId,
+  reminderIds,
   syncReminders as syncPlatformReminders,
-  todayAt,
   type Reminder,
+  type ReplaceResult,
 } from '@tracker-engine/platform'
 import * as repo from '@/data/repository'
 import { MEAL_LABELS } from '@/lib/meals'
-import { MEAL_SLOTS, type MealSlot, type RemindersConfig } from '@/domain/types'
+import { MEAL_SLOTS, type RemindersConfig } from '@/domain/types'
 
 /**
  * "You haven't logged lunch yet" — but only when that is true.
@@ -23,11 +27,10 @@ import { MEAL_SLOTS, type MealSlot, type RemindersConfig } from '@/domain/types'
  */
 
 const BASE_ID = 4100
-const idFor = (meal: MealSlot): number => BASE_ID + MEAL_SLOTS.indexOf(meal)
-const END_OF_DAY_ID = BASE_ID + MEAL_SLOTS.length
-const WEIGH_IN_ID = BASE_ID + MEAL_SLOTS.length + 1
-
-const ALL_IDS = [...MEAL_SLOTS.map(idFor), END_OF_DAY_ID, WEIGH_IN_ID]
+const SLOTS = MEAL_SLOTS.length + 2
+const END_OF_DAY_SLOT = MEAL_SLOTS.length
+const WEIGH_IN_SLOT = MEAL_SLOTS.length + 1
+const ALL_IDS = reminderIds(BASE_ID, SLOTS)
 
 /**
  * Brings scheduled reminders in line with what today still needs.
@@ -35,50 +38,55 @@ const ALL_IDS = [...MEAL_SLOTS.map(idFor), END_OF_DAY_ID, WEIGH_IN_ID]
  * Cheap enough to call freely: it reads one day of entries and one profile row, and does nothing at
  * all when reminders are off.
  */
-export async function syncReminders(now = Date.now()): Promise<void> {
-  syncPlatformReminders(ALL_IDS, await dueToday(now), now)
+export async function syncReminders(now = Date.now()): Promise<ReplaceResult> {
+  return syncPlatformReminders(ALL_IDS, await remindersAhead(now), now)
 }
 
-async function dueToday(now: number): Promise<Reminder[]> {
+export async function remindersAhead(now: number): Promise<Reminder[]> {
   const profile = await repo.getProfile()
   const config = profile.reminders
   if (!config) return []
+  const weighed = new Set((await repo.weights()).map((row) => row.day))
+  const days = await Promise.all(
+    Array.from({ length: DAYS_AHEAD }, async (_, offset) => {
+      const day = dayKey(dayAt(0, now, offset))
+      return { offset, day, entries: await repo.entriesForDay(day) }
+    }),
+  )
 
-  const day = dayKey(now)
-  const entries = await repo.entriesForDay(day)
-  const logged = new Set(entries.map((entry) => entry.meal))
-  const due: Reminder[] = []
+  return days.flatMap(({ offset, day, entries }) => {
+    const logged = new Set(entries.map((entry) => entry.meal))
+    const due: Reminder[] = []
 
-  for (const reminder of config.meals) {
-    if (!reminder.enabled || logged.has(reminder.meal)) continue
-    due.push({
-      id: idFor(reminder.meal),
-      title: `${MEAL_LABELS[reminder.meal]} not logged`,
-      body: `Add what you had and today's numbers stay right.`,
-      at: todayAt(reminder.minute, now),
-    })
-  }
+    for (const reminder of config.meals) {
+      if (!reminder.enabled || logged.has(reminder.meal)) continue
+      due.push({
+        id: reminderId(BASE_ID, MEAL_SLOTS.indexOf(reminder.meal), offset),
+        title: `${MEAL_LABELS[reminder.meal]} not logged`,
+        body: `Add what you had and today's numbers stay right.`,
+        at: dayAt(reminder.minute, now, offset),
+      })
+    }
 
-  if (config.endOfDay.enabled && entries.length === 0) {
-    due.push({
-      id: END_OF_DAY_ID,
-      title: 'Nothing logged today',
-      body: 'A rough entry beats a blank day — even one line keeps the trend usable.',
-      at: todayAt(config.endOfDay.minute, now),
-    })
-  }
+    if (config.endOfDay.enabled && entries.length === 0) {
+      due.push({
+        id: reminderId(BASE_ID, END_OF_DAY_SLOT, offset),
+        title: 'Nothing logged today',
+        body: 'A rough entry beats a blank day — even one line keeps the trend usable.',
+        at: dayAt(config.endOfDay.minute, now, offset),
+      })
+    }
 
-  // Same rule as the meals: only if it hasn't happened. A weigh-in is the one input the app can't
-  // derive from anything else — no trend means no measured expenditure, and no target after week two.
-  if (config.weighIn.enabled && !(await repo.weights()).some((row) => row.day === day)) {
-    due.push({
-      id: WEIGH_IN_ID,
-      title: 'Weigh-in',
-      body: 'One number, and the week has a trend to measure your calories against.',
-      at: todayAt(config.weighIn.minute, now),
-    })
-  }
-  return due
+    if (config.weighIn.enabled && !weighed.has(day)) {
+      due.push({
+        id: reminderId(BASE_ID, WEIGH_IN_SLOT, offset),
+        title: 'Weigh-in',
+        body: 'One number, and the week has a trend to measure your calories against.',
+        at: dayAt(config.weighIn.minute, now, offset),
+      })
+    }
+    return due
+  })
 }
 
 /** What the settings row shows: how many nudges a day are switched on. */

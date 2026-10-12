@@ -151,7 +151,7 @@ function SignedInApp() {
   )
   useEffect(() => {
     if (!isReady) return
-    void syncReminders()
+    syncReminders().catch((error) => console.warn('[reminders] sync failed', error))
   }, [isReady, todaysProgress])
 
   // Appearance lives on the profile, so it follows the same live-query path as everything else

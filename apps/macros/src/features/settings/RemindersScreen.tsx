@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, Screen, Switch } from '@tracker-engine/ui'
 import { isNativePlatform } from '@tracker-engine/platform'
@@ -23,9 +24,17 @@ import { DEFAULT_REMINDERS, MEAL_SLOTS, type MealSlot, type RemindersConfig } fr
  */
 export function RemindersScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
+  const [isDenied, setIsDenied] = useState(false)
+
+  const resync = () =>
+    syncReminders()
+      .then((result) => setIsDenied(result === 'denied'))
+      .catch((error) => console.warn('[reminders] sync failed', error))
+
+  useEffect(() => void resync(), [])
 
   const save = (next: RemindersConfig | null) => {
-    void repo.setReminders(next).then(() => syncReminders())
+    void repo.setReminders(next).then(resync)
   }
 
   // `undefined` means the profile hasn't loaded; rendering "off" for a frame would flip the switch
@@ -50,6 +59,11 @@ export function RemindersScreen({ onBack }: { onBack: () => void }) {
             />
           )}
         </div>
+        {config && isDenied && (
+          <p className="mt-2 text-[12.5px]" style={{ color: 'var(--status-critical)' }}>
+            Notifications are off for MACROcosm. Turn them on in your phone&rsquo;s Settings.
+          </p>
+        )}
       </Card>
 
       {config && (

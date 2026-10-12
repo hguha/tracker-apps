@@ -1,6 +1,14 @@
 import { useEffect } from 'react'
 import { liveQuery } from 'dexie'
-import { syncReminders, todayAt, type Reminder } from '@tracker-engine/platform'
+import {
+  DAYS_AHEAD,
+  dayAt,
+  reminderId,
+  reminderIds,
+  syncReminders,
+  type Reminder,
+  type ReplaceResult,
+} from '@tracker-engine/platform'
 import * as repo from '@/data/repository'
 import { dayStart, weekStart } from '@/lib/dates'
 
@@ -14,72 +22,83 @@ export const DEFAULT_REMINDERS: ReminderPrefs = {
   weighIn: { enabled: false, minute: 8 * 60 },
 }
 
-const KEY = 'reputation.reminders'
-const WORKOUT_ID = 4200
-const WEIGH_IN_ID = 4201
-const OWNED_IDS = [WORKOUT_ID, WEIGH_IN_ID]
+const keyFor = (userId: string) => `reputation.reminders.${userId}`
+const BASE_ID = 4200
+const WORKOUT_SLOT = 0
+const WEIGH_IN_SLOT = 1
+const OWNED_IDS = reminderIds(BASE_ID, 2)
 
 export function readReminders(): ReminderPrefs | null {
-  const raw = localStorage.getItem(KEY)
+  const raw = localStorage.getItem(keyFor(repo.getActiveUserId()))
   return raw === null ? null : (JSON.parse(raw) as ReminderPrefs)
 }
 
 export function writeReminders(prefs: ReminderPrefs | null): void {
-  if (prefs === null) localStorage.removeItem(KEY)
-  else localStorage.setItem(KEY, JSON.stringify(prefs))
+  const key = keyFor(repo.getActiveUserId())
+  if (prefs === null) localStorage.removeItem(key)
+  else localStorage.setItem(key, JSON.stringify(prefs))
 }
 
-export interface TodayState {
-  trainedToday: boolean
+export interface DayState {
+  trained: boolean
   weekGoalMet: boolean
-  weighedToday: boolean
+  weighed: boolean
 }
 
-export function remindersDue(prefs: ReminderPrefs | null, state: TodayState, now: number): Reminder[] {
+export function remindersDue(
+  prefs: ReminderPrefs | null,
+  days: readonly DayState[],
+  now: number,
+): Reminder[] {
   if (prefs === null) return []
-  const due: Reminder[] = []
   const { workout, weighIn } = prefs
-  if (
-    workout.enabled &&
-    workout.weekdays.includes(new Date(now).getDay()) &&
-    !state.trainedToday &&
-    !state.weekGoalMet
-  ) {
-    due.push({
-      id: WORKOUT_ID,
-      title: 'No workout yet today',
-      body: 'Even a short session keeps the week on track.',
-      at: todayAt(workout.minute, now),
-    })
-  }
-  if (weighIn.enabled && !state.weighedToday) {
-    due.push({
-      id: WEIGH_IN_ID,
-      title: 'Weigh-in',
-      body: 'One number keeps bodyweight lifts and your trend accurate.',
-      at: todayAt(weighIn.minute, now),
-    })
-  }
-  return due
+  return days.flatMap((state, offset) => {
+    const due: Reminder[] = []
+    const weekday = new Date(dayAt(0, now, offset)).getDay()
+    if (workout.enabled && workout.weekdays.includes(weekday) && !state.trained && !state.weekGoalMet) {
+      due.push({
+        id: reminderId(BASE_ID, WORKOUT_SLOT, offset),
+        title: 'No workout yet today',
+        body: 'Even a short session keeps the week on track.',
+        at: dayAt(workout.minute, now, offset),
+      })
+    }
+    if (weighIn.enabled && !state.weighed) {
+      due.push({
+        id: reminderId(BASE_ID, WEIGH_IN_SLOT, offset),
+        title: 'Weigh-in',
+        body: 'One number keeps bodyweight lifts and your trend accurate.',
+        at: dayAt(weighIn.minute, now, offset),
+      })
+    }
+    return due
+  })
 }
 
-async function todayState(now: number): Promise<TodayState> {
+async function upcomingDays(now: number): Promise<DayState[]> {
   const profile = await repo.getProfile()
   const today = dayStart(now)
   const thisWeek = weekStart(now, profile.weekStartsOn)
   const workouts = (await repo.listWorkouts(50)).filter((w) => w.startedAt >= thisWeek)
-  const finishedThisWeek = workouts.filter((w) => w.endedAt !== null).length
+  const goalMetThisWeek =
+    workouts.filter((w) => w.endedAt !== null).length >= Math.max(1, profile.weeklyWorkoutGoal || 4)
   const weights = await repo.listMetricEntries('bodyweight', 5)
-  return {
-    trainedToday: workouts.some((w) => w.startedAt >= today),
-    weekGoalMet: finishedThisWeek >= Math.max(1, profile.weeklyWorkoutGoal || 4),
-    weighedToday: weights.some((entry) => entry.measuredAt >= today),
-  }
+  return Array.from({ length: DAYS_AHEAD }, (_, offset) => {
+    const start = dayStart(dayAt(0, now, offset))
+    const end = dayStart(dayAt(0, now, offset + 1))
+    const inThisWeek = weekStart(start, profile.weekStartsOn) === thisWeek
+    return {
+      trained: offset === 0 && workouts.some((w) => w.startedAt >= today),
+      weekGoalMet: inThisWeek && goalMetThisWeek,
+      weighed: weights.some((entry) => entry.measuredAt >= start && entry.measuredAt < end),
+    }
+  })
 }
 
-export async function syncWorkoutReminders(now = Date.now()): Promise<void> {
+export async function syncWorkoutReminders(now = Date.now()): Promise<ReplaceResult> {
   const prefs = readReminders()
-  syncReminders(OWNED_IDS, prefs === null ? [] : remindersDue(prefs, await todayState(now), now), now)
+  const due = prefs === null ? [] : remindersDue(prefs, await upcomingDays(now), now)
+  return syncReminders(OWNED_IDS, due, now)
 }
 
 export function describeReminders(prefs: ReminderPrefs | null): string {

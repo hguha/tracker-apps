@@ -49,3 +49,26 @@ export function cancelLocalNotification(id: number): void {
     }
   })()
 }
+
+export type ReplaceResult = 'scheduled' | 'denied' | 'unsupported'
+
+export async function replaceLocalNotifications(
+  cancelIds: readonly number[],
+  notifications: readonly { id: number; title: string; body: string; at: number }[],
+): Promise<ReplaceResult> {
+  if (!isNativePlatform()) return 'unsupported'
+  const { LocalNotifications } = await import('@capacitor/local-notifications')
+  await LocalNotifications.cancel({ notifications: cancelIds.map((id) => ({ id })) })
+  const upcoming = notifications.filter((notification) => notification.at > Date.now())
+  if (upcoming.length === 0) return 'scheduled'
+  if (!(await ensurePermission())) return 'denied'
+  await LocalNotifications.schedule({
+    notifications: upcoming.map(({ id, title, body, at }) => ({
+      id,
+      title,
+      body,
+      schedule: { at: new Date(at) },
+    })),
+  })
+  return 'scheduled'
+}

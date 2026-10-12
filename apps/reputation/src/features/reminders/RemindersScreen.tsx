@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { cn, formatClock, parseClock } from '@tracker-engine/core'
 import { isNativePlatform } from '@tracker-engine/platform'
@@ -17,11 +17,19 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 export function RemindersScreen({ onBack }: { onBack: () => void }) {
   const profile = useLiveQuery(() => repo.getProfile(), [])
   const [prefs, setPrefs] = useState<ReminderPrefs | null>(() => readReminders())
+  const [isDenied, setIsDenied] = useState(false)
+
+  const resync = () =>
+    syncWorkoutReminders()
+      .then((result) => setIsDenied(result === 'denied'))
+      .catch((error) => console.warn('[reminders] sync failed', error))
+
+  useEffect(() => void resync(), [])
 
   const save = (next: ReminderPrefs | null) => {
     setPrefs(next)
     writeReminders(next)
-    void syncWorkoutReminders().catch((error) => console.warn('[reminders] sync failed', error))
+    void resync()
   }
 
   const order = profile?.weekStartsOn === 1 ? [1, 2, 3, 4, 5, 6, 0] : [0, 1, 2, 3, 4, 5, 6]
@@ -40,6 +48,11 @@ export function RemindersScreen({ onBack }: { onBack: () => void }) {
             onChange={(isOn) => save(isOn ? DEFAULT_REMINDERS : null)}
           />
         </div>
+        {prefs && isDenied && (
+          <p className="mt-2 text-[12.5px]" style={{ color: 'var(--status-critical)' }}>
+            Notifications are off for REPutation. Turn them on in your phone&rsquo;s Settings.
+          </p>
+        )}
       </Card>
 
       {prefs && (
