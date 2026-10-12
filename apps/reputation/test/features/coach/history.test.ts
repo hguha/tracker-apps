@@ -1,14 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { conversationTitleFrom } from '@tracker-engine/ai-coach'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
-import {
-  conversationTitleFrom,
-  deleteConversation,
-  listConversations,
-  loadConversation,
-  mostRecentConversationId,
-  saveConversation,
-} from '@/features/coach/history'
+import { conversations } from '@/features/coach/history'
 import type { GeminiContent } from '@/features/coach/types'
 
 beforeEach(async () => {
@@ -29,18 +23,18 @@ describe('coach conversation history', () => {
   })
 
   it('saves, loads, and lists a conversation', async () => {
-    await saveConversation({
+    await conversations.save({
       id: 'c1',
       title: 'Bench talk',
       contents,
       items: [{ role: 'user', text: 'hi' }],
     })
-    const loaded = await loadConversation('c1')
+    const loaded = await conversations.load('c1')
     expect(loaded?.title).toBe('Bench talk')
     expect(loaded?.contents).toEqual(contents)
     expect(loaded?.items).toEqual([{ role: 'user', text: 'hi' }])
 
-    const list = await listConversations()
+    const list = await conversations.list()
     expect(list.map((c) => c.id)).toEqual(['c1'])
   })
 
@@ -48,22 +42,33 @@ describe('coach conversation history', () => {
     // Space the writes so updatedAt (Date.now()) is strictly monotonic — three
     // saves in the same millisecond would tie and defeat the ordering.
     const tick = () => new Promise((r) => setTimeout(r, 3))
-    await saveConversation({ id: 'a', title: 'A', contents, items: [{ role: 'user', text: 'a' }] })
+    await conversations.save({ id: 'a', title: 'A', contents, items: [{ role: 'user', text: 'a' }] })
     await tick()
-    await saveConversation({ id: 'b', title: 'B', contents, items: [{ role: 'user', text: 'b' }] })
+    await conversations.save({ id: 'b', title: 'B', contents, items: [{ role: 'user', text: 'b' }] })
     await tick()
     // Re-saving 'a' bumps its updatedAt above 'b'.
-    await saveConversation({ id: 'a', title: 'A2', contents, items: [{ role: 'user', text: 'a2' }] })
+    await conversations.save({ id: 'a', title: 'A2', contents, items: [{ role: 'user', text: 'a2' }] })
 
-    const list = await listConversations()
+    const list = await conversations.list()
     expect(list[0]!.id).toBe('a')
-    expect(await mostRecentConversationId()).toBe('a')
+    expect((await conversations.mostRecent())?.id).toBe('a')
+    expect((await conversations.mostRecent())?.title).toBe('A2')
+  })
+
+  it('keeps when a conversation was started across saves', async () => {
+    await conversations.save({ id: 'c1', title: 'x', contents, items: [{ role: 'user', text: 'hi' }] })
+    const first = await db.coachConversations.get('c1')
+    await new Promise((r) => setTimeout(r, 3))
+    await conversations.save({ id: 'c1', title: 'x', contents, items: [{ role: 'user', text: 'hi' }] })
+    const second = await db.coachConversations.get('c1')
+    expect(second?.createdAt).toBe(first?.createdAt)
+    expect(second!.updatedAt).toBeGreaterThan(first!.updatedAt)
   })
 
   it('deletes a conversation', async () => {
-    await saveConversation({ id: 'c1', title: 'x', contents, items: [{ role: 'user', text: 'hi' }] })
-    await deleteConversation('c1')
-    expect(await loadConversation('c1')).toBeNull()
-    expect(await mostRecentConversationId()).toBeNull()
+    await conversations.save({ id: 'c1', title: 'x', contents, items: [{ role: 'user', text: 'hi' }] })
+    await conversations.remove('c1')
+    expect(await conversations.load('c1')).toBeNull()
+    expect(await conversations.mostRecent()).toBeNull()
   })
 })

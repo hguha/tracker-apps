@@ -13,7 +13,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": []
+    "types": [],
+    "jsx": "react-jsx"
   },
   "include": ["src", "test"]
 }

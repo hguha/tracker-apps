@@ -1,39 +1,16 @@
-// Presentational pieces of the coach chat, split out of CoachChat.tsx: message
-// bubbles, the plan/template-update/accessory cards, the history sheet, and the
-// "what's sent" disclosure. CoachChat owns the loop; these just render and act.
-
 import { useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, SquarePen, Trash2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { buildExerciseResolver } from '@/data/resolveExerciseName'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { BottomSheet } from '@/components/BottomSheet'
 import { useToast } from '@/components/Toast'
-import { cn } from '@/lib/cn'
 import type { WeightUnit } from '@/domain/types'
 import { buildCoachContext, type CoachContext } from '../context'
 import { describePlanExerciseLoad } from '../tools'
 import type { CoachAction, CoachPlan } from '../types'
-
-export function MessageBubble({ role, text }: { role: 'user' | 'assistant'; text: string }) {
-  const isUser = role === 'user'
-  return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14px] leading-snug',
-          isUser
-            ? 'bg-accent text-accent-contrast'
-            : 'border border-line bg-surface text-ink',
-        )}
-      >
-        {text}
-      </div>
-    </div>
-  )
-}
 
 export function ActionCard({
   action,
@@ -270,72 +247,6 @@ function AccessoryCard({
         </div>
       </div>
     </Card>
-  )
-}
-
-export function HistorySheet({
-  conversations,
-  activeId,
-  onOpen,
-  onDelete,
-  onNew,
-  onDismiss,
-}: {
-  conversations: { id: string; title: string; updatedAt: number }[]
-  activeId: string | null
-  onOpen: (id: string) => void
-  onDelete: (id: string) => void
-  onNew: () => void
-  onDismiss: () => void
-}) {
-  return (
-    <BottomSheet onDismiss={onDismiss} panelClassName="max-h-[80%] overflow-y-auto">
-      <div className="sticky top-0 flex items-center justify-between border-b border-line bg-surface px-5 py-3.5">
-        <h2 className="text-[17px] font-bold tracking-tight">Conversations</h2>
-        <button
-          onClick={onNew}
-          className="flex items-center gap-1 text-[13px] font-semibold text-accent active:opacity-60"
-        >
-          <SquarePen size={15} /> New
-        </button>
-      </div>
-      {conversations.length === 0 ? (
-        <p className="px-5 py-8 text-center text-[13.5px] text-ink-muted">
-          No saved conversations yet.
-        </p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {conversations.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 px-4 py-2.5">
-              <button
-                onClick={() => onOpen(c.id)}
-                className="min-w-0 flex-1 text-left active:opacity-70"
-              >
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[14px] font-medium">{c.title}</span>
-                  {c.id === activeId && (
-                    <span className="shrink-0 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
-                      Current
-                    </span>
-                  )}
-                </span>
-                <span className="mt-0.5 block text-[12px] text-ink-muted">
-                  {new Date(c.updatedAt).toLocaleDateString()}
-                </span>
-              </button>
-              <button
-                onClick={() => onDelete(c.id)}
-                aria-label={`Delete "${c.title}"`}
-                className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:bg-sunken"
-              >
-                <Trash2 size={16} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="h-4" />
-    </BottomSheet>
   )
 }
 
