@@ -46,18 +46,26 @@ const asked = new Set<string>()
 
 export function useFoodSearch(
   query: string,
-  { limit = 40, branded = true }: { limit?: number; branded?: boolean } = {},
+  {
+    limit = 40,
+    branded = true,
+    withAverage = false,
+  }: { limit?: number; branded?: boolean; withAverage?: boolean } = {},
 ): FoodSearchState {
   const trimmed = query.trim()
   const pool = useLiveQuery(
-    () => repo.searchFoods(trimmed, Math.max(limit, AVERAGE_POOL)),
-    [trimmed, limit],
+    () => repo.searchFoods(trimmed, withAverage ? Math.max(limit, AVERAGE_POOL) : limit),
+    [trimmed, limit, withAverage],
     undefined,
   )
-  const average = useMemo(() => (pool ? averageFood(trimmed, pool) : null), [pool, trimmed])
-  const results = pool
-    ?.filter((food) => !(average && isAverage(food) && food.description === average.description))
-    .slice(0, limit)
+  const { results, average } = useMemo(() => {
+    if (!pool) return { results: undefined, average: null }
+    const fresh = withAverage ? averageFood(trimmed, pool) : null
+    const kept = fresh
+      ? (pool.find((food) => isAverage(food) && food.description === fresh.description) ?? fresh)
+      : null
+    return { average: kept, results: pool.filter((food) => food.id !== kept?.id).slice(0, limit) }
+  }, [pool, trimmed, limit, withAverage])
   const [searchingFor, setSearchingFor] = useState<string | null>(null)
 
   useEffect(() => {

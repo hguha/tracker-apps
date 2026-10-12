@@ -48,7 +48,11 @@ export function FoodSearchPicker({
 }) {
   const [query, setQuery] = useState(initialQuery)
   const trimmed = query.trim()
-  const { results, average, isSearching, isEmpty } = useFoodSearch(query, { limit, branded })
+  const { results, average, isSearching, isEmpty } = useFoodSearch(query, {
+    limit,
+    branded,
+    withAverage: true,
+  })
   const shown = average ? [average, ...results.slice(0, limit - 1)] : results
 
   return (

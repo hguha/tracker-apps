@@ -58,4 +58,19 @@ describe('logging an average', () => {
     expect(rows.map((row) => row.foodId)).toEqual([own[0]!.id, own[0]!.id])
     expect(rows[0]!.grams).toBe(240)
   })
+
+  it('keeps the numbers it was first logged with, so recipes using it do not shift', async () => {
+    const first = averageFood('chicken alfredo', sources)!
+    await repo.logFood({ food: first, meal: 'dinner' })
+    const later = averageFood('chicken alfredo', [
+      ...sources,
+      alfredo('off:g', 'Chicken alfredo', 400, 'Big Portions'),
+      alfredo('off:h', 'Chicken alfredo', 400, 'Bigger Portions'),
+    ])!
+    expect(later.per100.kcal).not.toBe(first.per100.kcal)
+    await repo.logFood({ food: later, meal: 'dinner' })
+
+    const [own] = await repo.customFoods()
+    expect(own!.per100.kcal).toBe(first.per100.kcal)
+  })
 })

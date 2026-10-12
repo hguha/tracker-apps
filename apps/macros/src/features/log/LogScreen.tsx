@@ -247,7 +247,7 @@ function BrowsePanel({
         : [...current, food],
     )
 
-  const { results, average, isSearching } = useFoodSearch(query)
+  const { results, average, isSearching } = useFoodSearch(query, { withAverage: true })
   const settled = useDebouncedValue(trimmed)
   const libraryHits = useLiveQuery(() => repo.searchLibrary(settled), [settled], undefined)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)

@@ -74,13 +74,14 @@ function subjectWords(description: string): string[] {
 const synonymsOf = (word: string): string[] =>
   forms(word).flatMap((form) => SYNONYMS[form] ?? [])
 
-export function namesIngredient(food: Food, query: string): boolean {
+export function ingredientMatcher(query: string): (food: Food) => boolean {
   const head = ingredientHead(query)
-  if (head === null) return true
+  if (head === null) return () => true
   const accepted = [head, ...synonymsOf(head)]
-  return subjectWords(food.description).some((word) =>
-    accepted.some((candidate) => sameWord(word, candidate)),
-  )
+  return (food) =>
+    subjectWords(food.description).some((word) =>
+      accepted.some((candidate) => sameWord(word, candidate)),
+    )
 }
 
 export function ingredientQueries(query: string): string[] {

@@ -223,7 +223,7 @@ export function AverageRow({
         </span>
         <span className="tabular flex items-center gap-1.5 truncate text-[12px] text-ink-muted">
           {food ? (
-            `${food.brand?.replace(/^Average of /, '')} sources · ${servingLine(food)}`
+            `${food.brand} · ${servingLine(food)}`
           ) : (
             <>
               <Loader2 size={12} className="shrink-0 animate-spin" />

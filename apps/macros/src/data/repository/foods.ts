@@ -5,7 +5,7 @@ import { type CustomFood, type Food, type FoodPortion, type Nutrients } from '@/
 import { portionFor } from '@/lib/nutrition'
 import { haystackOf, matchesHaystack, overlapScore, queryTerms, rankFoods } from '@/lib/foodSearch'
 import { isAverage } from '@/lib/averageFood'
-import { namesIngredient } from '@/lib/ingredientMatch'
+import { ingredientMatcher } from '@/lib/ingredientMatch'
 import { closestGeneric, lendersFrom, type Lender, type LentPortions } from '@/lib/borrowPortions'
 import { activeUserId, alive, isPresent } from './internal'
 
@@ -124,18 +124,16 @@ export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
   // and a query with a real page of exact matches doesn't want rows that matched half of it: "chicken
   // thigh" with a dozen answers should not start listing everything containing "chicken".
   if (terms.length < 2 || ranked.length >= ENOUGH_STRICT) return ranked
-  const named = rest.filter((row) => namesIngredient(row.food, query))
-  return [...ranked, ...bestOverlap(named.length > 0 ? named : rest, terms, query, limit - ranked.length)]
+  return [...ranked, ...bestOverlap(rest, terms, query, limit - ranked.length)]
 }
 
 function distinct(foods: readonly Food[]): Food[] {
-  const seen = new Set<string>()
-  return foods.filter((food) => {
+  const kept = new Map<string, Food>()
+  for (const food of foods) {
     const key = `${food.description.toLowerCase()}|${food.brand ?? ''}|${food.per100.kcal}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+    if (!kept.has(key) || food.source === 'custom') kept.set(key, food)
+  }
+  return [...kept.values()]
 }
 
 /**
@@ -150,14 +148,17 @@ function bestOverlap(
   query: string,
   limit: number,
 ): Food[] {
-  const scored = rows
+  const names = ingredientMatcher(query)
+  const overlapping = rows
     .map((row) => ({ row, overlap: overlapScore(row.haystack, terms) }))
     .filter((entry) => entry.overlap > 0)
+  const named = overlapping.filter((entry) => names(entry.row.food))
+  const scored = named.length > 0 ? named : overlapping
   if (scored.length === 0) return []
 
   const best = Math.max(...scored.map((entry) => entry.overlap))
   return rankFoods(
-    scored.filter((entry) => entry.overlap === best).map((entry) => entry.row.food),
+    distinct(scored.filter((entry) => entry.overlap === best).map((entry) => entry.row.food)),
     query,
     limit,
   )
@@ -218,9 +219,7 @@ export async function saveCustomFood(
     ...(existing ? { ...touch(existing.clientRev), createdAt: existing.createdAt } : {}),
   }
 
-  await db.customFoods.put(row)
-  await enqueue('customFoods', row.id)
-  invalidateFoodIndex()
+  await putCustomFood(row)
   return row.id
 }
 
@@ -244,22 +243,23 @@ export async function keepAsOwnFood(food: Food): Promise<Food> {
   return (await db.customFoods.get(id)) ?? food
 }
 
-export async function adoptAverage(food: Food): Promise<Food> {
-  if (!isAverage(food) || food.id.startsWith('custom:')) return food
-  const existing = await db.customFoods
-    .filter((row) => alive(row) && isAverage(row) && row.description === food.description)
-    .first()
-  const row: CustomFood = {
-    ...food,
-    id: existing?.id ?? `custom:${newId()}`,
-    userId: activeUserId,
-    ...syncStamp(),
-    ...(existing ? { ...touch(existing.clientRev), createdAt: existing.createdAt } : {}),
-  }
+export function adoptAverage(food: Food): Promise<Food> {
+  if (!isAverage(food) || food.id.startsWith('custom:')) return Promise.resolve(food)
+  return db.transaction('rw', db.customFoods, db.outbox, async () => {
+    const saved = await db.customFoods
+      .filter((row) => alive(row) && isAverage(row) && row.description === food.description)
+      .first()
+    if (saved) return saved
+    const row: CustomFood = { ...food, id: `custom:${newId()}`, userId: activeUserId, ...syncStamp() }
+    await putCustomFood(row)
+    return row
+  })
+}
+
+async function putCustomFood(row: CustomFood): Promise<void> {
   await db.customFoods.put(row)
   await enqueue('customFoods', row.id)
   invalidateFoodIndex()
-  return row
 }
 
 export async function deleteCustomFood(id: string): Promise<void> {

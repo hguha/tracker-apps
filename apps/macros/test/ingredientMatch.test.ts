@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { ingredientHead, ingredientQueries, namesIngredient } from '@/lib/ingredientMatch'
+import { ingredientHead, ingredientMatcher, ingredientQueries } from '@/lib/ingredientMatch'
 import { testFood } from './fixtures'
 
 const named = (description: string, query: string) =>
-  namesIngredient(testFood({ description }), query)
+  ingredientMatcher(query)(testFood({ description }))
 
 describe('which word of an ingredient names it', () => {
   it('is the last word of the name, before any "with"', () => {

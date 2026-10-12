@@ -1098,7 +1098,10 @@ test('searching a dish many brands sell offers their average first', async ({ pa
   await page.getByRole('button', { name: /^Log it/ }).click()
 
   await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('hummus')
-  await expect(page.getByRole('button', { name: /Hummus, average/ })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /Hummus, average/ })).toBeVisible()
+  await expect(page.getByText(/^Average of \d+ ·/)).toHaveCount(1)
+  await page.getByRole('button', { name: /Hummus, average/ }).click()
+  await expect(page.getByText(/what you had last time/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })

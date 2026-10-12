@@ -1,10 +1,10 @@
 import { capitalise } from '@tracker-engine/core'
 import { householdPortions, median, medianNutrients, portionFor } from '@/lib/nutrition'
 import { matchesQuery, normalizeQuery, queryTerms } from '@/lib/foodSearch'
-import { namesIngredient } from '@/lib/ingredientMatch'
+import { ingredientMatcher } from '@/lib/ingredientMatch'
 import type { Food, FoodPortion } from '@/domain/types'
 
-export const AVERAGE = 'average'
+const AVERAGE = 'average'
 
 const MIN_SOURCES = 3
 const MIN_MAKERS = 2
@@ -17,12 +17,14 @@ export function averageFood(query: string, foods: readonly Food[]): Food | null 
   const terms = queryTerms(query)
   if (terms.length === 0) return null
   const asked = normalizeQuery(query)
+  const names = ingredientMatcher(query)
+  const allowsUncooked = NOT_AS_EATEN.test(asked)
   const pool = foods.filter(
     (food) =>
       !isAverage(food) &&
       matchesQuery(food, terms) &&
-      namesIngredient(food, query) &&
-      !(NOT_AS_EATEN.test(food.description) && !NOT_AS_EATEN.test(asked)),
+      names(food) &&
+      (allowsUncooked || !NOT_AS_EATEN.test(food.description)),
   )
   const makers = new Set(pool.map((food) => food.brand?.trim().toLowerCase()).filter(Boolean))
   if (pool.length < MIN_SOURCES || makers.size < MIN_MAKERS) return null
@@ -57,15 +59,17 @@ function sharedPortions(pool: readonly Food[]): FoodPortion[] {
     for (const portion of householdPortions(food)) {
       const label = portion.label.trim().toLowerCase()
       if (label === '1 serving') continue
-      byLabel.set(label, [...(byLabel.get(label) ?? []), portion.grams])
+      const weights = byLabel.get(label)
+      if (weights) weights.push(portion.grams)
+      else byLabel.set(label, [portion.grams])
     }
   }
   const shared = [...byLabel]
     .filter(([, grams]) => grams.length >= 2)
     .sort((a, b) => b[1].length - a[1].length)
     .slice(0, 3)
-    .map(([label, grams], index) => ({
-      id: `avg-${index}`,
+    .map(([label, grams]) => ({
+      id: `avg-${label.replace(/[^a-z0-9]+/g, '-')}`,
       label,
       grams: Math.round(median(grams)!),
       isDefault: false,
