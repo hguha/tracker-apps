@@ -128,11 +128,13 @@ export function MeScreen({
           icon={<Database size={18} />}
           label="Data & sync"
           hint={
-            sync.deadLettered > 0
-              ? `${plural(sync.deadLettered, 'change')} failed to sync`
-              : sync.pending > 0
-                ? `${plural(sync.pending, 'change')} waiting to upload`
-                : 'Backup, restore, and reset'
+            !sync.enabled
+              ? 'Backup, restore, and reset'
+              : sync.deadLettered > 0
+                ? `${plural(sync.deadLettered, 'change')} failed to sync`
+                : sync.pending > 0
+                  ? `${plural(sync.pending, 'change')} waiting to upload`
+                  : 'Backup, restore, and reset'
           }
           tone={sync.deadLettered > 0 ? 'warning' : undefined}
           onClick={onOpenData}
