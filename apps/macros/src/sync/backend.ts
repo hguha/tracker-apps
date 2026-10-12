@@ -6,7 +6,7 @@ import { getSupabase } from '@/backend/supabaseClient'
  * sends epoch milliseconds to Postgres, which rejects the whole push with "date/time field
  * value out of range" — every log entry silently dead-letters.
  */
-const TIMESTAMP_COLUMNS = ['eaten_at', 'verified_at']
+export const TIMESTAMP_COLUMNS = ['eaten_at', 'verified_at', 'reached_at']
 
 /** null with no project configured, which is what keeps the app fully usable offline. */
 export function syncBackend(): SyncBackend | null {
