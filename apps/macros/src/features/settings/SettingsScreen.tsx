@@ -1,7 +1,7 @@
 import { convertWeight, type WeightUnit } from '@tracker-engine/core'
 import { plural } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Card, NavList, NavRow } from '@tracker-engine/ui'
+import { Card, NavList, NavRow, PageTitle } from '@tracker-engine/ui'
 import {
   Award,
   Bell,
@@ -54,7 +54,7 @@ export function SettingsScreen({
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <h1 className="px-1 text-[17px] font-semibold tracking-tight">Settings</h1>
+      <PageTitle>Settings</PageTitle>
       <Card className="overflow-hidden">
         <button
           onClick={() => onOpen('account')}

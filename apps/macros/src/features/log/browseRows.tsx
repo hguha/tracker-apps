@@ -62,7 +62,7 @@ export function MoreWaysSheet({
 }
 
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <Card className="p-4 text-center text-[13px] text-ink-muted">{children}</Card>
+  return <Card className="px-4 py-3 text-[13px] text-ink-muted">{children}</Card>
 }
 
 export function FoodList({

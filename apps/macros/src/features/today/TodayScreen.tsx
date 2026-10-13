@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, dayKeyOffset, formatDayHeading } from '@tracker-engine/core'
 import { ChefHat, Flame, Sparkles } from 'lucide-react'
+import { PageTitle } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { dailyAverageCovered, dayTotals, remaining } from '@/lib/nutrition'
 import { CheckInCard } from '@/features/checkin/CheckInCard'
@@ -77,17 +78,18 @@ export function TodayScreen({
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <div className="flex items-baseline justify-between px-1">
-        <h1 className="text-[17px] font-semibold tracking-tight">
-          {formatDayHeading(Date.now())}
-        </h1>
-        {streak > 1 && (
-          <span className="flex items-center gap-1 text-[12.5px] font-semibold text-accent">
-            <Flame size={14} />
-            {streak} day streak
-          </span>
-        )}
-      </div>
+      <PageTitle
+        aside={
+          streak > 1 && (
+            <span className="flex items-center gap-1 text-[12.5px] font-semibold text-accent">
+              <Flame size={14} />
+              {streak} day streak
+            </span>
+          )
+        }
+      >
+        {formatDayHeading(Date.now())}
+      </PageTitle>
 
       <BudgetCard
         totals={totals}

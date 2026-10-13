@@ -13,7 +13,7 @@ import {
   Trophy,
 } from 'lucide-react'
 import { plural } from '@tracker-engine/core'
-import { NavList, NavRow } from '@tracker-engine/ui'
+import { NavList, NavRow, PageTitle } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { useAuth } from '@/auth/AuthContext'
@@ -54,6 +54,7 @@ export function MeScreen({
 
   return (
     <div className="space-y-3 px-3 py-3">
+      <PageTitle>More</PageTitle>
       <Card className="overflow-hidden">
         <button
           onClick={onOpenAccount}

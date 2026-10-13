@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useMemo, useState } from 'react'
 import { ScreenHeader, SearchField, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -131,7 +132,7 @@ export function StartWorkoutScreen({
                       ` +${summary.exerciseNames.length - 4}`}
                   </span>
                   <span className="tabular mt-0.5 block text-[12px] text-ink-muted">
-                    {summary.setCount} sets
+                    {plural(summary.setCount, 'set')}
                     {summary.volumeKg > 0 &&
                       ` · ${formatDisplayWeight(summary.volumeKg, unit)}`}
                   </span>
@@ -143,11 +144,11 @@ export function StartWorkoutScreen({
         )}
 
         {data && shownRecent.length === 0 && shownTemplates.length === 0 && (
-          <p className="px-4 pt-6 text-center text-[13.5px] text-ink-muted">
+          <Card className="px-4 py-3 text-[13px] text-ink-muted">
             {q
               ? `Nothing matches “${query.trim()}”.`
               : "Once you've logged a few workouts, they'll show up here so you can repeat one with a tap."}
-          </p>
+          </Card>
         )}
 
         <div className="h-4" />

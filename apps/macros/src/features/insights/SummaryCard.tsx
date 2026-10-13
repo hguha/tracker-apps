@@ -1,4 +1,4 @@
-import { Card } from '@tracker-engine/ui'
+import { Card, SectionLabel } from '@tracker-engine/ui'
 import { convertWeight, signed } from '@tracker-engine/core'
 import { grams } from '@/features/shared/format'
 import { useUnits } from '@/features/shared/useUnits'
@@ -11,7 +11,7 @@ export function SummaryCard({ data, rangeLabel }: { data: InsightsData; rangeLab
 
   return (
     <Card className="p-4">
-      <h2 className="text-[15px] font-semibold tracking-tight">{rangeLabel}</h2>
+      <SectionLabel>{rangeLabel}</SectionLabel>
       <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
         <Stat label="Days logged">{data.loggedDayCount}</Stat>
         <Stat label="Average intake">{averageKcal.toLocaleString()} kcal</Stat>

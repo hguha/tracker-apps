@@ -15,6 +15,7 @@ import {
   FilterSheet,
   MonthCalendar,
   SearchField,
+  SectionLabel,
   SegmentedTabs,
   type CalendarDay,
   type SegmentedTab,
@@ -165,14 +166,12 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3 pb-8">
         {!isLoaded ? null : days.length === 0 ? (
-          <Card className="p-4 text-center text-[13.5px] text-ink-muted">
+          <Card className="px-4 py-3 text-[13px] text-ink-muted">
             {isFiltered ? 'Nothing matches these filters.' : 'Nothing logged yet.'}
           </Card>
         ) : (
           <Card className="p-4">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-muted">
-              {isFiltered ? 'Matching days' : range.label}
-            </h2>
+            <SectionLabel>{isFiltered ? 'Matching days' : range.label}</SectionLabel>
             <p className="tabular mt-1 text-[20px] font-bold leading-tight">
               {averages.kcal.toLocaleString()}
               <span className="text-[13px] font-medium text-ink-muted"> kcal/day average</span>

@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { weekStreaks } from '@tracker-engine/core'
-import { ScreenHeader, SectionLabel } from '@tracker-engine/ui'
+import { BadgeGrid, ScreenHeader, SectionLabel, type BadgeView } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { evaluateBadges, groupedBadges, type BadgeState } from './badges'
-import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
+import { evaluateBadges, groupedBadges } from './badges'
+import { BadgeDetailSheet } from './BadgeUI'
 
 export function BadgesScreen({ onBack }: { onBack: () => void }) {
-  const [selected, setSelected] = useState<BadgeState | null>(null)
+  const [selected, setSelected] = useState<BadgeView | null>(null)
 
   const badges = useLiveQuery(async () => {
     const finished = await repo.listFinishedWorkoutSummaries(1000)
@@ -35,34 +35,28 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader
-        title="Badges"
-        onBack={onBack}
-        action={
-          badges && (
-            <span className="pr-2 text-[13px] text-ink-muted">
-              {earnedCount} of {badges.length}
-            </span>
-          )
-        }
-      />
+      <ScreenHeader title="Badges" onBack={onBack} />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        {badges && (
+          <Card className="p-4">
+            <p className="tabular text-[22px] font-bold leading-tight">
+              {earnedCount}
+              <span className="text-[13px] font-medium text-ink-muted">
+                {' '}
+                of {badges.length} earned
+              </span>
+            </p>
+          </Card>
+        )}
         {badges &&
           sections.map((section) => (
             <Card key={section.group} className="p-4">
               <SectionLabel>
                 {section.group}
               </SectionLabel>
-              <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-4">
-                {section.badges.map((badge) => (
-                  <BadgeTile
-                    key={badge.key}
-                    badge={badge}
-                    showProgress
-                    onClick={() => setSelected(badge)}
-                  />
-                ))}
+              <div className="mt-3">
+                <BadgeGrid badges={section.badges} onSelect={setSelected} />
               </div>
             </Card>
           ))}

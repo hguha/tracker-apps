@@ -49,7 +49,7 @@ export function ChartCard({
 
       <div className="px-2 pb-2 pt-1">
         {isEmpty ? (
-          <p className="px-2 py-8 text-center text-[13.5px] text-ink-muted">
+          <p className="px-2 pb-2 text-[13px] text-ink-muted">
             {emptyMessage ?? 'Not enough data yet.'}
           </p>
         ) : isTable ? (
@@ -100,7 +100,7 @@ function TableView({ table }: { table: TableData }) {
         </tbody>
       </table>
       {table.rows.length === 0 && (
-        <p className="py-6 text-center text-[13px] text-ink-muted">No rows in range.</p>
+        <p className="px-2 py-2 text-[13px] text-ink-muted">No rows in range.</p>
       )}
     </div>
   )

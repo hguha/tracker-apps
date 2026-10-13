@@ -155,7 +155,7 @@ export function CoachScreen({ onBack }: { onBack: () => void }) {
         onChange={setDraft}
         onSend={() => send(draft)}
         isDisabled={chat.isPending}
-        placeholder="Ask the coach"
+        placeholder="Ask your coach…"
       />
 
       {isShowingHistory && (

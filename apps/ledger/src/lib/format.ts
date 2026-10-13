@@ -2,7 +2,7 @@
 // → currency-string conversion happens in exactly one place (the conversion-boundary
 // rule). Money math never uses these — it stays in integer minor units.
 
-import { formatMoney, money } from '@tracker-engine/core'
+import { formatMoney, formatShortDay, money } from '@tracker-engine/core'
 import { format, parseISO } from 'date-fns'
 
 /** '-$45.00'. Pass a currency the account/entry carries; defaults to USD. */
@@ -29,9 +29,7 @@ export function fmtCompact(minor: number, currency = 'USD'): string {
   }).format(minor / 100)
 }
 
-export function fmtDate(iso: string): string {
-  return format(parseISO(iso), 'MMM d')
-}
+export const fmtDate = (iso: string): string => formatShortDay(iso)
 
 export function fmtDateLong(iso: string): string {
   return format(parseISO(iso), 'EEE, MMM d, yyyy')

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { weekStreaks } from '@tracker-engine/core'
-import { SectionLabel } from '@tracker-engine/ui'
+import { plural, weekStreaks } from '@tracker-engine/core'
+import { EmptyState, PageTitle, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ChevronRight,
@@ -206,12 +206,10 @@ export function HomeScreen({
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <div className="px-1 pt-1">
-        <h1 className="text-[22px] font-bold tracking-tight">
-          Good {partOfDay(Date.now()).toLowerCase()}
-          {greetName}
-        </h1>
-      </div>
+      <PageTitle>
+        Good {partOfDay(Date.now()).toLowerCase()}
+        {greetName}
+      </PageTitle>
 
       {greeting && (
         <button
@@ -426,7 +424,7 @@ export function HomeScreen({
                 </span>
                 <span className="tabular mt-0.5 block text-[12.5px] text-ink-muted">
                   {formatRelativeDay(summary.workout.startedAt)} ·{' '}
-                  {formatTimeOfDay(summary.workout.startedAt)} · {summary.setCount} sets
+                  {formatTimeOfDay(summary.workout.startedAt)} · {plural(summary.setCount, 'set')}
                   {summary.volumeKg > 0 &&
                     ` · ${formatDisplayWeight(summary.volumeKg, unit)}`}
                 </span>
@@ -438,12 +436,11 @@ export function HomeScreen({
       )}
 
       {totalWorkouts === 0 && !active && (
-        <Card className="p-5 text-center">
-          <p className="text-[15px] font-semibold">Nothing logged yet</p>
-          <p className="mt-1 text-[13.5px] text-ink-secondary">
+        <Card className="px-4 py-1">
+          <EmptyState title="Nothing logged yet">
             Log your first workout and this page starts filling in — weekly volume,
             balance by body part, and what to train next.
-          </p>
+          </EmptyState>
         </Card>
       )}
     </div>

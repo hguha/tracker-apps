@@ -157,7 +157,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
             </div>
             <div className="flex justify-between">
               <dt className="text-ink-secondary">App version</dt>
-              <dd className="tabular font-semibold text-ink-muted">{APP_VERSION}</dd>
+              <dd className="tabular font-semibold">{APP_VERSION}</dd>
             </div>
           </dl>
 

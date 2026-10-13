@@ -1,6 +1,6 @@
-import { formatShortDate } from '@tracker-engine/core'
+import { formatShortDate, plural } from '@tracker-engine/core'
 import { useEffect, useMemo, useState } from 'react'
-import { SegmentedTabs } from '@tracker-engine/ui'
+import { SearchField, SegmentedTabs } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   CalendarDays,
@@ -10,7 +10,6 @@ import {
   List,
   MoreHorizontal,
   Plus,
-  Search,
   Trash2,
   X,
 } from 'lucide-react'
@@ -142,40 +141,12 @@ export function HistoryScreen({
 
   return (
     <div className="px-3 py-3">
-      <div className="mb-2.5">
-        <SegmentedTabs
-          tabs={[
-            { key: 'list', label: 'List', icon: <List size={15} /> },
-            { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={15} /> },
-          ]}
-          active={view}
-          onSelect={setView}
-        />
-      </div>
-
-      {view === 'calendar' && (
-        <HistoryCalendar
-          summaries={data.summaries}
-          weekStartsOn={data.profile.weekStartsOn}
-          selectedDay={selectedDay}
-          onSelectDay={setSelectedDay}
-        />
-      )}
-
-      <div className="mb-2 flex h-11 items-center gap-2 rounded-xl bg-sunken px-3">
-        <Search size={17} className="shrink-0 text-ink-muted" />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search workouts and exercises"
-          className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-muted"
-        />
-        {query && (
-          <button onClick={() => setQuery('')} aria-label="Clear search">
-            <X size={17} className="text-ink-muted" />
-          </button>
-        )}
-      </div>
+      <SearchField
+        value={query}
+        onChange={setQuery}
+        placeholder="Search workouts and exercises"
+        className="mb-2"
+      />
 
       <div className="mb-2.5 flex gap-1.5 overflow-x-auto">
         <FilterChipButton
@@ -216,6 +187,26 @@ export function HistoryScreen({
           </button>
         )}
       </div>
+
+      <div className="mb-2.5">
+        <SegmentedTabs
+          tabs={[
+            { key: 'list', label: 'List', icon: <List size={15} /> },
+            { key: 'calendar', label: 'Calendar', icon: <CalendarDays size={15} /> },
+          ]}
+          active={view}
+          onSelect={setView}
+        />
+      </div>
+
+      {view === 'calendar' && (
+        <HistoryCalendar
+          summaries={data.summaries}
+          weekStartsOn={data.profile.weekStartsOn}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
+        />
+      )}
 
       {filtered.length === 0 && (
         <p className="mt-10 text-center text-[14px] text-ink-muted">
@@ -262,7 +253,7 @@ export function HistoryScreen({
                 </p>
 
                 <div className="mt-2.5 flex gap-4 text-[12.5px] text-ink-muted">
-                  <span className="tabular">{summary.setCount} sets</span>
+                  <span className="tabular">{plural(summary.setCount, 'set')}</span>
                   {summary.volumeKg > 0 && (
                     <span className="tabular">
                       {formatDisplayWeight(summary.volumeKg, data.profile.unitWeight)}
@@ -528,7 +519,7 @@ function SaveTemplateSheet({
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="e.g. Pull A"
-          className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
         />
         <p className="mt-2 text-[12.5px] text-ink-muted">
           Saves the exercises and set counts. Weights come from your history each time you
