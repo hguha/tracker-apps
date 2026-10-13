@@ -608,7 +608,7 @@ export const mockCoachProvider: CoachProvider = {
   },
   // No multi-turn tools offline: answer each message as a one-shot from the summary
   // — a plan-like ask returns a draft card, anything else a heuristic reply.
-  async chat(contents: GeminiContent[], _context: CoachContext): Promise<CoachChatResult> {
+  async chat(contents: GeminiContent[], context: CoachContext): Promise<CoachChatResult> {
     const text = lastUserText(contents)
     const summary = await repo.getCoachSummary()
     const reply = (body: string): CoachChatResult => ({
@@ -621,9 +621,13 @@ export const mockCoachProvider: CoachProvider = {
       const drafted = plan(summary, goal)
       // A model reply already in the thread means this is a refinement, not a first draft.
       const isRefinement = contents.some((c) => c.role === 'model')
-      const note = isRefinement
+      const draftNote = isRefinement
         ? 'Updated — same starting weights, dialed to your new ask. Save it as templates, or keep refining.'
         : "Here's a draft from your recent training — save any session as a template, or tell me what to change."
+      const notes = context.profile?.coachNotes?.trim()
+      const note = notes
+        ? `${draftNote} The offline coach can't fit it to your notes ("${notes}"), so swap anything that doesn't suit.`
+        : draftNote
       return {
         contents: [...contents, { role: 'model', parts: [{ text: note }] }],
         text: note,

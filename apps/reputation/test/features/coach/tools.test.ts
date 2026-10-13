@@ -119,6 +119,12 @@ describe('mock coach chat fallback', () => {
     expect(result.action?.kind).toBe('plan')
   })
 
+  it('says plainly that a drafted plan has not been fitted to the coach notes', async () => {
+    const withNotes = { profile: { coachNotes: 'Left knee: no deep squats' } } as CoachContext
+    const result = await mockCoachProvider.chat!(userTurn('give me a leg day'), withNotes)
+    expect(result.text).toContain('Left knee: no deep squats')
+  })
+
   it('answers a general question with text and no card', async () => {
     const result = await mockCoachProvider.chat!(userTurn('what should I focus on?'), context)
     expect(result.text.length).toBeGreaterThan(0)
