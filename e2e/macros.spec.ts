@@ -1431,3 +1431,17 @@ test('Today moves to the new day at midnight while the app stays open', async ({
   await expect(page.getByText(/Banana/)).toHaveCount(0)
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
+
+test('a long unbroken word stays inside its coach bubble', async ({ page }) => {
+  await bootWithoutErrors(page)
+  await completeOnboarding(page)
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: /^Coach/ }).click()
+  const word = 'x'.repeat(200)
+  await page.getByRole('textbox').last().fill(word)
+  await page.keyboard.press('Enter')
+  const bubble = page.getByText(word, { exact: true })
+  await expect(bubble).toBeVisible()
+  const fits = await bubble.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+  expect(fits).toBe(true)
+})

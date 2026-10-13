@@ -110,7 +110,7 @@ export function CoachScreen({ onClose }: { onClose: () => void }) {
           <div key={i} className={cn('flex', turn.role === 'user' ? 'justify-end' : 'justify-start')}>
             <div
               className={cn(
-                'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[15px]',
+                'max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-[15px]',
                 turn.role === 'user'
                   ? 'bg-accent text-accent-contrast'
                   : 'bg-surface text-ink',

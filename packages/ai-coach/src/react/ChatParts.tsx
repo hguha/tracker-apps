@@ -7,7 +7,7 @@ export function MessageBubble({ role, text }: { role: 'user' | 'assistant'; text
     <div className={cn('flex', role === 'user' ? 'justify-end' : 'justify-start')}>
       <p
         className={cn(
-          'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14.5px] leading-snug',
+          'max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-[14.5px] leading-snug',
           role === 'user' ? 'bg-accent text-accent-contrast' : 'bg-surface text-ink ring-1 ring-line',
         )}
       >
