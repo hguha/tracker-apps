@@ -84,7 +84,7 @@ export function QuickAddPanel({
           value={label}
           onChange={(event) => setLabel(event.target.value)}
           placeholder="Cafeteria stir fry"
-          className="mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+          className="mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
         />
       </label>
 
@@ -97,7 +97,7 @@ export function QuickAddPanel({
               inputMode="numeric"
               value={fields[field]}
               onChange={(event) => setFields({ ...fields, [field]: event.target.value })}
-              className="tabular mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none"
+              className="tabular mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
             />
           </label>
         ))}

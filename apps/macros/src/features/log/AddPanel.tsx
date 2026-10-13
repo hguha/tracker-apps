@@ -207,7 +207,7 @@ export function AddPanel({
               setUnitId(next.id)
             }}
             aria-label="Unit"
-            className="min-w-0 flex-1 rounded-xl bg-sunken px-3 text-[14px] outline-none"
+            className="min-w-0 flex-1 rounded-xl bg-sunken px-3 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
           >
             {subject.units.map((option) => (
               <option key={option.id} value={option.id}>

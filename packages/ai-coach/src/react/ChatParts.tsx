@@ -60,7 +60,7 @@ export function Composer({
           }
         }}
         placeholder={placeholder}
-        className="max-h-28 min-h-[44px] min-w-0 flex-1 resize-none rounded-xl bg-sunken px-3.5 py-2.5 text-[16px] outline-none"
+        className="max-h-28 min-h-[44px] min-w-0 flex-1 resize-none rounded-xl bg-sunken px-3.5 py-2.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
       />
       <button
         onClick={onSend}

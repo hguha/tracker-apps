@@ -40,7 +40,7 @@ export function GoalWeightCard({ profile }: { profile: Profile }) {
             inputMode="decimal"
             placeholder="Optional"
             {...goal.inputProps}
-            className="tabular h-10 w-24 rounded-lg border border-line bg-surface px-3 text-right text-[15px] outline-none focus:border-accent"
+            className="tabular h-10 w-24 rounded-lg bg-sunken px-3 text-right text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           <span className="w-6 text-[13px] text-ink-muted">{unit}</span>
         </div>

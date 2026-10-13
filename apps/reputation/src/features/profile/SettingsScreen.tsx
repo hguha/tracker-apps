@@ -229,7 +229,7 @@ function CoachingCard({ profile }: { profile: Profile }) {
           id="me-goal"
           placeholder='e.g. "gain strength", "lean out for summer"'
           {...goal.inputProps}
-          className="mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-[15px] outline-none focus:border-accent"
+          className="mt-1.5 h-10 w-full rounded-lg bg-sunken px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
         />
       </div>
     </Card>

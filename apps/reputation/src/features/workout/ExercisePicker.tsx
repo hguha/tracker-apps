@@ -372,7 +372,7 @@ function LoadModeSheet({
               onChange={(event) => setBodyweight(event.target.value)}
               inputMode="decimal"
               placeholder={unitWeight === 'kg' ? '75' : '165'}
-              className="mt-1.5 h-11 w-full rounded-xl border border-line bg-sunken px-3.5 text-[16px] outline-none focus:border-accent focus:bg-surface"
+              className="mt-1.5 h-11 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
             />
           </div>
         ) : undefined

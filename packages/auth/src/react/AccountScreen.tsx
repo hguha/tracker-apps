@@ -27,7 +27,7 @@ export interface AccountScreenProps {
 }
 
 const FIELD =
-  'h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent'
+  'h-11 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40'
 const LABEL = 'mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-ink-muted'
 
 export function AccountScreen({
@@ -233,7 +233,7 @@ export function AccountScreen({
             value={deleteConfirmation}
             onChange={(event) => setDeleteConfirmation(event.target.value)}
             autoCapitalize="none"
-            className="mt-1.5 h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-critical"
+            className="mt-1.5 h-11 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-critical/40"
           />
         </Dialog>
       )}

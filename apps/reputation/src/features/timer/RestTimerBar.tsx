@@ -207,7 +207,7 @@ function RestStartBar({
           onKeyDown={(event) => {
             if (event.key === 'Enter') commitCustom()
           }}
-          className="tabular h-11 min-w-0 flex-1 rounded-xl border border-line bg-sunken text-center text-[16px] font-semibold focus:border-accent focus:outline-none"
+          className="tabular h-11 min-w-0 flex-1 rounded-xl bg-sunken text-center text-[16px] font-semibold outline-none focus:ring-2 focus:ring-accent/40"
         />
         <button
           onClick={commitCustom}

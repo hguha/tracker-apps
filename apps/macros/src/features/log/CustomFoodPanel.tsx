@@ -112,13 +112,13 @@ export function CustomFoodPanel({
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Name"
-        className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+        className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
       />
       <input
         value={brand}
         onChange={(event) => setBrand(event.target.value)}
         placeholder="Brand"
-        className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+        className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
       />
 
       <SegmentedTabs tabs={BASES} active={basis} onSelect={setBasis} />
@@ -138,7 +138,7 @@ export function CustomFoodPanel({
               value={servingLabel}
               onChange={(event) => setServingLabel(event.target.value)}
               placeholder="1 wrap"
-              className="mt-0.5 w-full rounded-xl bg-sunken px-2.5 py-2 text-[14px] outline-none"
+              className="mt-0.5 w-full rounded-xl bg-sunken px-2.5 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
             />
           </label>
         </div>
@@ -222,7 +222,7 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={`${label}${suffix ? ` in ${suffix}` : ''}`}
-        className="tabular mt-0.5 w-full rounded-xl bg-sunken px-2.5 py-2 text-[14px] outline-none"
+        className="tabular mt-0.5 w-full rounded-xl bg-sunken px-2.5 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
       />
     </label>
   )

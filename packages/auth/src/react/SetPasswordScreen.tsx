@@ -69,7 +69,7 @@ export function SetPasswordScreen({ auth }: { auth: SetPasswordActions }) {
             if (event.key === 'Enter') void save()
           }}
           placeholder="••••••••"
-          className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
         />
         <p className="mt-1.5 text-[12px] text-ink-muted">{problem ?? 'Looks good.'}</p>
 

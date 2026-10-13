@@ -330,7 +330,7 @@ export function RecipeEditor({
           onChange={(event) => setName(event.target.value)}
           placeholder={fallbackName || 'Name'}
           aria-label="Name"
-          className="w-full rounded-xl bg-sunken px-3 py-2 text-[15px] font-medium outline-none"
+          className="w-full rounded-xl bg-sunken px-3 py-2 text-[15px] font-medium outline-none focus:ring-2 focus:ring-accent/40"
         />
         <label className="flex items-center gap-2 text-[13px] text-ink-secondary">
           Makes
@@ -338,7 +338,7 @@ export function RecipeEditor({
             value={servings}
             onValue={(value) => setServings(Math.max(1, Math.round(value)))}
             aria-label="Servings it makes"
-            className="tabular w-14 rounded-lg bg-sunken px-2 py-1 text-center text-[14px] outline-none"
+            className="tabular w-14 rounded-lg bg-sunken px-2 py-1 text-center text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           {servings === 1 ? 'serving' : 'servings'}
         </label>
@@ -455,7 +455,7 @@ export function RecipeEditor({
               value={cuisine}
               onChange={(event) => setCuisine(event.target.value as CuisineKey | '')}
               aria-label="Cuisine"
-              className="w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none"
+              className="w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
             >
               <option value="">Cuisine not set</option>
               {CUISINES.map((key) => (
@@ -470,7 +470,7 @@ export function RecipeEditor({
               onChange={(event) => setSteps(event.target.value)}
               placeholder="One step per line"
               aria-label="Method"
-              className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[13.5px] leading-relaxed outline-none"
+              className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[13.5px] leading-relaxed outline-none focus:ring-2 focus:ring-accent/40"
             />
             {totalMinutes !== null && (
               <p className="text-[12px] text-ink-muted">Takes about {totalMinutes} minutes.</p>
@@ -492,7 +492,7 @@ export function RecipeEditor({
                 value={eaten}
                 onValue={(value) => setEaten(Math.max(0.25, value))}
                 aria-label="Servings eaten"
-                className="tabular w-12 rounded-lg bg-sunken px-1 py-1 text-center text-[14px] outline-none"
+                className="tabular w-12 rounded-lg bg-sunken px-1 py-1 text-center text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
               />
               <Stepper label="More" onClick={() => setEaten(more(eaten))}>
                 <Plus size={15} />

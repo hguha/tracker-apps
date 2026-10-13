@@ -217,7 +217,7 @@ export function FinishSheet({
               value={templateName}
               onChange={(event) => setTemplateName(event.target.value)}
               placeholder="Optional — e.g. Pull A"
-              className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+              className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
             />
           </div>
         )}

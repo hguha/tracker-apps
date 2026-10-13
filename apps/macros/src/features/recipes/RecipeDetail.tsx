@@ -152,7 +152,7 @@ export function RecipeDetail({
               const next = fromDateTimeInputValue(event.target.value)
               if (Number.isFinite(next)) setAt(next)
             }}
-            className="tabular mt-1 w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none"
+            className="tabular mt-1 w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
           />
         </label>
 

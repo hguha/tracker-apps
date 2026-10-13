@@ -54,13 +54,13 @@ export function AmountRow({
           onValue={(value) => onGrams(Math.round(value * unit.grams))}
           tolerance={0.5 / unit.grams}
           aria-label={`Amount of ${title}`}
-          className="tabular w-16 shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-right text-[13.5px] outline-none"
+          className="tabular w-16 shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-right text-[13.5px] outline-none focus:ring-2 focus:ring-accent/40"
         />
         <select
           value={unit.id}
           onChange={(event) => setUnitId(event.target.value)}
           aria-label={`Unit for ${title}`}
-          className="w-[148px] shrink-0 rounded-lg bg-sunken py-1.5 pl-1.5 text-[12px] text-ink-secondary outline-none"
+          className="w-[148px] shrink-0 rounded-lg bg-sunken py-1.5 pl-1.5 text-[12px] text-ink-secondary outline-none focus:ring-2 focus:ring-accent/40"
         >
           {units.map((option) => (
             <option key={option.id} value={option.id}>

@@ -123,7 +123,7 @@ export function BodyMetricsScreen({ onBack }: { onBack: () => void }) {
                     }
                     inputMode="decimal"
                     placeholder="Log a new value"
-                    className="tabular h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                    className="tabular h-11 min-w-0 flex-1 rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
                   />
                   <span className="self-center text-[13px] text-ink-muted">
                     {unitSuffix(definition.unitType) || '—'}

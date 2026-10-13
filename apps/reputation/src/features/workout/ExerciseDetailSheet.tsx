@@ -166,7 +166,7 @@ export function ExerciseDetailSheet({
               }}
               rows={2}
               placeholder="Felt heavy, shoulder tweaked, last set was a grind…"
-              className="w-full resize-none rounded-xl border border-line bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+              className="w-full resize-none rounded-xl bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
             />
             <p className="mt-1 text-[11.5px] text-ink-muted">
               Stays with this workout only, and shows on the card.
@@ -185,7 +185,7 @@ export function ExerciseDetailSheet({
             }}
             rows={2}
             placeholder="Seat height, pin setting, cues…"
-            className="w-full resize-none rounded-xl border border-line bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+            className="w-full resize-none rounded-xl bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           {workoutExerciseId && (
             <p className="mt-1.5 text-[11.5px] text-ink-muted">

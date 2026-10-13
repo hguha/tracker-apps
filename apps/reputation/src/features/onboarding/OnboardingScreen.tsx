@@ -184,7 +184,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   if (event.key === 'Enter') void saveAndContinue()
                 }}
                 placeholder="Your name"
-                className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
               />
               <ContinueButton
                 onClick={() => void saveAndContinue()}
@@ -236,7 +236,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   value={height}
                   onChange={(event) => setHeight(event.target.value)}
                   placeholder="—"
-                  className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                  className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
                 />
               </Field>
               <Field label={`Bodyweight (${weightUnit})`}>
@@ -245,7 +245,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   value={bodyweight}
                   onChange={(event) => setBodyweight(event.target.value)}
                   placeholder="—"
-                  className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                  className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
                 />
               </Field>
               <Field label="Workouts per week you're aiming for">
@@ -291,7 +291,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                   value={age}
                   onChange={(event) => setAge(event.target.value)}
                   placeholder="—"
-                  className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                  className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
                 />
               </Field>
               <Field label="Lifting experience">
@@ -318,7 +318,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
                 value={goal}
                 onChange={(event) => setGoal(event.target.value)}
                 placeholder="e.g. squat 405 by spring"
-                className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
               />
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {GOAL_SUGGESTIONS.map((suggestion) => (

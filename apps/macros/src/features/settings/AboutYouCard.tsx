@@ -47,7 +47,7 @@ export function AboutYouCard() {
                 sex: (event.target.value || null) as 'male' | 'female' | null,
               })
             }
-            className="mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none"
+            className="mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
           >
             <option value="">—</option>
             <option value="male">Male</option>
@@ -87,7 +87,7 @@ function Field({
         key={label}
         defaultValue={value ?? ''}
         onBlur={(event) => onChange(event.target.value ? Number(event.target.value) : null)}
-        className="mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none"
+        className="mt-0.5 w-full rounded-xl bg-sunken px-2 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
       />
     </label>
   )

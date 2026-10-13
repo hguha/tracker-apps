@@ -165,7 +165,7 @@ function GoalDateField({ program }: { program: Program }) {
         min={dayKeyOffset(Date.now(), -1)}
         value={day}
         onChange={(event) => void pick(event.target.value)}
-        className="tabular mt-1.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+        className="tabular mt-1.5 w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
       />
       {result?.kind === 'past-goal' && (
         <p className="mt-1 text-[12px] text-ink-muted">You&rsquo;re already past your goal weight.</p>
@@ -334,7 +334,7 @@ function GoalWeightField({ program }: { program: Program }) {
         onChange={(event) => setValue(event.target.value)}
         onBlur={commit}
         placeholder={units.weight}
-        className="tabular w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+        className="tabular w-full rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
       />
     </Field>
   )

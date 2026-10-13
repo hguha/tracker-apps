@@ -147,7 +147,7 @@ function Row({
           if (next !== null) onChange({ minute: next, enabled })
         }}
         aria-label={`${label} time`}
-        className="tabular shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-[13.5px] outline-none disabled:opacity-40"
+        className="tabular shrink-0 rounded-lg bg-sunken px-2 py-1.5 text-[13.5px] outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-40"
       />
     </li>
   )

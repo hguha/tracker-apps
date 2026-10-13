@@ -107,7 +107,7 @@ function TimeField({
           const next = parseClock(event.target.value)
           if (next !== null) onChange(next)
         }}
-        className="tabular mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none"
+        className="tabular mt-0.5 w-full rounded-xl bg-sunken px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
       />
     </label>
   )

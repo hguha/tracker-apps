@@ -123,7 +123,7 @@ export function ImportLines({
               onChange={(event) => setInput(event.target.value)}
               inputMode="url"
               placeholder="https://…"
-              className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+              className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
             />
           ) : (
             <textarea
@@ -131,7 +131,7 @@ export function ImportLines({
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder={'500g beef mince\n2 tins chopped tomatoes\n1 onion'}
-              className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+              className="w-full resize-none rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
             />
           )}
           <Button

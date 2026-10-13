@@ -77,7 +77,7 @@ export function NewExerciseForm({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Reverse Dumbbell Fly"
-            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+            className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
           />
         </Field>
 
@@ -130,7 +130,7 @@ export function NewExerciseForm({
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             rows={2}
-            className="w-full resize-none rounded-xl border border-line bg-surface px-3.5 py-2.5 text-[15px] outline-none focus:border-accent"
+            className="w-full resize-none rounded-xl bg-sunken px-3.5 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
           />
         </Field>
       </div>

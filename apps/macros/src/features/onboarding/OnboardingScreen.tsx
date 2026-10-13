@@ -305,7 +305,7 @@ export function OnboardingScreen() {
               value={weight}
               onChange={(event) => setWeight(event.target.value)}
               placeholder={`Today's weight (${unit.weight})`}
-              className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+              className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
             />
             {goal !== 'maintain' && (
               <>
@@ -316,7 +316,7 @@ export function OnboardingScreen() {
                   value={goalWeight}
                   onChange={(event) => setGoalWeight(event.target.value)}
                   placeholder={`Goal weight (${unit.weight}) — optional`}
-                  className="mt-2 h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+                  className="mt-2 h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
                 />
                 <p className="mt-1.5 text-[12px] text-ink-muted">
                   A goal weight is what gives the goal an end, and a date. You can add or change it
@@ -412,7 +412,7 @@ function Picker({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-0.5 h-11 w-full rounded-xl bg-sunken px-2 text-[15px] outline-none"
+        className="mt-0.5 h-11 w-full rounded-xl bg-sunken px-2 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

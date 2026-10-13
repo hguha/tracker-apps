@@ -47,7 +47,7 @@ export function WeighInCard() {
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder={`Weight (${units.weight})`}
-          className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+          className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
         />
         <Button
           disabled={Number(value) <= 0}

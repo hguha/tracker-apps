@@ -350,7 +350,7 @@ function BodyweightPrompt({
           }}
           placeholder={weightUnit}
           aria-label={`Bodyweight (${weightUnit})`}
-          className="tabular h-8 w-20 rounded-md border border-line bg-surface px-2 text-[14px] outline-none focus:border-accent"
+          className="tabular h-8 w-20 rounded-md bg-sunken px-2 text-[14px] outline-none focus:ring-2 focus:ring-accent/40"
         />
         <button
           onClick={() => void save()}

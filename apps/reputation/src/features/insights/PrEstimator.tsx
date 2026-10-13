@@ -96,7 +96,7 @@ export function PrEstimator({ data }: { data: InsightsData }) {
             inputMode="decimal"
             placeholder="0"
             aria-label={`weight in ${unit}`}
-            className="tabular h-12 w-full rounded-xl border border-line bg-sunken text-center text-[18px] font-semibold outline-none focus:border-accent focus:bg-surface"
+            className="tabular h-12 w-full rounded-xl bg-sunken text-center text-[18px] font-semibold outline-none focus:ring-2 focus:ring-accent/40"
           />
         </Field>
         <span className="pb-3 text-[15px] font-semibold text-ink-muted">×</span>
@@ -110,7 +110,7 @@ export function PrEstimator({ data }: { data: InsightsData }) {
             inputMode="numeric"
             placeholder="0"
             aria-label="reps"
-            className="tabular h-12 w-full rounded-xl border border-line bg-sunken text-center text-[18px] font-semibold outline-none focus:border-accent focus:bg-surface"
+            className="tabular h-12 w-full rounded-xl bg-sunken text-center text-[18px] font-semibold outline-none focus:ring-2 focus:ring-accent/40"
           />
         </Field>
       </div>

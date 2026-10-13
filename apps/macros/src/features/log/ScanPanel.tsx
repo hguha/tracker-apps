@@ -122,7 +122,7 @@ export function ScanPanel({
             value={typed}
             onChange={(event) => setTyped(event.target.value.replace(/\D+/g, ''))}
             placeholder="Or type the barcode"
-            className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none"
+            className="min-w-0 flex-1 rounded-xl bg-sunken px-3 py-2 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           <Button disabled={typed.length < 6} onClick={() => void resolve(typed)}>
             Look up

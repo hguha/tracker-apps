@@ -44,7 +44,7 @@ export function PhotoPanel({ onPhoto }: { onPhoto: (photo: Photo) => void }) {
         value={note}
         onChange={(event) => setNote(event.target.value)}
         placeholder="Anything the photo won't show (optional)"
-        className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none"
+        className="w-full rounded-xl bg-sunken px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/40"
       />
       <Button className="w-full" onClick={() => fileRef.current?.click()}>
         <Camera size={16} />

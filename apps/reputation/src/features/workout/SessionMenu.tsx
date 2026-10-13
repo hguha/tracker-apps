@@ -131,7 +131,7 @@ export function SessionMenu({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Leave blank for an automatic title"
-            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+            className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           <p className="mt-2 text-[12.5px] text-ink-muted">
             Blank titles become the date, time of day, and body parts worked.
@@ -150,7 +150,7 @@ export function SessionMenu({
             type="datetime-local"
             value={startedAt}
             onChange={(event) => setStartedAt(event.target.value)}
-            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+            className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           <p className="mt-2 text-[12.5px] text-ink-muted">
             Moving a workout re-sorts your history and recalculates the charts for both
@@ -171,7 +171,7 @@ export function SessionMenu({
             value={templateName}
             onChange={(event) => setTemplateName(event.target.value)}
             placeholder="e.g. Pull A"
-            className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+            className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
           />
           <p className="mt-2 text-[12.5px] text-ink-muted">
             Saves the exercises and set counts. Weights come from your history each time

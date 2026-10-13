@@ -167,7 +167,7 @@ export function SignInScreen({
           setError(null)
         }}
         placeholder="you@example.com"
-        className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+        className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
       />
     </label>
   )
@@ -187,7 +187,7 @@ export function SignInScreen({
             setError(null)
           }}
           placeholder="••••••••"
-          className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-[16px] outline-none focus:border-accent"
+          className="h-12 w-full rounded-xl bg-sunken px-3.5 text-[16px] outline-none focus:ring-2 focus:ring-accent/40"
         />
         {mode === 'new' && (
           <span className="mt-1.5 block text-[12px] text-ink-muted">
@@ -236,7 +236,7 @@ export function SignInScreen({
               if (event.key === 'Enter' && isSubmittableCode(code)) void run(onSubmit)
             }}
             placeholder="000000"
-            className="tabular h-14 w-full rounded-xl border border-line bg-surface text-center text-[22px] font-bold tracking-[0.3em] outline-none focus:border-accent"
+            className="tabular h-14 w-full rounded-xl bg-sunken text-center text-[22px] font-bold tracking-[0.3em] outline-none focus:ring-2 focus:ring-accent/40"
           />
         </label>
 
