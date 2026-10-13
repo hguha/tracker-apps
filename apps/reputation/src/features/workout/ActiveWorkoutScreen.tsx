@@ -1,6 +1,7 @@
 // Serves both a live session and an edit of a past one (§6.6); `isEditMode`
 // suppresses the timers but leaves every mutation available.
 
+import { plural } from '@tracker-engine/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ScreenHeader } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -315,8 +316,8 @@ export function ActiveWorkoutScreen({
               )}
               <span className="truncate">
                 {isEditMode
-                  ? `${loggedSetCount} sets · editing`
-                  : `${elapsedLabel} · ${loggedSetCount} sets`}
+                  ? `${plural(loggedSetCount, 'set')} · editing`
+                  : `${elapsedLabel} · ${plural(loggedSetCount, 'set')}`}
               </span>
             </p>
           </>

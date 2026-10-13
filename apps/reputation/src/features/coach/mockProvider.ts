@@ -524,7 +524,7 @@ function answer(summary: CoachSummary, question: string): string {
     const parts = [
       `Over the last ${summary.weeksCovered} weeks you've logged ${totalSets} working sets across ${summary.totalWorkouts} sessions — about ${perWeek} a week.`,
     ]
-    if (top) parts.push(`${REGION_LABELS[top.region]} has taken the most work, at ${top.sets} sets.`)
+    if (top) parts.push(`${REGION_LABELS[top.region]} has taken the most work, at ${plural(top.sets, 'set')}.`)
     if (topLift && topLift.bestE1rmKg !== null) {
       parts.push(
         `Your strongest lift is ${topLift.name}, around ${displayWeight(topLift.bestE1rmKg, unit)} ${unit} estimated 1RM.`,
@@ -551,7 +551,7 @@ function answer(summary: CoachSummary, question: string): string {
         : pull > push * 1.4
           ? ' Your pulling is ahead of your pushing — a little more pressing would help.'
           : ''
-    return `Every major muscle is getting some work, but ${REGION_LABELS[least.r]} is your lightest at ${least.sets} sets, against ${most.sets} for ${REGION_LABELS[most.r]}.${balance} A couple of focused sets a week would even it out.`
+    return `Every major muscle is getting some work, but ${REGION_LABELS[least.r]} is your lightest at ${plural(least.sets, 'set')}, against ${most.sets} for ${REGION_LABELS[most.r]}.${balance} A couple of focused sets a week would even it out.`
   }
 
   return (

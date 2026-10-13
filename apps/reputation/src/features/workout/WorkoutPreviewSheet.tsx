@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Copy, Dumbbell, X } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -35,7 +36,7 @@ export function WorkoutPreviewSheet({
           </h2>
           {preview?.performedAt != null && (
             <p className="text-[12.5px] text-ink-muted">
-              From {formatRelativeDay(preview.performedAt)} · {preview.totalSets} sets
+              From {formatRelativeDay(preview.performedAt)} · {plural(preview.totalSets, 'set')}
             </p>
           )}
         </div>

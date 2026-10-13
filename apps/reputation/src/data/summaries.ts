@@ -2,6 +2,7 @@
 // workout/template previews, Home's badge stats, and the de-identified coach
 // summary. Everything here derives, nothing mutates.
 
+import { plural } from '@tracker-engine/core'
 import { db } from '@/db/database'
 import { isCardioPattern } from '@/domain/movement'
 import {
@@ -556,5 +557,5 @@ function summarizeSets(
         : ` × ${Math.min(...reps)}-${Math.max(...reps)}`
   const weightPart =
     weights.length > 0 ? ` @ ${formatWeight(Math.max(...weights), weightUnit)}` : ''
-  return `${working.length} sets${repPart}${weightPart}`
+  return `${plural(working.length, 'set')}${repPart}${weightPart}`
 }

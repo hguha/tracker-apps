@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { buildExerciseResolver } from './resolveExerciseName'
 import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
@@ -299,7 +300,7 @@ export function describeTemplateTarget(
   weightUnit: WeightUnit,
 ): string {
   const sets = te.targetSets ?? 3
-  const parts: string[] = [`${sets} sets`]
+  const parts: string[] = [plural(sets, 'set')]
   if (te.targetRepsLow !== null || te.targetRepsHigh !== null) {
     const low = te.targetRepsLow
     const high = te.targetRepsHigh
