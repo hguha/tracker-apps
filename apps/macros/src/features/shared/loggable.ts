@@ -103,9 +103,12 @@ const isOneOf = (label: string, id: string): boolean => {
   return parsed.quantity === 1 && `__${parsed.unit}` === id
 }
 
-export function readableUnitId(grams: number, measures: readonly { id: string; grams: number }[]): string {
+export function readableUnitId(
+  grams: number,
+  measures: readonly { id: string; grams: number; isBorrowed?: boolean }[],
+): string {
   if (grams <= 0) return GRAMS
-  const largestFirst = [...measures].sort((a, b) => b.grams - a.grams)
+  const largestFirst = measures.filter((measure) => !measure.isBorrowed).sort((a, b) => b.grams - a.grams)
   for (const measure of largestFirst) {
     const count = Math.round((grams / measure.grams) * 4) / 4
     if (count >= 0.25 && Math.abs(count * measure.grams - grams) <= grams * 0.02) return measure.id
@@ -127,7 +130,9 @@ export function startingAmount(
   }
   const measures = units.flatMap((unit) => {
     const one = unit.gramsAt(1)
-    return unit.id === GRAMS || unit.id === OUNCES || one === null ? [] : [{ id: unit.id, grams: one }]
+    return unit.id === GRAMS || unit.id === OUNCES || one === null
+      ? []
+      : [{ id: unit.id, grams: one, isBorrowed: unit.label.startsWith('≈') }]
   })
   const unitId = readableUnitId(logged.grams, measures)
   const unit = units.find((u) => u.id === unitId)

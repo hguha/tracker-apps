@@ -65,6 +65,11 @@ describe('the units a food is offered in', () => {
     expect(cup.gramsAt(1.5)).toBeCloseTo(381, 0)
   })
 
+  it('keeps grams the user typed rather than switching to a measure borrowed from another food', () => {
+    const borrowedCup = { id: 'like:usda:cooked:diced', grams: 135, isBorrowed: true }
+    expect(readableUnitId(500, [borrowedCup])).toBe(GRAMS)
+  })
+
   it('opens 381 g of chili as 1.5 cup', () => {
     const chili = testFood({ description: 'Chili con carne', portions: [portion('1/2 cup', 127)] })
     expect(readableUnitId(381, measuresFor(chili))).toBe('__cup')
