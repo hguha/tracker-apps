@@ -1,8 +1,8 @@
 /**
  * The transactional email templates, applied to the project's auth config.
  *
- *   node supabase/email-templates.mjs            # print what would change
- *   node supabase/email-templates.mjs --apply    # PATCH the project
+ *   node scripts/auth-config.mjs <reputation|macros>            # print what would change
+ *   node scripts/auth-config.mjs <reputation|macros> --apply    # PATCH the project
  *
  * Needs a Supabase management token in SUPABASE_ACCESS_TOKEN, or it reads the one
  * the CLI stored in the macOS keychain.
@@ -20,7 +20,43 @@
  * storage container). See features/auth/SignInScreen.tsx.
  */
 
-const ACCENT = '#2a78d6'
+const APPS = {
+  reputation: {
+    ref: 'orzuzeojacttsxiydwye',
+    name: 'REPutation',
+    accent: '#2a78d6',
+    tagline: 'log your lifts, watch the numbers move.',
+    siteUrl: 'https://reputation.fitness/app/',
+    redirects: [
+      'https://hirshguha.com/workout-tracker/**',
+      'https://workout-tracker-khaki-five.vercel.app/**',
+      'http://localhost:5173/**',
+      'http://localhost:5174/**',
+      'fitnote://auth-callback',
+      'https://reputation.fitness/app/**',
+    ],
+  },
+  macros: {
+    ref: 'kofgokucenxojecqbyhr',
+    name: 'MACROcosm',
+    accent: '#a84818',
+    tagline: 'log what you eat, and let the numbers find your target.',
+    siteUrl: 'https://macrocosm.fitness/app/',
+    redirects: [
+      'https://macrocosm.fitness/app/**',
+      'http://localhost:5175/**',
+      'macros://auth-callback',
+    ],
+  },
+}
+
+const APP = APPS[process.argv[2]]
+if (!APP) {
+  console.error(`Usage: node scripts/auth-config.mjs <${Object.keys(APPS).join('|')}> [--apply]`)
+  process.exit(1)
+}
+
+const ACCENT = APP.accent
 const INK = '#0b0b0b'
 const MUTED = '#6b6a66'
 const LINE = '#e6e5e0'
@@ -34,7 +70,7 @@ function shell({ heading, lead, codeLabel, footer }) {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px;background:#ffffff;border:1px solid ${LINE};border-radius:14px">
         <tr>
           <td style="padding:28px 28px 0">
-            <p style="margin:0;font:700 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:.02em;color:${ACCENT}">REPutation</p>
+            <p style="margin:0;font:700 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:.02em;color:${ACCENT}">${APP.name}</p>
             <h1 style="margin:14px 0 0;font:700 22px/1.25 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${INK}">${heading}</h1>
             <p style="margin:10px 0 0;font:400 15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">${lead}</p>
           </td>
@@ -59,14 +95,14 @@ function shell({ heading, lead, codeLabel, footer }) {
           </td>
         </tr>
       </table>
-      <p style="margin:16px 0 0;font:400 11.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">REPutation — log your lifts, watch the numbers move.</p>
+      <p style="margin:16px 0 0;font:400 11.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">${APP.name} — ${APP.tagline}</p>
     </td>
   </tr>
 </table>`
 }
 
 export const TEMPLATES = {
-  mailer_subjects_confirmation: 'Your REPutation confirmation code',
+  mailer_subjects_confirmation: `Your ${APP.name} confirmation code`,
   mailer_templates_confirmation_content: shell({
     heading: 'Confirm your email',
     lead: 'Enter this code in the app to finish creating your account.',
@@ -75,16 +111,16 @@ export const TEMPLATES = {
       "Didn't sign up? You can ignore this email — no account is created until the code is used.",
   }),
 
-  mailer_subjects_magic_link: 'Your REPutation sign-in code',
+  mailer_subjects_magic_link: `Your ${APP.name} sign-in code`,
   mailer_templates_magic_link_content: shell({
-    heading: 'Sign in to REPutation',
+    heading: `Sign in to ${APP.name}`,
     lead: 'Enter this code in the app to sign in.',
     codeLabel: 'Sign-in code',
     footer:
       "Didn't try to sign in? You can ignore this email, and consider changing your password.",
   }),
 
-  mailer_subjects_recovery: 'Your REPutation password reset code',
+  mailer_subjects_recovery: `Your ${APP.name} password reset code`,
   mailer_templates_recovery_content: shell({
     heading: 'Reset your password',
     lead: "Enter this code in the app, then choose a new password.",
@@ -95,9 +131,11 @@ export const TEMPLATES = {
 
   // A 6-digit code is the convention users expect and the one the copy states.
   mailer_otp_length: 6,
+  site_url: APP.siteUrl,
+  uri_allow_list: APP.redirects.join(','),
 }
 
-const PROJECT_REF = process.env.PROJECT_REF ?? 'orzuzeojacttsxiydwye'
+const PROJECT_REF = APP.ref
 
 async function accessToken() {
   if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN
@@ -114,12 +152,30 @@ async function accessToken() {
   return encoded === raw ? raw : Buffer.from(encoded, 'base64').toString('utf8')
 }
 
+function smtp() {
+  if (!process.argv.includes('--smtp')) return {}
+  const pass = process.env.SMTP_PASS
+  if (!pass) {
+    console.error('--smtp needs the Resend API key in SMTP_PASS')
+    process.exit(1)
+  }
+  return {
+    smtp_host: 'smtp.resend.com',
+    smtp_port: '465',
+    smtp_user: 'resend',
+    smtp_pass: pass,
+    smtp_admin_email: 'noreply@hirshguha.com',
+    smtp_sender_name: APP.name,
+    rate_limit_email_sent: 30,
+  }
+}
+
 const isApply = process.argv.includes('--apply')
 
 if (!isApply) {
   console.log('Would set:\n')
   for (const [key, value] of Object.entries(TEMPLATES)) {
-    console.log(`${key} = ${typeof value === 'number' ? value : `${value.length} chars`}`)
+    console.log(`${key} = ${typeof value === 'number' || key.startsWith('site') || key.startsWith('uri') ? value : `${value.length} chars`}`)
   }
   console.log('\nRe-run with --apply to PATCH project', PROJECT_REF)
 } else {
@@ -132,7 +188,11 @@ if (!isApply) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(TEMPLATES),
+      body: JSON.stringify(
+        process.argv.includes('--urls-only')
+          ? { site_url: TEMPLATES.site_url, uri_allow_list: TEMPLATES.uri_allow_list }
+          : { ...smtp(), ...TEMPLATES },
+      ),
     },
   )
   const body = await response.json()
@@ -143,6 +203,8 @@ if (!isApply) {
   const hasLink = (s) => typeof s === 'string' && s.includes('ConfirmationURL')
   console.log('Applied to', PROJECT_REF)
   console.log('  otp length:', body.mailer_otp_length)
+  console.log('  site url:', body.site_url)
+  console.log('  redirects:', body.uri_allow_list)
   for (const key of [
     'mailer_templates_confirmation_content',
     'mailer_templates_magic_link_content',
