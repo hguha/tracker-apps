@@ -13,3 +13,7 @@ android/local.properties
 **/*.p8
 .vercel
 .env*
+ios/App/fastlane/report.xml
+ios/App/fastlane/Preview.html
+ios/App/fastlane/test_output/
+ios/App/fastlane/README.md

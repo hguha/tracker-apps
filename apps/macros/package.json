@@ -15,6 +15,7 @@
     "build:native": "tsc --noEmit && BASE_PATH=/ vite build",
     "native:sync": "npm run build:native && cap sync",
     "native:ios": "npm run native:sync && cap open ios",
+    "release:ios": "npm run build:native && npx cap sync ios && cd ios/App && fastlane beta",
     "native:android": "npm run native:sync && cap open android",
     "native:icons": "capacitor-assets generate --assetPath resources"
   },

@@ -17,6 +17,7 @@
     "build:native": "npm run build:native --workspace reputation",
     "build:ledger": "npm run build --workspace ledger",
     "release:ios": "npm run release:ios --workspace reputation",
+    "release:ios:macros": "npm run release:ios --workspace macros",
     "dev": "npm run dev --workspace reputation",
     "dev:ledger": "npm run dev --workspace ledger",
     "dev:site": "npm run dev --workspace reputation-site",
