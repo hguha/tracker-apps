@@ -18,12 +18,7 @@ import {
 import { isNativePlatform } from '@/lib/platform'
 import { APP_VERSION } from '@/lib/version'
 import { exportBackup, pickBackupText } from '@/platform/files'
-import {
-  detectShell,
-  hasStaleWindow,
-  safeAreaInsets,
-  viewportShortfall,
-} from '@/platform/viewport'
+import { hasStaleWindow } from '@/platform/viewport'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { useToast } from '@/components/Toast'
@@ -163,12 +158,6 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
             <div className="flex justify-between">
               <dt className="text-ink-secondary">App version</dt>
               <dd className="tabular font-semibold text-ink-muted">{APP_VERSION}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-secondary">Display</dt>
-              <dd className="tabular text-right text-[12px] font-semibold text-ink-muted">
-                {displayReport()}
-              </dd>
             </div>
           </dl>
 
@@ -503,32 +492,4 @@ function QueueGroup({
       </div>
     </div>
   )
-}
-
-// `inset 0/34 · 894px of 956 · installed dm✗`, plus `⚠︎` for anything abnormal. iOS's
-// window geometry isn't inspectable any other way.
-function displayReport(): string {
-  if (typeof window === 'undefined') return '—'
-
-  const { top, bottom } = safeAreaInsets()
-  const doc = document.documentElement
-  const viewport = Math.round(window.visualViewport?.height ?? window.innerHeight)
-  const screenHeight = Math.round(window.screen?.height ?? 0)
-
-  const shellHeight = Math.round(doc.clientHeight)
-  const overflow = Math.round(doc.scrollHeight - doc.clientHeight)
-  const warnings = [
-    hasStaleWindow() ? `stale ${viewportShortfall()}` : '',
-    Math.abs(shellHeight - viewport) > 1 ? `shell ${shellHeight}` : '',
-    overflow > 0 ? `over ${overflow}` : '',
-  ].filter(Boolean)
-
-  const dm = window.matchMedia('(display-mode: standalone)').matches ? 'dm✓' : 'dm✗'
-
-  return [
-    `inset ${top}/${bottom}`,
-    `${viewport}px of ${screenHeight}`,
-    `${detectShell()} ${dm}`,
-    ...(warnings.length ? [`⚠︎ ${warnings.join(' ')}`] : []),
-  ].join(' · ')
 }
