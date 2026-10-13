@@ -40,7 +40,7 @@ export function ProgressCard({
   const badges = stats ? evaluateBadges(stats) : []
   const level = stats ? levelFor(experience(stats)) : null
   const dayComplete = goals !== null && goals.length > 0 && goals.every((goal) => goal.done)
-  const { hasReconciled } = useSyncStatus()
+  const { isReconciling } = useSyncStatus()
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const { current, dismiss } = useCelebrations(
     owner === null || profile === undefined
@@ -51,7 +51,7 @@ export function ProgressCard({
           legacyKey: `macros.celebrated.${owner}`,
         },
     level && goals !== null ? { badges, level: level.level, day, dayComplete } : null,
-    { isQuiet: !hasReconciled },
+    { isQuiet: isReconciling },
   )
 
   if (!stats || !level) return null

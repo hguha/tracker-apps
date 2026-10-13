@@ -49,22 +49,32 @@ describe('createSyncScope', () => {
     expect(createEngine).toHaveBeenCalledTimes(1)
   })
 
-  it('reports reconciled only once the first sync has finished', async () => {
+  it('is reconciling while a sync pulls, and not after', async () => {
     const first = deferred()
     const engine = { ...idleEngine(), sync: vi.fn(() => first.promise) }
     const { scope, wrapper } = setup(engine)
     const { result } = renderHook(() => scope.useSyncStatus(), { wrapper })
-    expect(result.current.hasReconciled).toBe(false)
+    expect(result.current.isReconciling).toBe(true)
 
     await act(async () => first.resolve())
-    await waitFor(() => expect(result.current.hasReconciled).toBe(true))
+    await waitFor(() => expect(result.current.isReconciling).toBe(false))
   })
 
-  it('counts as reconciled straight away when sync is off', () => {
+  it('is not left reconciling when the app opens offline', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const engine = idleEngine()
+    const { scope, wrapper } = setup(engine)
+    const { result } = renderHook(() => scope.useSyncStatus(), { wrapper })
+    await waitFor(() => expect(result.current.isReconciling).toBe(false))
+    expect(engine.sync).not.toHaveBeenCalled()
+    onLine.mockRestore()
+  })
+
+  it('is never reconciling when sync is off', () => {
     const { scope, wrapper } = setup(idleEngine(), { useSyncingUserId: () => null })
     const { result } = renderHook(() => scope.useSyncStatus(), { wrapper })
     expect(result.current.enabled).toBe(false)
-    expect(result.current.hasReconciled).toBe(true)
+    expect(result.current.isReconciling).toBe(false)
   })
 
   it('says whether sync now finished', async () => {

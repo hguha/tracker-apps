@@ -21,7 +21,7 @@ export interface SyncCounts {
 export interface SyncStatus extends SyncCounts {
   enabled: boolean
   phase: SyncPhase
-  hasReconciled: boolean
+  isReconciling: boolean
   syncNow(): Promise<boolean>
   retryFailed(): Promise<{ count: number; isComplete: boolean }>
   eraseServerData(): Promise<{ failed: { table: string; error: string }[] }>
@@ -53,7 +53,8 @@ export function createSyncScope(config: SyncScopeConfig) {
     const enabled = engine !== null && userId !== null
     const counts = config.useCounts()
     const [phase, setPhase] = useState<SyncPhase>('idle')
-    const [hasReconciled, setHasReconciled] = useState(false)
+    const [hasStarted, setHasStarted] = useState(false)
+    const [inFlight, setInFlight] = useState(0)
 
     useEffect(() => {
       if (!engine || !enabled) return
@@ -72,13 +73,16 @@ export function createSyncScope(config: SyncScopeConfig) {
       }
 
       const reconcile = () => {
-        if (cancelled || isOffline()) return
+        if (cancelled) return
+        setHasStarted(true)
+        if (isOffline()) return
+        setInFlight((count) => count + 1)
         void engine
           .sync()
           .then(() => config.afterReconcile?.())
           .catch((error) => warn('reconcile threw', error))
           .finally(() => {
-            if (!cancelled) setHasReconciled(true)
+            setInFlight((count) => count - 1)
           })
       }
 
@@ -131,7 +135,7 @@ export function createSyncScope(config: SyncScopeConfig) {
       ...counts,
       enabled,
       phase,
-      hasReconciled: !enabled || hasReconciled,
+      isReconciling: enabled && (!hasStarted || inFlight > 0),
       syncNow: async () => (await run('sync', settle, -1, (remaining) => remaining !== 0)) === 0,
       retryFailed: async () => {
         const result = await run(

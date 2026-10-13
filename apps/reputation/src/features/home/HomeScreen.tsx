@@ -469,7 +469,7 @@ function Celebrations({
   profile: Profile
   owner: string | null
 }) {
-  const { hasReconciled } = useSync()
+  const { isReconciling } = useSync()
 
   useEffect(() => {
     if (owner === null) return
@@ -486,7 +486,7 @@ function Celebrations({
           legacyKey: `reputation.celebrated.${owner}`,
         },
     { badges, level: level.level, day: dayKey(Date.now()), dayComplete: false },
-    { isQuiet: !hasReconciled },
+    { isQuiet: isReconciling },
   )
   return current ? <CelebrationOverlay celebration={current} onDone={dismiss} /> : null
 }
