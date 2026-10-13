@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cn, dayKey } from '@tracker-engine/core'
-import { createLazyScreens, ToastProvider, useSystemColorScheme } from '@tracker-engine/ui'
+import { cn } from '@tracker-engine/core'
+import { createLazyScreens, ToastProvider, useSystemColorScheme, useToday } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@tracker-engine/platform'
 import { useTransitionToast } from '@tracker-engine/auth/react'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
@@ -119,17 +119,18 @@ function SignedInApp() {
    * Keyed on the day's entries, so every log, edit and delete re-runs it, and on `isReady` so the
    * first run happens after the profile exists. See `data/reminders`.
    */
+  const today = useToday()
   const todaysProgress = useLiveQuery(
     async () => {
       if (!isReady) return ''
-      const day = dayKey(Date.now())
+      const day = today
       const entries = await repo.entriesForDay(day)
       // The weigh-in nudge is conditional on there being no weigh-in today, so recording one has to
       // re-derive the schedule exactly as logging a meal does.
       const weighed = (await repo.weights()).some((row) => row.day === day)
-      return `${entries.length}|${weighed}`
+      return `${day}|${entries.length}|${weighed}`
     },
-    [isReady],
+    [isReady, today],
     '',
   )
   useEffect(() => {

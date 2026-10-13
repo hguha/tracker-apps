@@ -1412,3 +1412,22 @@ test('Auto appearance follows the system switching to dark and back', async ({ p
   await page.emulateMedia({ colorScheme: 'dark' })
   await expect.poll(scheme).toBe('dark')
 })
+
+test('Today moves to the new day at midnight while the app stays open', async ({ page }) => {
+  const lateEvening = new Date()
+  lateEvening.setHours(23, 58, 0, 0)
+  await page.clock.install({ time: lateEvening })
+  const errors = await bootWithoutErrors(page)
+  await completeOnboarding(page)
+
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('banana')
+  await page.getByRole('button', { name: /Banana/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await expect(page.getByText(/Banana/).first()).toBeVisible()
+
+  await page.clock.runFor('05:00')
+  await expect(page.getByText(/Banana/)).toHaveCount(0)
+  expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
+})

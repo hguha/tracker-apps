@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey, dayKeyOffset, formatDayHeading } from '@tracker-engine/core'
+import { dayKeyOffset, formatDayHeading } from '@tracker-engine/core'
+import { useToday } from '@tracker-engine/ui'
 import { ChefHat, Flame, Sparkles } from 'lucide-react'
 import { PageTitle } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
@@ -36,11 +37,11 @@ export function TodayScreen({
   onOpenTargets: () => void
   onAdd: (day: string, meal: MealSlot) => void
 }) {
-  const today = dayKey(Date.now())
+  const today = useToday()
 
   const loaded = useEntriesWithFoods(today, today)
   const entries = loaded?.entries ?? []
-  const targets = useLiveQuery(() => repo.currentTargets(), [], null)
+  const targets = useLiveQuery(() => repo.currentTargets(), [today], null)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const weights = useLiveQuery(() => repo.weights(), [], [])

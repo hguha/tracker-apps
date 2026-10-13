@@ -212,3 +212,21 @@ test('Auto appearance follows the system switching to dark and back', async ({ p
   await page.emulateMedia({ colorScheme: 'light' })
   await expect.poll(scheme).toBe('light')
 })
+
+test('the week ring starts over at midnight on Monday while the app stays open', async ({
+  page,
+}) => {
+  const sundayNight = new Date()
+  sundayNight.setDate(sundayNight.getDate() + ((7 - sundayNight.getDay()) % 7))
+  sundayNight.setHours(23, 50, 0, 0)
+  await page.clock.install({ time: sundayNight })
+  await skipSetup(page)
+
+  await squat(page, '135')
+  await page.getByRole('button', { name: 'Finish workout' }).click()
+  await page.getByRole('button', { name: 'Finish', exact: true }).click()
+  await expect(page.getByText('1/4', { exact: true })).toBeVisible()
+
+  await page.clock.runFor('15:00')
+  await expect(page.getByText('0/4', { exact: true })).toBeVisible()
+})

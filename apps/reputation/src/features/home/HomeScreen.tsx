@@ -22,7 +22,7 @@ import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Profile, type Region } from '@/domain/types'
 import { levelFor, nextBadges, type Level } from '@tracker-engine/badges'
-import { CelebrationOverlay, useCelebrations } from '@tracker-engine/ui'
+import { CelebrationOverlay, useCelebrations, useToday } from '@tracker-engine/ui'
 import { evaluateBadges, type BadgeState } from './badges'
 import { experience, goalWeeksMet, shownExperience, takeLegacyHighWater } from './progression'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
@@ -51,6 +51,7 @@ export function HomeScreen({
 }) {
   const { session } = useAuth()
   const [greeting, setGreeting] = useState<string | null>(null)
+  const today = useToday()
 
   const data = useLiveQuery(async () => {
     const profile = await repo.getProfile()
@@ -144,7 +145,7 @@ export function HomeScreen({
       goalWeeks,
       avatar,
     }
-  }, [])
+  }, [today])
 
   // Greeting refreshes only when the workout count changes; getHomeGreeting caches on it.
   const finishedCount = data?.totalWorkouts ?? 0
