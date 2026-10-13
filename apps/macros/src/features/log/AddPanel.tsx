@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { dayKey } from '@tracker-engine/core'
+import { dayKey, formatGrams } from '@tracker-engine/core'
 import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
 import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -326,7 +326,7 @@ function PartRow({
       <span className="min-w-0 flex-1 truncate text-[12.5px]">{part.label}</span>
       {part.grams > 0 && (
         <span className="tabular shrink-0 text-[11px] text-ink-muted">
-          {Math.round(part.grams * count)}g
+          {formatGrams(part.grams * count)}
         </span>
       )}
       <span className="tabular w-9 shrink-0 text-right text-[12px]">{scaled.kcal}</span>

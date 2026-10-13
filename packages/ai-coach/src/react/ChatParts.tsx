@@ -1,5 +1,5 @@
 import { History, Send, SquarePen, Trash2 } from 'lucide-react'
-import { cn } from '@tracker-engine/core'
+import { cn, formatRelativeDay } from '@tracker-engine/core'
 import { BottomSheet, Working } from '@tracker-engine/ui'
 
 export function MessageBubble({ role, text }: { role: 'user' | 'assistant'; text: string }) {
@@ -152,7 +152,7 @@ export function ConversationsSheet({
                   )}
                 </span>
                 <span className="mt-0.5 block text-[12px] text-ink-muted">
-                  {new Date(conversation.updatedAt).toLocaleDateString()}
+                  {formatRelativeDay(conversation.updatedAt)}
                 </span>
               </button>
               <button

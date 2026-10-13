@@ -497,7 +497,7 @@ test('several foods log at once, at the amount each was last eaten in', async ({
   // Three items on the day, and the chicken came back at 183 g rather than a database default —
   // which is the whole reason logging in MyFitnessPal feels quick.
   await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
-  await expect(page.getByText('183g')).toHaveCount(2)
+  await expect(page.getByText('183 g')).toHaveCount(2)
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
@@ -574,7 +574,7 @@ test('an eating window shows itself on the day it applies to', async ({ page }) 
 
   // The window was implemented and invisible: it appended half a line to the budget text, so
   // someone who turned it on reasonably concluded it did nothing.
-  await expect(page.getByText('12:00–20:00')).toBeVisible()
+  await expect(page.getByText('12:00 PM–8:00 PM')).toBeVisible()
   await expect(page.getByText(/Opens in|left$|Closed for today/)).toBeVisible()
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
@@ -1279,7 +1279,7 @@ test('a logged food is edited on the screen it was added with', async ({ page })
   await page.getByRole('button', { name: /^Save/ }).click()
 
   await expect(page.getByText('Dinner', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('250g')).toBeVisible()
+  await expect(page.getByText('250 g')).toBeVisible()
 
   await page.getByRole('button', { name: /Chicken breast/ }).first().click()
   await expect(page.getByLabel('Amount', { exact: true })).toHaveValue('250')

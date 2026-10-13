@@ -1,13 +1,15 @@
-import type { UnitPreference } from '@tracker-engine/core'
+import { formatGrams, type UnitPreference } from '@tracker-engine/core'
 import { mgToGrams, nutrientsFor, portionFor } from '@/lib/nutrition'
 import { householdAmount } from '@/lib/householdAmount'
 import type { LastAmount } from '@/data/repository'
 import type { Food, Nutrients } from '@/domain/types'
 
-export const grams = (mg: number): string => `${Math.round(mgToGrams(mg))}g`
+export const grams = (mg: number): string => formatGrams(Math.round(mgToGrams(mg)))
+
+const g = (mg: number): number => Math.round(mgToGrams(mg))
 
 export const macroLine = (n: Pick<Nutrients, 'proteinMg' | 'carbsMg' | 'fatMg'>): string =>
-  `${grams(n.proteinMg)}P ${grams(n.carbsMg)}C ${grams(n.fatMg)}F`
+  `${g(n.proteinMg)}gP ${g(n.carbsMg)}gC ${g(n.fatMg)}gF`
 
 /**
  * A portion's label, made safe to show.

@@ -13,7 +13,7 @@ import {
 import { Button, Card, ScreenHeader, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { coachHistory } from '@/data/coachHistory'
-import { cn } from '@tracker-engine/core'
+import { cn, formatGrams } from '@tracker-engine/core'
 import { macroLine } from '@/features/shared/format'
 import { buildCoachContext, geminiCoachProvider } from './geminiProvider'
 import { mockCoachProvider } from './mockProvider'
@@ -190,7 +190,7 @@ function ActionCard({
       <Card className="p-4">
         <h3 className="text-[14.5px] font-semibold tracking-tight">{action.description}</h3>
         <p className="tabular mt-0.5 text-[12.5px] text-ink-muted">
-          {Math.round(action.grams)}g · {action.nutrients.kcal} kcal · {macroLine(action.nutrients)}
+          {formatGrams(action.grams)} · {action.nutrients.kcal} kcal · {macroLine(action.nutrients)}
         </p>
         <Button
           className="mt-3 w-full"
@@ -252,7 +252,7 @@ function ActionCard({
         {action.items.map((item) => (
           <li key={item.foodId} className="flex justify-between gap-3 py-1.5 text-[13.5px]">
             <span className="min-w-0 truncate">{item.description}</span>
-            <span className="tabular shrink-0 text-ink-muted">{Math.round(item.grams)}g</span>
+            <span className="tabular shrink-0 text-ink-muted">{formatGrams(item.grams)}</span>
           </li>
         ))}
       </ul>

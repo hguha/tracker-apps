@@ -1,3 +1,4 @@
+import { formatShortDay } from '@tracker-engine/core'
 import { resolveColor } from '@tracker-engine/ui'
 import { useChartChrome } from '@tracker-engine/ui/charts'
 
@@ -23,7 +24,7 @@ export function useChartTokens() {
 export type ChartTokens = ReturnType<typeof useChartTokens>
 
 /** Axis labels are `yyyy-MM-dd`; charts only have room for the day and month. */
-export const shortDay = (day: string): string => day.slice(5).replace('-', '/')
+export const shortDay = formatShortDay
 
 export const targetMark = (points: number) =>
   points === 1

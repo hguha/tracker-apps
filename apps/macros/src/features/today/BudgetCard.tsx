@@ -1,4 +1,4 @@
-import { formatClock } from '@tracker-engine/core'
+import { formatMinuteOfDay } from '@tracker-engine/core'
 import { Card, ProgressRing } from '@tracker-engine/ui'
 import { ChevronRight, Moon, Utensils } from 'lucide-react'
 import { grams } from '@/features/shared/format'
@@ -132,7 +132,7 @@ function WindowStrip({
           ) : (
             <Moon size={13} className="text-ink-muted" />
           )}
-          {formatClock(window.startMinute)}–{formatClock(window.endMinute)}
+          {formatMinuteOfDay(window.startMinute)}–{formatMinuteOfDay(window.endMinute)}
         </span>
         <span className="tabular text-[12px] text-ink-muted">
           {state.phase === 'before'

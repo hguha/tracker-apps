@@ -1,4 +1,4 @@
-import { dayNoon } from '@tracker-engine/core'
+import { formatShortDay } from '@tracker-engine/core'
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, useToast } from '@tracker-engine/ui'
@@ -26,14 +26,8 @@ export function CheckInStatusCard() {
       <Card className="p-4">
         <h2 className="text-[15px] font-semibold tracking-tight">Weekly check-in</h2>
         <p className="mt-0.5 text-[12.5px] text-ink-muted">
-          Week of{' '}
-          {status
-            ? new Date(dayNoon(status.weekStart)).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-              })
-            : '—'}{' '}
-          · moves at most 150 kcal a week
+          Week of {status ? formatShortDay(status.weekStart) : '—'} · moves at most 150 kcal a
+          week
         </p>
         <dl className="mt-2 space-y-1.5 text-[13.5px]">
           <Row label="Days logged" ok={enoughDays}>

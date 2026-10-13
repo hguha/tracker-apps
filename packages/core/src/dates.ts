@@ -155,9 +155,21 @@ export function formatDayHeading(ts: number, now = Date.now()): string {
   return isSameYear(ts, now) ? format(ts, 'EEEE, MMM d') : format(ts, 'EEEE, MMM d, yyyy')
 }
 
+const TIME_OF_DAY = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+
 export function formatTimeOfDay(ts: number): string {
-  return format(ts, 'h:mm a')
+  return TIME_OF_DAY.format(ts)
 }
+
+export function formatMinuteOfDay(minute: number): string {
+  const date = new Date(2000, 0, 1)
+  date.setHours(Math.floor(minute / 60) % 24, Math.round(minute % 60), 0, 0)
+  return formatTimeOfDay(date.getTime())
+}
+
+export const formatShortDate = (ts: number): string => format(ts, 'MMM d')
+
+export const formatShortDay = (day: string): string => formatShortDate(dayNoon(day))
 
 /** For <input type="datetime-local">, which wants local time with no zone. */
 export function toDateTimeInputValue(ts: number): string {

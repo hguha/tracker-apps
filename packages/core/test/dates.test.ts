@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { dayKeyOffset, dayStreaks } from '../src/dates'
+import {
+  dayKeyOffset,
+  dayStreaks,
+  formatMinuteOfDay,
+  formatShortDate,
+  formatShortDay,
+  formatTimeOfDay,
+} from '../src/dates'
+
+describe('short dates and times', () => {
+  it('writes a date as "Oct 5"', () => {
+    expect(formatShortDate(Date.parse('2026-10-05T09:00:00'))).toBe('Oct 5')
+    expect(formatShortDay('2026-10-12')).toBe('Oct 12')
+  })
+
+  it('writes a time and a minute of the day the same way', () => {
+    const at = Date.parse('2026-10-05T13:05:00')
+    expect(formatMinuteOfDay(13 * 60 + 5)).toBe(formatTimeOfDay(at))
+    expect(formatTimeOfDay(at)).toMatch(/1:05\s?PM|13:05/)
+  })
+})
 
 const at = (iso: string) => Date.parse(`${iso}T12:00:00`)
 

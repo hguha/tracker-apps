@@ -5,6 +5,8 @@ import {
   dayKeyOffset,
   dayNoon,
   formatDayHeading,
+  formatGrams,
+  formatShortDate,
   formatTimeOfDay,
   plural,
 } from '@tracker-engine/core'
@@ -452,7 +454,7 @@ function EntryRow({
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate text-[13.5px]">{name}</span>
             <span className="tabular w-11 shrink-0 text-right text-[11.5px] text-ink-muted">
-              {entry.grams > 0 ? `${Math.round(entry.grams)}g` : ''}
+              {entry.grams > 0 ? formatGrams(entry.grams) : ''}
             </span>
             <span className="tabular w-11 shrink-0 text-right text-[13px] font-medium">
               {entry.nutrients.kcal}
@@ -483,7 +485,4 @@ function sameEntries(a: readonly LogEntry[], b: readonly LogEntry[]): boolean {
 }
 
 const defaultMealName = (entry: LogEntry): string =>
-  `${MEAL_LABELS[entry.meal]} · ${new Date(entry.eatenAt).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  })}`
+  `${MEAL_LABELS[entry.meal]} · ${formatShortDate(entry.eatenAt)}`

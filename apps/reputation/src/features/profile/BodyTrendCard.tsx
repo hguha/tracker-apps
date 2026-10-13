@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { format } from 'date-fns'
 import type { EChartsOption } from 'echarts'
-import { dayNoon } from '@tracker-engine/core'
+import { formatShortDay } from '@tracker-engine/core'
 import { perWeek } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import type { WeightUnit } from '@/domain/types'
@@ -25,7 +24,7 @@ export function BodyTrendCard({ unit }: { unit: WeightUnit }) {
       ...baseOption(c),
       xAxis: categoryAxis(
         c,
-        trend.map((point) => format(dayNoon(point.day), 'MMM d')),
+        trend.map((point) => formatShortDay(point.day)),
       ),
       yAxis: { ...valueAxis(c), scale: true, minInterval: 1 },
       series: [

@@ -1,3 +1,4 @@
+import { formatShortDate } from '@tracker-engine/core'
 import { displayWeight, weightFromKg } from '@/lib/units'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
@@ -30,7 +31,7 @@ export function StrengthProgressionChart({
       ...baseOption(c),
       xAxis: categoryAxis(
         c,
-        points.map((p) => format(p.at, 'MMM d')),
+        points.map((p) => formatShortDate(p.at)),
       ),
       yAxis: valueAxis(c),
       series: [
@@ -98,7 +99,7 @@ export function TopSetChart({
       ...baseOption(c),
       xAxis: categoryAxis(
         c,
-        points.map((p) => format(p.at, 'MMM d')),
+        points.map((p) => formatShortDate(p.at)),
       ),
       yAxis: valueAxis(c),
       series: [
@@ -222,7 +223,7 @@ export function PerExerciseVolumeChart({
 
   const { option, labels, values, points } = useMemo(() => {
     const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
-    const labels = points.map((p) => format(p.at, 'MMM d'))
+    const labels = points.map((p) => formatShortDate(p.at))
     const values = points.map((p) => displayWeight(p.volumeKg, unit))
     const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
     const option: EChartsOption = {

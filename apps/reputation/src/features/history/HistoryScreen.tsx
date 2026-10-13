@@ -1,3 +1,4 @@
+import { formatShortDate } from '@tracker-engine/core'
 import { useEffect, useMemo, useState } from 'react'
 import { SegmentedTabs } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -13,7 +14,6 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { format } from 'date-fns'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -201,7 +201,7 @@ export function HistoryScreen({
             onClick={() => setSelectedDay(null)}
             className="flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent-wash px-3 py-1.5 text-[13px] font-medium text-accent"
           >
-            {format(selectedDay, 'MMM d')} <X size={13} />
+            {formatShortDate(selectedDay)} <X size={13} />
           </button>
         )}
         {(regionFilter.length > 0 || exerciseFilter.length > 0) && (

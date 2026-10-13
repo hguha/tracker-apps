@@ -1,3 +1,4 @@
+import { formatShortDate } from '@tracker-engine/core'
 import { displayWeight } from '@/lib/units'
 import { Chart } from './Chart'
 import { ChartCard } from './ChartCard'
@@ -6,7 +7,6 @@ import { resolveRegionColor } from '@/lib/palette'
 import { type InsightsData } from './useInsightsData'
 import { weekKey } from '@/lib/dates'
 import { useAppearanceKey } from '@/lib/useColorScheme'
-import { format } from 'date-fns'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
 import {
@@ -80,7 +80,7 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
         trigger: 'item',
         formatter: (params: unknown) => {
           const point = params as { value: [number, number, number] }
-          return `${format(point.value[2], 'MMM d')}<br/>${point.value[0]} min · ${point.value[1].toLocaleString()} ${unit}`
+          return `${formatShortDate(point.value[2])}<br/>${point.value[0]} min · ${point.value[1].toLocaleString()} ${unit}`
         },
       },
       xAxis: valueAxis(c, { name: 'minutes' }),
@@ -107,7 +107,7 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
         columns: ['Date', 'Minutes', `Volume (${unit})`],
         rows: [...points]
           .reverse()
-          .map((p) => [format(p[2]!, 'MMM d'), p[0]!, p[1]!.toLocaleString()]),
+          .map((p) => [formatShortDate(p[2]!), p[0]!, p[1]!.toLocaleString()]),
       }}
     >
       <Chart
@@ -167,7 +167,7 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
 
   const { option, labels, minutes, average, withDuration } = useMemo(() => {
     const withDuration = data.sessions.filter((s) => s.durationSeconds !== null)
-    const labels = withDuration.map((s) => format(s.at, 'MMM d'))
+    const labels = withDuration.map((s) => formatShortDate(s.at))
     const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
     const average = movingAverage(minutes)
     const c = { ...chartChrome(), plot: resolveRegionColor('chest') }

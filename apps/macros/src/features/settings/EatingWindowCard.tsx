@@ -1,4 +1,4 @@
-import { formatClock, parseClock } from '@tracker-engine/core'
+import { formatClock, formatMinuteOfDay, parseClock } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
@@ -78,7 +78,7 @@ export function EatingWindowCard() {
             />
           </div>
           <p className="tabular mt-2 text-[12px] text-ink-muted">
-            {formatClock(current.startMinute)}–{formatClock(current.endMinute)} ·{' '}
+            {formatMinuteOfDay(current.startMinute)}–{formatMinuteOfDay(current.endMinute)} ·{' '}
             {formatDuration(windowLength(current.startMinute, current.endMinute))} eating,{' '}
             {formatDuration(24 * 60 - windowLength(current.startMinute, current.endMinute))} fasting
           </p>

@@ -1,11 +1,11 @@
+import { formatShortDay } from '@tracker-engine/core'
 import { type ExerciseSeries, type InsightsData } from './useInsightsData'
-import { format } from 'date-fns'
 import { TrendingUp } from 'lucide-react'
 
 export const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function weekLabels(weeks: string[]): string[] {
-  return weeks.map((week) => format(new Date(week), 'MMM d'))
+  return weeks.map(formatShortDay)
 }
 
 // A-4

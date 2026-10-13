@@ -1,7 +1,7 @@
 // Display-only session titles (§6.7): `Jul 29 Evening · Push`, derived from the
 // date and what was trained. Never written to workouts.title; a user title wins.
 
-import { format } from 'date-fns'
+import { formatShortDate } from '@tracker-engine/core'
 import type { MovementPattern, Region } from '@/domain/types'
 import { REGION_LABELS } from '@/domain/types'
 
@@ -78,7 +78,7 @@ export function sessionTitle(
 ): string {
   if (userTitle.trim()) return userTitle.trim()
 
-  const datePart = `${format(startedAt, 'MMM d')} ${partOfDay(startedAt)}`
+  const datePart = `${formatShortDate(startedAt)} ${partOfDay(startedAt)}`
   const split = inferSplit(signals)
   return split ? `${datePart} · ${split}` : datePart
 }

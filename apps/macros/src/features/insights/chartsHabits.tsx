@@ -1,4 +1,4 @@
-import { formatClock } from '@tracker-engine/core'
+import { formatMinuteOfDay } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { categoryAxis, chartLegend, shortDay, useChartTokens, valueAxis } from './chartTokens'
@@ -62,7 +62,7 @@ export function MealTimingChart({
       subtitle={
         window === null
           ? 'Calories by hour, across the window'
-          : `${formatClock(window.startMinute)}–${formatClock(window.endMinute)} window · ${Math.round(
+          : `${formatMinuteOfDay(window.startMinute)}–${formatMinuteOfDay(window.endMinute)} window · ${Math.round(
               total === 0 ? 0 : (outside / total) * 100,
             )}% eaten outside it`
       }
@@ -70,7 +70,7 @@ export function MealTimingChart({
       emptyMessage="Log a few meals to see this."
       table={{
         columns: ['Hour', 'kcal'],
-        rows: kcalByHour.map((value, hour) => [`${hour}:00`, Math.round(value)]),
+        rows: kcalByHour.map((value, hour) => [formatMinuteOfDay(hour * 60), Math.round(value)]),
       }}
     >
       <Chart option={option} ariaLabel="Calories by hour of the day" />
@@ -137,8 +137,8 @@ export function ConsistencyChart({ days }: { days: InsightsDay[] }) {
         rows: days.map((day) => [
           day.day,
           day.occasions,
-          day.firstMinute === null ? '—' : formatClock(day.firstMinute),
-          day.lastMinute === null ? '—' : formatClock(day.lastMinute),
+          day.firstMinute === null ? '—' : formatMinuteOfDay(day.firstMinute),
+          day.lastMinute === null ? '—' : formatMinuteOfDay(day.lastMinute),
         ]),
       }}
     >

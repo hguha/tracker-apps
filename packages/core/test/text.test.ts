@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { plural, signed } from '../src/text'
+import { formatGrams, formatNumber, plural, signed } from '../src/text'
+
+describe('numbers', () => {
+  it('groups thousands and rounds to the digits asked for', () => {
+    expect(formatNumber(2304)).toBe('2,304')
+    expect(formatNumber(2304.6)).toBe('2,305')
+    expect(formatNumber(82.46, 1)).toBe('82.5')
+  })
+
+  it('writes grams with a space, like every other unit', () => {
+    expect(formatGrams(174.4)).toBe('174 g')
+    expect(formatGrams(1250)).toBe('1,250 g')
+  })
+})
 
 describe('plural', () => {
   it('uses the singular only for exactly one', () => {
