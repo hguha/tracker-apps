@@ -214,6 +214,7 @@ function Field({
       <span className="text-[11px] text-ink-muted">
         {label}
         {suffix && ` (${suffix})`}
+        {isRequired && <span className="text-accent"> · required</span>}
       </span>
       <input
         type="number"
@@ -221,9 +222,7 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={`${label}${suffix ? ` in ${suffix}` : ''}`}
-        className={`tabular mt-0.5 w-full rounded-xl bg-sunken px-2.5 py-2 text-[14px] outline-none ${
-          isRequired ? 'ring-1 ring-accent' : ''
-        }`}
+        className="tabular mt-0.5 w-full rounded-xl bg-sunken px-2.5 py-2 text-[14px] outline-none"
       />
     </label>
   )
