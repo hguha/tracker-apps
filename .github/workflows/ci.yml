@@ -33,7 +33,33 @@ jobs:
         run: npm run build:macros
       - name: Build MACROcosm (native bundle)
         run: npm run build:native:macros
+      - name: Build COINcidence (web)
+        run: npm run build:ledger
       # The sites build here because they import from packages/site-kit: a change to the kit can
       # break a site without touching either site's files, which is exactly the failure CI is for.
       - name: Build the marketing sites
         run: npm run build:site && npm run build:site:macros
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache the Playwright browser
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install the Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install the Playwright system libraries
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: End-to-end (offline, every app)
+        run: npm run test:e2e
+      - name: Keep failure screenshots and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results
+          retention-days: 7

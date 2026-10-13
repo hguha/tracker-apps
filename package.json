@@ -21,7 +21,7 @@
     "dev:ledger": "npm run dev --workspace ledger",
     "dev:site": "npm run dev --workspace reputation-site",
     "build:site": "npm run build --workspace reputation-site",
-    "test:e2e": "playwright test --project=reputation --project=macros",
+    "test:e2e": "playwright test --project=reputation --project=ledger --project=macros",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:native && npm run build:macros && npm run build:native:macros && npm run build:site && npm run build:site:macros && npm run test:e2e",
     "dev:macros": "npm run dev --workspace macros",
     "build:macros": "npm run build --workspace macros",
