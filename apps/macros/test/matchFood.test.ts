@@ -109,3 +109,11 @@ describe('matching an ingredient the AI named', () => {
     expect((await matchIngredient('parmesan fries')).food?.description).toMatch(/fries/)
   })
 })
+
+describe('matching a measured ingredient', () => {
+  it('prefers a row that can weigh the stated unit, so 3 cloves of garlic are counted', async () => {
+    const matched = await matchIngredient('garlic', 'clove')
+    expect(matched.food?.portions.some((portion) => /clove/.test(portion.label))).toBe(true)
+  })
+})
+

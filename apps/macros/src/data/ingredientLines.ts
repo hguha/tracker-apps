@@ -65,7 +65,7 @@ export async function resolveLines(
        */
       const matched = line.isToTaste
         ? { food: null, matchedBy: 'unmatched' as const }
-        : await matchIngredient(line.name)
+        : await matchIngredient(line.name, line.grams === null ? line.unit : null)
       const amount = resolveAmount(line, matched.food)
       done += 1
       onProgress?.(done, parsed.length)
