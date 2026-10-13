@@ -32,6 +32,7 @@
     "build:site:macros": "npm run build --workspace macros-site"
   },
   "devDependencies": {
-    "@playwright/test": "^1.57.0"
+    "@playwright/test": "^1.57.0",
+    "prettier": "^3.9.10"
   }
 }

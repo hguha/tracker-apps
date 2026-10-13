@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+coverage
+test-results
+playwright-report
+package-lock.json
+**/ios/**
+**/android/**
+**/src/db/seed/**
+**/supabase/.temp/**
+**/public/**
+.claude
