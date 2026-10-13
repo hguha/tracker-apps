@@ -76,4 +76,15 @@ describe('createAuthScope', () => {
     await act(async () => emit(account('a')))
     expect(seen.filter((value) => value === null)).toEqual([])
   })
+
+  it('reports a session that could not be applied instead of failing silently', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { provider } = fakeProvider(account('a'))
+    const { scope, wrapper } = scopeWith(provider, async () => {
+      throw new Error('wipe failed')
+    })
+    const { result } = renderHook(() => scope.useAuth(), { wrapper })
+    await waitFor(() => expect(error).toHaveBeenCalled())
+    expect(result.current.isLoading).toBe(true)
+  })
 })

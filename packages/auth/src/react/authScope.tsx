@@ -89,8 +89,9 @@ export function createAuthScope<T>(config: AuthScopeConfig<T>) {
         if (result !== null) setTransition(result)
       }
 
-      void provider.getSession().then(apply)
-      const unsubscribe = provider.onSessionChange((next) => void apply(next))
+      const report = (error: unknown) => console.error('[auth] could not apply the session', error)
+      void provider.getSession().then(apply).catch(report)
+      const unsubscribe = provider.onSessionChange((next) => void apply(next).catch(report))
       return () => {
         cancelled = true
         unsubscribe()
