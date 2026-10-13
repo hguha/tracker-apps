@@ -71,11 +71,13 @@ class FakeBackend implements SyncBackend {
   readonly pushed: PushRow[] = []
   toPull: Record<string, PulledRow[]> = {}
   private fail: Record<string, PushOutcome> = {}
+  onPush: (row: PushRow) => Promise<void> = async () => {}
   failTable(table: string, outcome: PushOutcome) {
     this.fail[table] = outcome
   }
   async push(row: PushRow): Promise<PushOutcome> {
     this.pushed.push(row)
+    await this.onPush(row)
     return this.fail[row.table] ?? { status: 'ok' }
   }
   async pull(table: string, since: number): Promise<PulledRow[]> {
@@ -148,6 +150,39 @@ describe('SyncEngine (isolated, injected deps)', () => {
     expect(first.pushed).toBe(1)
     expect(second.pushed).toBe(1)
     expect(backend.pushed).toHaveLength(1)
+  })
+
+  it('takes the server’s newer row when a push is stale, and stops sending it', async () => {
+    const { schema, stores } = makeSchema()
+    const { deps, enqueue, outbox } = memDeps()
+    stores.notes.rows.set('n1', { id: 'n1', body: 'old phone', clientRev: 2 })
+    enqueue('notes', 'n1')
+    backend.failTable('notes', {
+      status: 'stale',
+      row: { id: 'n1', body: 'laptop', clientRev: 5, updatedAt: 10 },
+    })
+
+    const result = await new SyncEngine(backend, schema, deps).drain()
+
+    expect(result.deadLettered).toBe(0)
+    expect(outbox).toHaveLength(0)
+    expect(stores.notes.rows.get('n1')).toMatchObject({ body: 'laptop', clientRev: 5, tag: 'default' })
+  })
+
+  it('keeps an edit made while a stale push was in flight', async () => {
+    const { schema, stores } = makeSchema()
+    const { deps, enqueue, outbox } = memDeps()
+    stores.notes.rows.set('n1', { id: 'n1', body: 'old phone', clientRev: 2 })
+    enqueue('notes', 'n1')
+    backend.failTable('notes', { status: 'stale', row: { id: 'n1', body: 'laptop', clientRev: 5 } })
+    backend.onPush = async () => {
+      stores.notes.rows.set('n1', { id: 'n1', body: 'typed meanwhile', clientRev: 3 })
+    }
+
+    await new SyncEngine(backend, schema, deps).drain()
+
+    expect(stores.notes.rows.get('n1')).toMatchObject({ body: 'typed meanwhile' })
+    expect(outbox).toHaveLength(1)
   })
 
   it('dead-letters a row the server rejects permanently', async () => {

@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { classify, toPostgresRow } from '../src/supabaseBackend'
+import { classify, SupabaseBackend, toPostgresRow } from '../src/supabaseBackend'
 
 /** Minimal PostgrestError-shaped object for the classifier. */
 function err(code: string, message = 'x') {
@@ -64,5 +64,26 @@ describe('toPostgresRow', () => {
     expect(row.user_id).toBe('u1')
     expect(row.started_at).toBe(new Date(at).toISOString())
     expect(row.ended_at).toBeNull()
+  })
+})
+
+describe('SupabaseBackend.push', () => {
+  function backendReturning(stored: Record<string, unknown> | null, error: unknown = null) {
+    const select = async () => ({ data: stored === null ? [] : [stored], error })
+    const client = { from: () => ({ upsert: () => ({ select }) }) }
+    return new SupabaseBackend(client as never)
+  }
+
+  it('reports stale with the stored row when the server kept a newer revision', async () => {
+    const backend = backendReturning({ id: 'n1', body: 'laptop', client_rev: 5 })
+    const outcome = await backend.push({ table: 'notes', rowId: 'n1', row: { id: 'n1', clientRev: 2 } })
+    expect(outcome).toEqual({ status: 'stale', row: { id: 'n1', body: 'laptop', clientRev: 5 } })
+  })
+
+  it('is ok when the stored revision is the one sent', async () => {
+    const backend = backendReturning({ id: 'n1', client_rev: 2 })
+    expect(await backend.push({ table: 'notes', rowId: 'n1', row: { id: 'n1', clientRev: 2 } })).toEqual({
+      status: 'ok',
+    })
   })
 })

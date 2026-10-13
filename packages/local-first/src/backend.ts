@@ -14,6 +14,7 @@ export type PushOutcome =
   | { status: 'transient'; error: string }
   | { status: 'permanent'; error: string }
   | { status: 'auth'; error: string }
+  | { status: 'stale'; row: Record<string, unknown> }
 
 /** Tombstones (deleted_at set) are included so a delete propagates. */
 export interface PulledRow {

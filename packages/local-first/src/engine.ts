@@ -149,6 +149,18 @@ export class SyncEngine {
         continue
       }
 
+      if (outcome.status === 'stale') {
+        const local = await this.currentRow(entry.table, entry.rowId)
+        if (local?.clientRev === row.clientRev) {
+          await this.deps.outbox.delete(entry.seq!)
+          await this.schema
+            .store(entry.table)
+            .put(this.schema.normalize?.(entry.table, outcome.row) ?? outcome.row)
+          syncLog.info(`kept the server's newer ${entry.table}/${entry.rowId}`)
+        }
+        continue
+      }
+
       // Every push carries the same token, so one auth failure means they all
       // fail. Stop the pass and leave the queue intact for after re-auth.
       if (outcome.status === 'auth') {

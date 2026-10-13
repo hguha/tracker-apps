@@ -39,10 +39,16 @@ export class SupabaseBackend implements SyncBackend {
       // Upsert on the client-generated id, so a replayed write is idempotent.
       // The full row, not a diff: the upsert re-checks the INSERT policy, and a
       // partial tuple lacks user_id, which RLS then rejects.
-      const { error } = await this.client
+      const { data, error } = await this.client
         .from(table)
         .upsert({ ...toPostgresRow(row.row, this.timestamps), id: row.rowId }, { onConflict: 'id' })
-      return error ? classify(error) : { status: 'ok' }
+        .select()
+      if (error) return classify(error)
+      const stored = (data as Record<string, unknown>[] | null)?.[0]
+      if (stored && Number(stored.client_rev) > Number(row.row.clientRev)) {
+        return { status: 'stale', row: fromPostgresRow(stored, this.timestamps) }
+      }
+      return { status: 'ok' }
     } catch (cause) {
       // A thrown error (network down, DNS) is always transient.
       return { status: 'transient', error: String(cause) }
