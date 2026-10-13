@@ -182,7 +182,8 @@ export function HomeScreen({
 
   const unit = profile.unitWeight
   const maxSets = Math.max(6, ...setsByRegion.values())
-  const firstName = (session?.displayName ?? 'there').split(/\s+/)[0]
+  const firstName = (session?.displayName ?? '').split(/\s+/)[0]
+  const greetName = firstName && firstName !== 'You' ? `, ${firstName}` : ''
   // weeklyWorkoutGoal can be absent; coalesce before Math.max or the ring shows "/NaN".
   const goal = Math.max(1, profile.weeklyWorkoutGoal || 4)
 
@@ -207,7 +208,8 @@ export function HomeScreen({
     <div className="space-y-3 px-3 py-3">
       <div className="px-1 pt-1">
         <h1 className="text-[22px] font-bold tracking-tight">
-          Good {partOfDay(Date.now()).toLowerCase()}, {firstName}
+          Good {partOfDay(Date.now()).toLowerCase()}
+          {greetName}
         </h1>
       </div>
 

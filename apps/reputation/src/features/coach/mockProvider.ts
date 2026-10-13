@@ -3,6 +3,7 @@
 
 import { REGION_LABELS, type Equipment, type Region } from '@/domain/types'
 import { displayWeight, displayWeightOrNull } from '@/lib/units'
+import { plural } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import type { CoachSummary, ExerciseAgg } from '@/data/coachSummary'
 import type { CoachContext } from './context'
@@ -548,7 +549,7 @@ function answer(summary: CoachSummary, question: string): string {
   }
 
   return (
-    `I'm reading ${summary.totalWorkouts} sessions and ${summary.exercises.length} exercises from your last ${summary.weeksCovered} weeks` +
+    `I'm reading ${plural(summary.totalWorkouts, 'session')} and ${plural(summary.exercises.length, 'exercise')} from your last ${plural(summary.weeksCovered, 'week')}` +
     (topLift && topLift.bestE1rmKg !== null
       ? `, with ${topLift.name} your strongest at about ${displayWeight(topLift.bestE1rmKg, unit)} ${unit}. `
       : '. ') +

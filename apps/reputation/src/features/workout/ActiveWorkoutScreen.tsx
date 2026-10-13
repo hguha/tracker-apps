@@ -456,7 +456,7 @@ export function ActiveWorkoutScreen({
               className="flex-1"
               onClick={() => void handleLeaveEditing()}
             >
-              Discard changes
+              Discard
             </Button>
             <Button
               size="lg"

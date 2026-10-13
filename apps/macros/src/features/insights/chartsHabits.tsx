@@ -129,7 +129,7 @@ export function ConsistencyChart({ days }: { days: InsightsDay[] }) {
   return (
     <ChartCard
       title="Meals per day"
-      subtitle={days.length === 0 ? undefined : `${average} eating occasions a day on average`}
+      subtitle={days.length === 0 ? undefined : `${average} ${average === 1 ? 'eating occasion' : 'eating occasions'} a day on average`}
       isEmpty={days.length === 0}
       emptyMessage="Log a few days to see this."
       table={{

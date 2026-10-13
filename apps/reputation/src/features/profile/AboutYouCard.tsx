@@ -64,13 +64,16 @@ export function AboutYouCard({ profile }: { profile: Profile }) {
           <label htmlFor="body-age" className="text-[13.5px] font-medium">
             Age
           </label>
-          <input
-            id="body-age"
-            inputMode="numeric"
-            placeholder="—"
-            {...age.inputProps}
-            className="h-10 w-24 rounded-lg border border-line bg-surface px-3 text-right text-[15px] outline-none focus:border-accent"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              id="body-age"
+              inputMode="numeric"
+              placeholder="—"
+              {...age.inputProps}
+              className="h-10 w-24 rounded-lg border border-line bg-surface px-3 text-right text-[15px] outline-none focus:border-accent"
+            />
+            <span className="w-6 text-[13px] text-ink-muted">yr</span>
+          </div>
         </div>
 
         <div>

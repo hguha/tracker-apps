@@ -18,6 +18,13 @@ interface QuickEdit {
 
 const asField = (mg: number) => String(Math.round(mgToGrams(mg)))
 
+const FIELD_LABELS = {
+  kcal: 'kcal',
+  protein: 'Protein (g)',
+  carbs: 'Carbs (g)',
+  fat: 'Fat (g)',
+} as const
+
 /** For a label in your hand and no database row — the escape hatch that stops someone
  *  abandoning the log entirely. */
 export function QuickAddPanel({
@@ -84,7 +91,7 @@ export function QuickAddPanel({
       <div className="grid grid-cols-4 gap-2">
         {(['kcal', 'protein', 'carbs', 'fat'] as const).map((field) => (
           <label key={field}>
-            <span className="text-[11px] text-ink-muted">{field}</span>
+            <span className="text-[11px] text-ink-muted">{FIELD_LABELS[field]}</span>
             <input
               type="number"
               inputMode="numeric"

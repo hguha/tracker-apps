@@ -175,6 +175,7 @@ function goalHint(
 }
 
 function dataHint(sync: { deadLettered: number; pending: number; enabled: boolean }): string {
+  if (!sync.enabled) return 'This device only'
   if (sync.deadLettered > 0) {
     return `${plural(sync.deadLettered, 'change')} failed to sync`
   }

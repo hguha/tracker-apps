@@ -65,7 +65,7 @@ export function App() {
 
   return (
     <AuthProviderScope>
-      <ToastProvider>
+      <ToastProvider placement="bottom">
         <AuthGate />
       </ToastProvider>
     </AuthProviderScope>
