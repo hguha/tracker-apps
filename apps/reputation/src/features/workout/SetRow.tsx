@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 // Typing a value logs the set — there is no confirm step (§6.2).
 
 import { Copy, Trash2, Trophy } from 'lucide-react'
@@ -282,7 +283,7 @@ function formatPrevious(
   if (previous.weightKg !== null && previous.reps !== null) {
     return `${weightFromKg(previous.weightKg, weightUnit)}×${previous.reps}`
   }
-  if (previous.reps !== null) return `${previous.reps} reps`
+  if (previous.reps !== null) return plural(previous.reps, 'rep')
   return '—'
 }
 

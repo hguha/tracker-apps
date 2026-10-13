@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Dumbbell, Pencil, Play, X } from 'lucide-react'
 import * as repo from '@/data/repository'
@@ -33,8 +34,8 @@ export function TemplatePreviewSheet({
             {preview?.title ?? 'Template'}
           </h2>
           <p className="text-[12.5px] text-ink-muted">
-            Template · {preview?.exercises.length ?? 0} exercises ·{' '}
-            {preview?.totalSets ?? 0} planned sets
+            Template · {plural(preview?.exercises.length ?? 0, 'exercise')} ·{' '}
+            {plural(preview?.totalSets ?? 0, 'planned set')}
           </p>
         </div>
         <button

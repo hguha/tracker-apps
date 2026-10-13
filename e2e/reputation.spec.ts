@@ -230,3 +230,14 @@ test('the week ring starts over at midnight on Monday while the app stays open',
   await page.clock.runFor('15:00')
   await expect(page.getByText('0/4', { exact: true })).toBeVisible()
 })
+
+test('a one-set workout reads "1 set" everywhere', async ({ page }) => {
+  await skipSetup(page)
+  await squat(page, '135')
+  await expect(page.getByText(/· 1 set$/)).toBeVisible()
+  await page.getByRole('button', { name: 'Finish workout' }).click()
+  await page.getByRole('button', { name: 'Finish', exact: true }).click()
+  await page.getByRole('button', { name: 'History', exact: true }).click()
+  await expect(page.getByText('1 set', { exact: true })).toBeVisible()
+  await expect(page.getByText(/\b1 sets\b/)).toHaveCount(0)
+})

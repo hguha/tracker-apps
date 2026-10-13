@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 // Sync status, backups, and the destructive resets — the only screen with an
 // irreversible control, so it takes a deliberate navigation to reach.
 
@@ -81,8 +82,8 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
       const backup = parseBackup(text)
       const counts = countsOf(backup)
       const ok = window.confirm(
-        `Import ${counts.workouts} workouts, ${counts.templates} templates, ` +
-          `${counts.exercises} custom exercises, and ${counts.metricEntries} measurements? ` +
+        `Import ${plural(counts.workouts, 'workout')}, ${plural(counts.templates, 'template')}, ` +
+          `${plural(counts.exercises, 'custom exercise')}, and ${plural(counts.metricEntries, 'measurement')}? ` +
           `Existing items with the same id are overwritten; nothing is deleted.`,
       )
       if (!ok) return
