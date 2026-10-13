@@ -37,6 +37,15 @@ function useAppearanceObserver<T>(read: () => T): T {
   return value
 }
 
+const systemScheme = (): ColorScheme =>
+  typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
+
+export function useSystemColorScheme(): ColorScheme {
+  return useAppearanceObserver(systemScheme)
+}
+
 export function useColorScheme(): ColorScheme {
   return useAppearanceObserver(readScheme)
 }

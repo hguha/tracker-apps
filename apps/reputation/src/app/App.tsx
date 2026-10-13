@@ -23,7 +23,7 @@ import { MeScreen } from '@/features/profile/MeScreen'
 import { ActiveWorkoutScreen } from '@/features/workout/ActiveWorkoutScreen'
 import { StartWorkoutScreen } from '@/features/workout/StartWorkoutScreen'
 import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
-import { useColorScheme } from '@/lib/useColorScheme'
+import { useSystemColorScheme } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@/platform/statusBar'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
 import { SyncScope } from '@/sync/useSync'
@@ -155,7 +155,7 @@ function SignedInApp() {
 
   // The live OS scheme, via the shared hook (which owns the single media-query
   // listener) — re-applies appearance on an OS light/dark switch while on "Auto".
-  const osScheme = useColorScheme()
+  const osScheme = useSystemColorScheme()
   useEffect(() => {
     if (!appearance) return
     const scheme = applyAppearance(appearance)

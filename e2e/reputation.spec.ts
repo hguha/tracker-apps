@@ -201,3 +201,14 @@ test('the offline coach answers and keeps the conversation', async ({ page }) =>
 
   expect(errors, `page errors: ${errors.join(', ')}`).toEqual([])
 })
+
+test('Auto appearance follows the system switching to dark and back', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await skipSetup(page)
+  const scheme = () => page.evaluate(() => document.documentElement.dataset.scheme)
+  await expect.poll(scheme).toBe('light')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect.poll(scheme).toBe('dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect.poll(scheme).toBe('light')
+})

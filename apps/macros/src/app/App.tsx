@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { cn, dayKey } from '@tracker-engine/core'
-import { createLazyScreens, ToastProvider, useColorScheme } from '@tracker-engine/ui'
+import { createLazyScreens, ToastProvider, useSystemColorScheme } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@tracker-engine/platform'
 import { useTransitionToast } from '@tracker-engine/auth/react'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
@@ -152,7 +152,7 @@ function SignedInApp() {
   }, [isReady])
 
   // The live OS scheme, via the shared hook, so "Auto" re-applies on a light/dark switch.
-  const osScheme = useColorScheme()
+  const osScheme = useSystemColorScheme()
   useEffect(() => {
     if (!appearance) return
     const scheme = applyAppearance(appearance)

@@ -1402,3 +1402,13 @@ test('the account screen erases a device-only account only after typing delete',
   await expect(page.getByRole('button', { name: /Use this device only/ })).toBeVisible()
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([])
 })
+
+test('Auto appearance follows the system switching to dark and back', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await bootWithoutErrors(page)
+  await completeOnboarding(page, { goal: 'maintain', weight: '70' })
+  const scheme = () => page.evaluate(() => document.documentElement.dataset.scheme)
+  await expect.poll(scheme).toBe('light')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect.poll(scheme).toBe('dark')
+})

@@ -7,7 +7,7 @@ import * as repo from '@/data/repository'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import { ToastProvider } from '@tracker-engine/ui'
 import { applyAppearance } from '@/lib/theme'
-import { useColorScheme } from '@/lib/useColorScheme'
+import { useSystemColorScheme } from '@tracker-engine/ui'
 import { SyncScope, useSync } from '@/sync/useSync'
 import type { ColorSchemePreference } from '@/domain/types'
 import { TabBar, type TabKey } from './TabBar'
@@ -78,7 +78,7 @@ function SignedInApp() {
     }
   }, [isReady])
 
-  const osScheme = useColorScheme()
+  const osScheme = useSystemColorScheme()
   useEffect(() => {
     if (appearance) applyAppearance(appearance)
   }, [appearance, osScheme])
