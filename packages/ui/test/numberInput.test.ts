@@ -10,6 +10,14 @@ const focus = { currentTarget: { select: () => {} } } as never
 const change = (value: string) => ({ target: { value } }) as never
 
 describe('useDraftInput', () => {
+  it('puts the saved value back when a commit is refused', () => {
+    const { result } = renderHook(() => useDraftInput({ value: '80', onCommit: () => false }))
+    act(() => result.current.inputProps.onFocus(focus))
+    act(() => result.current.inputProps.onChange(change('abc')))
+    act(() => result.current.inputProps.onBlur())
+    expect(result.current.draft).toBe('80')
+  })
+
   it('keeps the draft while focused and commits it on blur', () => {
     const onCommit = vi.fn()
     const { result, rerender } = renderHook(({ value }) => useDraftInput({ value, onCommit }), {

@@ -8,7 +8,7 @@ export function useDraftInput({
   isEcho = () => true,
 }: {
   value: string
-  onCommit: (draft: string) => void
+  onCommit: (draft: string) => boolean | void
   commitOnChange?: boolean
   selectOnFocus?: boolean
   isEcho?: (draft: string, value: string) => boolean
@@ -36,7 +36,7 @@ export function useDraftInput({
     },
     onBlur: () => {
       isFocused.current = false
-      if (!commitOnChange && draft !== value) onCommit(draft)
+      if (!commitOnChange && draft !== value && onCommit(draft) === false) setDraft(value)
       if (commitOnChange) setDraft(value)
     },
   }

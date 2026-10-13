@@ -9,6 +9,7 @@ export type PartOfDay = 'Morning' | 'Afternoon' | 'Evening'
 
 export function partOfDay(timestamp: number): PartOfDay {
   const hour = new Date(timestamp).getHours()
+  if (hour < 5) return 'Evening'
   if (hour < 12) return 'Morning'
   if (hour < 17) return 'Afternoon'
   return 'Evening'

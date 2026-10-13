@@ -23,6 +23,12 @@ describe('partOfDay', () => {
     expect(partOfDay(atHour(17))).toBe('Evening')
     expect(partOfDay(atHour(22))).toBe('Evening')
   })
+
+  it('treats the small hours as the end of the evening, not morning', () => {
+    expect(partOfDay(atHour(0))).toBe('Evening')
+    expect(partOfDay(atHour(4))).toBe('Evening')
+    expect(partOfDay(atHour(5))).toBe('Morning')
+  })
 })
 
 describe('inferSplit', () => {

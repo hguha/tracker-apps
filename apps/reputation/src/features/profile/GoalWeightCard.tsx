@@ -24,7 +24,8 @@ export function GoalWeightCard({ profile }: { profile: Profile }) {
       const trimmed = draft.trim()
       if (trimmed === '') return void repo.setGoalWeight(null)
       const parsed = parseNumber(trimmed)
-      if (parsed !== null && parsed > 0) void repo.setGoalWeight(weightToKg(parsed, unit))
+      if (parsed === null || parsed <= 0) return false
+      void repo.setGoalWeight(weightToKg(parsed, unit))
     },
   })
 
