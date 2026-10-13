@@ -1,20 +1,18 @@
 // App shell and navigation, as hand-rolled view state (§5.2) rather than a router
 // while there's no URL-shareable state.
 
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { seedIfNeeded } from '@/db/seed'
 import * as repo from '@/data/repository'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import { useTransitionToast } from '@tracker-engine/auth/react'
+import { createLazyScreens } from '@tracker-engine/ui'
 import { ToastProvider } from '@/components/Toast'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
-import { AccountScreen } from '@/features/auth/AccountScreen'
 import { HomeScreen } from '@/features/home/HomeScreen'
-import { BadgesScreen } from '@/features/home/BadgesScreen'
-import { CoachScreen } from '@/features/coach/CoachScreen'
 import {
   OnboardingScreen,
   ONBOARDING_VERSION,
@@ -22,14 +20,8 @@ import {
 import { AppTour } from '@/features/onboarding/AppTour'
 import { HistoryScreen } from '@/features/history/HistoryScreen'
 import { MeScreen } from '@/features/profile/MeScreen'
-import { SettingsScreen } from '@/features/profile/SettingsScreen'
-import { BodyMetricsScreen } from '@/features/profile/BodyMetricsScreen'
-import { DataScreen } from '@/features/profile/DataScreen'
-import { ExerciseLibraryScreen } from '@/features/library/ExerciseLibraryScreen'
 import { ActiveWorkoutScreen } from '@/features/workout/ActiveWorkoutScreen'
 import { StartWorkoutScreen } from '@/features/workout/StartWorkoutScreen'
-import { TemplatesScreen } from '@/features/templates/TemplatesScreen'
-import { TemplateEditorScreen } from '@/features/templates/TemplateEditorScreen'
 import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
 import { useColorScheme } from '@/lib/useColorScheme'
 import { applyStatusBarStyle } from '@/platform/statusBar'
@@ -38,11 +30,20 @@ import { SyncScope } from '@/sync/useSync'
 import { useReminderSync } from '@/features/reminders/reminders'
 
 // ECharts is the biggest dependency; lazy so the logging path never downloads it.
-const InsightsScreen = lazy(() =>
-  import('@/features/insights/InsightsScreen').then((m) => ({
-    default: m.InsightsScreen,
-  })),
+const { screen, preloadScreens } = createLazyScreens()
+
+const InsightsScreen = screen(() =>
+  import('@/features/insights/InsightsScreen').then((m) => m.InsightsScreen),
 )
+const AccountScreen = screen(() => import('@/features/auth/AccountScreen').then((m) => m.AccountScreen))
+const BadgesScreen = screen(() => import('@/features/home/BadgesScreen').then((m) => m.BadgesScreen))
+const CoachScreen = screen(() => import('@/features/coach/CoachScreen').then((m) => m.CoachScreen))
+const SettingsScreen = screen(() => import('@/features/profile/SettingsScreen').then((m) => m.SettingsScreen))
+const BodyMetricsScreen = screen(() => import('@/features/profile/BodyMetricsScreen').then((m) => m.BodyMetricsScreen))
+const DataScreen = screen(() => import('@/features/profile/DataScreen').then((m) => m.DataScreen))
+const ExerciseLibraryScreen = screen(() => import('@/features/library/ExerciseLibraryScreen').then((m) => m.ExerciseLibraryScreen))
+const TemplatesScreen = screen(() => import('@/features/templates/TemplatesScreen').then((m) => m.TemplatesScreen))
+const TemplateEditorScreen = screen(() => import('@/features/templates/TemplateEditorScreen').then((m) => m.TemplateEditorScreen))
 
 type View =
   | { kind: 'tabs' }
@@ -88,7 +89,9 @@ function AuthGate() {
   // Keyed on the user, so switching accounts remounts and discards prior state.
   return (
     <SyncScope key={session.userId}>
-      <SignedInApp />
+      <Suspense fallback={<div className="h-full" aria-busy="true" />}>
+        <SignedInApp />
+      </Suspense>
     </SyncScope>
   )
 }
@@ -104,6 +107,10 @@ function SignedInApp() {
 
   useDataTransitionToast()
   useReminderSync(isReady)
+
+  useEffect(() => {
+    if (isReady) preloadScreens()
+  }, [isReady])
 
   useEffect(() => {
     void seedIfNeeded()

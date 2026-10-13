@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { cn, dayKey } from '@tracker-engine/core'
-import { ToastProvider, useColorScheme } from '@tracker-engine/ui'
+import { createLazyScreens, ToastProvider, useColorScheme } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@tracker-engine/platform'
 import { useTransitionToast } from '@tracker-engine/auth/react'
 import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
@@ -23,24 +23,7 @@ import { DayScreen } from '@/features/day/DayScreen'
 import { mealForHour } from '@/lib/meals'
 import { ONBOARDING_VERSION, type MealSlot } from '@/domain/types'
 
-const preloads: (() => Promise<unknown>)[] = []
-
-function screen<P extends object>(load: () => Promise<ComponentType<P>>) {
-  let loaded: ComponentType<P> | null = null
-  const fetch = () => load().then((component) => (loaded = component))
-  preloads.push(fetch)
-  const Lazy = lazy(() => fetch().then((component) => ({ default: component })))
-  return function Screen(props: P) {
-    const Loaded = loaded
-    return Loaded ? <Loaded {...props} /> : <Lazy {...props} />
-  }
-}
-
-function preloadScreens() {
-  const run = () => preloads.forEach((load) => void load())
-  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 2000 })
-  else setTimeout(run, 500)
-}
+const { screen, preloadScreens } = createLazyScreens()
 
 const OnboardingScreen = screen(() =>
   import('@/features/onboarding/OnboardingScreen').then((m) => m.OnboardingScreen),
