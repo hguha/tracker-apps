@@ -202,8 +202,6 @@ export interface BadgeStats {
   earlyWorkouts: number
   lateWorkouts: number
   weekendWorkouts: number
-  /** Personal records set, across every record type. */
-  prCount: number
   recordSessions: number
   totalTrainingSeconds: number
   longestWorkoutSeconds: number
@@ -305,9 +303,6 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     }
   }
 
-  const prCount = (await db.personalRecords.toArray()).filter(
-    (pr) => pr.deletedAt === null,
-  ).length
 
   const finishedById = new Map(finished.map((w) => [w.id, w]))
   const exerciseById = new Map(exercises.flatMap((ex) => (ex ? [[ex.id, ex] as const] : [])))
@@ -359,7 +354,6 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     earlyWorkouts,
     lateWorkouts,
     weekendWorkouts,
-    prCount,
     recordSessions,
     totalTrainingSeconds,
     longestWorkoutSeconds,

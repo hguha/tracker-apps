@@ -40,7 +40,7 @@ export interface LifetimeStats {
   earlyWorkouts: number
   lateWorkouts: number
   weekendWorkouts: number
-  prCount: number
+  recordSessions: number
   totalTrainingSeconds: number
   longestWorkoutSeconds: number
   /** Latest bodyweight in kg; 0 when unknown, which parks relative badges at 0. */
@@ -207,10 +207,10 @@ export const BADGES: Badge[] = [
   countBadge('variety-100', 'Encyclopedia', 'Train 100 different exercises.', '📚', 'Milestones', (s) => s.distinctExercises, 100),
   countBadge('all-regions', 'Full Body', 'Train every body region at least once.', '🧍', 'Milestones', (s) => s.distinctRegions, 7),
 
-  countBadge('first-pr', 'Personal Best', 'Set your first personal record.', '⭐', 'Milestones', (s) => s.prCount, 1),
-  countBadge('ten-prs', 'Record Breaker', 'Set 10 personal records.', '🌟', 'Milestones', (s) => s.prCount, 10),
-  countBadge('fifty-prs', 'Always Climbing', 'Set 50 personal records.', '✨', 'Milestones', (s) => s.prCount, 50),
-  countBadge('hundred-prs', 'Record Cabinet', 'Set 100 personal records.', '🏆', 'Milestones', (s) => s.prCount, 100),
+  countBadge('first-pr', 'Personal Best', 'Set your first personal record.', '⭐', 'Milestones', (s) => s.recordSessions, 1),
+  countBadge('ten-prs', 'Record Breaker', 'Set 10 personal records.', '🌟', 'Milestones', (s) => s.recordSessions, 10),
+  countBadge('fifty-prs', 'Always Climbing', 'Set 50 personal records.', '✨', 'Milestones', (s) => s.recordSessions, 50),
+  countBadge('hundred-prs', 'Record Cabinet', 'Set 100 personal records.', '🏆', 'Milestones', (s) => s.recordSessions, 100),
 
   countBadge('days-50', 'Fifty Days', 'Train on 50 separate days.', '📅', 'Milestones', (s) => s.totalDaysTrained, 50),
   countBadge('days-100', 'Hundred Days', 'Train on 100 separate days.', '🗂️', 'Milestones', (s) => s.totalDaysTrained, 100),

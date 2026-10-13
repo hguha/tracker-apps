@@ -37,7 +37,7 @@ function stats(partial: Partial<LifetimeStats> = {}): LifetimeStats {
     earlyWorkouts: 0,
     lateWorkouts: 0,
     weekendWorkouts: 0,
-    prCount: 0,
+    recordSessions: 0,
     totalTrainingSeconds: 0,
     longestWorkoutSeconds: 0,
     bodyweightKg: 0,
@@ -167,6 +167,15 @@ describe('non-finite guards (the NaN bug)', () => {
   })
 })
 
+describe('PR badges', () => {
+  it('count sessions that beat a record, not records held', () => {
+    const earned = (partial: Partial<LifetimeStats>) =>
+      evaluateBadges(stats(partial)).find((badge) => badge.key === 'first-pr')!.earned
+    expect(earned({ recordSessions: 0 })).toBe(false)
+    expect(earned({ recordSessions: 1 })).toBe(true)
+  })
+})
+
 describe('groupedBadges', () => {
   it('splits the catalog into ordered, non-empty sections', () => {
     const groups = groupedBadges(evaluateBadges(stats()))
@@ -208,7 +217,7 @@ describe('groupedBadges', () => {
           earlyWorkouts: 50,
           lateWorkouts: 10,
           weekendWorkouts: 50,
-          prCount: 100,
+          recordSessions: 100,
           totalDaysTrained: 365,
           distinctRegions: 7,
           totalTrainingSeconds: 500 * 3600,
