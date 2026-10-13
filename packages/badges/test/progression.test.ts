@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { celebrationsSince, levelFor, nextBadges, type CelebratedBadge } from '../src'
+import { celebrationsSince, levelFor, mergeCelebrated, nextBadges, type CelebratedBadge } from '../src'
 
 const badge = (key: string, earned: boolean): CelebratedBadge => ({
   key,
@@ -49,6 +49,17 @@ describe('celebrationsSince', () => {
     expect(celebrations[0]!.title).toBe('2 badges earned')
   })
 
+  it('keeps badges another device already celebrated, so they are not cheered twice', () => {
+    const elsewhere = { badges: ['b'], level: 1, completedDay: null }
+    const { next } = celebrationsSince(elsewhere, {
+      badges: [badge('a', true), badge('b', false)],
+      level: 1,
+      day,
+      dayComplete: false,
+    })
+    expect(next.badges.sort()).toEqual(['a', 'b'])
+  })
+
   it('never celebrates a level twice after it drops and comes back', () => {
     const before = { badges: [], level: 3, completedDay: null }
     const { next } = celebrationsSince(before, { badges: [], level: 2, day, dayComplete: false })
@@ -68,5 +79,23 @@ describe('nextBadges', () => {
       { key: 'd', earned: false, fraction: 0.5 },
     ]
     expect(nextBadges(all, 2).map((b) => b.key)).toEqual(['c', 'd'])
+  })
+})
+
+describe('mergeCelebrated', () => {
+  it('keeps everything either record has celebrated', () => {
+    expect(
+      mergeCelebrated(
+        { badges: ['a'], level: 2, completedDay: '2026-10-01' },
+        { badges: ['b'], level: 3, completedDay: '2026-09-30' },
+      ),
+    ).toEqual({ badges: ['a', 'b'], level: 3, completedDay: '2026-10-01' })
+  })
+
+  it('takes whichever record exists', () => {
+    const only = { badges: ['a'], level: 1, completedDay: null }
+    expect(mergeCelebrated(null, only)).toBe(only)
+    expect(mergeCelebrated(only, null)).toBe(only)
+    expect(mergeCelebrated(null, null)).toBeNull()
   })
 })

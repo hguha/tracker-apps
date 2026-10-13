@@ -50,6 +50,7 @@ export const macroSyncSchema: SyncSchema = {
         waterTargetMl: row.waterTargetMl ?? null,
         manualTargets: row.manualTargets ?? null,
         reminders: row.reminders ?? null,
+        celebrated: row.celebrated ?? null,
       }
     }
     if (table === 'foods' || table === 'customFoods') {

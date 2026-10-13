@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { levelFor } from '@tracker-engine/badges'
-import { experience, goalWeeksMet, shownExperience } from '@/features/home/progression'
+import {
+  experience,
+  goalWeeksMet,
+  shownExperience,
+  takeLegacyHighWater,
+} from '@/features/home/progression'
 
 const at = (iso: string) => Date.parse(`${iso}T18:00:00`)
 
@@ -30,10 +35,17 @@ describe('goalWeeksMet', () => {
 
 describe('shownExperience', () => {
   it('never shows less than the most this account has reached', () => {
-    localStorage.clear()
-    expect(shownExperience('reputation.xp.a', 300)).toBe(300)
-    expect(shownExperience('reputation.xp.a', 120)).toBe(300)
-    expect(shownExperience('reputation.xp.a', 340)).toBe(340)
-    expect(shownExperience('reputation.xp.b', 50)).toBe(50)
+    expect(shownExperience(300, 120)).toBe(300)
+    expect(shownExperience(300, 340)).toBe(340)
+    expect(shownExperience(0, 50)).toBe(50)
+  })
+})
+
+describe('takeLegacyHighWater', () => {
+  it('moves an old device-only record out of local storage once', () => {
+    localStorage.setItem('reputation.xp.a', '420')
+    expect(takeLegacyHighWater('reputation.xp.a')).toBe(420)
+    expect(localStorage.getItem('reputation.xp.a')).toBeNull()
+    expect(takeLegacyHighWater('reputation.xp.a')).toBe(0)
   })
 })

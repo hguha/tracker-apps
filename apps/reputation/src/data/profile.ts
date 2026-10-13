@@ -1,3 +1,4 @@
+import { mergeCelebrated } from '@tracker-engine/badges'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, getActiveUserId } from '@/db/seed'
 import { type Profile } from '@/domain/types'
@@ -77,6 +78,8 @@ export async function claimLocalData(newUserId: string): Promise<number> {
               ? (existing.goalStartKg ?? null)
               : (localProfile.goalStartKg ?? null),
           coachNotes: localProfile.coachNotes || (existing?.coachNotes ?? ''),
+          celebrated: mergeCelebrated(existing?.celebrated ?? null, localProfile.celebrated ?? null),
+          xpHighWater: Math.max(existing?.xpHighWater ?? 0, localProfile.xpHighWater ?? 0),
           onboardedAt: existing?.onboardedAt ?? localProfile.onboardedAt ?? null,
           id: newUserId,
           updatedAt: now,

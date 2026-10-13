@@ -23,10 +23,11 @@ export function goalWeeksMet(
   return [...perWeek.values()].filter((count) => count >= weeklyGoal).length
 }
 
-export function shownExperience(storageKey: string | null, earned: number): number {
-  if (storageKey === null) return earned
-  const best = Number(localStorage.getItem(storageKey) ?? 0)
-  if (earned <= best) return best
-  localStorage.setItem(storageKey, String(earned))
-  return earned
+export const shownExperience = (highWater: number, earned: number): number =>
+  Math.max(highWater, earned)
+
+export function takeLegacyHighWater(storageKey: string): number {
+  const stored = Number(localStorage.getItem(storageKey) ?? 0)
+  localStorage.removeItem(storageKey)
+  return Number.isFinite(stored) ? stored : 0
 }

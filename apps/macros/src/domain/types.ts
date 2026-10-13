@@ -1,4 +1,5 @@
 import type { Goal } from '@tracker-engine/body'
+import type { Celebrated } from '@tracker-engine/badges'
 export interface SyncColumns {
   createdAt: number
   updatedAt: number
@@ -489,6 +490,7 @@ export interface Profile extends SyncColumns {
   manualTargets: ManualTargets | null
   /** When to be nudged about logging. Null means never, which is the default. */
   reminders: RemindersConfig | null
+  celebrated: Celebrated | null
 }
 
 /**

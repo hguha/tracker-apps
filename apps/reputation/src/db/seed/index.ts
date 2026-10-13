@@ -134,6 +134,8 @@ async function seedProfile(): Promise<void> {
     if (existing.goalWeightKg === undefined) backfill.goalWeightKg = null
     if (existing.goalStartKg === undefined) backfill.goalStartKg = null
     if (existing.coachNotes === undefined) backfill.coachNotes = ''
+    if (existing.celebrated === undefined) backfill.celebrated = null
+    if (existing.xpHighWater === undefined) backfill.xpHighWater = 0
     // An existing local profile predates onboarding; treat it as done.
     if (existing.onboardedAt === undefined) backfill.onboardedAt = Date.now()
     // 0 trails the current ONBOARDING_VERSION, so existing accounts replay the
@@ -166,6 +168,8 @@ async function seedProfile(): Promise<void> {
     goalWeightKg: null,
     goalStartKg: null,
     coachNotes: '',
+    celebrated: null,
+    xpHighWater: 0,
     onboardedAt: null,
     onboardingVersion: 0,
     theme: 'default',

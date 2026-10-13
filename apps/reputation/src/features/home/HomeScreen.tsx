@@ -20,11 +20,11 @@ import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
 import { DAY_MS, WEEK_MS, dayKey, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
-import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
+import { REGION_LABELS, REGIONS, type Profile, type Region } from '@/domain/types'
 import { levelFor, nextBadges, type Level } from '@tracker-engine/badges'
 import { CelebrationOverlay, useCelebrations } from '@tracker-engine/ui'
 import { evaluateBadges, type BadgeState } from './badges'
-import { experience, goalWeeksMet, shownExperience } from './progression'
+import { experience, goalWeeksMet, shownExperience, takeLegacyHighWater } from './progression'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 import {
   conditionLabel,
@@ -195,12 +195,8 @@ export function HomeScreen({
     ...badgeStats,
   })
 
-  const level = levelFor(
-    shownExperience(
-      session ? `reputation.xp.${session.userId}` : null,
-      experience({ ...badgeStats, goalWeeks }),
-    ),
-  )
+  const earnedXp = experience({ ...badgeStats, goalWeeks })
+  const level = levelFor(shownExperience(profile.xpHighWater, earnedXp))
 
   const deltaPercent =
     lastWeekVolume > 0
@@ -339,7 +335,13 @@ export function HomeScreen({
         </Card>
       )}
 
-      <Celebrations badges={badges} level={level} owner={session?.userId ?? null} />
+      <Celebrations
+        badges={badges}
+        level={level}
+        earnedXp={earnedXp}
+        profile={profile}
+        owner={session?.userId ?? null}
+      />
       {totalWorkouts > 0 && (
         <BadgeStrip badges={badges} level={level} onSeeAll={onOpenBadges} />
       )}
@@ -458,15 +460,32 @@ function Stat({ label, value }: { label: string; value: string }) {
 function Celebrations({
   badges,
   level,
+  earnedXp,
+  profile,
   owner,
 }: {
   badges: BadgeState[]
   level: Level
+  earnedXp: number
+  profile: Profile
   owner: string | null
 }) {
   const { hasReconciled } = useSync()
+
+  useEffect(() => {
+    if (owner === null) return
+    const best = Math.max(takeLegacyHighWater(`reputation.xp.${owner}`), earnedXp)
+    if (best > profile.xpHighWater) void repo.updateProfile({ xpHighWater: best })
+  }, [owner, earnedXp, profile.xpHighWater])
+
   const { current, dismiss } = useCelebrations(
-    owner === null ? null : `reputation.celebrated.${owner}`,
+    owner === null
+      ? null
+      : {
+          stored: profile.celebrated,
+          save: (next) => void repo.updateProfile({ celebrated: next }),
+          legacyKey: `reputation.celebrated.${owner}`,
+        },
     { badges, level: level.level, day: dayKey(Date.now()), dayComplete: false },
     { isQuiet: !hasReconciled },
   )

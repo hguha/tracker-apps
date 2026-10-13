@@ -1,3 +1,5 @@
+import type { Celebrated } from '@tracker-engine/badges'
+
 // Mirrors the Postgres schema (§4) one-to-one. Storage is always metric —
 // anything `_kg`/`_m`/`_cm` is canonical; conversion happens only in lib/units.
 
@@ -147,6 +149,8 @@ export interface Profile extends SyncColumns {
   goalWeightKg: number | null
   goalStartKg: number | null
   coachNotes: string
+  celebrated: Celebrated | null
+  xpHighWater: number
   // Null until first-run setup completes. On the profile so it follows the
   // account across devices rather than re-running per device (§11.1.3).
   onboardedAt: number | null

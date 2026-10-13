@@ -71,6 +71,8 @@ export const repSyncSchema: SyncSchema = {
         goalWeightKg: row.goalWeightKg ?? null,
         goalStartKg: row.goalStartKg ?? null,
         coachNotes: row.coachNotes ?? '',
+        celebrated: row.celebrated ?? null,
+        xpHighWater: row.xpHighWater ?? 0,
         onboardedAt: row.onboardedAt ?? null,
         onboardingVersion: row.onboardingVersion ?? 0,
       }

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { haptic } from '@tracker-engine/platform'
 import {
   celebrationsSince,
+  mergeCelebrated,
   type CelebratedBadge,
   type Celebrated,
   type Celebration,
@@ -109,7 +110,8 @@ export interface CelebrationState {
   dayComplete: boolean
 }
 
-function readCelebrated(storageKey: string): Celebrated | null {
+function takeLegacyRecord(storageKey: string | undefined): Celebrated | null {
+  if (storageKey === undefined) return null
   const raw = localStorage.getItem(storageKey)
   if (!raw) return null
   try {
@@ -124,12 +126,21 @@ const QUIET_ONCE_KEY = 'celebrations.quiet-once'
 
 export const quietNextCelebrations = (): void => sessionStorage.setItem(QUIET_ONCE_KEY, '1')
 
+export interface CelebrationRecord {
+  stored: Celebrated | null
+  save(next: Celebrated): void
+  legacyKey?: string
+}
+
 export function useCelebrations(
-  storageKey: string | null,
+  record: CelebrationRecord | null,
   now: CelebrationState | null,
   { isQuiet = false }: { isQuiet?: boolean } = {},
 ) {
   const [queue, setQueue] = useState<Celebration[]>([])
+  const latest = useRef(record)
+  latest.current = record
+  const saved = useRef<Celebrated | null>(null)
 
   const signature =
     now === null
@@ -140,15 +151,24 @@ export function useCelebrations(
           now.dayComplete,
           ...now.badges.filter((badge) => badge.earned).map((badge) => badge.key),
         ].join('|')
+  const storedSignature = record === null ? null : JSON.stringify(record.stored)
 
   useEffect(() => {
-    if (now === null || storageKey === null) return
+    const current = latest.current
+    if (now === null || current === null) return
     const isQuietOnce = sessionStorage.getItem(QUIET_ONCE_KEY) !== null
     sessionStorage.removeItem(QUIET_ONCE_KEY)
-    const { celebrations, next } = celebrationsSince(readCelebrated(storageKey), now)
-    localStorage.setItem(storageKey, JSON.stringify(next))
-    if (!isQuiet && !isQuietOnce && celebrations.length > 0) setQueue((current) => [...current, ...celebrations])
-  }, [signature, storageKey, isQuiet])
+    const previous = mergeCelebrated(current.stored ?? takeLegacyRecord(current.legacyKey), saved.current)
+    const { celebrations, next } = celebrationsSince(previous, now)
+    saved.current = next
+    if (JSON.stringify(next) !== JSON.stringify(current.stored)) current.save(next)
+    if (current.stored === null && current.legacyKey !== undefined) {
+      localStorage.removeItem(current.legacyKey)
+    }
+    if (!isQuiet && !isQuietOnce && celebrations.length > 0) {
+      setQueue((queued) => [...queued, ...celebrations])
+    }
+  }, [signature, storedSignature, isQuiet])
 
   const pushed = useRef(0)
   const push = useCallback((celebration: Celebration) => {

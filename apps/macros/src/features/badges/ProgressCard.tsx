@@ -4,6 +4,7 @@ import { levelFor, nextBadges } from '@tracker-engine/badges'
 import { Card, CelebrationOverlay, ProgressRing, useCelebrations } from '@tracker-engine/ui'
 import { Check, ChevronRight, Droplet, Drumstick, Scale, Utensils } from 'lucide-react'
 import { nutritionStats } from '@/data/stats'
+import * as repo from '@/data/repository'
 import { useSyncStatus } from '@/sync/useSync'
 import { evaluateBadges } from './catalog'
 import { experience, type DailyGoal, type DailyGoalKey } from './progression'
@@ -40,8 +41,15 @@ export function ProgressCard({
   const level = stats ? levelFor(experience(stats)) : null
   const dayComplete = goals !== null && goals.length > 0 && goals.every((goal) => goal.done)
   const { hasReconciled } = useSyncStatus()
+  const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   const { current, dismiss } = useCelebrations(
-    owner === null ? null : `macros.celebrated.${owner}`,
+    owner === null || profile === undefined
+      ? null
+      : {
+          stored: profile.celebrated,
+          save: (next) => void repo.saveProfile({ celebrated: next }),
+          legacyKey: `macros.celebrated.${owner}`,
+        },
     level && goals !== null ? { badges, level: level.level, day, dayComplete } : null,
     { isQuiet: !hasReconciled },
   )

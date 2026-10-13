@@ -28,6 +28,7 @@ export {
   CelebrationOverlay,
   quietNextCelebrations,
   useCelebrations,
+  type CelebrationRecord,
   type CelebrationState,
 } from './Celebration'
 export { TabBar, type TabDefinition } from './TabBar'

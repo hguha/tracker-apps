@@ -36,13 +36,22 @@ export interface Celebration {
   subtitle: string
 }
 
+export function mergeCelebrated(a: Celebrated | null, b: Celebrated | null): Celebrated | null {
+  if (a === null || b === null) return a ?? b
+  return {
+    badges: [...new Set([...a.badges, ...b.badges])],
+    level: Math.max(a.level, b.level),
+    completedDay: (a.completedDay ?? '') >= (b.completedDay ?? '') ? a.completedDay : b.completedDay,
+  }
+}
+
 export function celebrationsSince(
   previous: Celebrated | null,
   now: { badges: readonly CelebratedBadge[]; level: number; day: string; dayComplete: boolean },
 ): { celebrations: Celebration[]; next: Celebrated } {
   const earned = now.badges.filter((badge) => badge.earned)
   const next: Celebrated = {
-    badges: earned.map((badge) => badge.key),
+    badges: [...new Set([...(previous?.badges ?? []), ...earned.map((badge) => badge.key)])],
     level: Math.max(now.level, previous?.level ?? 0),
     completedDay: now.dayComplete ? now.day : (previous?.completedDay ?? null),
   }

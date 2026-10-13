@@ -30,6 +30,7 @@ function defaultProfile(userId: string): Profile {
     waterTargetMl: null,
     manualTargets: null,
     reminders: null,
+    celebrated: null,
     ...syncStamp(),
   }
 }
@@ -55,6 +56,7 @@ export async function getProfile(): Promise<Profile> {
       ? { ...row.reminders, weighIn: row.reminders.weighIn ?? DEFAULT_REMINDERS.weighIn }
       : null,
     activity: row.activity ?? null,
+    celebrated: row.celebrated ?? null,
   }
 }
 
