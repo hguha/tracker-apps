@@ -26,7 +26,7 @@
 </head>
 <body><main>
 <h1>Privacy Policy</h1>
-<p><em>Last updated: 2026-09-20</em></p>
+<p><em>Last updated: 2026-10-13</em></p>
 <p>MACROcosm is a calorie and macro tracker that keeps your food diary on your device by default. This policy says what leaves the device, when, and what you can do about it.</p>
 
 <h2>What the app collects</h2>
@@ -70,6 +70,15 @@
 <h3>Apple Health (native app only)</h3>
 <p>Read-only, and weight only. The app reads weigh-ins so you don't have to type them twice. It never writes to Health, and it deliberately does not read active energy: expenditure here is measured from your own logs and already accounts for how you move.</p>
 
+<h3>Sign-in emails</h3>
+<p>Sign-in, confirmation and password-reset codes are emailed through Resend, which receives your email address and the code to deliver them.</p>
+
+<h3>Error reports (signed in only)</h3>
+<p>When something fails in the app — a sync that can't complete, a crash on a screen — a short report is saved to our own Supabase database: the error message and stack, the screen's address without any sign-in tokens, the app version, your browser or device type, and your user id. Nothing is sent to a third-party monitoring service.</p>
+
+<h3>Reminders</h3>
+<p>Reminders are scheduled on your device as local notifications. Nothing is sent to a server to deliver them.</p>
+
 <h2>What the app does not collect</h2>
 <ul>
   <li>No third-party analytics — no Google Analytics, Mixpanel, or PostHog.</li>
@@ -81,7 +90,7 @@
 
 <h2>Where your data lives</h2>
 <ul>
-  <li><strong>On your device:</strong> IndexedDB, plus an auth session in <code>localStorage</code> when signed in.</li>
+  <li><strong>On your device:</strong> IndexedDB, including your coach conversations, which are never uploaded, plus an auth session in <code>localStorage</code> when signed in.</li>
   <li><strong>On the server:</strong> Supabase (Postgres, Auth, Edge Functions). AI requests transit Google's Gemini API; food lookups transit USDA FoodData Central and Open Food Facts.</li>
   <li><strong>Hosting:</strong> Vercel serves the app at <code>macrocosm.fitness/app</code>.</li>
 </ul>
@@ -104,6 +113,6 @@
 <p>Material changes show up in the "Last updated" date above and, where they matter, in the app.</p>
 
 <h2>Contact</h2>
-<p>Questions: <a href="https://hirshguha.com">hirshguha.com</a>.</p>
+<p>Questions or deletion requests: <a href="mailto:support@macrocosm.fitness">support@macrocosm.fitness</a>, or see <a href="support.html">Support</a>.</p>
 </main></body>
 </html>
