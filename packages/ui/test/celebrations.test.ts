@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { Celebrated } from '@tracker-engine/badges'
 import { quietNextCelebrations, useCelebrations, type CelebrationState } from '../src/Celebration'
 
-const KEY = 'test.celebrated'
 const badge = (key: string, earned: boolean) => ({
   key,
   label: key,
@@ -17,6 +17,14 @@ const state = (earned: string[], level = 1): CelebrationState => ({
   dayComplete: false,
 })
 
+function account(initial: Celebrated | null) {
+  const box = { stored: initial }
+  return {
+    box,
+    record: () => ({ stored: box.stored, save: (next: Celebrated) => void (box.stored = next) }),
+  }
+}
+
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
@@ -24,7 +32,8 @@ beforeEach(() => {
 
 describe('useCelebrations', () => {
   it('queues a badge earned after the first look', () => {
-    const { result, rerender } = renderHook(({ now }) => useCelebrations(KEY, now), {
+    const { record } = account(null)
+    const { result, rerender } = renderHook(({ now }) => useCelebrations(record(), now), {
       initialProps: { now: state([]) },
     })
     expect(result.current.current).toBeNull()
@@ -34,22 +43,22 @@ describe('useCelebrations', () => {
   })
 
   it('records quietly while quiet, so nothing bursts when it stops', () => {
-    localStorage.setItem(KEY, JSON.stringify({ badges: [], level: 1, completedDay: null }))
+    const { box, record } = account({ badges: [], level: 1, completedDay: null })
     const { result, rerender } = renderHook(
-      ({ now, isQuiet }) => useCelebrations(KEY, now, { isQuiet }),
+      ({ now, isQuiet }) => useCelebrations(record(), now, { isQuiet }),
       { initialProps: { now: state(['a', 'b'], 3), isQuiet: true } },
     )
     expect(result.current.current).toBeNull()
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ badges: ['a', 'b'], level: 3 })
+    expect(box.stored).toMatchObject({ badges: ['a', 'b'], level: 3 })
 
     rerender({ now: state(['a', 'b'], 3), isQuiet: false })
     expect(result.current.current).toBeNull()
   })
 
   it('stays quiet once after quietNextCelebrations, then celebrates again', () => {
-    localStorage.setItem(KEY, JSON.stringify({ badges: [], level: 1, completedDay: null }))
+    const { record } = account({ badges: [], level: 1, completedDay: null })
     quietNextCelebrations()
-    const { result, rerender } = renderHook(({ now }) => useCelebrations(KEY, now), {
+    const { result, rerender } = renderHook(({ now }) => useCelebrations(record(), now), {
       initialProps: { now: state(['a']) },
     })
     expect(result.current.current).toBeNull()
