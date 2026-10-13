@@ -184,6 +184,20 @@ describe('mockCoachProvider — questions', () => {
     expect(r.text).toMatch(/\d+ working sets/)
   })
 
+  it('names the lift with the highest estimated 1RM as the strongest', async () => {
+    const r = await mockCoachProvider.respond(
+      summary({
+        exercises: [
+          ex({ name: 'Bench Press', bestE1rmKg: 55 }),
+          ex({ name: 'Back Squat', region: 'legs', bestE1rmKg: 71 }),
+        ],
+      }),
+      { kind: 'ask', question: 'hello' },
+    )
+    if (r.kind !== 'answer') throw new Error('wrong kind')
+    expect(r.text).toContain('Back Squat your strongest')
+  })
+
   it('is honest when there is no data', async () => {
     const r = await mockCoachProvider.respond(summary({ totalWorkouts: 0 }), {
       kind: 'ask',

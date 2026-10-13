@@ -509,7 +509,13 @@ function answer(summary: CoachSummary, question: string): string {
   const setsByRegion = new Map<Region, number>(
     summary.regionSets.map((r) => [r.region, r.sets]),
   )
-  const topLift = summary.exercises.find((e) => e.bestE1rmKg !== null)
+  const topLift = summary.exercises.reduce<ExerciseAgg | undefined>(
+    (best, e) =>
+      e.bestE1rmKg !== null && (best === undefined || e.bestE1rmKg > (best.bestE1rmKg ?? 0))
+        ? e
+        : best,
+    undefined,
+  )
 
   if (q.includes('volume') || q.includes('how much')) {
     const totalSets = summary.weeks.reduce((s, w) => s + w.sets, 0)
