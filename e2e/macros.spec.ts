@@ -1445,3 +1445,18 @@ test('a long unbroken word stays inside its coach bubble', async ({ page }) => {
   const fits = await bubble.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
   expect(fits).toBe(true)
 })
+
+test('stepping to an untouched day offers nothing to revert', async ({ page }) => {
+  await bootWithoutErrors(page)
+  await completeOnboarding(page)
+  await page.getByRole('button', { name: 'Log food' }).click()
+  await page.getByPlaceholder('Search a food, a recipe, or a meal').fill('banana')
+  await page.getByRole('button', { name: /Banana/ }).first().click()
+  await page.getByRole('button', { name: /^Log it/ }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: /^(Breakfast|Lunch|Dinner|Snack)/ }).first().click()
+
+  await page.getByRole('button', { name: 'Previous day' }).click()
+  await expect(page.getByText('Nothing logged on this day')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Revert' })).toHaveCount(0)
+})

@@ -9,12 +9,13 @@ export interface EntriesWithFoods {
 }
 
 export function useEntriesWithFoods(fromDay: string, toDay: string): EntriesWithFoods | undefined {
-  return useLiveQuery(
+  const loaded = useLiveQuery(
     async () => {
       const entries = await repo.entriesBetween(fromDay, toDay)
-      return { entries, foods: await repo.foodsByIds(foodIdsOf(entries)) }
+      return { fromDay, toDay, entries, foods: await repo.foodsByIds(foodIdsOf(entries)) }
     },
     [fromDay, toDay],
     undefined,
   )
+  return loaded?.fromDay === fromDay && loaded.toDay === toDay ? loaded : undefined
 }
