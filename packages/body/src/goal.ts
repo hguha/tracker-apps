@@ -28,6 +28,7 @@ export function goalProgress(inputs: {
 }
 
 export const FLAT_KG_PER_WEEK = 0.05
+const HELD_KG = 0.05
 const SCALE_WINDOW_DAYS = 28
 const MIN_WEIGH_INS = 3
 const MIN_SCALE_SPAN_DAYS = 3
@@ -110,7 +111,11 @@ export function scaleOutlook(inputs: {
   const latest = trend[trend.length - 1]
   if (!latest) return null
   const goal = goalDirection(startKg ?? latest.trendKg, targetKg)
-  const progress = goalProgress({ goal, targetKg, startKg, trendKg: latest.trendKg })
+  const measured = goalProgress({ goal, targetKg, startKg, trendKg: latest.trendKg })
+  const progress =
+    goal === 'maintain'
+      ? { ...measured, isReached: Math.abs(measured.remainingKg) < HELD_KG }
+      : measured
   const rate = scaleRate(trend, now)
   const neededKg = targetKg - latest.trendKg
   const toward = Math.sign(neededKg)

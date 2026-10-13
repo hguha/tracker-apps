@@ -128,6 +128,12 @@ describe('scaleOutlook', () => {
     expect(outlook.likelyAt).toBeNull()
   })
 
+  it('counts a goal set at the current weight as reached, not 0.0 to go', () => {
+    const flat = weightTrend(weighIns(80, { days: 7, kgPerWeek: 0, noisy: false }))
+    const outlook = scaleOutlook({ targetKg: 80, startKg: 80, trend: flat, now: NOW })!
+    expect(outlook.progress.isReached).toBe(true)
+  })
+
   it('needs at least one weigh-in', () => {
     expect(scaleOutlook({ targetKg: 78, startKg: null, trend: [], now: NOW })).toBeNull()
   })
