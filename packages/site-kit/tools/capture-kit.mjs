@@ -15,8 +15,8 @@ import { rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /** iPhone 15 Pro logical size; ×3 so the images stay sharp on retina displays. */
-export const VIEWPORT = { width: 393, height: 852 }
-export const SCALE = 3
+const VIEWPORT = { width: 393, height: 852 }
+const SCALE = 3
 
 /** `--app ../x --only home,coach --headed` for every capture script, parsed once. */
 export function parseArgs(argv = process.argv.slice(2)) {
@@ -42,7 +42,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
  * for the mode it was given. It also means the app's own `.env.local`, with the real keys in it, is
  * never touched.
  */
-export async function startApp({ dir, port, ready = /ready in/ }) {
+export async function startApp({ dir, port }) {
   const envFile = resolve(dir, '.env.capture.local')
   writeFileSync(envFile, 'VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n')
 
@@ -58,7 +58,7 @@ export async function startApp({ dir, port, ready = /ready in/ }) {
     await new Promise((res, rej) => {
       const timer = setTimeout(() => rej(new Error('dev server did not start')), 90_000)
       child.stdout.on('data', (buffer) => {
-        if (ready.test(String(buffer))) {
+        if (/ready in/.test(String(buffer))) {
           clearTimeout(timer)
           res()
         }
