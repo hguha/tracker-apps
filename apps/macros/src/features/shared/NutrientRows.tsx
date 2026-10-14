@@ -10,7 +10,7 @@ import {
   type ReferenceSex,
 } from '@/lib/micronutrients'
 import type { CoveredNutrients } from '@/lib/nutrition'
-import { entryName, foodIdsOf } from '@/features/shared/entryName'
+import { entryName } from '@/features/shared/entryName'
 import type { LogEntry } from '@/domain/types'
 
 export function NutrientRows({
@@ -26,7 +26,7 @@ export function NutrientRows({
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const foods = useLiveQuery(
-    () => (open === null ? undefined : repo.foodsByIds(foodIdsOf(entries))),
+    () => (open === null ? undefined : repo.foodsByIds(entries.map((entry) => entry.foodId))),
     [open === null, entries],
   )
   const statuses = nutrientStatus(nutrition.totals, sex, nutrition.coverage)

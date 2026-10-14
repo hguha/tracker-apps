@@ -22,8 +22,3 @@ export function entryName(entry: LogEntry, foods: ReadonlyMap<string, Food>): st
 export function searchableNames(entry: LogEntry, foods: ReadonlyMap<string, Food>): string {
   return [entryName(entry, foods), entry.dishName, entry.note].filter(Boolean).join(' ')
 }
-
-/** The food ids on a set of entries, for one bulk lookup instead of a query per row. */
-export function foodIdsOf(entries: readonly LogEntry[]): string[] {
-  return entries.map((entry) => entry.foodId).filter((id): id is string => id !== null)
-}
