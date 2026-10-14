@@ -56,16 +56,7 @@ export function CardioEntry(props: CardioEntryProps) {
   return (
     <div className="px-3 pb-1 pt-2">
       {sets.map((set, index) => {
-        const raw = previous[index]
-        // An all-null carry-forward shouldn't offer a "Same as last" that copies
-        // nothing (matches SetRow's placeholderAt guard).
-        const placeholder =
-          raw &&
-          (raw.durationSeconds !== null ||
-            raw.distanceM !== null ||
-            raw.weightKg !== null)
-            ? raw
-            : undefined
+        const placeholder = previous[index]
         const pace = formatPace(set.durationSeconds, set.distanceM, distanceUnit)
         const hasValues = hasLoggedValues(set, exercise)
 

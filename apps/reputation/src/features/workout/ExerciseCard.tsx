@@ -21,15 +21,8 @@ import { regionVar } from '@/lib/palette'
 import { composeExerciseName } from '@/lib/labels'
 import { CardioEntry } from './CardioEntry'
 import { SetRow, hasLoggedValues, setFields } from './SetRow'
-import { hasValue, resolvePlaceholders } from './resolvePlaceholders'
+import { hasValue, resolvePlaceholders, type SetValues } from './resolvePlaceholders'
 import { isCardioPattern } from '@/domain/movement'
-
-export interface SetPlaceholderHint {
-  weightKg: number | null
-  reps: number | null
-  durationSeconds: number | null
-  distanceM: number | null
-}
 
 export interface ExerciseCardProps {
   exercise: Exercise
@@ -51,11 +44,11 @@ export interface ExerciseCardProps {
   supersetGroup: number | null
   sessionNote: string
   // Per-set hints from a "do this again" copy (§7.2), keyed by set id; win over history.
-  placeholderOverrides: Record<string, PerformedSet | SetPlaceholderHint>
+  placeholderOverrides: Record<string, SetValues>
   onAddSet: () => void
   onSetChange: (setId: string, patch: Partial<WorkoutSet>) => void
   onDeleteSet: (setId: string) => void
-  onConfirmPlaceholder: (setId: string, shown: SetPlaceholderHint | undefined) => void
+  onConfirmPlaceholder: (setId: string, shown: SetValues | undefined) => void
   onDuplicateSet: (setId: string) => void
   onOpenDetail: () => void
 }
@@ -117,15 +110,13 @@ export function ExerciseCard(props: ExerciseCardProps) {
     [previousSession],
   )
 
-  const placeholderFor = useMemo<(PerformedSet | undefined)[]>(
-    () => resolvePlaceholders(sets, placeholderOverrides, previousSets),
+  const placeholders = useMemo<(PerformedSet | undefined)[]>(
+    () =>
+      resolvePlaceholders(sets, placeholderOverrides, previousSets).map((candidate) =>
+        candidate && hasValue(candidate) ? candidate : undefined,
+      ),
     [sets, placeholderOverrides, previousSets],
   )
-
-  function placeholderAt(index: number): PerformedSet | undefined {
-    const candidate = placeholderFor[index]
-    return candidate && hasValue(candidate) ? candidate : undefined
-  }
 
   return (
     <Card
@@ -224,7 +215,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
           <CardioEntry
             exercise={exercise}
             sets={sets}
-            previous={placeholderFor}
+            previous={placeholders}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             onChange={onSetChange}
@@ -268,7 +259,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
                 index={index}
                 exercise={exercise}
                 loadMode={loadMode}
-                previous={placeholderAt(index)}
+                previous={placeholders[index]}
                 lastSession={previousSets[index]}
                 weightUnit={weightUnit}
                 distanceUnit={distanceUnit}
@@ -277,7 +268,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
                 onChange={(patch) => onSetChange(set.id, patch)}
                 onDelete={() => onDeleteSet(set.id)}
                 onConfirmPlaceholder={() =>
-                  onConfirmPlaceholder(set.id, placeholderAt(index))
+                  onConfirmPlaceholder(set.id, placeholders[index])
                 }
                 onDuplicate={() => onDuplicateSet(set.id)}
               />
