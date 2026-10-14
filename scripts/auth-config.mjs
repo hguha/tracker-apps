@@ -54,7 +54,7 @@ const APPS = {
 
 const APP = APPS[process.argv[2]]
 if (!APP) {
-  console.error(`Usage: node scripts/auth-config.mjs <${Object.keys(APPS).join('|')}> [--apply]`)
+  console.error(`Usage: node scripts/auth-config.mjs <${Object.keys(APPS).join('|')}> [--apply] [--urls-only] [--smtp]`)
   process.exit(1)
 }
 
@@ -169,11 +169,13 @@ function smtp() {
   }
 }
 
-const isApply = process.argv.includes('--apply')
+const payload = process.argv.includes('--urls-only')
+  ? { site_url: TEMPLATES.site_url, uri_allow_list: TEMPLATES.uri_allow_list }
+  : { ...smtp(), ...TEMPLATES }
 
-if (!isApply) {
+if (!process.argv.includes('--apply')) {
   console.log('Would set:\n')
-  for (const [key, value] of Object.entries(TEMPLATES)) {
+  for (const [key, value] of Object.entries(payload)) {
     console.log(`${key} = ${typeof value === 'number' || key.startsWith('site') || key.startsWith('uri') ? value : `${value.length} chars`}`)
   }
   console.log('\nRe-run with --apply to PATCH project', APP.ref)
@@ -187,11 +189,7 @@ if (!isApply) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(
-        process.argv.includes('--urls-only')
-          ? { site_url: TEMPLATES.site_url, uri_allow_list: TEMPLATES.uri_allow_list }
-          : { ...smtp(), ...TEMPLATES },
-      ),
+      body: JSON.stringify(payload),
     },
   )
   const body = await response.json()
