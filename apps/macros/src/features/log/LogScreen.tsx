@@ -301,7 +301,7 @@ function BrowsePanel({
   ]
 
   const pickedTotal = picked.reduce((sum, food) => {
-    const last = lastAmounts?.get(food.id)
+    const last = lastAmounts.get(food.id)
     return sum + nutrientsFor(food, amountGrams(food, last)).kcal
   }, 0)
 
@@ -384,7 +384,7 @@ function BrowsePanel({
               picked={picked}
               onToggle={toggle}
               saved={savedIds}
-              lastAmounts={lastAmounts ?? new Map()}
+              lastAmounts={lastAmounts}
               footer={isSearching ? <SearchingRow /> : null}
             />
           )}
@@ -453,8 +453,8 @@ function BrowsePanel({
                       picked={picked}
                       onToggle={toggle}
                       saved={savedIds}
-                      lastAmounts={lastAmounts ?? new Map()}
-                              isRemovable
+                      lastAmounts={lastAmounts}
+                      isRemovable
                     />
                   )}
                 </>

@@ -52,8 +52,7 @@ export function RecipesScreen({
   const todayEntries = useLiveQuery(() => repo.entriesForDay(today), [today], [])
   const recentCuisines = useLiveQuery(() => repo.recentRecipeCuisines(), [], [])
 
-  const all = recipes ?? []
-  const left = targets ? remaining(dayTotals(todayEntries ?? []), targets) : null
+  const left = targets ? remaining(dayTotals(todayEntries), targets) : null
 
   // Ranked once for the whole list, so the "Suggested" order and each row's stated reason can't
   // disagree about why a recipe is where it is. Above the route branches, because hooks must run
@@ -64,14 +63,14 @@ export function RecipesScreen({
         {
           remainingKcal: left?.kcal ?? null,
           remainingProteinMg: left?.proteinMg ?? 0,
-          recipes: all,
-          usage: usage ?? new Map(),
-          recentCuisines: recentCuisines ?? [],
+          recipes,
+          usage,
+          recentCuisines,
           today,
         },
-        all.length,
+        recipes.length,
       ),
-    [all, usage, left?.kcal, left?.proteinMg, recentCuisines, today],
+    [recipes, usage, left?.kcal, left?.proteinMg, recentCuisines, today],
   )
 
   if (route.kind === 'edit') {
@@ -93,12 +92,12 @@ export function RecipesScreen({
   }
 
   const needle = query.trim().toLowerCase()
-  const visible = all
+  const visible = recipes
     .filter((recipe) => cuisines.length === 0 || cuisines.includes(recipe.cuisine ?? 'none'))
     .filter((recipe) => needle === '' || matches(recipe, needle))
-  const order = sortRecipes(visible, sort, ranked, usage ?? new Map())
+  const order = sortRecipes(visible, sort, ranked, usage)
 
-  const available = cuisinesPresent(all)
+  const available = cuisinesPresent(recipes)
   const isFiltered = needle !== '' || cuisines.length > 0
 
   return (
@@ -108,7 +107,7 @@ export function RecipesScreen({
       action={
         // Only once there's a list to sit above. With none, the empty state's own button is the
         // better target and two "new recipe" buttons on one screen is just noise.
-        all.length > 0 ? (
+        recipes.length > 0 ? (
           <button
             onClick={() => setRoute({ kind: 'edit', id: null })}
             aria-label="New recipe"
@@ -121,7 +120,7 @@ export function RecipesScreen({
       }
     >
       {header}
-      {all.length === 0 ? (
+      {recipes.length === 0 ? (
         <>
           <Card className="p-4 text-[13.5px] text-ink-muted">
             Nothing yet. A recipe is worth it for anything you cook in a batch — enter the
@@ -192,7 +191,7 @@ export function RecipesScreen({
               <ul className="divide-y divide-line">
                 {order.map((recipe) => {
                   const each = perServing(recipe)
-                  const cooked = usage?.get(recipe.id)
+                  const cooked = usage.get(recipe.id)
                   const why = sort === 'suggested' ? whyOf(ranked, recipe.id) : null
                   return (
                     <li key={recipe.id}>

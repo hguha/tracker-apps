@@ -14,8 +14,8 @@ export function WeighInCard() {
   const units = useUnits()
   const [value, setValue] = useState('')
 
-  const trend = weightTrend(rows ?? [])
-  const todayRow = (rows ?? []).find((row) => row.day === today)
+  const trend = weightTrend(rows)
+  const todayRow = rows.find((row) => row.day === today)
   const latest = trend[trend.length - 1]
 
   if (todayRow) {

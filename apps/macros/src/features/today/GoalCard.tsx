@@ -26,7 +26,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   const units = useUnits()
   const [isOpen, setIsOpen] = useState(false)
 
-  const trend = weightTrend(weights ?? [])
+  const trend = weightTrend(weights)
   const latest = trend[trend.length - 1]
   if (!program || !latest) return null
 
@@ -109,7 +109,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
   }
 
   const remaining = Math.abs(convertWeight(progress.remainingKg, units.weight))
-  const needsAttention = forecast !== null && forecast !== undefined && forecast.pace !== 'matches'
+  const needsAttention = forecast !== null && forecast.pace !== 'matches'
 
   return (
     <Card className="p-4">
@@ -148,7 +148,7 @@ export function GoalCard({ onOpenTargets }: { onOpenTargets: () => void }) {
       >
         <span className="min-w-0 flex-1 text-[13px]">
           <Headline
-            forecast={forecast ?? null}
+            forecast={forecast}
             program={program}
             isReached={progress.isReached}
           />

@@ -64,7 +64,7 @@ export function TodayScreen({
 
   const totals = dayTotals(entries)
   const left = targets ? remaining(totals, targets) : null
-  const weekDayCount = new Set((week ?? []).map((entry) => entry.day)).size
+  const weekDayCount = new Set(week.map((entry) => entry.day)).size
   const goals =
     loaded && profile && goalInputs
       ? dailyGoals({
@@ -98,7 +98,7 @@ export function TodayScreen({
         left={left}
         window={profile?.eatingWindow ?? null}
         entries={entries}
-        missing={missingForTarget(profile, program != null, weights ?? [])}
+        missing={missingForTarget(profile, program != null, weights)}
         onFix={onOpenAbout}
         onOpenDay={() => onOpenDay(today)}
       />
@@ -127,7 +127,7 @@ export function TodayScreen({
 
       {weekDayCount > 0 && (
         <NutritionCard
-          nutrition={dailyAverageCovered(week ?? [])}
+          nutrition={dailyAverageCovered(week)}
           dayCount={weekDayCount}
           sex={profile?.sex ?? null}
           entries={week ?? []}

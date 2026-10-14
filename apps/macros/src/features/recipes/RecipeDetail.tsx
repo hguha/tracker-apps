@@ -59,7 +59,7 @@ export function RecipeDetail({
 
   const each = perServing(recipe)
   const portion = scale(each, servings)
-  const cooked = usage?.get(recipe.id)
+  const cooked = usage.get(recipe.id)
 
   /**
    * One way to log a recipe, everywhere.
@@ -175,7 +175,7 @@ export function RecipeDetail({
           {recipe.ingredients.map((ingredient) => (
             <li key={ingredient.id} className="flex items-baseline gap-2 px-4 py-2">
               <span className="min-w-0 flex-1 truncate text-[13.5px]">
-                {(ingredient.foodId ? foods?.get(ingredient.foodId)?.description : null) ??
+                {(ingredient.foodId ? foods.get(ingredient.foodId)?.description : null) ??
                   ingredient.label}
                 {ingredient.foodId === null && (
                   <span className="text-[11.5px]" style={{ color: 'var(--status-serious)' }}>
@@ -189,7 +189,7 @@ export function RecipeDetail({
               <span className="tabular shrink-0 text-[13px] text-ink-muted">
                 {ingredientAmount(
                   ingredient,
-                  ingredient.foodId ? foods?.get(ingredient.foodId) : null,
+                  ingredient.foodId ? foods.get(ingredient.foodId) : null,
                   units,
                 )}
               </span>

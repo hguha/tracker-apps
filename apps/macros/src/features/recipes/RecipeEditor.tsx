@@ -126,7 +126,7 @@ export function RecipeEditor({
         amount: row.amount ?? null,
       })),
     },
-    foods ?? new Map(),
+    foods,
   )
   const each = scale(total, 1 / Math.max(1, servings))
   const unmatched = rows.filter((row) => row.foodId === null && !row.isMatching).length
@@ -271,7 +271,7 @@ export function RecipeEditor({
       const { meal, at, venue } = log.target
       const kind = aiSource ?? 'recipe'
       if (rows.length === 1 && counted.length === 1) {
-        const food = foods?.get(counted[0]!.foodId!)
+        const food = foods.get(counted[0]!.foodId!)
         if (!food) return
         await repo.logFood({
           food,
@@ -359,7 +359,7 @@ export function RecipeEditor({
         {rows.length > 0 && (
           <ul className="divide-y divide-line px-4">
             {rows.map((row) => {
-              const food = row.foodId === null ? undefined : foods?.get(row.foodId)
+              const food = row.foodId === null ? undefined : foods.get(row.foodId)
               const isSwapping = swapping === row.key || (row.foodId === null && !row.isMatching)
               return (
                 <AmountRow

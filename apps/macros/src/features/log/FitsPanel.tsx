@@ -46,7 +46,7 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
   const recentCuisines = useLiveQuery(() => repo.recentRecipeCuisines(), [], [])
 
   const savedIds = profile?.favouriteFoodIds ?? []
-  const candidateIds = [...savedIds, ...(frequentIds ?? []).filter((id) => !savedIds.includes(id))]
+  const candidateIds = [...savedIds, ...frequentIds.filter((id) => !savedIds.includes(id))]
   const candidates = useLiveQuery(
     () => repo.foodsInOrder(candidateIds),
     [candidateIds.join(',')],
@@ -61,13 +61,13 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
     const fromRecipes: Fit[] = recommendRecipes({
       remainingKcal: left.kcal,
       remainingProteinMg: left.proteinMg,
-      recipes: recipes ?? [],
-      usage: usage ?? new Map(),
-      recentCuisines: recentCuisines ?? [],
+      recipes,
+      usage,
+      recentCuisines,
       today,
     }).map(({ recipe, why }) => ({ ...fromRecipe(recipe, why), source: 'recipes' }))
 
-    const fromFoods: Fit[] = suggestFoods(left, candidates ?? []).map((suggestion) => ({
+    const fromFoods: Fit[] = suggestFoods(left, candidates).map((suggestion) => ({
       key: `f:${suggestion.food.id}`,
       title: suggestion.food.description,
       nutrients: suggestion.nutrients,
