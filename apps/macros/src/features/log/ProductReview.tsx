@@ -71,7 +71,7 @@ export function ProductReview({
         Change the numbers
       </button>
 
-      <Refine onRefine={onRefine} isBusy={false} placeholder="Not that one? e.g. the large size" />
+      <Refine onRefine={onRefine} placeholder="Not that one? e.g. the large size" />
     </div>
   )
 }

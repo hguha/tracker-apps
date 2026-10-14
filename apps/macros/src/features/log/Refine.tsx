@@ -3,12 +3,10 @@ import { Sparkles } from 'lucide-react'
 
 export function Refine({
   onRefine,
-  isBusy,
-  placeholder = 'Missed something? e.g. zucchini, not plain',
+  placeholder,
 }: {
   onRefine: (extra: string) => void
-  isBusy: boolean
-  placeholder?: string
+  placeholder: string
 }) {
   const [extra, setExtra] = useState('')
 
@@ -25,7 +23,7 @@ export function Refine({
       />
       <button
         onClick={() => extra.trim() && onRefine(extra)}
-        disabled={isBusy || extra.trim().length === 0}
+        disabled={extra.trim().length === 0}
         className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-wash text-accent disabled:opacity-40 active:opacity-60"
         aria-label="Ask again with this detail"
       >
