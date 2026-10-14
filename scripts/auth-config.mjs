@@ -20,6 +20,8 @@
  * storage container). See features/auth/SignInScreen.tsx.
  */
 
+import { execFileSync } from 'node:child_process'
+
 const APPS = {
   reputation: {
     ref: 'orzuzeojacttsxiydwye',
@@ -56,7 +58,7 @@ if (!APP) {
   process.exit(1)
 }
 
-const ACCENT = APP.accent
+const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 const INK = '#0b0b0b'
 const MUTED = '#6b6a66'
 const LINE = '#e6e5e0'
@@ -70,14 +72,14 @@ function shell({ heading, lead, codeLabel, footer }) {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px;background:#ffffff;border:1px solid ${LINE};border-radius:14px">
         <tr>
           <td style="padding:28px 28px 0">
-            <p style="margin:0;font:700 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:.02em;color:${ACCENT}">${APP.name}</p>
-            <h1 style="margin:14px 0 0;font:700 22px/1.25 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${INK}">${heading}</h1>
-            <p style="margin:10px 0 0;font:400 15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">${lead}</p>
+            <p style="margin:0;font:700 15px/1 ${SANS};letter-spacing:.02em;color:${APP.accent}">${APP.name}</p>
+            <h1 style="margin:14px 0 0;font:700 22px/1.25 ${SANS};color:${INK}">${heading}</h1>
+            <p style="margin:10px 0 0;font:400 15px/1.55 ${SANS};color:${MUTED}">${lead}</p>
           </td>
         </tr>
         <tr>
           <td style="padding:22px 28px 0">
-            <p style="margin:0 0 8px;font:600 11px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:${MUTED}">${codeLabel}</p>
+            <p style="margin:0 0 8px;font:600 11px/1 ${SANS};letter-spacing:.09em;text-transform:uppercase;color:${MUTED}">${codeLabel}</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${PAGE};border:1px solid ${LINE};border-radius:10px">
               <tr>
                 <td align="center" style="padding:16px 12px">
@@ -85,23 +87,23 @@ function shell({ heading, lead, codeLabel, footer }) {
                 </td>
               </tr>
             </table>
-            <p style="margin:10px 0 0;font:400 13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">Type it into the app on the device you're using. It expires in an hour and works once.</p>
+            <p style="margin:10px 0 0;font:400 13px/1.5 ${SANS};color:${MUTED}">Type it into the app on the device you're using. It expires in an hour and works once.</p>
           </td>
         </tr>
         <tr>
           <td style="padding:22px 28px 26px">
             <div style="height:1px;background:${LINE};font-size:0;line-height:0">&nbsp;</div>
-            <p style="margin:16px 0 0;font:400 12.5px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">${footer}</p>
+            <p style="margin:16px 0 0;font:400 12.5px/1.55 ${SANS};color:${MUTED}">${footer}</p>
           </td>
         </tr>
       </table>
-      <p style="margin:16px 0 0;font:400 11.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED}">${APP.name} — ${APP.tagline}</p>
+      <p style="margin:16px 0 0;font:400 11.5px/1.5 ${SANS};color:${MUTED}">${APP.name} — ${APP.tagline}</p>
     </td>
   </tr>
 </table>`
 }
 
-export const TEMPLATES = {
+const TEMPLATES = {
   mailer_subjects_confirmation: `Your ${APP.name} confirmation code`,
   mailer_templates_confirmation_content: shell({
     heading: 'Confirm your email',
@@ -135,11 +137,8 @@ export const TEMPLATES = {
   uri_allow_list: APP.redirects.join(','),
 }
 
-const PROJECT_REF = APP.ref
-
-async function accessToken() {
+function accessToken() {
   if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN
-  const { execFileSync } = await import('node:child_process')
   const raw = execFileSync('security', [
     'find-generic-password',
     '-s',
@@ -177,11 +176,11 @@ if (!isApply) {
   for (const [key, value] of Object.entries(TEMPLATES)) {
     console.log(`${key} = ${typeof value === 'number' || key.startsWith('site') || key.startsWith('uri') ? value : `${value.length} chars`}`)
   }
-  console.log('\nRe-run with --apply to PATCH project', PROJECT_REF)
+  console.log('\nRe-run with --apply to PATCH project', APP.ref)
 } else {
-  const token = await accessToken()
+  const token = accessToken()
   const response = await fetch(
-    `https://api.supabase.com/v1/projects/${PROJECT_REF}/config/auth`,
+    `https://api.supabase.com/v1/projects/${APP.ref}/config/auth`,
     {
       method: 'PATCH',
       headers: {
@@ -201,7 +200,7 @@ if (!isApply) {
     process.exit(1)
   }
   const hasLink = (s) => typeof s === 'string' && s.includes('ConfirmationURL')
-  console.log('Applied to', PROJECT_REF)
+  console.log('Applied to', APP.ref)
   console.log('  otp length:', body.mailer_otp_length)
   console.log('  site url:', body.site_url)
   console.log('  redirects:', body.uri_allow_list)
