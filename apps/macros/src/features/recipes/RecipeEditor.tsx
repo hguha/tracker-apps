@@ -35,12 +35,12 @@ import {
   type Row,
 } from './rows'
 
-export interface LogMode {
+interface LogMode {
   target: LogTarget
   title: string
-  when?: React.ReactNode
+  when: React.ReactNode
   onLogged: (count: number) => void
-  onProduct?: (product: FoodDraft, text: string) => void
+  onProduct: (product: FoodDraft, text: string) => void
 }
 
 export type ComposeStart =
@@ -153,7 +153,7 @@ export function RecipeEditor({
     try {
       let draft = await read()
       if (draft.product) {
-        if (log?.onProduct && rows.length === 0) {
+        if (log && rows.length === 0) {
           log.onProduct(draft.product, text)
           return
         }

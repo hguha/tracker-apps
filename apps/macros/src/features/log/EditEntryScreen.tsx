@@ -204,7 +204,7 @@ function Editor({
     const units = describeLoggable(loggable, borrowed).units
     return (
       <div className="pt-3">
-        {when && <div className="px-4">{when}</div>}
+        <div className="px-4">{when}</div>
         <AddPanel
           loggable={loggable}
           target={{ meal, at, venue: first.venue }}
@@ -247,7 +247,7 @@ function Editor({
 
   return (
     <div className="pt-3">
-      {when && <div className="px-4">{when}</div>}
+      <div className="px-4">{when}</div>
       <AddPanel
         loggable={loggable}
         target={{ meal, at, venue: first.venue }}
