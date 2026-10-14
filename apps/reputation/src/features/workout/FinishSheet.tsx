@@ -55,8 +55,6 @@ export function FinishSheet({
       byRegionMap.set(region, (byRegionMap.get(region) ?? 0) + exerciseVolume)
     }
 
-    const byRegion = byRegionMap
-
     return {
       workout,
       profile,
@@ -65,7 +63,7 @@ export function FinishSheet({
       completedSets,
       cardioSeconds,
       // Drop zero-volume regions: cardio has no volume load (§8.1), so 0% would mislead.
-      byRegion: [...byRegion]
+      byRegion: [...byRegionMap]
         .filter(([, value]) => value > 0)
         .sort((a, b) => b[1] - a[1]),
       isFromTemplate: workout.templateId !== null,
@@ -181,9 +179,9 @@ export function FinishSheet({
                   key={region}
                   style={{
                     width: `${(value / totalRegionVolume) * 100}%`,
-                    background: regionVar(region as Region),
+                    background: regionVar(region),
                   }}
-                  title={`${REGION_LABELS[region as Region]}`}
+                  title={REGION_LABELS[region]}
                 />
               ))}
             </div>
@@ -193,11 +191,11 @@ export function FinishSheet({
                 <span key={region} className="flex items-center gap-1.5 text-[12.5px]">
                   <span
                     className="size-2.5 rounded-full"
-                    style={{ background: regionVar(region as Region) }}
+                    style={{ background: regionVar(region) }}
                     aria-hidden
                   />
                   <span className="text-ink-secondary">
-                    {REGION_LABELS[region as Region]}
+                    {REGION_LABELS[region]}
                   </span>
                   <span className="tabular text-ink-muted">
                     {Math.round((value / totalRegionVolume) * 100)}%
@@ -243,11 +241,11 @@ export function FinishSheet({
 function StatTile({
   label,
   value,
-  index = 0,
+  index,
 }: {
   label: string
   value: string
-  index?: number
+  index: number
 }) {
   return (
     <div

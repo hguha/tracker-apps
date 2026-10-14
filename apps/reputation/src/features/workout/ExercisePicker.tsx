@@ -205,12 +205,12 @@ export function ExercisePicker({
         )}
       </div>
 
-      {chosen && loadModeIsChosen(chosen.trackingType) && (
+      {data && chosen && loadModeIsChosen(chosen.trackingType) && (
         <LoadModeSheet
           exerciseName={chosen.name}
-          lastUsed={data?.lastLoadModeByExerciseId.get(chosen.id) ?? null}
-          bodyweightKg={data?.bodyweightKg ?? null}
-          unitWeight={data?.unitWeight ?? 'lb'}
+          lastUsed={data.lastLoadModeByExerciseId.get(chosen.id) ?? null}
+          bodyweightKg={data.bodyweightKg}
+          unitWeight={data.unitWeight}
           onPick={(loadMode) =>
             onPick(chosen.id, defaultEquipmentForTracking(chosen.trackingType), loadMode)
           }
@@ -218,10 +218,12 @@ export function ExercisePicker({
         />
       )}
 
-      {chosen && equipmentIsChosen(chosen.trackingType) && (
-        <EquipmentSheet
+      {data && chosen && equipmentIsChosen(chosen.trackingType) && (
+        <ChoiceGridSheet
           exerciseName={chosen.name}
-          lastUsed={data?.lastEquipmentByExerciseId.get(chosen.id) ?? null}
+          options={EQUIPMENT}
+          lastUsed={data.lastEquipmentByExerciseId.get(chosen.id) ?? null}
+          labelOf={humanizeSlug}
           onPick={(equipment) => onPick(chosen.id, equipment, null)}
           onDismiss={() => setChosenId(null)}
         />
@@ -293,29 +295,6 @@ function ChoiceGridSheet<T extends string>({
       {/* Breathing room below; the panel itself only carries safe-area pad. */}
       <div className="h-8" />
     </BottomSheet>
-  )
-}
-
-function EquipmentSheet({
-  exerciseName,
-  lastUsed,
-  onPick,
-  onDismiss,
-}: {
-  exerciseName: string
-  lastUsed: Equipment | null
-  onPick: (equipment: Equipment) => void
-  onDismiss: () => void
-}) {
-  return (
-    <ChoiceGridSheet
-      exerciseName={exerciseName}
-      options={EQUIPMENT}
-      lastUsed={lastUsed}
-      labelOf={humanizeSlug}
-      onPick={onPick}
-      onDismiss={onDismiss}
-    />
   )
 }
 

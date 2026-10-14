@@ -83,9 +83,7 @@ export function ExerciseDetailSheet({
   const { exercise, records, sessions } = detail
   // "This session" must be matched by id; falling back to sessions[0] would show
   // the most recent historical session's numbers before anything is logged here.
-  const thisSession = currentWorkoutId
-    ? sessions.find((s) => s.workoutId === currentWorkoutId)
-    : sessions[0]
+  const thisSession = sessions.find((s) => s.workoutId === currentWorkoutId)
 
   function formatRecordValue(type: RecordType, value: number): string {
     switch (type) {
@@ -215,36 +213,33 @@ export function ExerciseDetailSheet({
         <Section title="Details">
           <dl className="space-y-1.5 text-[13.5px]">
             <Row label="Tracked as" value={humanizeSlug(exercise.trackingType)} />
-            {sessionRow?.loadMode != null &&
-              (workoutExerciseId === undefined ? (
-                <Row label="Load" value={LOAD_MODE_LABELS[sessionRow.loadMode]} />
-              ) : (
-                // Switchable in place: adding weight to a set mid-session used to
-                // mean adding the movement a second time under a different mode,
-                // which left two identical-looking cards in one workout.
-                <div className="flex items-center justify-between gap-3 py-0.5">
-                  <dt className="text-ink-secondary">Load</dt>
-                  <dd className="flex shrink-0 gap-1">
-                    {LOAD_MODES.map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() =>
-                          void repo.updateWorkoutExercise(workoutExerciseId, {
-                            loadMode: mode,
-                          })
-                        }
-                        className={
-                          sessionRow.loadMode === mode
-                            ? 'rounded-md bg-accent px-2 py-1 text-[12px] font-semibold text-accent-contrast'
-                            : 'rounded-md bg-sunken px-2 py-1 text-[12px] font-semibold text-ink-secondary active:opacity-60'
-                        }
-                      >
-                        {LOAD_MODE_LABELS[mode]}
-                      </button>
-                    ))}
-                  </dd>
-                </div>
-              ))}
+            {workoutExerciseId !== undefined && sessionRow?.loadMode != null && (
+              // Switchable in place: adding weight to a set mid-session used to
+              // mean adding the movement a second time under a different mode,
+              // which left two identical-looking cards in one workout.
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <dt className="text-ink-secondary">Load</dt>
+                <dd className="flex shrink-0 gap-1">
+                  {LOAD_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() =>
+                        void repo.updateWorkoutExercise(workoutExerciseId, {
+                          loadMode: mode,
+                        })
+                      }
+                      className={
+                        sessionRow.loadMode === mode
+                          ? 'rounded-md bg-accent px-2 py-1 text-[12px] font-semibold text-accent-contrast'
+                          : 'rounded-md bg-sunken px-2 py-1 text-[12px] font-semibold text-ink-secondary active:opacity-60'
+                      }
+                    >
+                      {LOAD_MODE_LABELS[mode]}
+                    </button>
+                  ))}
+                </dd>
+              </div>
+            )}
             {exercise.bodyweightFactor !== null && (
               <Row
                 label="Bodyweight moved"
