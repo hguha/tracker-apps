@@ -5,8 +5,6 @@
  * Deliberately an `<img>` of the app's icon rather than inline SVG copied out of it: the icon is
  * already the mark, and a second copy in a component drifts from the one on the home screen.
  */
-import { site } from '@site'
-
 interface Props {
   size?: number
   class?: string
@@ -14,4 +12,4 @@ interface Props {
 const { size = 32, class: className } = Astro.props
 ---
 
-<img src="/icon.svg" width={size} height={size} alt={site.name} class={className} />
+<img src="/icon.svg" width={size} height={size} alt="" class={className} />
