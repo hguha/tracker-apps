@@ -72,7 +72,7 @@ export async function searchHistory(
   if (terms.length === 0) return []
 
   const from = dayKeyOffset(Date.now(), days)
-  const entries = await entriesBetween(from, dayKey(Date.now()))
+  const entries = (await entriesBetween(from, dayKey(Date.now()))).sort(byRecency)
   const foods = await foodsByIds(entries.map((entry) => entry.foodId))
   const hits = (text: string) => {
     const lower = text.toLowerCase()
@@ -81,8 +81,7 @@ export async function searchHistory(
 
   // One group per dish *name*, holding every sitting of it.
   const byName = new Map<string, Map<string, LogEntry[]>>()
-  const byFood = new Map<string, { entry: LogEntry; times: number }>()
-  const byQuick = new Map<string, { entry: LogEntry; times: number }>()
+  const loose: Tally = new Map()
   for (const entry of entries) {
     if (entry.dishId !== null && entry.dishName !== null) {
       if (!hits(entry.dishName)) continue
@@ -95,25 +94,10 @@ export async function searchHistory(
     // A food that only ever arrived inside a dish is left out for the same reason it is in
     // `recentItems`: "Cheese, ricotta" is not something anybody logged, it came with the lasagna.
     if (entry.dishId !== null) continue
-    if (entry.foodId === null) {
-      const key = quickKey(entry)
-      if (key === null || !hits(entry.note ?? '')) continue
-      const current = byQuick.get(key)
-      if (!current) byQuick.set(key, { entry, times: 1 })
-      else {
-        current.times += 1
-        if (entry.eatenAt > current.entry.eatenAt) current.entry = entry
-      }
-      continue
-    }
-    const food = foods.get(entry.foodId)
-    if (!food || !hits(food.description)) continue
-    const current = byFood.get(entry.foodId)
-    if (!current) byFood.set(entry.foodId, { entry, times: 1 })
-    else {
-      current.times += 1
-      if (entry.eatenAt > current.entry.eatenAt) current.entry = entry
-    }
+    const key = entry.foodId ?? quickKey(entry)
+    const text = entry.foodId === null ? (entry.note ?? '') : foods.get(entry.foodId)?.description
+    if (key === null || text === undefined || !hits(text)) continue
+    tally(loose, key, entry)
   }
 
   const items: RecentItem[] = []
@@ -134,24 +118,7 @@ export async function searchHistory(
         .filter(Boolean),
     })
   }
-  for (const { entry, times } of byFood.values()) {
-    const food = foods.get(entry.foodId!)
-    if (!food) continue
-    items.push({
-      kind: 'food',
-      food,
-      lastAt: entry.eatenAt,
-      times,
-      amount:
-        entry.grams > 0
-          ? { grams: entry.grams, portionId: entry.portionId, portionCount: entry.portionCount }
-          : null,
-    })
-  }
-  for (const { entry, times } of byQuick.values()) {
-    const quick = asQuick(entry, times)
-    if (quick) items.push(quick)
-  }
+  items.push(...looseItems(loose, foods))
 
   return items.sort((a, b) => b.lastAt - a.lastAt).slice(0, limit)
 }
@@ -298,20 +265,31 @@ export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> 
     }
   })
 
-  const byFood = new Map<string, { entry: LogEntry; times: number }>()
+  const tallied: Tally = new Map()
   for (const entry of loose) {
     const key = entry.foodId ?? quickKey(entry)
-    if (key === null) continue
-    const current = byFood.get(key)
-    if (!current) byFood.set(key, { entry, times: 1 })
-    else {
-      current.times += 1
-      current.entry = entry
-    }
+    if (key !== null) tally(tallied, key, entry)
   }
 
-  const items: RecentItem[] = [...dishes]
-  for (const { entry, times } of byFood.values()) {
+  return [...dishes, ...looseItems(tallied, foods)]
+    .sort((a, b) => b.lastAt - a.lastAt)
+    .slice(0, limit)
+}
+
+type Tally = Map<string, { entry: LogEntry; times: number }>
+
+function tally(into: Tally, key: string, entry: LogEntry): void {
+  const current = into.get(key)
+  if (!current) into.set(key, { entry, times: 1 })
+  else {
+    current.times += 1
+    current.entry = entry
+  }
+}
+
+function looseItems(tallied: Tally, foods: ReadonlyMap<string, Food>): RecentItem[] {
+  const items: RecentItem[] = []
+  for (const { entry, times } of tallied.values()) {
     const food = entry.foodId ? foods.get(entry.foodId) : undefined
     if (!food) {
       const quick = asQuick(entry, times)
@@ -328,6 +306,5 @@ export async function recentItems(days = 30, limit = 40): Promise<RecentItem[]> 
         : null,
     })
   }
-
-  return items.sort((a, b) => b.lastAt - a.lastAt).slice(0, limit)
+  return items
 }
