@@ -7,10 +7,11 @@ import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { BottomSheet } from '@/components/BottomSheet'
 import { useToast } from '@/components/Toast'
-import type { WeightUnit } from '@/domain/types'
+import { SectionLabel } from '@tracker-engine/ui'
+import type { Equipment, WeightUnit } from '@/domain/types'
 import { buildCoachContext, type CoachContext } from '../context'
 import { describePlanExerciseLoad } from '../tools'
-import type { CoachAction, CoachPlan } from '../types'
+import type { CoachAction, CoachPlan, PlanExercise } from '../types'
 
 export function ActionCard({
   action,
@@ -60,6 +61,28 @@ function ExerciseRow({
           {note}
         </p>
       )}
+    </div>
+  )
+}
+
+function PlanExerciseRows({
+  exercises,
+  weightUnit,
+}: {
+  exercises: PlanExercise[]
+  weightUnit: WeightUnit
+}) {
+  return (
+    <div className="divide-y divide-line">
+      {exercises.map((e, ei) => (
+        <ExerciseRow
+          key={ei}
+          name={e.name}
+          load={describePlanExerciseLoad(e, weightUnit)}
+          note={e.note}
+          autoProgress={e.autoProgress}
+        />
+      ))}
     </div>
   )
 }
@@ -117,17 +140,7 @@ function PlanCard({
             <p className="border-b border-line px-3 py-2 text-[14px] font-semibold">
               {session.name}
             </p>
-            <div className="divide-y divide-line">
-              {session.exercises.map((e, ei) => (
-                <ExerciseRow
-                  key={ei}
-                  name={e.name}
-                  load={describePlanExerciseLoad(e, weightUnit)}
-                  note={e.note}
-                  autoProgress={e.autoProgress}
-                />
-              ))}
-            </div>
+            <PlanExerciseRows exercises={session.exercises} weightUnit={weightUnit} />
           </div>
         ))}
       </div>
@@ -174,17 +187,7 @@ function TemplateUpdateCard({
       <SectionLabel>Update “{action.templateName}”</SectionLabel>
       {action.note && <p className="mt-1 text-[13.5px] text-ink-secondary">{action.note}</p>}
       <div className="mt-3 rounded-xl border border-line">
-        <div className="divide-y divide-line">
-          {action.session.exercises.map((e, ei) => (
-            <ExerciseRow
-              key={ei}
-              name={e.name}
-              load={describePlanExerciseLoad(e, weightUnit)}
-              note={e.note}
-              autoProgress={e.autoProgress}
-            />
-          ))}
-        </div>
+        <PlanExerciseRows exercises={action.session.exercises} weightUnit={weightUnit} />
       </div>
       <p className="mt-2 text-[12px] text-ink-muted">
         This replaces the template's exercises. Nothing is applied until you tap below.
@@ -208,9 +211,9 @@ function AccessoryCard({
   const toast = useToast()
   const [added, setAdded] = useState<Set<number>>(new Set())
 
-  async function add(index: number, name: string, equipment: string | null) {
+  async function add(index: number, name: string, equipment: Equipment | null) {
     const library = await repo.listExercises()
-    const hit = buildExerciseResolver(library)(name, (equipment as never) ?? null)
+    const hit = buildExerciseResolver(library)(name, equipment)
     if (!hit) return void toast.show(`Couldn't find "${name}" in your library`)
     const active = await repo.getActiveWorkout()
     if (!active) return void toast.show('Start a workout to add this')
@@ -275,13 +278,5 @@ export function ContextDisclosure({
         {context ? JSON.stringify(context, null, 2) : 'Building…'}
       </pre>
     </BottomSheet>
-  )
-}
-
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
-      {children}
-    </p>
   )
 }
