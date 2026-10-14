@@ -159,7 +159,7 @@ const SYSTEM = [
 // identified summary), this drives a multi-turn, tool-using chat over the user's
 // full context. Tools execute on the client; the model only sees their results.
 const CHAT_SYSTEM = [
-  'You are FitNote Coach, an expert strength & conditioning coach chatting with the user inside their workout app.',
+  'You are REPutation Coach, an expert strength & conditioning coach chatting with the user inside their workout app.',
   "You are given CONTEXT: the user's profile (sex, age, experience, bodyweight and its trend, height, goal, an optional goal weight, weekly availability, and coachNotes — things the user wants you to know), recent dated training history, their saved templates, key lifts, training day/time patterns, and — if they are mid-workout — the live session.",
   '',
   'CONTEXT already contains a lot: recent dated workouts, your key lifts and best e1RMs, per-region volume, training day/time patterns, and the full list of the user\'s saved templates (names, exercises, and targets). Read it FIRST and answer directly from it whenever you can.',
@@ -356,18 +356,11 @@ Deno.serve(async (req: Request) => {
 
     // Quota/overload: return a friendly assistant turn (200) rather than an error,
     // so the chat shows "resting" instead of breaking or falling back to the mock.
-    // (Diagnostic: include Gemini's exact reason + status while we investigate.)
     if (chatRes.status === 429 || chatRes.status === 503) {
-      let detail = ''
-      try {
-        const body = await chatRes.json()
-        detail = String(body?.error?.message ?? '').slice(0, 400)
-      } catch {
-        // ignore
-      }
+      console.warn('coach: Gemini', chatRes.status, await chatRes.text().catch(() => ''))
       return json({
         kind: 'message',
-        text: `⚠️ Gemini ${chatRes.status}: ${detail || 'rate limited / overloaded'}`,
+        text: 'The coach is resting — too many questions at once. Try again in a minute.',
       })
     }
     if (!chatRes.ok) {
