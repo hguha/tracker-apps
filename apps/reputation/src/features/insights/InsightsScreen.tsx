@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { TrendingUp } from 'lucide-react'
+import { SegmentedTabs } from '@tracker-engine/ui'
 import { FilterChipButton, FilterSheet } from '@/components/FilterSheet'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
 import { useInsightsData, type InsightsFilters } from './useInsightsData'
 import { CHART_CATALOG, SUB_TABS, filtersForSubTab, type ChartContext } from './catalog'
 import { ExerciseFilterSheet } from './ExerciseFilterSheet'
-import { cn } from '@/lib/cn'
 
 const RANGES = [
   { key: '4w', label: '4 weeks', weeks: 4 },
@@ -56,21 +56,13 @@ export function InsightsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1.5">
-        {SUB_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setSubTabKey(tab.key)}
-            className={cn(
-              'shrink-0 rounded-lg px-3 py-1.5 text-[13.5px] font-semibold',
-              subTab.key === tab.key
-                ? 'bg-accent-wash text-accent'
-                : 'text-ink-secondary active:bg-sunken',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="border-b border-line bg-surface px-2 py-1.5">
+        <SegmentedTabs
+          variant="underline"
+          tabs={SUB_TABS}
+          active={subTab.key}
+          onSelect={setSubTabKey}
+        />
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto border-b border-line bg-surface px-3 py-2">
