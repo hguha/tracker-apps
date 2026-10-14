@@ -1,5 +1,4 @@
 import { plural } from '@tracker-engine/core'
-import { buildExerciseResolver } from './resolveExerciseName'
 import { db, syncStamp } from '@/db/database'
 import { getActiveUserId } from '@/db/seed'
 import {
@@ -15,6 +14,7 @@ import { lastEquipmentMap, listExercises } from './exercises'
 import { enqueue, newId, patchRow } from './outbox'
 import { getProfile } from './profile'
 import { getLastPerformance } from './records'
+import { buildExerciseResolver, type ExerciseResolver } from './resolveExerciseName'
 import { addSet, listSets, type SetPlaceholder } from './sets'
 import { type WorkoutPreview } from './summaries'
 import {
@@ -144,49 +144,69 @@ export async function reorderTemplateExercises(orderedIds: string[]): Promise<vo
   }
 }
 
+interface PlanExercise {
+  name: string
+  sets: number
+  repLow: number
+  repHigh: number
+  weight: number | null
+  equipment?: Equipment | null
+  autoProgress?: boolean
+}
+
+interface ResolvedPlanExercise {
+  pe: PlanExercise
+  hit: { exerciseId: string; equipment: Equipment }
+}
+
+// The coach answers with names like "Cable Face Pull"; equipment is a separate
+// column here, so the name has to be split into both. This used to stamp every
+// plan exercise `barbell`, which turned a cable movement into "Barbell Face Pull"
+// and filed its records under an implement the user never touched.
+async function planResolver(): Promise<ExerciseResolver> {
+  return buildExerciseResolver(await listExercises(), await lastEquipmentMap())
+}
+
+function resolvePlanExercises(
+  resolve: ExerciseResolver,
+  exercises: PlanExercise[],
+  unmatched: string[],
+): ResolvedPlanExercise[] {
+  const resolved: ResolvedPlanExercise[] = []
+  for (const pe of exercises) {
+    const hit = resolve(pe.name, pe.equipment ?? null)
+    if (hit) resolved.push({ pe, hit })
+    else unmatched.push(pe.name)
+  }
+  return resolved
+}
+
+function planTargets(pe: PlanExercise, unitWeight: WeightUnit): Partial<TemplateExercise> {
+  const incrementKg = unitWeight === 'kg' ? 2.5 : weightToKg(5, 'lb')
+  return {
+    targetSets: pe.sets,
+    targetRepsLow: pe.repLow,
+    targetRepsHigh: pe.repHigh,
+    targetWeightKg: pe.weight === null ? null : weightToKg(pe.weight, unitWeight),
+    progression: pe.autoProgress ? { kind: 'double', incrementKg, maxRpe: 8 } : null,
+  }
+}
+
 // Materialize a coach plan (§13) into templates, one per session. Exercises are matched
 // to the library by name/alias; unmatched names are skipped (not invented) and returned.
 
 export async function createTemplatesFromPlan(plan: {
-  sessions: {
-    name: string
-    exercises: {
-      name: string
-      sets: number
-      repLow: number
-      repHigh: number
-      weight: number | null
-      equipment?: Equipment | null
-      autoProgress?: boolean
-    }[]
-  }[]
+  sessions: { name: string; exercises: PlanExercise[] }[]
   unitWeight: WeightUnit
   folder?: string | null
 }): Promise<{ templateIds: string[]; unmatched: string[] }> {
-  // The coach answers with names like "Cable Face Pull"; equipment is a separate
-  // column here, so the name has to be split into both. This used to stamp every
-  // plan exercise `barbell`, which turned a cable movement into "Barbell Face Pull"
-  // and filed its records under an implement the user never touched.
-  const resolve = buildExerciseResolver(await listExercises(), await lastEquipmentMap())
-
-  const incrementKg = plan.unitWeight === 'kg' ? 2.5 : weightToKg(5, 'lb')
-
+  const resolve = await planResolver()
   const templateIds: string[] = []
   const unmatched: string[] = []
 
   for (const session of plan.sessions) {
     // Resolve matches first, so a session where nothing matched creates no empty template.
-    const matched = session.exercises.map((pe) => ({
-      pe,
-      hit: resolve(pe.name, pe.equipment ?? null),
-    }))
-    for (const { pe, hit } of matched) {
-      if (!hit) unmatched.push(pe.name)
-    }
-    const resolved = matched.filter(
-      (m): m is { pe: (typeof m)['pe']; hit: NonNullable<(typeof m)['hit']> } =>
-        m.hit !== null,
-    )
+    const resolved = resolvePlanExercises(resolve, session.exercises, unmatched)
     if (resolved.length === 0) continue
 
     const templateId = await createTemplate(session.name, plan.folder ?? null)
@@ -194,14 +214,7 @@ export async function createTemplatesFromPlan(plan: {
 
     for (const { pe, hit } of resolved) {
       const teId = await addExerciseToTemplate(templateId, hit.exerciseId, hit.equipment)
-      await updateTemplateExercise(teId, {
-        targetSets: pe.sets,
-        targetRepsLow: pe.repLow,
-        targetRepsHigh: pe.repHigh,
-        targetWeightKg:
-          pe.weight === null ? null : weightToKg(pe.weight, plan.unitWeight),
-        progression: pe.autoProgress ? { kind: 'double', incrementKg, maxRpe: 8 } : null,
-      })
+      await updateTemplateExercise(teId, planTargets(pe, plan.unitWeight))
     }
   }
 
@@ -213,29 +226,11 @@ export async function createTemplatesFromPlan(plan: {
 // unmatched names are skipped and returned, as in createTemplatesFromPlan.
 export async function applyPlanSessionToTemplate(
   templateId: string,
-  session: {
-    exercises: {
-      name: string
-      sets: number
-      repLow: number
-      repHigh: number
-      weight: number | null
-      equipment?: Equipment | null
-      autoProgress?: boolean
-    }[]
-  },
+  session: { exercises: PlanExercise[] },
   unitWeight: WeightUnit,
 ): Promise<{ unmatched: string[] }> {
-  const resolve = buildExerciseResolver(await listExercises(), await lastEquipmentMap())
-  const incrementKg = unitWeight === 'kg' ? 2.5 : weightToKg(5, 'lb')
-
   const unmatched: string[] = []
-  const desired = session.exercises
-    .map((pe) => ({ pe, hit: resolve(pe.name, pe.equipment ?? null) }))
-    .filter((m) => {
-      if (!m.hit) unmatched.push(m.pe.name)
-      return m.hit !== null
-    }) as { pe: (typeof session.exercises)[number]; hit: { exerciseId: string; equipment: Equipment } }[]
+  const desired = resolvePlanExercises(await planResolver(), session.exercises, unmatched)
 
   const current = await listTemplateExercises(templateId)
   const keyOf = (exerciseId: string, equipment: Equipment) => `${exerciseId}:${equipment}`
@@ -254,14 +249,7 @@ export async function applyPlanSessionToTemplate(
     const existing = currentByKey.get(keyOf(hit.exerciseId, hit.equipment))
     const teId =
       existing?.id ?? (await addExerciseToTemplate(templateId, hit.exerciseId, hit.equipment))
-    await updateTemplateExercise(teId, {
-      position,
-      targetSets: pe.sets,
-      targetRepsLow: pe.repLow,
-      targetRepsHigh: pe.repHigh,
-      targetWeightKg: pe.weight === null ? null : weightToKg(pe.weight, unitWeight),
-      progression: pe.autoProgress ? { kind: 'double', incrementKg, maxRpe: 8 } : null,
-    })
+    await updateTemplateExercise(teId, { position, ...planTargets(pe, unitWeight) })
   }
 
   return { unmatched }
