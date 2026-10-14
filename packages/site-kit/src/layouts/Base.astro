@@ -14,12 +14,8 @@ import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import { site } from '@site'
 
-interface Props {
-  title?: string
-  description?: string
-}
-
-const { title = `${site.name} — ${site.tagline}`, description = site.seoDescription } = Astro.props
+const title = `${site.name} — ${site.tagline}`
+const description = site.seoDescription
 
 const canonical = new URL(Astro.url.pathname, Astro.site ?? site.origin)
 
@@ -36,7 +32,7 @@ const jsonLd = {
   name: site.name,
   applicationCategory: site.applicationCategory,
   operatingSystem,
-  description: site.seoDescription,
+  description,
   author: { '@type': 'Person', name: site.author.name, url: site.author.url },
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 }
@@ -64,7 +60,6 @@ const jsonLd = {
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
 
     <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
-    <slot name="head" />
   </head>
 
   <body id="top">
