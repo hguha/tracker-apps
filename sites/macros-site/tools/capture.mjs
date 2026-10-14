@@ -279,7 +279,7 @@ async function shoot(page, take, want) {
         // is not one of them without a model, and a shot of it explaining the protein floor instead
         // would be advertising a miss.
         for (const question of ['How is my weight trending?', 'Why did my target change?']) {
-          await page.getByPlaceholder('Ask the coach').fill(question)
+          await page.getByPlaceholder(/^Ask your coach/).fill(question)
           await page.getByRole('button', { name: 'Send', exact: true }).click()
           await settle(page, 2600)
         }
