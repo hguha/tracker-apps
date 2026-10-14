@@ -17,8 +17,6 @@ export const assertDbOwner = (userId: string): Promise<boolean> => owner.assertO
 
 export const adoptSession = (userId: string) => owner.adopt(userId)
 
-export const getDbOwner = (): string | null => owner.currentOwner()
-
 export const setDbOwner = (userId: string): void => owner.setOwner(userId)
 
 export const clearDbOwner = (): void => owner.clearOwner()
