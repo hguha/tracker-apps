@@ -27,7 +27,7 @@ export interface TrendPoint {
 
 /** Half-life in days of the weight trend. Short enough to react within a week, long
  *  enough that a salty dinner doesn't move a calorie target. */
-export const TREND_HALF_LIFE_DAYS = 10
+const TREND_HALF_LIFE_DAYS = 10
 
 /**
  * Exponentially weighted trend over daily weigh-ins.
@@ -37,16 +37,13 @@ export const TREND_HALF_LIFE_DAYS = 10
  * last value flat through a week away would make the trend claim evidence it doesn't have,
  * and then lurch when weighing resumes.
  */
-export function weightTrend(
-  weights: readonly BodyWeight[],
-  halfLifeDays = TREND_HALF_LIFE_DAYS,
-): TrendPoint[] {
+export function weightTrend(weights: readonly BodyWeight[]): TrendPoint[] {
   const rows = [...weights]
     .filter((w) => w.deletedAt === null)
     .sort((a, b) => a.day.localeCompare(b.day))
   if (rows.length === 0) return []
 
-  const alpha = 1 - Math.pow(2, -1 / halfLifeDays)
+  const alpha = 1 - Math.pow(2, -1 / TREND_HALF_LIFE_DAYS)
   const out: TrendPoint[] = []
   let trend = rows[0]!.kg
 

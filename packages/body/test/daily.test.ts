@@ -1,16 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dailyWeights, earliestPerDay } from '../src/daily'
-
-describe('earliestPerDay', () => {
-  it('keeps the first reading of each day', () => {
-    const picked = earliestPerDay([
-      { day: '2026-10-01', at: 20, kg: 81 },
-      { day: '2026-10-01', at: 10, kg: 80 },
-      { day: '2026-10-02', at: 30, kg: 79 },
-    ])
-    expect(picked.map((sample) => sample.kg)).toEqual([80, 79])
-  })
-})
+import { dailyWeights } from '../src/daily'
 
 describe('dailyWeights', () => {
   const at = (day: string, hour: number) => Date.parse(`${day}T${String(hour).padStart(2, '0')}:00:00`)

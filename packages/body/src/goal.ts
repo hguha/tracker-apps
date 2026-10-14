@@ -98,7 +98,7 @@ export interface ScaleOutlook {
   latestAt: number | null
 }
 
-export const goalDirection = (fromKg: number, targetKg: number): Goal =>
+const goalDirection = (fromKg: number, targetKg: number): Goal =>
   targetKg < fromKg ? 'lose' : targetKg > fromKg ? 'gain' : 'maintain'
 
 export function scaleOutlook(inputs: {
