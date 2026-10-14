@@ -13,6 +13,9 @@ const owner = createOwnerGuard({
   claim: claimLocalData,
 })
 
+// Enforces that the local database holds only the signed-in account's data (§11.1.3),
+// since IndexedDB reads aren't scoped by user; switching accounts wipes the previous
+// one's rows. Returns whether it wiped, so the caller can resync rather than show an empty app.
 export const assertDbOwner = (userId: string): Promise<boolean> => owner.assertOwner(userId)
 
 export const adoptSession = (userId: string) => owner.adopt(userId)
@@ -20,17 +23,6 @@ export const adoptSession = (userId: string) => owner.adopt(userId)
 export const setDbOwner = (userId: string): void => owner.setOwner(userId)
 
 export const clearDbOwner = (): void => owner.clearOwner()
-
-// One-time migration to the base-exercise model. Runs at boot after seedIfNeeded()
-// has inserted the base rows. Repoints every workout/template exercise from an
-// equipment-named row ("barbell_bench_press") to its base ("bench_press") +
-// equipment, archives the old system variants, then rebuilds the
-// per-(exercise+equipment) records and last-time caches. Idempotent: a no-op once
-// everything already carries equipment.
-//
-// The synced tables are enqueued so the change reaches the server and supersedes
-// any stale queued entry; records and last-time are rebuilt locally (they never
-// sync). The server's own SQL migration keeps the DB self-consistent.
 
 export async function clearLocalData(): Promise<void> {
   await db.transaction(

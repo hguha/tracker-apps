@@ -30,6 +30,7 @@ import {
 } from './sets'
 import { getTemplate } from './templates'
 
+// Scanned not indexed: IndexedDB can't index the null endedAt that "unfinished" means (§4.4).
 export async function getActiveWorkout(): Promise<Workout | undefined> {
   const recent = await db.workouts.orderBy('startedAt').reverse().limit(20).toArray()
   return recent.find((w) => w.endedAt === null && w.deletedAt === null)
@@ -128,10 +129,6 @@ export async function beginWorkoutEdits(workoutId: string): Promise<void> {
     createdAt: Date.now(),
   })
 }
-
-// Clears deferrals left behind by a workout that is no longer in progress and is
-// not open for editing — an earlier build could strand them, and a held write is
-// invisible: it never pushes and nothing retries it. Returns how many it freed.
 
 export async function hasUnsavedWorkoutEdits(workoutId: string): Promise<boolean> {
   const held = await db.outbox.where('deferredForWorkoutId').equals(workoutId).count()
@@ -265,9 +262,6 @@ export async function restoreWorkout(id: string): Promise<void> {
   await requeueWorkoutSubtree(id)
   await rebuildLastPerformanceForWorkout(id)
 }
-
-// Re-queues a workout and everything under it, in parent-first order. Deferral is
-// re-applied by enqueue, so a restored in-progress session is held again.
 
 export async function listWorkoutExercises(
   workoutId: string,
@@ -412,8 +406,12 @@ export async function getSessionTitleSignals(workoutId: string): Promise<SetSign
   return signals
 }
 
-// ----- sets -----
-
+// Following a template ends the moment the exercise list diverges from it. The
+// session no longer describes that template, so keeping the link would credit it
+// as an instance and skew adherence — and would offer "save as template" for a
+// workout that already is one. Set-level changes are normal progression and don't
+// count; only the shape does. Returns the template's name for the UI to explain
+// the change, or null when there was nothing to detach.
 export async function detachWorkoutFromTemplate(
   workoutId: string,
 ): Promise<string | null> {
@@ -484,7 +482,8 @@ export async function getPlaceholderOverrides(
   return row?.placeholders ?? {}
 }
 
-// ----- body metrics -----
+// Tombstones finished workouts with no completed set (§6.4.1); these arrive via pull or
+// an interrupted session, never from finishWorkout. In-progress workouts are never touched.
 
 export async function purgeEmptyWorkouts(): Promise<number> {
   const finished = (await db.workouts.toArray()).filter(
@@ -500,7 +499,3 @@ export async function purgeEmptyWorkouts(): Promise<number> {
   }
   return removed
 }
-
-// Enforces that the local database holds only the signed-in account's data (§11.1.3),
-// since IndexedDB reads aren't scoped by user; switching accounts wipes the previous
-// one's rows. Returns whether it wiped, so the caller can resync rather than show an empty app.

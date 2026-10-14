@@ -160,5 +160,3 @@ export async function claimLocalData(newUserId: string): Promise<number> {
 
   return claimed
 }
-
-// ----- exercises -----

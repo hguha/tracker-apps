@@ -65,9 +65,6 @@ export async function addMetricEntry(input: {
   return entry.id
 }
 
-// Tombstones finished workouts with no completed set (§6.4.1); these arrive via pull or
-// an interrupted session, never from finishWorkout. In-progress workouts are never touched.
-
 export async function bodyweightTrend(
   now = Date.now(),
 ): Promise<{ trend: TrendPoint[]; kgPerWeek: number | null }> {

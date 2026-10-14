@@ -197,6 +197,8 @@ export async function endStaleEditSessions(): Promise<number> {
   return snapshots.length
 }
 
+// Re-queues a workout and everything under it, in parent-first order. Deferral is
+// re-applied by enqueue, so a restored in-progress session is held again.
 export async function requeueWorkoutSubtree(workoutId: string): Promise<void> {
   const workoutExercises = await db.workoutExercises
     .where('workoutId')

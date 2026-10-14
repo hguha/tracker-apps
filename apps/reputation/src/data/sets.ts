@@ -181,9 +181,6 @@ function hasAnyValue(v: SetPlaceholder): boolean {
   )
 }
 
-// Which record types the given values would beat, without writing (§6.2). Measured
-// against previous sessions only, like refreshPersonalRecords, so glow and toast agree.
-
 export interface SetPlaceholder {
   weightKg: number | null
   reps: number | null
@@ -226,5 +223,3 @@ export async function addSetWithPlaceholder(
   const setId = await addSet({ workoutExerciseId })
   return { setId }
 }
-
-// ----- templates -----

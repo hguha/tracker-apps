@@ -416,10 +416,3 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<stri
 
   return workoutId
 }
-
-// Following a template ends the moment the exercise list diverges from it. The
-// session no longer describes that template, so keeping the link would credit it
-// as an instance and skew adherence — and would offer "save as template" for a
-// workout that already is one. Set-level changes are normal progression and don't
-// count; only the shape does. Returns the template's name for the UI to explain
-// the change, or null when there was nothing to detach.

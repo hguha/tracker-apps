@@ -95,6 +95,8 @@ export async function listStalledLifts(
   return rows.sort((a, b) => b.weeksStalled - a.weeksStalled)
 }
 
+// Which record types the given values would beat, without writing (§6.2). Measured
+// against previous sessions only, like refreshPersonalRecords, so glow and toast agree.
 export async function previewRecords(
   exerciseId: string,
   equipment: Equipment,

@@ -13,8 +13,16 @@ import { backfillWorkoutBodyweights } from '../bodyweightBackfill'
 import { enqueue } from '../outbox'
 import { rebuildLastPerformance, refreshPersonalRecords } from '../records'
 
-// Scanned not indexed: IndexedDB can't index the null endedAt that "unfinished" means (§4.4).
-
+// One-time migration to the base-exercise model. Runs at boot after seedIfNeeded()
+// has inserted the base rows. Repoints every workout/template exercise from an
+// equipment-named row ("barbell_bench_press") to its base ("bench_press") +
+// equipment, archives the old system variants, then rebuilds the
+// per-(exercise+equipment) records and last-time caches. Idempotent: a no-op once
+// everything already carries equipment.
+//
+// The synced tables are enqueued so the change reaches the server and supersedes
+// any stale queued entry; records and last-time are rebuilt locally (they never
+// sync). The server's own SQL migration keeps the DB self-consistent.
 export async function migrateToBaseExercises(): Promise<void> {
   const staleWe = await db.workoutExercises
     .filter((we) => (we as { equipment?: Equipment }).equipment === undefined)
