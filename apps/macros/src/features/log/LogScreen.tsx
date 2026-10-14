@@ -26,6 +26,7 @@ import { amountGrams } from '@/features/shared/format'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import { useDebouncedValue } from '@/features/shared/useDebouncedValue'
+import { useBusy } from '@/features/shared/useBusy'
 import type { LastAmount } from '@/data/repository'
 import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'
@@ -240,7 +241,7 @@ function BrowsePanel({
    * last eaten in, which for anything eaten regularly is the right amount already.
    */
   const [picked, setPicked] = useState<Food[]>([])
-  const [isLogging, setIsLogging] = useState(false)
+  const [isLogging, run] = useBusy()
   const toggle = (food: Food) =>
     setPicked((current) =>
       current.some((row) => row.id === food.id)
@@ -475,17 +476,13 @@ function BrowsePanel({
             </button>
             <button
               disabled={isLogging}
-              onClick={() => {
-                if (isLogging) return
-                setIsLogging(true)
-                void repo
-                  .logFoods(picked, { meal, eatenAt: at, venue: target.venue })
-                  .then((count) => {
-                    setPicked([])
-                    onLogged(count)
-                  })
-                  .finally(() => setIsLogging(false))
-              }}
+              onClick={() =>
+                void run(async () => {
+                  const count = await repo.logFoods(picked, { meal, eatenAt: at, venue: target.venue })
+                  setPicked([])
+                  onLogged(count)
+                })
+              }
               className="min-w-0 flex-1 rounded-xl bg-accent py-2.5 text-[14px] font-semibold text-accent-contrast active:brightness-90"
             >
               {isLogging ? 'Logging…' : `Log ${picked.length} · ${Math.round(pickedTotal)} kcal`}

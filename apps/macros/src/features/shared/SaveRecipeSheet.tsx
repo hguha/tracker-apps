@@ -4,6 +4,7 @@ import { BottomSheet, Button, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { macroLine } from '@/features/shared/format'
 import { dayTotals } from '@/lib/nutrition'
+import { useBusy } from '@/features/shared/useBusy'
 import type { LogEntry } from '@/domain/types'
 
 export function SaveRecipeSheet({
@@ -17,7 +18,7 @@ export function SaveRecipeSheet({
 }) {
   const toast = useToast()
   const [name, setName] = useState(defaultName)
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, run] = useBusy()
   const totals = dayTotals(entries)
 
   return (
@@ -38,17 +39,13 @@ export function SaveRecipeSheet({
       <Button
         className="mt-3 w-full"
         disabled={isSaving || name.trim().length === 0}
-        onClick={() => {
-          if (isSaving) return
-          setIsSaving(true)
-          void repo
-            .saveRecipeFromEntries(name, entries)
-            .then(() => {
-              toast.show('Saved to your library')
-              onDismiss()
-            })
-            .finally(() => setIsSaving(false))
-        }}
+        onClick={() =>
+          void run(async () => {
+            await repo.saveRecipeFromEntries(name, entries)
+            toast.show('Saved to your library')
+            onDismiss()
+          })
+        }
       >
         {isSaving ? 'Saving…' : 'Save recipe'}
       </Button>

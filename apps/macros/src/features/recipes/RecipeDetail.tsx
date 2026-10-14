@@ -12,6 +12,7 @@ import * as repo from '@/data/repository'
 import { perServing, scale } from '@/lib/nutrition'
 import { cuisineLabel } from '@/lib/cuisine'
 import { ingredientAmount, macroLine } from '@/features/shared/format'
+import { useBusy } from '@/features/shared/useBusy'
 import { useUnits } from '@/features/shared/useUnits'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { MealPicker } from '@/features/log/MealPicker'
@@ -41,7 +42,7 @@ export function RecipeDetail({
   const [servings, setServings] = useState(1)
   const [meal, setMeal] = useState<MealSlot>(() => mealForHour(new Date().getHours()))
   const [at, setAt] = useState(() => Date.now())
-  const [isSaving, setIsSaving] = useState(false)
+  const [isSaving, run] = useBusy()
 
   const foods = useLiveQuery(
     () => repo.foodsByIds((recipe?.ingredients ?? []).map((i) => i.foodId)),
@@ -74,21 +75,16 @@ export function RecipeDetail({
    * An arrow after the guard, not a hoisted `function`: a hoisted declaration is not covered by the
    * `if (!recipe) return` above it, so `recipe` would still be possibly-undefined inside.
    */
-  const log = () => {
-    if (isSaving) return
-    setIsSaving(true)
-    return repo
-      .logRecipeIngredients(recipe, servings, meal, at)
-      .then(() => {
-        toast.show(
-          `${recipe.name} · ${servings === 1 ? 'a serving' : `${servings} servings`} · ${MEAL_LABELS[
-            meal
-          ].toLowerCase()}`,
-        )
-        onBack()
-      })
-      .finally(() => setIsSaving(false))
-  }
+  const log = () =>
+    run(async () => {
+      await repo.logRecipeIngredients(recipe, servings, meal, at)
+      toast.show(
+        `${recipe.name} · ${servings === 1 ? 'a serving' : `${servings} servings`} · ${MEAL_LABELS[
+          meal
+        ].toLowerCase()}`,
+      )
+      onBack()
+    })
 
   return (
     <Screen
