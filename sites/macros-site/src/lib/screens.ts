@@ -8,6 +8,6 @@
 
 import { screenIndex } from '@tracker-engine/site-kit'
 
-export const { screen, hasScreen } = screenIndex(
+export const { screen } = screenIndex(
   import.meta.glob('../assets/screens/*.png', { eager: true }),
 )

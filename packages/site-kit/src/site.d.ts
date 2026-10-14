@@ -27,5 +27,4 @@ declare module '@site' {
   export const faqs: readonly Faq[]
   export const conversation: Conversation
   export function screen(name: string, scheme: Scheme): ImageMetadata
-  export function hasScreen(name: string, scheme: Scheme): boolean
 }

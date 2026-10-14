@@ -125,7 +125,6 @@ export type Scheme = 'light' | 'dark'
  */
 export function screenIndex(files: Record<string, { default: ImageMetadata }>): {
   screen: (name: string, scheme: Scheme) => ImageMetadata
-  hasScreen: (name: string, scheme: Scheme) => boolean
 } {
   const byName = new Map<string, ImageMetadata>(
     Object.entries(files).map(([path, module]) => [
@@ -141,6 +140,5 @@ export function screenIndex(files: Record<string, { default: ImageMetadata }>): 
       if (!image) throw new Error(`No screenshot "${name}-${scheme}" in src/assets/screens`)
       return image
     },
-    hasScreen: (name, scheme) => byName.has(`${name}-${scheme}`),
   }
 }

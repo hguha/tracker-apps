@@ -18,7 +18,7 @@ ssr: { noExternal: ['@tracker-engine/site-kit'] },   // the kit ships .astro sou
 ```
 
 `src/site.ts` re-exports `site`, `stats`, `spotlights`, `cards`, `gallery`, `faqs`,
-`conversation`, and `screen`/`hasScreen`. The shapes are exported from this package
+`conversation`, and `screen`. The shapes are exported from this package
 (`SiteConfig`, `Spotlight`, …), so a site checks itself with `satisfies SiteConfig`.
 
 An alias rather than props: the alternative was threading a config object through four levels of

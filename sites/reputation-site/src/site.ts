@@ -8,4 +8,4 @@
 
 export { site, stats } from '@/data/site'
 export { cards, conversation, faqs, gallery, spotlights } from '@/data/features'
-export { hasScreen, screen } from '@/lib/screens'
+export { screen } from '@/lib/screens'
