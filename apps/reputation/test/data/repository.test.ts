@@ -1163,6 +1163,35 @@ describe('personal records', () => {
 
     expect(await repo.listPersonalRecords('deadlift')).toHaveLength(0)
   })
+
+  it('drops records from an exercise removed before finishing', async () => {
+    const first = await repo.startWorkout()
+    const firstExercise = await repo.addExerciseToWorkout(first, 'deadlift', 'barbell')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: firstExercise, weightKg: 100, reps: 5 }),
+      {},
+    )
+    await repo.finishWorkout(first)
+
+    const second = await repo.startWorkout()
+    const kept = await repo.addExerciseToWorkout(second, 'bench_press', 'barbell')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: kept, weightKg: 60, reps: 5 }),
+      {},
+    )
+    const removed = await repo.addExerciseToWorkout(second, 'deadlift', 'barbell')
+    await repo.logSetValues(
+      await repo.addSet({ workoutExerciseId: removed, weightKg: 200, reps: 5 }),
+      {},
+    )
+    await repo.removeWorkoutExercise(removed)
+    await repo.finishWorkout(second)
+
+    const records = await repo.listPersonalRecords('deadlift')
+    expect(records.find((r) => r.recordType === 'max_weight')?.value).toBe(100)
+    const last = await repo.getLastPerformance('deadlift', 'barbell')
+    expect(last?.sessions.map((s) => s.workoutId)).toEqual([first])
+  })
 })
 
 describe('custom exercises', () => {

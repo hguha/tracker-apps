@@ -21,7 +21,6 @@ import {
 } from '@/lib/metrics'
 import { WEEK_MS } from '@/lib/dates'
 import { listSets } from './sets'
-import { listWorkoutExercises } from './workouts'
 
 // The records that mean a lift "got stronger". "Stalled" keys off these so a raw
 // weight/rep PR isn't reported as stalled just because estimated-1RM didn't move.
@@ -421,8 +420,14 @@ function toPlaceholderSet(s: WorkoutSet): PerformedSet {
 }
 
 export async function rebuildLastPerformanceForWorkout(workoutId: string): Promise<void> {
-  const workoutExercises = await listWorkoutExercises(workoutId)
-  for (const we of workoutExercises) {
+  const workoutExercises = await db.workoutExercises
+    .where('workoutId')
+    .equals(workoutId)
+    .toArray()
+  const pairs = new Map(
+    workoutExercises.map((we) => [`${we.exerciseId}:${we.equipment}`, we]),
+  )
+  for (const we of pairs.values()) {
     await rebuildLastPerformance(we.exerciseId, we.equipment)
     await refreshPersonalRecords(we.exerciseId, we.equipment)
   }
