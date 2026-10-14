@@ -11,7 +11,7 @@ export interface Money {
 // Currencies whose minor unit isn't 1/100 (JPY has none); default to 2.
 const MINOR_DIGITS: Record<string, number> = { USD: 2, EUR: 2, GBP: 2, CAD: 2, JPY: 0 }
 
-export function minorDigits(currency: string): number {
+function minorDigits(currency: string): number {
   return MINOR_DIGITS[currency] ?? 2
 }
 
@@ -38,16 +38,4 @@ export function formatMoney(
     currency: m.currency,
     signDisplay: opts.signDisplay ?? 'auto',
   }).format(m.minor / 10 ** minorDigits(m.currency))
-}
-
-/** Sum amounts of one currency; throws on a mismatch rather than silently adding. */
-export function sumMoney(amounts: readonly Money[], currency = 'USD'): Money {
-  let minor = 0
-  for (const a of amounts) {
-    if (a.currency !== currency) {
-      throw new Error(`currency mismatch: ${a.currency} vs ${currency}`)
-    }
-    minor += a.minor
-  }
-  return { minor, currency }
 }

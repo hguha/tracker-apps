@@ -5,11 +5,7 @@
   "type": "module",
   "description": "Domain-agnostic primitives shared across apps.",
   "exports": {
-    ".": "./src/index.ts",
-    "./money": "./src/money.ts",
-    "./cn": "./src/cn.ts",
-    "./dates": "./src/dates.ts",
-    "./color": "./src/color.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

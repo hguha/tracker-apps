@@ -21,13 +21,13 @@ export interface UnitPreference {
   volume: VolumeUnit
 }
 
-export const METRIC: UnitPreference = {
+const METRIC: UnitPreference = {
   weight: 'kg',
   length: 'cm',
   distance: 'km',
   volume: 'ml',
 }
-export const IMPERIAL: UnitPreference = {
+const IMPERIAL: UnitPreference = {
   weight: 'lb',
   length: 'in',
   distance: 'mi',
@@ -145,10 +145,6 @@ export function lengthToCm(value: number, from: LengthUnit): number {
 
 export function lengthFromCm(cm: number, to: LengthUnit): number {
   return clean(to === 'cm' ? cm : cm / CM_PER_IN, 2)
-}
-
-export function volumeToMl(value: number, from: VolumeUnit): number {
-  return from === 'ml' ? value : value * ML_PER_FLOZ
 }
 
 export function volumeFromMl(ml: number, to: VolumeUnit): number {

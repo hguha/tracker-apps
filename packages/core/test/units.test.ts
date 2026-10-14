@@ -9,7 +9,6 @@ import {
   formatVolume,
   unitsFor,
   volumeFromMl,
-  volumeToMl,
   weightFromKg,
   weightToKg,
 } from '../src/units'
@@ -33,8 +32,6 @@ describe('unitsFor', () => {
 
 describe('volume', () => {
   it('stores millilitres and converts only for display, like weight does', () => {
-    expect(volumeToMl(8, 'floz')).toBeCloseTo(236.6, 1)
-    expect(volumeToMl(250, 'ml')).toBe(250)
     expect(volumeFromMl(250, 'floz')).toBeCloseTo(8.5, 1)
   })
 
