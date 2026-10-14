@@ -52,13 +52,15 @@ function range(from: number, to: number): number[] {
 
 /** "175 cm · 5′9″" — the same height in both, so the choice needs no arithmetic to verify. */
 function heightLabel(cm: number): string {
-  const totalInches = Math.round(lengthFromCm(cm, 'in'))
-  return `${Math.round(cm)} cm · ${Math.floor(totalInches / 12)}′${totalInches % 12}″`
+  return `${Math.round(cm)} cm · ${feetAndInches(Math.round(lengthFromCm(cm, 'in')))}`
 }
 
 function inchesLabel(totalInches: number): string {
-  return `${Math.floor(totalInches / 12)}′${totalInches % 12}″ · ${Math.round(lengthToCm(totalInches, 'in'))} cm`
+  return `${feetAndInches(totalInches)} · ${Math.round(lengthToCm(totalInches, 'in'))} cm`
 }
+
+const feetAndInches = (totalInches: number): string =>
+  `${Math.floor(totalInches / 12)}′${totalInches % 12}″`
 
 /**
  * First-run setup. Asks only what the first target needs and says why, because the honest
@@ -100,7 +102,7 @@ export function OnboardingScreen() {
       await repo.saveProfile({
         units,
         heightCm,
-        birthYear: birthYear ? Number(birthYear) : null,
+        birthYear: Number(birthYear),
         sex: sex || null,
         activity,
       })
