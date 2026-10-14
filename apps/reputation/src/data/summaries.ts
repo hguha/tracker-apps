@@ -21,6 +21,7 @@ import {
   type SummarySession,
   buildCoachSummary,
 } from './coachSummary'
+import { groupBy } from '@tracker-engine/core'
 import { WEEK_MS, dayKey, dayStreaks, weekOffset } from '@/lib/dates'
 import { composeExerciseName } from '@/lib/labels'
 import { effectiveWeightKg, isWorkingSet, volumeLoadKg } from '@/lib/metrics'
@@ -116,41 +117,42 @@ function buildWorkoutSummary(
   }
 }
 
+// The live exercises and sets under a batch of workouts, in three queries.
+async function loadWorkoutRows(workouts: Workout[]): Promise<{
+  workoutExercises: WorkoutExercise[]
+  sets: WorkoutSet[]
+  exercisesById: Map<string, Exercise>
+}> {
+  const workoutExercises = (
+    await db.workoutExercises
+      .where('workoutId')
+      .anyOf(workouts.map((w) => w.id))
+      .toArray()
+  ).filter((r) => r.deletedAt === null)
+  const sets = (
+    await db.sets
+      .where('workoutExerciseId')
+      .anyOf(workoutExercises.map((we) => we.id))
+      .toArray()
+  ).filter((s) => s.deletedAt === null)
+  const exercises = await db.exercises.bulkGet([
+    ...new Set(workoutExercises.map((we) => we.exerciseId)),
+  ])
+  const exercisesById = new Map<string, Exercise>()
+  for (const exercise of exercises) if (exercise) exercisesById.set(exercise.id, exercise)
+  return { workoutExercises, sets, exercisesById }
+}
+
+const byPosition = (a: { position: number }, b: { position: number }) =>
+  a.position - b.position
+
 export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[]> {
   const workouts = await listWorkouts(limit)
   if (workouts.length === 0) return []
 
-  const workoutIds = workouts.map((w) => w.id)
-  const allWe = (
-    await db.workoutExercises.where('workoutId').anyOf(workoutIds).toArray()
-  ).filter((r) => r.deletedAt === null)
-
-  const weIds = allWe.map((we) => we.id)
-  const allSets = (
-    await db.sets.where('workoutExerciseId').anyOf(weIds).toArray()
-  ).filter((s) => s.deletedAt === null)
-
-  const exercises = await db.exercises.bulkGet([
-    ...new Set(allWe.map((we) => we.exerciseId)),
-  ])
-  const exercisesById = new Map<string, Exercise>()
-  exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
-
-  const weByWorkout = new Map<string, WorkoutExercise[]>()
-  for (const we of allWe) {
-    const list = weByWorkout.get(we.workoutId)
-    if (list) list.push(we)
-    else weByWorkout.set(we.workoutId, [we])
-  }
-  for (const list of weByWorkout.values()) list.sort((a, b) => a.position - b.position)
-
-  const setsByWe = new Map<string, WorkoutSet[]>()
-  for (const set of allSets) {
-    const list = setsByWe.get(set.workoutExerciseId)
-    if (list) list.push(set)
-    else setsByWe.set(set.workoutExerciseId, [set])
-  }
-  for (const list of setsByWe.values()) list.sort((a, b) => a.position - b.position)
+  const { workoutExercises, sets, exercisesById } = await loadWorkoutRows(workouts)
+  const weByWorkout = groupBy(workoutExercises.sort(byPosition), (we) => we.workoutId)
+  const setsByWe = groupBy(sets.sort(byPosition), (s) => s.workoutExerciseId)
 
   return workouts.map((w) =>
     buildWorkoutSummary(w, weByWorkout.get(w.id) ?? [], exercisesById, setsByWe),
@@ -224,30 +226,9 @@ export async function getBadgeStats(): Promise<BadgeStats> {
   }
 
   const workouts = await listWorkouts(1000)
-  const workoutIds = workouts.map((w) => w.id)
-  const allWe = (
-    await db.workoutExercises.where('workoutId').anyOf(workoutIds).toArray()
-  ).filter((r) => r.deletedAt === null)
-  const exercises = await db.exercises.bulkGet([
-    ...new Set(allWe.map((we) => we.exerciseId)),
-  ])
-  const patternByExercise = new Map<string, string>()
-  const regionByExercise = new Map<string, string>()
-  const trackingByExercise = new Map<string, string>()
-  exercises.forEach((ex) => {
-    if (!ex) return
-    patternByExercise.set(ex.id, ex.movementPattern)
-    regionByExercise.set(ex.id, ex.region)
-    trackingByExercise.set(ex.id, ex.trackingType)
-  })
-  const weToExercise = new Map(allWe.map((we) => [we.id, we.exerciseId]))
-
-  const allSets = (
-    await db.sets
-      .where('workoutExerciseId')
-      .anyOf(allWe.map((we) => we.id))
-      .toArray()
-  ).filter((s) => s.deletedAt === null && s.isCompleted)
+  const { workoutExercises, sets, exercisesById } = await loadWorkoutRows(workouts)
+  const weToExercise = new Map(workoutExercises.map((we) => [we.id, we.exerciseId]))
+  const allSets = sets.filter((s) => s.isCompleted)
 
   let totalCardioMeters = 0
   let totalCardioSeconds = 0
@@ -261,18 +242,18 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     const exerciseId = weToExercise.get(set.workoutExerciseId)
     if (!exerciseId) continue
     distinctExercises.add(exerciseId)
-    const region = regionByExercise.get(exerciseId)
-    if (region) distinctRegions.add(region)
+    const exercise = exercisesById.get(exerciseId)
+    if (exercise) distinctRegions.add(exercise.region)
 
     const reps = set.reps ?? 0
     totalReps += reps
     if (reps > maxRepsInSet) maxRepsInSet = reps
     if ((set.weightKg ?? 0) > maxSetWeightKg) maxSetWeightKg = set.weightKg ?? 0
-    if (trackingByExercise.get(exerciseId) === 'bodyweight_reps') {
+    if (exercise?.trackingType === 'bodyweight_reps') {
       totalBodyweightReps += reps
     }
 
-    if (patternByExercise.get(exerciseId) === 'cardio') {
+    if (exercise?.movementPattern === 'cardio') {
       totalCardioMeters += set.distanceM ?? 0
       totalCardioSeconds += set.durationSeconds ?? 0
     }
@@ -385,36 +366,12 @@ export async function getCoachSummary(): Promise<CoachSummary> {
     })
   }
 
-  const allWe = (
-    await db.workoutExercises
-      .where('workoutId')
-      .anyOf(workouts.map((w) => w.id))
-      .toArray()
-  ).filter((r) => r.deletedAt === null)
-  const exercises = await db.exercises.bulkGet([
-    ...new Set(allWe.map((we) => we.exerciseId)),
-  ])
-  const exercisesById = new Map<string, Exercise>()
-  exercises.forEach((ex) => ex && exercisesById.set(ex.id, ex))
-  const allSets = (
-    await db.sets
-      .where('workoutExerciseId')
-      .anyOf(allWe.map((we) => we.id))
-      .toArray()
-  ).filter((s) => s.deletedAt === null && s.isCompleted)
-
-  const setsByWe = new Map<string, WorkoutSet[]>()
-  for (const s of allSets) {
-    const list = setsByWe.get(s.workoutExerciseId)
-    if (list) list.push(s)
-    else setsByWe.set(s.workoutExerciseId, [s])
-  }
-  const weByWorkout = new Map<string, WorkoutExercise[]>()
-  for (const we of allWe) {
-    const list = weByWorkout.get(we.workoutId)
-    if (list) list.push(we)
-    else weByWorkout.set(we.workoutId, [we])
-  }
+  const { workoutExercises, sets, exercisesById } = await loadWorkoutRows(workouts)
+  const setsByWe = groupBy(
+    sets.filter((s) => s.isCompleted),
+    (s) => s.workoutExerciseId,
+  )
+  const weByWorkout = groupBy(workoutExercises, (we) => we.workoutId)
 
   const sessions: SummarySession[] = workouts.map((w) => {
     const offset = weekOffset(w.startedAt, profile.weekStartsOn)
