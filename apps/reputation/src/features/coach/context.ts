@@ -14,7 +14,7 @@ import {
   formatWeight,
   lengthFromCm,
 } from '@/lib/units'
-import type { WeightUnit } from '@/domain/types'
+import type { PerformedSet, WeightUnit } from '@/domain/types'
 
 export const COACH_CONTEXT_VERSION = 1
 
@@ -88,7 +88,7 @@ export interface CoachContext {
 }
 
 function compactSet(
-  set: { weightKg: number | null; reps: number | null; durationSeconds: number | null; distanceM: number | null },
+  set: PerformedSet,
   unit: WeightUnit,
 ): string {
   if (set.durationSeconds !== null) {
