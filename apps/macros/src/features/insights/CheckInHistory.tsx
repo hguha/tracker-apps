@@ -9,7 +9,7 @@ import { useUnits } from '@/features/shared/useUnits'
 export function CheckInHistory() {
   const history = useLiveQuery(() => repo.checkIns(), [], [])
   const units = useUnits()
-  const weeks = (history ?? [])
+  const weeks = history
     .filter((c) => c.status !== 'declined')
     .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
     .slice(0, 8)
