@@ -23,6 +23,7 @@ import { ExerciseDetailSheet } from './ExerciseDetailSheet'
 import { ExercisePicker } from './ExercisePicker'
 import { FinishSheet } from './FinishSheet'
 import { SessionMenu } from './SessionMenu'
+import { lastLiftRestSeconds } from './rest'
 import { CoachChat } from '@/features/coach/CoachChat'
 import { isCardioPattern } from '@/domain/movement'
 
@@ -290,15 +291,7 @@ export function ActiveWorkoutScreen({
     : []
   const lastSetOfDetail = detailSets[detailSets.length - 1]
 
-  // The last non-cardio exercise is the one just trained; fall back to the default.
-  const restDefaultSeconds =
-    [...rows]
-      .reverse()
-      .find((r) => r.exercise && !isCardioPattern(r.exercise.movementPattern))
-      ?.workoutExercise.restSeconds ??
-    [...rows].reverse().find((r) => r.exercise?.defaultRestSeconds != null)?.exercise
-      ?.defaultRestSeconds ??
-    profile.defaultRestSeconds
+  const restDefaultSeconds = lastLiftRestSeconds(rows, profile)
 
   return (
     <div className="flex h-full flex-col">
