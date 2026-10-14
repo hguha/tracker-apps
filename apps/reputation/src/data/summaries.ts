@@ -87,24 +87,18 @@ function buildWorkoutSummary(
       cardioSeconds += logged.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
     }
 
-    if (region) {
-      const workingSets = logged.filter((s) => isWorkingSet(s)).length
-      if (workingSets > 0) {
-        workingSetsByRegion[region] = (workingSetsByRegion[region] ?? 0) + workingSets
-      }
-      for (let i = 0; i < logged.length; i += 1) {
-        signals.push({ region, pattern: exercise.movementPattern })
-      }
+    const workingSets = logged.filter((s) => isWorkingSet(s)).length
+    if (workingSets > 0) {
+      workingSetsByRegion[region] = (workingSetsByRegion[region] ?? 0) + workingSets
+    }
+    for (let i = 0; i < logged.length; i += 1) {
+      signals.push({ region, pattern: exercise.movementPattern })
     }
   }
 
   return {
     workout,
-    title: sessionTitle(
-      workout.title,
-      workout.startedAt,
-      signals.filter((s) => s.region !== undefined),
-    ),
+    title: sessionTitle(workout.title, workout.startedAt, signals),
     exerciseNames,
     exerciseIds,
     regions: [...regionSet],
@@ -354,18 +348,6 @@ export async function getCoachSummary(): Promise<CoachSummary> {
     (w) => w.endedAt !== null && w.startedAt >= cutoff,
   )
 
-  if (workouts.length === 0) {
-    return buildCoachSummary({
-      unitWeight: profile.unitWeight,
-      unitLength: profile.unitLength,
-      weeklyWorkoutGoal: profile.weeklyWorkoutGoal || 4,
-      bodyweightKg: profile.bodyweightCacheKg,
-      heightCm: profile.heightCm ?? null,
-      trainingGoal: profile.trainingGoal ?? '',
-      sessions: [],
-    })
-  }
-
   const { workoutExercises, sets, exercisesById } = await loadWorkoutRows(workouts)
   const setsByWe = groupBy(
     sets.filter((s) => s.isCompleted),
@@ -443,10 +425,8 @@ export async function getWorkoutPreview(
     const region = exercise.region
     const logged = (await listSets(we.id)).filter((s) => s.isCompleted)
     totalSets += logged.length
-    if (region) {
-      for (let i = 0; i < logged.length; i += 1) {
-        signals.push({ region, pattern: exercise.movementPattern })
-      }
+    for (let i = 0; i < logged.length; i += 1) {
+      signals.push({ region, pattern: exercise.movementPattern })
     }
     exercises.push({
       name: composeExerciseName(exercise.name, we.equipment),
@@ -469,21 +449,20 @@ function summarizeSets(
   weightUnit: WeightUnit,
   distanceUnit: DistanceUnit,
 ): string {
-  const working = sets
-  if (working.length === 0) return 'no sets'
+  const first = sets[0]
+  if (!first) return 'no sets'
 
-  const first = working[0]!
   if (first.durationSeconds !== null) {
-    const seconds = working.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
-    const meters = working.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
+    const seconds = sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
+    const meters = sets.reduce((sum, s) => sum + (s.distanceM ?? 0), 0)
     const mins = Math.round(seconds / 60)
     return meters > 0
       ? `${mins} min · ${formatDistance(meters, distanceUnit)}`
       : `${mins} min`
   }
 
-  const reps = working.map((s) => s.reps).filter((r): r is number => r !== null)
-  const weights = working.map((s) => s.weightKg).filter((w): w is number => w !== null)
+  const reps = sets.map((s) => s.reps).filter((r): r is number => r !== null)
+  const weights = sets.map((s) => s.weightKg).filter((w): w is number => w !== null)
   const repPart =
     reps.length === 0
       ? ''
@@ -492,5 +471,5 @@ function summarizeSets(
         : ` × ${Math.min(...reps)}-${Math.max(...reps)}`
   const weightPart =
     weights.length > 0 ? ` @ ${formatWeight(Math.max(...weights), weightUnit)}` : ''
-  return `${plural(working.length, 'set')}${repPart}${weightPart}`
+  return `${plural(sets.length, 'set')}${repPart}${weightPart}`
 }
