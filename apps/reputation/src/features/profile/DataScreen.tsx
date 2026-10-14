@@ -1,8 +1,8 @@
-import { isNativePlatform } from '@tracker-engine/platform'
 import { plural } from '@tracker-engine/core'
 // Sync status, backups, and the destructive resets — the only screen with an
 // irreversible control, so it takes a deliberate navigation to reach.
 
+import { isNativePlatform } from '@tracker-engine/platform'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { quietNextCelebrations } from '@tracker-engine/ui'
@@ -53,10 +53,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
     return last?.error ?? null
   }, [])
 
-  const workoutCount = useLiveQuery(
-    async () => (await repo.listWorkouts(500)).filter((w) => w.endedAt !== null).length,
-    [],
-  )
+  const workoutCount = useLiveQuery(() => repo.countFinishedWorkouts(), [])
 
   async function handleExport() {
     if (isExporting) return
@@ -201,7 +198,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                     void sync.retryFailed().then(({ count }) => {
                       toast.show(
                         count > 0
-                          ? `Retrying ${count} failed ${count === 1 ? 'change' : 'changes'}…`
+                          ? `Retrying ${plural(count, 'failed change')}…`
                           : 'Nothing to retry',
                       )
                     })
@@ -217,12 +214,12 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                 onClick={() => {
                   if (sync.phase === 'syncing') return
                   const ok = window.confirm(
-                    `Discard ${sync.pending > 0 ? `${sync.pending} unsynced local change${sync.pending === 1 ? '' : 's'}` : 'unsynced local changes'} and load the server's version instead? Anything not yet synced from this device is lost.`,
+                    `Discard ${sync.pending > 0 ? plural(sync.pending, 'unsynced local change') : 'unsynced local changes'} and load the server's version instead? Anything not yet synced from this device is lost.`,
                   )
                   if (!ok) return
                   void sync.discardLocalChanges().then(({ discarded, applied }) => {
                     toast.show(
-                      `Discarded ${discarded} local change${discarded === 1 ? '' : 's'} · loaded ${applied} rows`,
+                      `Discarded ${plural(discarded, 'local change')} · loaded ${applied} rows`,
                     )
                   })
                 }}
