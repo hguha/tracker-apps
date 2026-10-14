@@ -10,6 +10,7 @@ import {
   TOOL_DECLARATIONS,
   toolLabel,
   toolToAction,
+  windowLabel,
 } from './tools'
 import type {
   CoachAction,
@@ -83,9 +84,7 @@ export async function buildCoachContext(): Promise<CoachContext> {
     dietNotes: profile.dietNotes,
     // In the opening context rather than behind a tool: it changes what advice is even
     // appropriate, so the model must not have to think to ask for it.
-    eatingWindow: window
-      ? `${formatClock(window.startMinute)}-${formatClock(window.endMinute)}`
-      : null,
+    eatingWindow: window ? windowLabel(window) : null,
     todayTiming: describeTiming(entries),
   }
 }

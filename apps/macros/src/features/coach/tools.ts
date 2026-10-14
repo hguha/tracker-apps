@@ -2,11 +2,11 @@ import type { ToolDeclaration } from '@tracker-engine/ai-coach'
 import { bodyWeightFromKg, convertWeight, dayKey, dayKeyOffset, formatClock, groupBy, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
-import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale } from '@/lib/nutrition'
+import { dayTotals, mgToGrams, nutrientsFor, perServing, remaining, scale, sum } from '@/lib/nutrition'
 import { dayTiming, eatingOccasions, minutesIntoDay, windowState } from '@/lib/mealTiming'
 import { cuisineMix, venueSummary, type DaySide } from '@/lib/patterns'
 import type { CoachAction } from './types'
-import { MEAL_SLOTS, type MealSlot } from '@/domain/types'
+import { MEAL_SLOTS, type EatingWindow, type MealSlot } from '@/domain/types'
 
 /**
  * What the coach may look up, and what it may propose.
@@ -171,9 +171,7 @@ export async function executeRetrievalTool(
           meal: occasion.entries[0]!.meal,
           kcal: occasion.nutrients.kcal,
         })),
-        eatingWindow: window
-          ? `${formatClock(window.startMinute)}-${formatClock(window.endMinute)}`
-          : null,
+        eatingWindow: window ? windowLabel(window) : null,
         windowPhase: state?.phase ?? null,
         fastedMinutes: state?.fastedMinutes ?? null,
       }
@@ -299,13 +297,12 @@ export async function toolToAction(
     const food = await repo.getFood(String(args.foodId ?? ''))
     const grams = Number(args.grams)
     if (!food || !Number.isFinite(grams) || grams <= 0) return null
-    const meal = MEAL_SLOTS.includes(args.meal as MealSlot) ? (args.meal as MealSlot) : 'snack'
     return {
       kind: 'log-food',
       foodId: food.id,
       description: food.description,
       grams,
-      meal,
+      meal: mealSlot(args.meal),
       nutrients: nutrientsFor(food, grams),
     }
   }
@@ -314,13 +311,12 @@ export async function toolToAction(
     const recipe = await repo.getRecipe(String(args.recipeId ?? ''))
     const servings = Number(args.servings)
     if (!recipe || !Number.isFinite(servings) || servings <= 0) return null
-    const meal = MEAL_SLOTS.includes(args.meal as MealSlot) ? (args.meal as MealSlot) : 'snack'
     return {
       kind: 'log-recipe',
       recipeId: recipe.id,
       name: recipe.name,
       servings,
-      meal,
+      meal: mealSlot(args.meal),
       nutrients: scale(perServing(recipe), servings),
     }
   }
@@ -343,12 +339,18 @@ export async function toolToAction(
       title: String(args.title ?? 'A meal'),
       note: String(args.note ?? ''),
       items,
-      nutrients: dayTotals(parts.map((nutrients) => ({ nutrients }))),
+      nutrients: sum(parts),
     }
   }
 
   return null
 }
+
+const mealSlot = (value: unknown): MealSlot =>
+  MEAL_SLOTS.includes(value as MealSlot) ? (value as MealSlot) : 'snack'
+
+export const windowLabel = (window: EatingWindow): string =>
+  `${formatClock(window.startMinute)}-${formatClock(window.endMinute)}`
 
 /** One side of the home/out comparison, named so the model can't mistake which is which. */
 const side = (row: DaySide) => ({
