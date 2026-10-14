@@ -14,6 +14,7 @@ import {
   type Workout,
   type WorkoutExercise,
   type WorkoutSet,
+  weeklyGoalOf,
 } from '@/domain/types'
 import {
   type CoachSummary,
@@ -385,7 +386,7 @@ export async function getCoachSummary(): Promise<CoachSummary> {
   return buildCoachSummary({
     unitWeight: profile.unitWeight,
     unitLength: profile.unitLength,
-    weeklyWorkoutGoal: profile.weeklyWorkoutGoal || 4,
+    weeklyWorkoutGoal: weeklyGoalOf(profile),
     bodyweightKg: profile.bodyweightCacheKg,
     heightCm: profile.heightCm ?? null,
     trainingGoal: profile.trainingGoal ?? '',

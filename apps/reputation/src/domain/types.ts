@@ -167,6 +167,10 @@ export interface Profile extends SyncColumns {
   showAvatar: boolean
 }
 
+export function weeklyGoalOf(profile: Pick<Profile, 'weeklyWorkoutGoal'>): number {
+  return Math.max(1, profile.weeklyWorkoutGoal || 4)
+}
+
 // A movement ("Bench Press"), independent of equipment. Equipment is chosen when
 // the exercise is added to a workout and lives on the WorkoutExercise — any
 // movement can be loaded with any equipment, so the exercise stores none.

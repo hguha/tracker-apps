@@ -11,6 +11,7 @@ import {
 } from '@tracker-engine/platform'
 import * as repo from '@/data/repository'
 import { dayStart, weekStart } from '@/lib/dates'
+import { weeklyGoalOf } from '@/domain/types'
 
 export interface ReminderPrefs {
   workout: { enabled: boolean; minute: number; weekdays: number[] }
@@ -81,7 +82,7 @@ async function upcomingDays(now: number): Promise<DayState[]> {
   const thisWeek = weekStart(now, profile.weekStartsOn)
   const workouts = (await repo.listWorkouts(50)).filter((w) => w.startedAt >= thisWeek)
   const goalMetThisWeek =
-    workouts.filter((w) => w.endedAt !== null).length >= Math.max(1, profile.weeklyWorkoutGoal || 4)
+    workouts.filter((w) => w.endedAt !== null).length >= weeklyGoalOf(profile)
   const weights = await repo.listMetricEntries('bodyweight', 5)
   return Array.from({ length: DAYS_AHEAD }, (_, offset) => {
     const start = dayStart(dayAt(0, now, offset))

@@ -19,7 +19,13 @@ import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
 import { DAY_MS, WEEK_MS, dayKey, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
-import { REGION_LABELS, REGIONS, type Profile, type Region } from '@/domain/types'
+import {
+  REGION_LABELS,
+  REGIONS,
+  weeklyGoalOf,
+  type Profile,
+  type Region,
+} from '@/domain/types'
 import { levelFor, nextBadges, type Level } from '@tracker-engine/badges'
 import { CelebrationOverlay, useCelebrations, useToday } from '@tracker-engine/ui'
 import { evaluateBadges, type BadgeState } from './badges'
@@ -122,7 +128,7 @@ export function HomeScreen({
     const goalWeeks = goalWeeksMet(
       finished.map((s) => s.workout.startedAt),
       profile.weekStartsOn,
-      Math.max(1, profile.weeklyWorkoutGoal || 4),
+      weeklyGoalOf(profile),
     )
 
     return {
@@ -185,7 +191,7 @@ export function HomeScreen({
   const firstName = (session?.displayName ?? '').split(/\s+/)[0]
   const greetName = firstName && firstName !== 'You' ? `, ${firstName}` : ''
   // weeklyWorkoutGoal can be absent; coalesce before Math.max or the ring shows "/NaN".
-  const goal = Math.max(1, profile.weeklyWorkoutGoal || 4)
+  const goal = weeklyGoalOf(profile)
 
   const badges = evaluateBadges({
     totalWorkouts,
