@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { Dumbbell } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { SignInScreen as BaseSignInScreen } from '@tracker-engine/auth/react'
@@ -25,7 +26,7 @@ export function SignInScreen({ onCancel }: { onCancel?: () => void } = {}) {
       localSummary={
         workouts === undefined
           ? undefined
-          : `Your ${workouts} workout${workouts === 1 ? '' : 's'}`
+          : `Your ${plural(workouts, 'workout')}`
       }
     />
   )

@@ -362,7 +362,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
                   toast.show(
                     removed === 0
                       ? 'No empty workouts found'
-                      : `Removed ${removed} empty ${removed === 1 ? 'workout' : 'workouts'}`,
+                      : `Removed ${plural(removed, 'empty workout')}`,
                   )
                 })
                 .catch(() => {

@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useState } from 'react'
 import { ScreenHeader } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -89,7 +90,7 @@ export function TemplatesScreen({
                     {template.name}
                   </span>
                   <span className="block text-[12.5px] text-ink-muted">
-                    {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
+                    {plural(exerciseCount, 'exercise')}
                     {template.lastUsedAt !== null &&
                       ` · last used ${formatRelativeDay(template.lastUsedAt)}`}
                   </span>

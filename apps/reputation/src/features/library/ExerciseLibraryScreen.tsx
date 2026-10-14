@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { useMemo, useState } from 'react'
 import { SearchField, SegmentedTabs } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -133,7 +134,7 @@ export function ExerciseLibraryScreen({ onBack }: { onBack?: () => void }) {
 
         <div className="mb-2 flex items-center justify-between gap-2 px-1">
           <span className="text-[12px] text-ink-muted">
-            {movementCount} {movementCount === 1 ? 'movement' : 'movements'}
+            {plural(movementCount, 'movement')}
             {hasFilters && (
               <button
                 onClick={() => setRegionFilter(null)}

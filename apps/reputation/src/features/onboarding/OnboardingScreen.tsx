@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import { AccentPicker, PillSelect } from '@tracker-engine/ui'
 import { useEffect, useState } from 'react'
 import { ArrowRight, Check, ChevronLeft, Dumbbell, Loader2, Sparkles } from 'lucide-react'
@@ -537,12 +538,12 @@ function SyncStep({
         <span className="min-w-0 flex-1 text-[13.5px]">
           {state === 'running'
             ? pushed > 0
-              ? `Uploaded ${pushed} ${pushed === 1 ? 'change' : 'changes'}…`
+              ? `Uploaded ${plural(pushed, 'change')}…`
               : 'Checking what needs uploading…'
             : !sync.enabled
               ? 'Saved on this device.'
               : pushed > 0
-                ? `Uploaded ${pushed} ${pushed === 1 ? 'change' : 'changes'}.`
+                ? `Uploaded ${plural(pushed, 'change')}.`
                 : 'Nothing needed uploading.'}
         </span>
       </Card>
