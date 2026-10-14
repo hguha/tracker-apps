@@ -127,7 +127,7 @@ function SignedInApp() {
       // writes it was holding.
       .then(() => repo.endStaleEditSessions())
       .then(() => repo.releaseStrandedDeferrals())
-      .then(() => setIsReady(true))
+      .finally(() => setIsReady(true))
   }, [])
 
   // Appearance and sound live in the profile, so they follow the same live-query

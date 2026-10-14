@@ -105,8 +105,7 @@ function SignedInApp() {
     void repo
       .ensureProfile()
       .then(() => repo.runCheckIn())
-      .then(() => setIsReady(true))
-      .catch(() => setIsReady(true))
+      .finally(() => setIsReady(true))
   }, [])
 
   /**
