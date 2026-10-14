@@ -8,12 +8,7 @@ import { BottomSheet } from '@/components/BottomSheet'
 import { ExerciseFilterPills } from '@/components/ExerciseFilterPills'
 import { regionVar } from '@/lib/palette'
 import { REGION_LABELS, REGIONS, type Region } from '@/domain/types'
-
-export interface ExerciseOption {
-  id: string
-  name: string
-  region: Region | undefined
-}
+import type { ExerciseOption } from './useInsightsData'
 
 export function ExerciseFilterSheet({
   options,
@@ -37,19 +32,17 @@ export function ExerciseFilterSheet({
       return true
     })
     // Region slot order, so the sections match every chart legend.
-    matched.sort((a, b) => {
-      const ai = a.region ? REGIONS.indexOf(a.region) : REGIONS.length
-      const bi = b.region ? REGIONS.indexOf(b.region) : REGIONS.length
-      return ai - bi || a.name.localeCompare(b.name)
-    })
-    const byRegion: { name: string; region: Region | undefined; items: ExerciseOption[] }[] =
-      []
+    matched.sort(
+      (a, b) =>
+        REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region) || a.name.localeCompare(b.name),
+    )
+    const byRegion: { name: string; region: Region; items: ExerciseOption[] }[] = []
     for (const option of matched) {
       const last = byRegion[byRegion.length - 1]
       if (last && last.region === option.region) last.items.push(option)
       else
         byRegion.push({
-          name: option.region ? REGION_LABELS[option.region] : 'Other',
+          name: REGION_LABELS[option.region],
           region: option.region,
           items: [option],
         })
@@ -118,13 +111,11 @@ export function ExerciseFilterSheet({
                 }}
                 className="flex w-full items-center gap-3 border-b border-line px-5 py-3 text-left active:bg-accent-wash"
               >
-                {option.region && (
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ background: regionVar(option.region) }}
-                    aria-hidden
-                  />
-                )}
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ background: regionVar(option.region) }}
+                  aria-hidden
+                />
                 <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
                   {option.name}
                 </span>

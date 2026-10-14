@@ -72,9 +72,9 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
 
   const { option, points } = useMemo(() => {
     const points = data.sessions
-      .filter((s) => s.durationSeconds !== null && s.volumeKg > 0)
+      .filter((s) => s.volumeKg > 0)
       .map((s) => [
-        Math.round(s.durationSeconds! / 60),
+        Math.round(s.durationSeconds / 60),
         displayWeight(s.volumeKg, unit),
         s.at,
       ])
@@ -171,10 +171,9 @@ export function TimeOfDayChart({ data }: { data: InsightsData }) {
 export function DurationTrendChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
-  const { option, labels, minutes, average, withDuration } = useMemo(() => {
-    const withDuration = data.sessions.filter((s) => s.durationSeconds !== null)
-    const labels = withDuration.map((s) => formatShortDate(s.at))
-    const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
+  const { option, labels, minutes, average } = useMemo(() => {
+    const labels = data.sessions.map((s) => formatShortDate(s.at))
+    const minutes = data.sessions.map((s) => Math.round(s.durationSeconds / 60))
     const average = movingAverage(minutes)
     const c = chrome()
     const option: EChartsOption = {
@@ -209,14 +208,14 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
         },
       ],
     }
-    return { option, labels, minutes, average, withDuration }
+    return { option, labels, minutes, average }
   }, [data, appearance])
 
   return (
     <ChartCard
       title="Workout duration"
       subtitle="Are sessions getting longer?"
-      isEmpty={withDuration.length < 2}
+      isEmpty={data.sessions.length < 2}
       emptyMessage="Finish two workouts to see how long they run."
       table={{
         columns: ['Date', 'Minutes', '4-session avg'],

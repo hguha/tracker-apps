@@ -8,9 +8,8 @@ import {
   volumeLoadKg,
 } from '@/lib/metrics'
 import { bucketByDayOfWeek, bucketByHour } from '@/data/patterns'
-import { WEEK_MS, weekKey, weekStart } from '@/lib/dates'
-import { format } from 'date-fns'
-import type { Profile, Region, WorkoutSet } from '@/domain/types'
+import { dayKey, WEEK_MS, weekKey, weekStart } from '@/lib/dates'
+import type { Profile, Region, Workout, WorkoutSet } from '@/domain/types'
 import type { StalledLift } from '@/data/records'
 import { isCardioPattern } from '@/domain/movement'
 
@@ -18,17 +17,20 @@ export interface InsightsFilters {
   weeks: number
   // Empty means all regions.
   regions: string[]
-  // Empty means all exercises.
-  exerciseIds: string[]
+  exerciseId: string | null
 }
 
 export interface SessionPoint {
-  workoutId: string
   at: number
   volumeKg: number
   setCount: number
-  durationSeconds: number | null
-  regions: Region[]
+  durationSeconds: number
+}
+
+export interface ExerciseOption {
+  id: string
+  name: string
+  region: Region
 }
 
 export interface ExerciseSeries {
@@ -50,7 +52,6 @@ export interface InsightsData {
   // Every week in range, including empty ones, so a gap reads as a gap.
   weeks: string[]
   volumeByWeek: Map<string, number>
-  setsByWeek: Map<string, number>
   workoutsByWeek: Map<string, number>
   volumeByRegion: Map<Region, number>
   setsByRegion: Map<Region, number>
@@ -68,10 +69,8 @@ export interface InsightsData {
   dayOfWeekCounts: number[]
   // Session start hour, 0–23, for the time-of-day histogram (D-37).
   hourCounts: number[]
-  // Volume per calendar day (yyyy-MM-dd), for the training-calendar heatmap (A-3).
-  volumeByDay: Map<string, number>
   // Every exercise trained ever (not just in range), for the filter sheet.
-  exerciseOptions: { id: string; name: string; region: Region | undefined }[]
+  exerciseOptions: ExerciseOption[]
   workoutCount: number
   totalVolumeKg: number
   totalSets: number
@@ -95,14 +94,14 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
     const profile = await repo.getProfile()
 
     const cutoff = Date.now() - filters.weeks * WEEK_MS
-    const allWorkouts = (await repo.listWorkouts(500)).filter((w) => w.endedAt !== null)
+    const allWorkouts = (await repo.listWorkouts(500)).filter(
+      (w): w is Workout & { endedAt: number } => w.endedAt !== null,
+    )
     const workouts = allWorkouts.filter((w) => w.startedAt >= cutoff)
 
     const regionFilter = new Set(filters.regions)
-    const exerciseFilter = new Set(filters.exerciseIds)
 
     const volumeByWeek = new Map<string, number>()
-    const setsByWeek = new Map<string, number>()
     const workoutsByWeek = new Map<string, number>()
     const volumeByRegion = new Map<Region, number>()
     const setsByRegion = new Map<Region, number>()
@@ -112,13 +111,9 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
     const repBuckets = new Map<string, number>()
     // Start times of workouts matching the active filter; bucketed after the loop.
     const matchedStarts: number[] = []
-    const volumeByDay = new Map<string, number>()
     const sessions: SessionPoint[] = []
     const seriesByExercise = new Map<string, ExerciseSeries>()
-    const exerciseOptions = new Map<
-      string,
-      { id: string; name: string; region: Region | undefined }
-    >()
+    const exerciseOptions = new Map<string, ExerciseOption>()
 
     let totalVolumeKg = 0
     let totalSets = 0
@@ -145,7 +140,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
 
       let sessionVolume = 0
       let sessionSets = 0
-      const sessionRegions = new Set<Region>()
       let matchedFilter = false
 
       for (const we of workoutExercises) {
@@ -154,7 +148,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
 
         const region = exercise.region
         if (regionFilter.size > 0 && !regionFilter.has(region)) continue
-        if (exerciseFilter.size > 0 && !exerciseFilter.has(exercise.id)) continue
+        if (filters.exerciseId !== null && exercise.id !== filters.exerciseId) continue
         matchedFilter = true
 
         const sets = (await repo.listSets(we.id)).filter((s) => s.isCompleted)
@@ -174,7 +168,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         totalSets += working.length
 
         volumeByWeek.set(key, (volumeByWeek.get(key) ?? 0) + exerciseVolume)
-        setsByWeek.set(key, (setsByWeek.get(key) ?? 0) + working.length)
 
         if (isCardioPattern(exercise.movementPattern)) {
           cardioSeconds += sets.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0)
@@ -194,7 +187,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
         weekMap.set(region, (weekMap.get(region) ?? 0) + exerciseVolume)
         regionVolumeByWeek.set(key, weekMap)
 
-        sessionRegions.add(region)
         setsByRegion.set(region, (setsByRegion.get(region) ?? 0) + working.length)
 
         setsByPattern.set(
@@ -235,16 +227,11 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
 
       workoutsByWeek.set(key, (workoutsByWeek.get(key) ?? 0) + 1)
       matchedStarts.push(workout.startedAt)
-      const dayKey = format(workout.startedAt, 'yyyy-MM-dd')
-      volumeByDay.set(dayKey, (volumeByDay.get(dayKey) ?? 0) + sessionVolume)
       sessions.push({
-        workoutId: workout.id,
         at: workout.startedAt,
         volumeKg: sessionVolume,
         setCount: sessionSets,
-        durationSeconds:
-          workout.endedAt !== null ? (workout.endedAt - workout.startedAt) / 1000 : null,
-        regions: [...sessionRegions],
+        durationSeconds: (workout.endedAt - workout.startedAt) / 1000,
       })
     }
 
@@ -255,7 +242,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       let cursor = weekStart(earliest, profile.weekStartsOn)
       const end = weekStart(Date.now(), profile.weekStartsOn)
       while (cursor <= end) {
-        weeks.push(format(cursor, 'yyyy-MM-dd'))
+        weeks.push(dayKey(cursor))
         cursor += WEEK_MS
       }
     }
@@ -281,7 +268,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       profile,
       weeks,
       volumeByWeek,
-      setsByWeek,
       workoutsByWeek,
       volumeByRegion,
       setsByRegion,
@@ -294,7 +280,6 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       repBuckets,
       dayOfWeekCounts,
       hourCounts,
-      volumeByDay,
       exerciseOptions: [...exerciseOptions.values()].sort((a, b) =>
         a.name.localeCompare(b.name),
       ),
@@ -304,7 +289,7 @@ export function useInsightsData(filters: InsightsFilters): InsightsData | undefi
       cardioSeconds,
       cardioMeters,
     }
-  }, [filters.weeks, filters.regions.join(), filters.exerciseIds.join()])
+  }, [filters.weeks, filters.regions.join(), filters.exerciseId])
 }
 
 function computeRepRange(sets: WorkoutSet[]): [number, number] | null {

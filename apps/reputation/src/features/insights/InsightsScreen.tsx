@@ -22,7 +22,7 @@ export function InsightsScreen() {
   const [subTabKey, setSubTabKey] = useState<string>(SUB_TABS[0]!.key)
   const [rangeKey, setRangeKey] = useState<RangeKey>('12w')
   const [regions, setRegions] = useState<string[]>([])
-  const [exerciseIds, setExerciseIds] = useState<string[]>([])
+  const [exerciseId, setExerciseId] = useState<string | null>(null)
   const [openSheet, setOpenSheet] = useState<'range' | 'region' | 'exercise' | null>(null)
 
   const range = RANGES.find((r) => r.key === rangeKey)!
@@ -32,17 +32,14 @@ export function InsightsScreen() {
   const showRegion = activeFilters.has('region')
   const showExercise = activeFilters.has('exercise')
 
-  // Single-lift charts need exactly one pick as their subject (§9.0).
-  const activeExerciseId = exerciseIds.length === 1 ? exerciseIds[0]! : null
-
   // Only pass a filter the tab uses, so a stray selection from another tab can't silently scope it.
   const filters: InsightsFilters = useMemo(
     () => ({
       weeks: range.weeks,
       regions: showRegion ? regions : [],
-      exerciseIds: showExercise ? exerciseIds : [],
+      exerciseId: showExercise ? exerciseId : null,
     }),
-    [range.weeks, showRegion, regions, showExercise, exerciseIds],
+    [range.weeks, showRegion, regions, showExercise, exerciseId],
   )
 
   const data = useInsightsData(filters)
@@ -54,7 +51,7 @@ export function InsightsScreen() {
   const ctx: ChartContext = {
     data,
     rangeLabel: range.label,
-    activeExerciseId,
+    activeExerciseId: exerciseId,
   }
 
   return (
@@ -91,21 +88,21 @@ export function InsightsScreen() {
         )}
         {showExercise && (
           <FilterChipButton
-            label={summarize(
-              'Exercise',
-              exerciseIds,
-              (id) => data.exerciseOptions.find((e) => e.id === id)?.name ?? 'Exercise',
-            )}
-            isActive={exerciseIds.length > 0}
+            label={
+              exerciseId === null
+                ? 'All exercises'
+                : (data.exerciseOptions.find((e) => e.id === exerciseId)?.name ?? 'Exercise')
+            }
+            isActive={exerciseId !== null}
             onClick={() => setOpenSheet('exercise')}
           />
         )}
         {((showRegion && regions.length > 0) ||
-          (showExercise && exerciseIds.length > 0)) && (
+          (showExercise && exerciseId !== null)) && (
           <button
             onClick={() => {
               setRegions([])
-              setExerciseIds([])
+              setExerciseId(null)
             }}
             className="shrink-0 px-2 text-[13px] font-semibold text-accent"
           >
@@ -171,8 +168,8 @@ export function InsightsScreen() {
       {openSheet === 'exercise' && (
         <ExerciseFilterSheet
           options={data.exerciseOptions}
-          selectedId={activeExerciseId}
-          onSelect={(id) => setExerciseIds(id === null ? [] : [id])}
+          selectedId={exerciseId}
+          onSelect={setExerciseId}
           onDismiss={() => setOpenSheet(null)}
         />
       )}
