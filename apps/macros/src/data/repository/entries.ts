@@ -12,6 +12,7 @@ import {
   type Venue,
 } from '@/domain/types'
 import { nutrientsFor, portionFor, scale as scaleNutrients } from '@/lib/nutrition'
+import { minutesIntoDay } from '@/lib/mealTiming'
 import { adoptAverage, getFood } from './foods'
 import { activeUserId, alive, isLater, nextSortIndex } from './internal'
 
@@ -389,7 +390,7 @@ export async function relogEntries(
   // today's the same dish, so "log this dish again" would then re-log both sittings.
   const dishIds = new Map<string, string>()
   for (const entry of entries) {
-    const eatenAt = into.at ?? Date.parse(`${day}T00:00:00`) + minutesIntoDay(entry.eatenAt) * 60_000
+    const eatenAt = into.at ?? new Date(`${day}T00:00:00`).setMinutes(minutesIntoDay(entry.eatenAt))
     await insertEntry({
       ...entry,
       day,
@@ -406,11 +407,6 @@ export async function relogEntries(
     })
   }
   return entries.length
-}
-
-const minutesIntoDay = (at: number): number => {
-  const date = new Date(at)
-  return date.getHours() * 60 + date.getMinutes()
 }
 
 export const newDishId = (): string => newId()

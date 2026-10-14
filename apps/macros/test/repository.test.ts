@@ -481,6 +481,23 @@ describe('relogEntries', () => {
     expect(new Date(copies[0]!.eatenAt).getHours()).toBe(12)
     expect(copies[1]!.eatenAt - copies[0]!.eatenAt).toBe(25 * 60_000)
   })
+
+  it('keeps the clock time when copying onto the day the clocks change', async () => {
+    const tz = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    try {
+      const food = await chicken()
+      await repo.logFood({ food, grams: 100, meal: 'dinner', eatenAt: Date.parse('2026-03-01T19:40:00') })
+
+      await repo.relogEntries(await repo.entriesForDay('2026-03-01'), { day: '2026-03-08' })
+
+      const [copy] = await repo.entriesForDay('2026-03-08')
+      const at = new Date(copy!.eatenAt)
+      expect([at.getDate(), at.getHours(), at.getMinutes()]).toEqual([8, 19, 40])
+    } finally {
+      process.env.TZ = tz
+    }
+  })
 })
 
 describe('forced check-ins', () => {
