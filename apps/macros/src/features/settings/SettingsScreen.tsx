@@ -1,5 +1,4 @@
-import { convertWeight, type WeightUnit } from '@tracker-engine/core'
-import { plural } from '@tracker-engine/core'
+import { convertWeight, plural, type WeightUnit } from '@tracker-engine/core'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Card, NavList, NavRow, PageTitle } from '@tracker-engine/ui'
 import {
@@ -85,7 +84,7 @@ export function SettingsScreen({
         <NavRow
           icon={<ChefHat size={17} />}
           label="Your library"
-          hint={libraryHint(recipes?.length ?? 0, myFoods?.length ?? 0)}
+          hint={libraryHint(recipes.length, myFoods.length)}
           onClick={() => onOpen('library')}
         />
         <NavRow
@@ -103,7 +102,7 @@ export function SettingsScreen({
           hint={
             missing.length > 0
               ? `Add your ${missing.join(', ')} to get a target`
-              : goalHint(program, weights?.[weights.length - 1]?.kg ?? null, units.weight)
+              : goalHint(program, weights[weights.length - 1]?.kg ?? null, units.weight)
           }
           tone={missing.length > 0 ? 'warning' : undefined}
           onClick={() => onOpen('targets')}

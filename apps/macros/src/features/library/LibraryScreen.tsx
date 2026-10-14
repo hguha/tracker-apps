@@ -14,7 +14,7 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
   const recipes = useLiveQuery(() => repo.recipes(), [], [])
 
   const tabs: SegmentedTab<Tab>[] = [
-    { key: 'recipes', label: 'Recipes', badge: (recipes ?? []).length || undefined },
+    { key: 'recipes', label: 'Recipes', badge: recipes.length || undefined },
     { key: 'foods', label: 'Foods' },
   ]
 

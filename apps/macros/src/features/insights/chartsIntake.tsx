@@ -1,4 +1,4 @@
-import { plural } from '@tracker-engine/core'
+import { dayNoon, plural } from '@tracker-engine/core'
 import type { EChartsOption } from 'echarts'
 import { Chart, ChartCard } from '@tracker-engine/ui/charts'
 import { categoryAxis, shortDay, targetMark, useChartTokens, valueAxis } from './chartTokens'
@@ -133,7 +133,7 @@ export function WeekdayChart({ days }: { days: InsightsDay[] }) {
   const totals = WEEKDAYS.map(() => ({ sum: 0, count: 0 }))
   for (const day of days) {
     // Monday-first, to match the week the check-in measures.
-    const index = (new Date(`${day.day}T12:00:00`).getDay() + 6) % 7
+    const index = (new Date(dayNoon(day.day)).getDay() + 6) % 7
     totals[index]!.sum += day.kcal
     totals[index]!.count += 1
   }

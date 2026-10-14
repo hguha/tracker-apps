@@ -199,7 +199,7 @@ export function HistoryScreen({ onOpenDay }: { onOpenDay: (day: string) => void 
               day={day}
               entries={byDay.get(day) ?? []}
               foods={foods ?? new Map()}
-              target={targets?.get(day) ?? null}
+              target={targets.get(day) ?? null}
               isPartial={isFiltered}
               onOpen={() => onOpenDay(day)}
             />

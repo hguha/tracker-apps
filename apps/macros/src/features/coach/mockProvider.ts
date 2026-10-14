@@ -1,5 +1,4 @@
-import { dayKey, signed } from '@tracker-engine/core'
-import { bodyWeightFromKg, convertWeight, unitsFor } from '@tracker-engine/core'
+import { bodyWeightFromKg, convertWeight, dayKey, signed, unitsFor } from '@tracker-engine/core'
 import { trendChangePerWeek, weightTrend } from '@tracker-engine/body'
 import * as repo from '@/data/repository'
 import { trendDirection } from '@/lib/checkin'

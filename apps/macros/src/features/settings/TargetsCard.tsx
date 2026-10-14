@@ -63,7 +63,7 @@ export function TargetsCard() {
     program.targetAt !== null ||
     !rates.some((rate) => rate.value === program.ratePctPerWeek)
   const kcal = profile?.manualTargets ? null : (targets?.kcal ?? null)
-  const latestKg = weights?.[weights.length - 1]?.kg ?? null
+  const latestKg = weights[weights.length - 1]?.kg ?? null
   // The pace as a weight per week rather than a percentage, which is the form anyone thinks in.
   const perWeek = (pct: number): string | null => {
     if (latestKg === null) return null
@@ -72,61 +72,58 @@ export function TargetsCard() {
   }
 
   return (
-    <>
-      <Card className="p-4">
-        <h2 className="text-[15px] font-semibold tracking-tight">Goal</h2>
+    <Card className="p-4">
+      <h2 className="text-[15px] font-semibold tracking-tight">Goal</h2>
 
-        <div className="mt-2.5 space-y-3">
-          <Field label="Direction">
+      <div className="mt-2.5 space-y-3">
+        <Field label="Direction">
+          <PillSelect
+            value={program.goal}
+            options={GOALS}
+            onChange={(goal) => {
+              if (!goal) return
+              setIsByDate(false)
+              void repo.startProgram(changeDirection(program, goal))
+            }}
+          />
+        </Field>
+
+        {program.goal !== 'maintain' && <GoalWeightField program={program} />}
+
+        {rates.length > 1 && (
+          <Field
+            label="Pace"
+            hint={[
+              perWeek(program.ratePctPerWeek) ?? `${program.ratePctPerWeek}% of bodyweight a week`,
+              kcal !== null && `${kcal.toLocaleString()} kcal a day`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          >
             <PillSelect
-              value={program.goal}
-              options={GOALS}
-              onChange={(goal) => {
-                if (!goal) return
+              value={isDated ? BY_DATE : String(program.ratePctPerWeek)}
+              options={[
+                ...rates.map((r) => ({ value: String(r.value), label: r.label })),
+                { value: BY_DATE, label: 'By date' },
+              ]}
+              onChange={(value) => {
+                if (value === null) return
+                if (value === BY_DATE) {
+                  setIsByDate(true)
+                  return
+                }
                 setIsByDate(false)
-                void repo.startProgram(changeDirection(program, goal))
+                void repo.setProgramFields(program.id, {
+                  ratePctPerWeek: Number(value),
+                  targetAt: null,
+                })
               }}
             />
+            {isDated && <GoalDateField key={program.targetKg ?? 0} program={program} />}
           </Field>
-
-          {program.goal !== 'maintain' && <GoalWeightField program={program} />}
-
-          {rates.length > 1 && (
-            <Field
-              label="Pace"
-              hint={[
-                perWeek(program.ratePctPerWeek) ?? `${program.ratePctPerWeek}% of bodyweight a week`,
-                kcal !== null && `${kcal.toLocaleString()} kcal a day`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            >
-              <PillSelect
-                value={isDated ? BY_DATE : String(program.ratePctPerWeek)}
-                options={[
-                  ...rates.map((r) => ({ value: String(r.value), label: r.label })),
-                  { value: BY_DATE, label: 'By date' },
-                ]}
-                onChange={(value) => {
-                  if (value === null) return
-                  if (value === BY_DATE) {
-                    setIsByDate(true)
-                    return
-                  }
-                  setIsByDate(false)
-                  void repo.setProgramFields(program.id, {
-                    ratePctPerWeek: Number(value),
-                    targetAt: null,
-                  })
-                }}
-              />
-              {isDated && <GoalDateField key={program.targetKg ?? 0} program={program} />}
-            </Field>
-          )}
-        </div>
-
-      </Card>
-    </>
+        )}
+      </div>
+    </Card>
   )
 }
 
@@ -179,85 +176,84 @@ export function TargetRulesCard() {
   const targets = useLiveQuery(() => repo.currentTargets(), [], null)
   const [isOpen, setIsOpen] = useState(false)
   if (!program) return null
+  const mode = MODES.find((option) => option.id === program.coachingMode)
 
   return (
-    <>
-      <Card className="p-0">
-        <button
-          onClick={() => setIsOpen((current) => !current)}
-          aria-expanded={isOpen}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-sunken"
-        >
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-medium">How the targets are built</span>
-            <span className="block truncate text-[12.5px] text-ink-muted">
-              {program.proteinGPerKg} g/kg protein · at least {program.fatMinPctKcal}% fat ·{' '}
-              {MODES.find((mode) => mode.id === program.coachingMode)?.label.toLowerCase()}
-            </span>
+    <Card className="p-0">
+      <button
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-sunken"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-medium">How the targets are built</span>
+          <span className="block truncate text-[12.5px] text-ink-muted">
+            {program.proteinGPerKg} g/kg protein · at least {program.fatMinPctKcal}% fat ·{' '}
+            {mode?.label.toLowerCase()}
           </span>
-          <ChevronDown
-            size={18}
-            className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
-          />
-        </button>
+        </span>
+        <ChevronDown
+          size={18}
+          className={cn('shrink-0 text-ink-muted transition-transform', isOpen && 'rotate-180')}
+        />
+      </button>
 
-        {isOpen && (
-          <div className="space-y-3 border-t border-line px-4 py-3">
-            <Field
-              label="Protein floor"
-              hint={
-                targets
-                  ? `${program.proteinGPerKg} g/kg → ${Math.round(mgToGrams(targets.proteinMg))} g of protein a day`
-                  : `${program.proteinGPerKg} g per kg of bodyweight`
-              }
-            >
-              <PillSelect
-                value={String(program.proteinGPerKg)}
-                options={PROTEIN.map((g) => ({ value: String(g), label: String(g) }))}
-                onChange={(value) => {
-                  if (value === null) return
-                  void repo.setProgramFields(program.id, { proteinGPerKg: Number(value) })
-                }}
-              />
-            </Field>
+      {isOpen && (
+        <div className="space-y-3 border-t border-line px-4 py-3">
+          <Field
+            label="Protein floor"
+            hint={
+              targets
+                ? `${program.proteinGPerKg} g/kg → ${Math.round(mgToGrams(targets.proteinMg))} g of protein a day`
+                : `${program.proteinGPerKg} g per kg of bodyweight`
+            }
+          >
+            <PillSelect
+              value={String(program.proteinGPerKg)}
+              options={PROTEIN.map((g) => ({ value: String(g), label: String(g) }))}
+              onChange={(value) => {
+                if (value === null) return
+                void repo.setProgramFields(program.id, { proteinGPerKg: Number(value) })
+              }}
+            />
+          </Field>
 
-            <Field
-              label="Minimum fat"
-              hint={
-                targets
-                  ? `${program.fatMinPctKcal}% of calories → at least ${Math.round(mgToGrams(targets.fatMg))} g a day`
-                  : `${program.fatMinPctKcal}% of calories`
-              }
-            >
-              <PillSelect
-                value={String(program.fatMinPctKcal)}
-                options={FAT_MIN.map((p) => ({ value: String(p), label: `${p}%` }))}
-                onChange={(value) => {
-                  if (value === null) return
-                  void repo.setProgramFields(program.id, { fatMinPctKcal: Number(value) })
-                }}
-              />
-            </Field>
+          <Field
+            label="Minimum fat"
+            hint={
+              targets
+                ? `${program.fatMinPctKcal}% of calories → at least ${Math.round(mgToGrams(targets.fatMg))} g a day`
+                : `${program.fatMinPctKcal}% of calories`
+            }
+          >
+            <PillSelect
+              value={String(program.fatMinPctKcal)}
+              options={FAT_MIN.map((p) => ({ value: String(p), label: `${p}%` }))}
+              onChange={(value) => {
+                if (value === null) return
+                void repo.setProgramFields(program.id, { fatMinPctKcal: Number(value) })
+              }}
+            />
+          </Field>
 
-            <Field
-              label="Weekly check-in"
-              hint={MODES.find((mode) => mode.id === program.coachingMode)?.blurb ?? ''}
-            >
-              <PillSelect
-                value={program.coachingMode}
-                isRequired
-                options={MODES.map((mode) => ({ value: mode.id, label: mode.label }))}
-                onChange={(mode) => mode && void repo.setCoachingMode(program.id, mode)}
-              />
-            </Field>
+          <Field
+            label="Weekly check-in"
+            hint={mode?.blurb ?? ''}
+          >
+            <PillSelect
+              value={program.coachingMode}
+              isRequired
+              options={MODES.map((mode) => ({ value: mode.id, label: mode.label }))}
+              onChange={(mode) => mode && void repo.setCoachingMode(program.id, mode)}
+            />
+          </Field>
 
-            <p className="text-[12px] text-ink-muted">
-              Protein and fat are floors; carbs fill the rest.
-            </p>
-          </div>
-        )}
-      </Card>
-    </>
+          <p className="text-[12px] text-ink-muted">
+            Protein and fat are floors; carbs fill the rest.
+          </p>
+        </div>
+      )}
+    </Card>
   )
 }
 
