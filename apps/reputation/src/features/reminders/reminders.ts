@@ -119,7 +119,7 @@ export function useReminderSync(isReady: boolean): void {
         repo.listWorkouts(1),
         repo.listMetricEntries('bodyweight', 1),
       ])
-      return `${workouts[0]?.id ?? ''}|${weights[0]?.id ?? ''}`
+      return `${workouts[0]?.id ?? ''}:${workouts[0]?.endedAt ?? ''}|${weights[0]?.id ?? ''}`
     }).subscribe({
       next: sync,
       error: (error) => console.warn('[reminders] observer failed', error),
