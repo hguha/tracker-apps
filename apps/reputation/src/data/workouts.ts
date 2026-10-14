@@ -20,7 +20,14 @@ import {
 } from './outbox'
 import { getProfile } from './profile'
 import { rebuildLastPerformanceForWorkout } from './records'
-import { addSet, deleteSet, listSets, setHasValues, type SetPlaceholder } from './sets'
+import {
+  addSet,
+  deleteSet,
+  listSets,
+  placeholderOf,
+  setHasValues,
+  type SetPlaceholder,
+} from './sets'
 import { getTemplate } from './templates'
 
 export async function getActiveWorkout(): Promise<Workout | undefined> {
@@ -453,12 +460,7 @@ export async function repeatWorkout(
       const setId = await addSet({
         workoutExerciseId: newWorkoutExerciseId,
       })
-      placeholders[setId] = {
-        weightKg: set.weightKg,
-        reps: set.reps,
-        durationSeconds: set.durationSeconds,
-        distanceM: set.distanceM,
-      }
+      placeholders[setId] = placeholderOf(set)
     }
   }
 

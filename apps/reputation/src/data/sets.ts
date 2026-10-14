@@ -202,40 +202,19 @@ export async function getPrefillForSet(
   currentSessionSets?: WorkoutSet[],
 ): Promise<SetPlaceholder | null> {
   const cache = await getLastPerformance(exerciseId, equipment)
-  const history = (cache?.sessions[0]?.sets ?? []).filter(() => true)
+  const history = cache?.sessions[0]?.sets ?? []
+  const lastThisSession = (currentSessionSets ?? []).filter((s) => s.isCompleted).at(-1)
+  const source = history[setIndex] ?? lastThisSession ?? history.at(-1)
+  return source ? placeholderOf(source) : null
+}
 
-  const fromHistory = history[setIndex]
-  if (fromHistory) {
-    return {
-      weightKg: fromHistory.weightKg,
-      reps: fromHistory.reps,
-      durationSeconds: fromHistory.durationSeconds,
-      distanceM: fromHistory.distanceM,
-    }
+export function placeholderOf(set: SetPlaceholder): SetPlaceholder {
+  return {
+    weightKg: set.weightKg,
+    reps: set.reps,
+    durationSeconds: set.durationSeconds,
+    distanceM: set.distanceM,
   }
-
-  const loggedThisSession = (currentSessionSets ?? []).filter((s) => s.isCompleted)
-  const lastThisSession = loggedThisSession[loggedThisSession.length - 1]
-  if (lastThisSession) {
-    return {
-      weightKg: lastThisSession.weightKg,
-      reps: lastThisSession.reps,
-      durationSeconds: lastThisSession.durationSeconds,
-      distanceM: lastThisSession.distanceM,
-    }
-  }
-
-  const lastFromHistory = history[history.length - 1]
-  if (lastFromHistory) {
-    return {
-      weightKg: lastFromHistory.weightKg,
-      reps: lastFromHistory.reps,
-      durationSeconds: lastFromHistory.durationSeconds,
-      distanceM: lastFromHistory.distanceM,
-    }
-  }
-
-  return null
 }
 
 // Adds an empty set; its placeholder is resolved live by the exercise card (§6.2), so nothing is persisted here.
