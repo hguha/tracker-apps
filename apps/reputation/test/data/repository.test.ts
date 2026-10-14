@@ -1758,6 +1758,21 @@ describe('templates (§7)', () => {
     expect(preview?.totalSets).toBe(3)
   })
 
+  it('appends after the last exercise when an earlier one was removed', async () => {
+    const templateId = await repo.createTemplate('Pull')
+    await repo.addExerciseToTemplate(templateId, 'deadlift', 'barbell')
+    const middle = await repo.addExerciseToTemplate(templateId, 'barbell_row', 'barbell')
+    await repo.addExerciseToTemplate(templateId, 'lat_pulldown', 'cable')
+    await repo.removeTemplateExercise(middle)
+
+    await repo.addExerciseToTemplate(templateId, 'bicep_curl', 'dumbbell')
+
+    const positions = (await repo.listTemplateExercises(templateId)).map((te) => te.position)
+    expect(new Set(positions).size).toBe(positions.length)
+    const order = (await repo.listTemplateExercises(templateId)).map((te) => te.exerciseId)
+    expect(order.at(-1)).toBe('bicep_curl')
+  })
+
   it('instantiating a template seeds planned sets with target-based placeholders', async () => {
     const templateId = await repo.createTemplate('Legs')
     const teId = await repo.addExerciseToTemplate(templateId, 'back_squat', 'barbell')

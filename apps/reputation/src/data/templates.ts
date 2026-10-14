@@ -110,7 +110,7 @@ export async function addExerciseToTemplate(
     exerciseId,
     equipment,
     loadMode: loadMode !== undefined ? loadMode : await resolveDefaultLoadMode(exerciseId),
-    position: existing.length,
+    position: existing.reduce((max, te) => Math.max(max, te.position), -1) + 1,
     supersetGroup: null,
     targetSets: 3,
     targetRepsLow: null,
