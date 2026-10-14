@@ -55,7 +55,6 @@ export async function clearLocalData(): Promise<void> {
       db.outbox,
       db.deadLetter,
       db.syncState,
-      db.coachConversations,
     ],
     async () => {
       await db.coachConversations.clear()
@@ -77,7 +76,6 @@ export async function clearLocalData(): Promise<void> {
       await db.outbox.clear()
       await db.deadLetter.clear()
       await db.syncState.clear()
-      await db.coachConversations.clear()
     },
   )
 }
