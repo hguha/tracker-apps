@@ -84,7 +84,7 @@ npm run build     # production bundle
 - **First-party error log** — signed-in crashes write a scrubbed record to
   Supabase (`client_errors`, INSERT-only RLS); no third-party SDK
 - **Keep-alive** — daily `pg_cron` heartbeat against Supabase's free-tier idle timer
-- **Privacy policy** — [`docs/privacy-policy.md`](docs/privacy-policy.md), linked
+- **Privacy policy** — [`public/privacy.html`](public/privacy.html), linked
   from Sign-in and Account
 
 ## Not built yet

@@ -468,7 +468,7 @@ Custom email templates require custom SMTP; a Resend sender must be on a **verif
 
 This app holds body weight, body-fat percentage, and years of behavioral data. Treat it as health data. RLS on every table, enforced by tests. No third-party analytics, no third-party error-reporting SDK, no ad tech. The coach sends only the §9.1 aggregate.
 
-Error diagnostics are **first-party**. When a signed-in user hits a render crash, `window.onerror`, or an unhandled rejection, the client inserts a scrubbed record — message, stack, page URL, user agent, build stamp — into `client_errors` (migration 0020). No request bodies, no training data. The table has an INSERT-only policy: users cannot read their own errors; developer reads go through the service role. Device-only users report nothing (RLS would reject the insert). Records cascade away on account deletion. The public policy lives at `docs/privacy-policy.md`.
+Error diagnostics are **first-party**. When a signed-in user hits a render crash, `window.onerror`, or an unhandled rejection, the client inserts a scrubbed record — message, stack, page URL, user agent, build stamp — into `client_errors` (migration 0020). No request bodies, no training data. The table has an INSERT-only policy: users cannot read their own errors; developer reads go through the service role. Device-only users report nothing (RLS would reject the insert). Records cascade away on account deletion. The public policy lives at `public/privacy.html`.
 
 ### 11.5 Export and import
 
@@ -522,7 +522,7 @@ Charts are **config-driven** (`insights/catalog.tsx`): each entry declares which
 | PWA — service worker (scoped), `navigator.storage.persist()` on load | ✅ |
 | First-party error logging — `client_errors` (INSERT-only RLS), no third-party SDK | ✅ |
 | Keep-alive — daily `pg_cron` heartbeat against the free-tier idle timer | ✅ |
-| Privacy policy — `docs/privacy-policy.md`, linked from Sign-in and Account | ✅ |
+| Privacy policy — `public/privacy.html`, linked from Sign-in and Account | ✅ |
 | Export / import JSON | ✅ |
 
 ## 14. What's not built

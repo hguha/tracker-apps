@@ -248,9 +248,9 @@ Assumes the Apple Developer Program membership is active.
 **D. App Store Connect — fill the listing** (while the build processes, ~10–30 min)
 9. **App Privacy**: declare Email (account), Health & Fitness (workouts, body
    metrics — stored for the user's own sync), and diagnostics (first-party error
-   log). Not used for tracking; not sold. See `docs/privacy-policy.md`.
+   log). Not used for tracking; not sold. See `public/privacy.html`.
 10. **Privacy Policy URL**: a public page (host the rendered
-    `docs/privacy-policy.md`).
+    `public/privacy.html`).
 11. Screenshots: at least 6.7" and 6.5" iPhone sizes. Description, keywords,
     support URL, category **Health & Fitness**.
 12. **Age rating** questionnaire.

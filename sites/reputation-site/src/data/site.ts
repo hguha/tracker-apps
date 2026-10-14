@@ -28,6 +28,7 @@ export const site = {
   // preview deploys and never hardcodes the domain.
   webAppUrl: '/app',
   privacyUrl: '/app/privacy.html',
+  supportUrl: '/app/support.html',
   author: { name: 'Hirsh Guha', url: 'https://hirshguha.com' },
 
   nav: [
