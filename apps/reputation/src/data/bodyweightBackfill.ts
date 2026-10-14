@@ -9,7 +9,7 @@ import { db, touch } from '@/db/database'
 import { enqueue } from './outbox'
 
 /** The measurement closest in time to `at`. `entries` must be non-empty. */
-export function nearestMeasurement(
+function nearestMeasurement(
   entries: { measuredAt: number; value: number }[],
   at: number,
 ): number {

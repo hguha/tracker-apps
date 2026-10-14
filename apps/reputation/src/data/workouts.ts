@@ -193,7 +193,7 @@ export async function cancelWorkoutEdits(workoutId: string): Promise<void> {
   await rebuildLastPerformanceForWorkout(workoutId)
 }
 
-export async function hasLoggedWork(workoutId: string): Promise<boolean> {
+async function hasLoggedWork(workoutId: string): Promise<boolean> {
   for (const we of await listWorkoutExercises(workoutId)) {
     const sets = await listSets(we.id)
     if (sets.some((s) => s.isCompleted)) return true
@@ -203,9 +203,8 @@ export async function hasLoggedWork(workoutId: string): Promise<boolean> {
 
 // Removes placeholder rows never filled in (§6.2), on finish.
 
-export async function discardEmptySets(workoutId: string): Promise<number> {
+async function discardEmptySets(workoutId: string): Promise<void> {
   const workoutExercises = await listWorkoutExercises(workoutId)
-  let discarded = 0
 
   // A placeholder row from a session the server has never seen is removed rather
   // than tombstoned: a row nobody has heard of doesn't need a delete propagated,
@@ -226,10 +225,7 @@ export async function discardEmptySets(workoutId: string): Promise<number> {
     const exercise = await db.exercises.get(we.exerciseId)
     if (!exercise) continue
     for (const set of await listSets(we.id)) {
-      if (!setHasValues(set, exercise)) {
-        await discardRow('sets', set.id)
-        discarded += 1
-      }
+      if (!setHasValues(set, exercise)) await discardRow('sets', set.id)
     }
   }
 
@@ -238,8 +234,6 @@ export async function discardEmptySets(workoutId: string): Promise<number> {
       await discardRow('workoutExercises', we.id)
     }
   }
-
-  return discarded
 }
 
 export async function deleteWorkout(id: string): Promise<void> {

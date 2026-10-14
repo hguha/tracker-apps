@@ -156,14 +156,14 @@ export async function listWorkoutSummaries(limit = 100): Promise<WorkoutSummary[
 // Base exercise ids (§4.3): equipment is a dimension of the workout now, so the
 // squat/bench badges credit any equipment of the movement.
 
-export const BIG_THREE = {
+const BIG_THREE = {
   squat: 'back_squat',
   bench: 'bench_press',
   deadlift: 'deadlift',
 } as const
 
 // The lifts beyond the big three that carry their own milestones.
-export const BADGE_LIFTS = {
+const BADGE_LIFTS = {
   overheadPress: 'overhead_press',
   row: 'barbell_row',
   pullUp: 'pull_up',

@@ -26,7 +26,7 @@ const writes = createWriteQueue({
     delete: (seq) => db.outbox.delete(seq),
   },
   store: (table) => WRITE_STORES[table],
-  deferralFor: (table, rowId) => deferralFor(table, rowId),
+  deferralFor,
 })
 
 export const enqueue = writes.enqueue
@@ -39,7 +39,7 @@ export { newId } from '@tracker-engine/local-first'
  * writes don't reach the server until Finish, so a live session doesn't publish
  * half a workout and a cancelled edit publishes nothing.
  */
-export async function deferralFor(
+async function deferralFor(
   table: string,
   rowId: string,
 ): Promise<string | undefined> {

@@ -23,7 +23,7 @@ import { listSets } from './sets'
 
 // The records that mean a lift "got stronger". "Stalled" keys off these so a raw
 // weight/rep PR isn't reported as stalled just because estimated-1RM didn't move.
-export const PROGRESS_RECORD_TYPES: readonly RecordType[] = [
+const PROGRESS_RECORD_TYPES: readonly RecordType[] = [
   'max_weight',
   'max_est_1rm',
   'max_reps_any_weight',
