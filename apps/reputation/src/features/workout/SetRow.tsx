@@ -279,6 +279,11 @@ function formatPrevious(
   return '—'
 }
 
+export function parseSetValue(draft: string): number | null {
+  const parsed = parseNumber(draft)
+  return parsed === null || parsed < 0 ? null : parsed
+}
+
 // Commits on blur, not per keystroke: clearing the field mid-edit would briefly
 // store null and un-log the set under the §6.2 rule.
 function NumericField({
@@ -302,9 +307,8 @@ function NumericField({
     // Parse here so a non-numeric entry becomes null, never a stored NaN. A
     // negative weight/rep/duration is meaningless, so it reads as no value.
     onCommit: (draft) => {
-      const parsed = parseNumber(draft)
-      if (parsed === null || parsed < 0) return onCommit(null)
-      onCommit(integer ? Math.round(parsed) : parsed)
+      const parsed = parseSetValue(draft)
+      onCommit(parsed !== null && integer ? Math.round(parsed) : parsed)
     },
   })
 

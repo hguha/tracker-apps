@@ -16,11 +16,10 @@ import {
   distanceToM,
   formatDuration,
   formatPace,
-  parseNumber,
   weightFromKg,
   weightToKg,
 } from '@/lib/units'
-import { hasLoggedValues, parseDuration } from './SetRow'
+import { hasLoggedValues, parseDuration, parseSetValue } from './SetRow'
 
 export interface CardioEntryProps {
   exercise: Exercise
@@ -112,7 +111,7 @@ export function CardioEntry(props: CardioEntryProps) {
                     }
                     ariaLabel={`distance in ${distanceUnit}`}
                     onCommit={(raw) => {
-                      const value = parseNumber(raw)
+                      const value = parseSetValue(raw)
                       onChange(set.id, {
                         distanceM:
                           value === null ? null : distanceToM(value, distanceUnit),
@@ -137,7 +136,7 @@ export function CardioEntry(props: CardioEntryProps) {
                     }
                     ariaLabel={`weight in ${weightUnit}`}
                     onCommit={(raw) => {
-                      const value = parseNumber(raw)
+                      const value = parseSetValue(raw)
                       onChange(set.id, {
                         weightKg: value === null ? null : weightToKg(value, weightUnit),
                         enteredUnit: weightUnit,
