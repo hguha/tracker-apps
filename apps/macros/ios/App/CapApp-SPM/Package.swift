@@ -18,8 +18,7 @@ let package = Package(
         .package(name: "CapacitorLocalNotifications", path: "../../../../../node_modules/@capacitor/local-notifications"),
         .package(name: "CapacitorShare", path: "../../../../../node_modules/@capacitor/share"),
         .package(name: "CapacitorSplashScreen", path: "../../../../../node_modules/@capacitor/splash-screen"),
-        .package(name: "CapacitorStatusBar", path: "../../../../../node_modules/@capacitor/status-bar"),
-        .package(name: "CapacitorHealth", path: "../../../../../node_modules/capacitor-health")
+        .package(name: "CapacitorStatusBar", path: "../../../../../node_modules/@capacitor/status-bar")
     ],
     targets: [
         .target(
@@ -33,8 +32,7 @@ let package = Package(
                 .product(name: "CapacitorLocalNotifications", package: "CapacitorLocalNotifications"),
                 .product(name: "CapacitorShare", package: "CapacitorShare"),
                 .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
-                .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar"),
-                .product(name: "CapacitorHealth", package: "CapacitorHealth")
+                .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar")
             ]
         )
     ]

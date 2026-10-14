@@ -37,7 +37,6 @@
     "@tracker-engine/local-first": "*",
     "@tracker-engine/platform": "*",
     "@tracker-engine/ui": "*",
-    "capacitor-health": "^8.2.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.4",

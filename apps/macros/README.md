@@ -292,15 +292,5 @@ npm run native:sync         # build, then cap sync
 npm run native:ios          # build, sync, open Xcode
 ```
 
-Two things Xcode owns and a script can't:
-
-- **Icons.** `npm run native:icons` needs `resources/icon.png`; until that art exists the app
-  carries Capacitor's placeholder.
-- **The HealthKit capability.** `ios/App/App/App.entitlements` declares it and `Info.plist` has the
-  usage strings, but the capability itself has to be added once under Signing & Capabilities —
-  editing the `.pbxproj` by hand to do it risks corrupting the project for no gain.
-
-Apple Health is **read-only and weight-only**, via `capacitor-health`. That is a deliberate
-limit, not a first step: expenditure here is measured from the user's own logs and already
-includes training, so reading active energy and adding it to the budget would double-count. There
-is nothing to misuse because nothing else is read.
+Icons are the one thing a script can't do: `npm run native:icons` needs `resources/icon.png`;
+until that art exists the app carries Capacitor's placeholder.

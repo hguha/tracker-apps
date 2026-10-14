@@ -82,11 +82,5 @@
 	<string>Scan a barcode or photograph a meal to log it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pick a photo of a meal to log it.</string>
-	<!-- Weight only, read-only: expenditure here is measured from your own logs and already
-	     includes training, so calories burned are deliberately never read. -->
-	<key>NSHealthShareUsageDescription</key>
-	<string>Import your weigh-ins so a smart scale feeds your weight trend. Only weight is read — never workouts or calories burned.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>MACROcosm does not write to Health.</string>
 </dict>
 </plist>

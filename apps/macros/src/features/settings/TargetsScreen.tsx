@@ -7,7 +7,6 @@ import { CyclingCard } from './CyclingCard'
 import { DailyTargetsCard } from './DailyTargetsCard'
 import { DietBreakCard } from './DietBreakCard'
 import { EatingWindowCard } from './EatingWindowCard'
-import { HealthCard } from './HealthCard'
 import { TargetRulesCard, TargetsCard } from './TargetsCard'
 import { WaterTargetCard } from './WaterTargetCard'
 
@@ -20,7 +19,6 @@ export function TargetsScreen({ onBack }: { onBack: () => void }) {
       <CheckInStatusCard />
       <AboutYouCard />
       <WeighInCard />
-      <HealthCard />
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center gap-1 px-1 py-2 text-[13px] font-semibold text-ink-secondary">
           <ChevronRight size={15} className="transition-transform group-open:rotate-90" />

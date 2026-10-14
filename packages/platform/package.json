@@ -23,13 +23,5 @@
   "devDependencies": {
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
-  },
-  "peerDependencies": {
-    "capacitor-health": ">=8.0.0"
-  },
-  "peerDependenciesMeta": {
-    "capacitor-health": {
-      "optional": true
-    }
   }
 }

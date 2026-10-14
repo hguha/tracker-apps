@@ -8,7 +8,6 @@ import { AuthProviderScope, useAuth } from '@/auth/AuthContext'
 import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
 import { syncReminders } from '@/data/reminders'
-import { syncHealthWeightsIfEnabled } from '@/data/health'
 import { applyAppearance } from '@/lib/theme'
 import { SyncScope } from '@/sync/useSync'
 import { TabBar, type TabKey } from './TabBar'
@@ -104,8 +103,6 @@ function SignedInApp() {
     void seedFoods().then(() => repo.migrateSavedMeals())
     void repo
       .ensureProfile()
-      // Before the check-in: an imported weigh-in is part of the week it measures.
-      .then(() => syncHealthWeightsIfEnabled())
       .then(() => repo.runCheckIn())
       .then(() => setIsReady(true))
       .catch(() => setIsReady(true))

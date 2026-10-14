@@ -1,5 +1,4 @@
 import { dayKey } from '@tracker-engine/core'
-import { earliestPerDay } from '@tracker-engine/body'
 import { syncStamp } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue, patch } from '@/data/outbox'
@@ -50,37 +49,4 @@ export async function recordWeight(
   }
   await db.bodyWeights.put(row)
   await enqueue('bodyWeights', row.id)
-}
-
-/** Weigh-ins that came from Health rather than from this app. */
-const HEALTH_SOURCE = 'apple-health'
-
-interface WeightImport {
-  day: string
-  kg: number
-  at: number
-}
-
-/**
- * Brings weigh-ins in from Health.
- *
- * Two rules, both about not overwriting the user:
- *
- * 1. A day already weighed in *in this app* is left alone. Someone who typed 80.4 here meant it,
- *    and a smart scale's later reading that evening shouldn't silently replace it.
- * 2. Where a day has several samples, the earliest is used. Weight drifts up over a day by a kilo
- *    or more, so mixing morning and evening readings would add noise the trend then has to smooth
- *    back out — a consistent time of day matters more than which time.
- */
-export async function importWeights(samples: readonly WeightImport[]): Promise<number> {
-  let imported = 0
-  for (const sample of earliestPerDay(samples)) {
-    const existing = await db.bodyWeights.get(weightIdFor(activeUserId, sample.day))
-    if (existing && existing.deletedAt === null && existing.source !== HEALTH_SOURCE) continue
-    if (existing?.kg === sample.kg && existing.source === HEALTH_SOURCE) continue
-
-    await recordWeight(Math.round(sample.kg * 10) / 10, sample.day, HEALTH_SOURCE)
-    imported += 1
-  }
-  return imported
 }

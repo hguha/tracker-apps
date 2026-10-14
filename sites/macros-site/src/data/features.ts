@@ -152,7 +152,7 @@ export const cards: Card[] = [
   },
   {
     title: 'Weigh-ins that expect noise',
-    body: 'A trend line through the scatter, every reading still visible behind it, and Apple Health read for you on iOS. Weight only, read-only.',
+    body: 'A trend line through the scatter, every reading still visible behind it, and the goal line drawn through it.',
     icon: 'scale',
     accent: 'var(--macro-protein)',
   },
