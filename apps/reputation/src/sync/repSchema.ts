@@ -3,8 +3,8 @@
 // and helper functions inside engine.ts (SYNCED_TABLES, parentRowId, normalizeRow,
 // tableStore, ERASE_ORDER); moving it here makes the engine reusable by a second app.
 
+import type { SyncRowStore, SyncSchema } from '@tracker-engine/local-first'
 import { db } from '@/db/database'
-import type { SyncRowStore, SyncSchema } from './schema'
 
 // Tables that participate in sync, in dependency order for the initial pull.
 // `personalRecords` is absent: PRs are derived from sets and recomputed per device.

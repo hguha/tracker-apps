@@ -1,3 +1,4 @@
+import { isNativePlatform } from '@tracker-engine/platform'
 import { plural } from '@tracker-engine/core'
 // Sync status, backups, and the destructive resets — the only screen with an
 // irreversible control, so it takes a deliberate navigation to reach.
@@ -16,7 +17,6 @@ import {
   parseBackup,
   BackupParseError,
 } from '@/data/backup'
-import { isNativePlatform } from '@/lib/platform'
 import { APP_VERSION } from '@/lib/version'
 import { exportBackup, pickBackupText } from '@/platform/files'
 import { hasStaleWindow } from '@/platform/viewport'

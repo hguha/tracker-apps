@@ -1,10 +1,10 @@
-import { isNativePlatform } from '../lib/platform'
+import { isNativePlatform } from '@tracker-engine/platform'
 
-export type Shell = 'native' | 'installed' | 'browser'
+type Shell = 'native' | 'installed' | 'browser'
 
 // `@media (display-mode: standalone)` does not match in an installed iOS web app, so the
 // shell can only be detected here, not in CSS.
-export function detectShell(): Shell {
+function detectShell(): Shell {
   if (isNativePlatform()) return 'native'
   const standalone = (navigator as { standalone?: boolean }).standalone === true
   return standalone || window.matchMedia('(display-mode: standalone)').matches
@@ -12,7 +12,7 @@ export function detectShell(): Shell {
     : 'browser'
 }
 
-export function safeAreaInsets(): { top: number; bottom: number } {
+function safeAreaInsets(): { top: number; bottom: number } {
   const probe = document.createElement('div')
   probe.style.cssText =
     'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'
@@ -26,7 +26,7 @@ export function safeAreaInsets(): { top: number; bottom: number } {
   return insets
 }
 
-export function viewportShortfall(): number {
+function viewportShortfall(): number {
   const screenHeight = window.screen?.height ?? 0
   const viewport = window.visualViewport?.height ?? window.innerHeight
   return Math.max(0, Math.round(screenHeight - viewport))

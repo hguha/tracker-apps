@@ -1,3 +1,4 @@
+import { SupabaseBackend } from '@tracker-engine/local-first'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { liveQuery } from 'dexie'
 import { createSyncScope } from '@tracker-engine/local-first/react'
@@ -5,7 +6,6 @@ import { db, isReadyToPush } from '@/db/database'
 import * as repo from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
 import { getSupabase } from '@/backend/supabaseClient'
-import { SupabaseBackend } from './supabaseBackend'
 import { SyncEngine } from './engine'
 
 export type { SyncPhase, SyncStatus } from '@tracker-engine/local-first/react'

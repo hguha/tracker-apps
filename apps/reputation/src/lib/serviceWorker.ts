@@ -3,7 +3,7 @@
 // so a root-scope worker would intercept its requests too. persist() is the
 // point — without it iOS can evict the IndexedDB store under storage pressure.
 // Prod only, so a stale cache never gets in the way of `vite dev`.
-import { isNativePlatform } from './platform'
+import { isNativePlatform } from '@tracker-engine/platform'
 
 const SW_URL = import.meta.env.BASE_URL + 'sw.js'
 const SW_SCOPE = import.meta.env.BASE_URL

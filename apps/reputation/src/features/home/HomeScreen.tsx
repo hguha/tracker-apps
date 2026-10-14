@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { plural, weekStreaks } from '@tracker-engine/core'
-import { EmptyState, PageTitle, SectionLabel } from '@tracker-engine/ui'
+import { EmptyState, PageTitle, ProgressRing, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   ChevronRight,
@@ -15,7 +15,6 @@ import { useAuth } from '@/auth/AuthContext'
 import { useSync } from '@/sync/useSync'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
-import { ProgressRing } from '@/components/ProgressRing'
 import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
 import { DAY_MS, WEEK_MS, dayKey, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'

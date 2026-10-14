@@ -1,3 +1,9 @@
+import type {
+  PulledRow,
+  PushOutcome,
+  PushRow,
+  SyncBackend,
+} from '@tracker-engine/local-first'
 /**
  * An in-memory sync backend for tests (§14.1).
  *
@@ -7,7 +13,6 @@
  * failure classification, backoff, dead-lettering, and pending-write guard.
  */
 
-import type { PulledRow, PushOutcome, PushRow, SyncBackend } from '@/sync/backend'
 
 type Store = Map<string, Map<string, Record<string, unknown>>>
 

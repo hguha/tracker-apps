@@ -1,6 +1,7 @@
 // App shell and navigation, as hand-rolled view state (§5.2) rather than a router
 // while there's no URL-shareable state.
 
+import { applyStatusBarStyle } from '@tracker-engine/platform'
 import { Suspense, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { seedIfNeeded } from '@/db/seed'
@@ -24,7 +25,6 @@ import { ActiveWorkoutScreen } from '@/features/workout/ActiveWorkoutScreen'
 import { StartWorkoutScreen } from '@/features/workout/StartWorkoutScreen'
 import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
 import { useSystemColorScheme } from '@tracker-engine/ui'
-import { applyStatusBarStyle } from '@/platform/statusBar'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
 import { SyncScope, useSync } from '@/sync/useSync'
 import { useReminderSync } from '@/features/reminders/reminders'
