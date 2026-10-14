@@ -8,6 +8,7 @@
  */
 import StoreBadges from './StoreBadges.astro'
 import Icon from './Icon.astro'
+import Pill from './Pill.astro'
 import { site } from '@site'
 ---
 
@@ -27,17 +28,7 @@ import { site } from '@site'
   </div>
 
   <div class="mx-auto max-w-3xl px-5 text-center" data-reveal>
-    <p
-      class="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3.5 py-1.5 text-[12.5px] font-semibold text-ink-soft"
-    >
-      <span class="relative flex size-1.5">
-        <span
-          class="absolute inline-flex size-full animate-ping rounded-full bg-accent-bright opacity-75"
-        ></span>
-        <span class="relative inline-flex size-1.5 rounded-full bg-accent-bright"></span>
-      </span>
-      {site.heroBadge}
-    </p>
+    <Pill>{site.heroBadge}</Pill>
 
     <h1
       class="mt-6 font-semibold tracking-[-0.045em] text-balance"
