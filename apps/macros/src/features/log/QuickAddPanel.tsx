@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Button, useToast } from '@tracker-engine/ui'
+import { Button, useBusy, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { gramsToMg, mgToGrams } from '@/lib/nutrition'
 import { EMPTY_NUTRIENTS, type Nutrients } from '@/domain/types'
 import type { LogTarget } from '@/features/shared/target'
-import { useBusy } from '@/features/shared/useBusy'
 import { EditActions } from './EditActions'
 
 interface QuickEdit {

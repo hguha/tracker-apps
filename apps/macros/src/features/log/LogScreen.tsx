@@ -6,6 +6,7 @@ import {
   SearchField,
   SegmentedTabs,
   type SegmentedTab,
+  useBusy,
 } from '@tracker-engine/ui'
 import {
   ChefHat,
@@ -26,7 +27,6 @@ import { amountGrams } from '@/features/shared/format'
 import { SearchingRow } from '@/features/shared/FoodSearchPicker'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import { useDebouncedValue } from '@/features/shared/useDebouncedValue'
-import { useBusy } from '@/features/shared/useBusy'
 import type { LastAmount } from '@/data/repository'
 import type { Food, MealSlot } from '@/domain/types'
 import { AddPanel } from './AddPanel'

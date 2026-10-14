@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey, formatGrams } from '@tracker-engine/core'
-import { Button, ProgressRing, useToast } from '@tracker-engine/ui'
+import { Button, ProgressRing, useBusy, useToast } from '@tracker-engine/ui'
 import { ChevronRight, Minus, Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { fetchFoodParts, type FoodParts } from '@/data/foodLookup'
 import { dayTotals, macroSharePct, scale, sum } from '@/lib/nutrition'
-import { useBusy } from '@/features/shared/useBusy'
 import { MacroBars } from '@/features/shared/MacroBar'
 import type { MacroTargets, Nutrients } from '@/domain/types'
 import {

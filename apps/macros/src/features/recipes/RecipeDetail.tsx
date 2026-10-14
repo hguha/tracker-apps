@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Button, Card, Screen, useToast } from '@tracker-engine/ui'
+import { Button, Card, Screen, useBusy, useToast } from '@tracker-engine/ui'
 import {
   dayNoon,
   formatRelativeDay,
@@ -12,7 +12,6 @@ import * as repo from '@/data/repository'
 import { perServing, scale } from '@/lib/nutrition'
 import { cuisineLabel } from '@/lib/cuisine'
 import { ingredientAmount, macroLine } from '@/features/shared/format'
-import { useBusy } from '@/features/shared/useBusy'
 import { useUnits } from '@/features/shared/useUnits'
 import { MEAL_LABELS, mealForHour } from '@/lib/meals'
 import { MealPicker } from '@/features/log/MealPicker'

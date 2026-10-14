@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Button, SegmentedTabs, useToast, type SegmentedTab } from '@tracker-engine/ui'
+import { Button, SegmentedTabs, type SegmentedTab, useBusy, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { per100FromPanel, per100FromServing } from '@/lib/nutrition'
 import type { Food } from '@/domain/types'
-import { useBusy } from '@/features/shared/useBusy'
 import type { FoodDraft } from './estimate'
 
 /**
