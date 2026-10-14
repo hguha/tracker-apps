@@ -3,12 +3,7 @@ import { Timer } from 'lucide-react'
 import { formatClock } from '@/lib/units'
 import { parseDuration } from '@/features/workout/SetRow'
 import { remainingSeconds, useRestTimer } from './restTimerStore'
-import {
-  cancelScheduledRest,
-  playCue,
-  scheduleRestComplete,
-  signalRestComplete,
-} from './sounds'
+import { cancelScheduledRest, playCue, scheduleRestComplete } from './sounds'
 
 // Seconds remaining when the heads-up tick fires (§6.8).
 const WARNING_AT = 10
@@ -73,7 +68,7 @@ export function RestTimerBar({
       // played while the app was in the background — don't sound it twice.
       const isLate = Date.now() - targetAt > 3000
       cancelScheduledRest()
-      if (!isLate) signalRestComplete()
+      if (!isLate) playCue('rest-complete')
       onExpire?.()
       // Hold the "rest over" message briefly; tracked so cleanup can cancel it if the bar unmounts first.
       lingerTimeout.current = window.setTimeout(() => {

@@ -16,7 +16,7 @@
 //     starts suspended and is materially harder to resume, so only the gesture
 //     handlers construct one; every other path may resume but never create.
 
-import { haptic as deviceHaptic, hapticSuccess } from '@/platform/haptics'
+import { haptic, hapticSuccess } from '@tracker-engine/platform'
 
 export type SoundCue =
   | 'set-logged'
@@ -198,15 +198,19 @@ const CUE_HAPTICS: Partial<Record<SoundCue, number | number[]>> = {
   'workout-complete': [90, 50, 90, 50, 140],
 }
 
-function emit(cue: SoundCue, ctx: AudioContext, destination: AudioNode): void {
-  const now = ctx.currentTime
-  for (const tone of CUES[cue]) {
+function emit(
+  cue: SoundCue,
+  ctx: AudioContext,
+  destination: AudioNode,
+  base = ctx.currentTime,
+): AudioScheduledSourceNode[] {
+  return CUES[cue].map((tone) => {
     const oscillator = ctx.createOscillator()
     const gain = ctx.createGain()
     oscillator.type = tone.type ?? 'sine'
     oscillator.frequency.value = tone.frequency
 
-    const startAt = now + tone.at
+    const startAt = base + tone.at
     // Ramp both edges — a hard start or stop clicks audibly.
     gain.gain.setValueAtTime(0, startAt)
     gain.gain.linearRampToValueAtTime(tone.gain, startAt + 0.012)
@@ -215,7 +219,8 @@ function emit(cue: SoundCue, ctx: AudioContext, destination: AudioNode): void {
     oscillator.connect(gain).connect(destination)
     oscillator.start(startAt)
     oscillator.stop(startAt + tone.duration + 0.02)
-  }
+    return oscillator
+  })
 }
 
 export function playCue(cue: SoundCue): void {
@@ -225,7 +230,7 @@ export function playCue(cue: SoundCue): void {
   if (cue === 'pr') hapticSuccess()
   else {
     const pattern = CUE_HAPTICS[cue]
-    if (pattern !== undefined) vibrate(pattern)
+    if (pattern !== undefined) haptic(pattern)
   }
 
   const ctx = context
@@ -243,15 +248,6 @@ export function playCue(cue: SoundCue): void {
   }
 
   emit(cue, ctx, out)
-}
-
-/** Haptics where available. Independent of the sound toggle. */
-export function vibrate(pattern: number | number[]): void {
-  deviceHaptic(pattern)
-}
-
-export function signalRestComplete(): void {
-  playCue('rest-complete')
 }
 
 // Nodes queued for a future time, so they can be torn down if rest is cancelled.
@@ -286,21 +282,5 @@ export function scheduleRestComplete(secondsFromNow: number): void {
   const out = master
   if (!ctx || !out || stateOf(ctx) !== 'running') return
 
-  const base = ctx.currentTime + secondsFromNow
-  for (const tone of CUES['rest-complete']) {
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
-    oscillator.type = tone.type ?? 'sine'
-    oscillator.frequency.value = tone.frequency
-
-    const startAt = base + tone.at
-    gain.gain.setValueAtTime(0, startAt)
-    gain.gain.linearRampToValueAtTime(tone.gain, startAt + 0.012)
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + tone.duration)
-
-    oscillator.connect(gain).connect(out)
-    oscillator.start(startAt)
-    oscillator.stop(startAt + tone.duration + 0.02)
-    scheduled.push(oscillator)
-  }
+  scheduled = emit('rest-complete', ctx, out, ctx.currentTime + secondsFromNow)
 }
