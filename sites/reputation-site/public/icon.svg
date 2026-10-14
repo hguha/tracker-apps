@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FitNote">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="REPutation">
   <!-- Maskable: keep the mark within the inner ~80% safe zone. -->
   <rect width="512" height="512" rx="112" fill="#2a78d6"/>
-  <!-- A dumbbell: two plates on a bar, the FitNote mark. -->
+  <!-- A dumbbell: two plates on a bar, the REPutation mark. -->
   <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
     <!-- bar -->
     <line x1="188" y1="256" x2="324" y2="256" stroke-width="28"/>
