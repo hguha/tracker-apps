@@ -1,6 +1,6 @@
 import { formatClock, parseClock } from '@tracker-engine/core'
-import { describe, expect, it } from 'vitest'
-import { dayTiming, eatingOccasions, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
+import { describe, expect, it, vi } from 'vitest'
+import { atOnDay, dayTiming, eatingOccasions, formatDuration, windowProgress, windowState } from '@/lib/mealTiming'
 import { EMPTY_NUTRIENTS, type LogEntry } from '@/domain/types'
 
 const day = '2026-09-07'
@@ -138,5 +138,21 @@ describe('parseClock', () => {
     expect(parseClock('9')).toBeNull()
     expect(parseClock('25:00')).toBeNull()
     expect(parseClock('12:74')).toBeNull()
+  })
+})
+
+describe('atOnDay', () => {
+  it('puts the current clock time on a day the clocks changed', () => {
+    const tz = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-03-20T19:40:00'))
+      const at = new Date(atOnDay('2026-03-08'))
+      expect([at.getDate(), at.getHours(), at.getMinutes()]).toEqual([8, 19, 40])
+    } finally {
+      vi.useRealTimers()
+      process.env.TZ = tz
+    }
   })
 })
