@@ -23,6 +23,7 @@ export function RestTimerBar({
   const start = useRestTimer((s) => s.start)
   const extend = useRestTimer((s) => s.extend)
   const cancel = useRestTimer((s) => s.cancel)
+  const dismissExpired = useRestTimer((s) => s.dismissExpired)
 
   const [remaining, setRemaining] = useState(() => remainingSeconds(targetAt))
   const [hasExpired, setHasExpired] = useState(false)
@@ -73,10 +74,10 @@ export function RestTimerBar({
       // Hold the "rest over" message briefly; tracked so cleanup can cancel it if the bar unmounts first.
       lingerTimeout.current = window.setTimeout(() => {
         setHasExpired(false)
-        cancel()
+        dismissExpired(targetAt)
       }, EXPIRED_LINGER_MS)
     }
-  }, [remaining, targetAt, onExpire, cancel])
+  }, [remaining, targetAt, onExpire, dismissExpired])
 
   useEffect(() => {
     return () => {

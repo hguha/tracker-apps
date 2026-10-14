@@ -20,6 +20,7 @@ interface RestTimerState {
   ) => void
   extend: (seconds: number) => void
   cancel: () => void
+  dismissExpired: (expiredTargetAt: number | null) => void
   elapsedSeconds: () => number | null
 }
 
@@ -65,6 +66,10 @@ export const useRestTimer = create<RestTimerState>()(
           exerciseId: null,
         })
         cancelRestDone()
+      },
+
+      dismissExpired: (expiredTargetAt) => {
+        if (get().targetAt === expiredTargetAt) get().cancel()
       },
 
       elapsedSeconds: () => {
