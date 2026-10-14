@@ -33,6 +33,11 @@ const year = new Date().getFullYear()
             <li>
               <a href={site.privacyUrl} class="transition hover:text-ink">Privacy policy</a>
             </li>
+            {site.supportUrl && (
+              <li>
+                <a href={site.supportUrl} class="transition hover:text-ink">Support</a>
+              </li>
+            )}
             <li>
               <a href={site.author.url} class="transition hover:text-ink">{site.author.name}</a>
             </li>

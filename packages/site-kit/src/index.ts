@@ -25,6 +25,7 @@ export interface SiteConfig {
    */
   webAppUrl: string
   privacyUrl: string
+  supportUrl?: string
   author: { name: string; url: string }
   /**
    * Store listings, keyed by store. Three states, and the difference between the last two is the
