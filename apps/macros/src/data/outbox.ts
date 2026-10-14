@@ -26,5 +26,5 @@ const writes = createWriteQueue({
   store: (table) => WRITE_STORES[table],
 })
 
-export const { enqueue, forget, patch } = writes
+export const { enqueue, patch } = writes
 export { newId } from '@tracker-engine/local-first'

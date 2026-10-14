@@ -18,5 +18,3 @@ export const THEME_PRESETS: { id: ThemePreset; label: string; swatch: string }[]
 export const { applyAppearance, applyDefaultAppearance } = createAppearance({
   presets: THEME_PRESETS,
 })
-
-export { resolveScheme, type AppearanceSettings } from '@tracker-engine/ui'
