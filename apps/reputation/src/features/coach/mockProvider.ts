@@ -6,6 +6,7 @@ import { displayWeight, displayWeightOrNull } from '@/lib/units'
 import { plural } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import type { CoachSummary, ExerciseAgg } from '@/data/coachSummary'
+import type { GeminiContent } from '@tracker-engine/ai-coach'
 import type { CoachContext } from './context'
 import type {
   CoachChatResult,
@@ -14,7 +15,6 @@ import type {
   CoachProvider,
   CoachRequest,
   CoachResponse,
-  GeminiContent,
   PlanSession,
 } from './types'
 

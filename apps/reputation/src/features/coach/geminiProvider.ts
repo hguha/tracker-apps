@@ -5,7 +5,7 @@
 
 import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
-import { runToolLoop } from '@tracker-engine/ai-coach'
+import { runToolLoop, type GeminiContent } from '@tracker-engine/ai-coach'
 import type { CoachSummary } from '@/data/coachSummary'
 import type { CoachContext } from './context'
 import type {
@@ -15,7 +15,6 @@ import type {
   CoachProvider,
   CoachRequest,
   CoachResponse,
-  GeminiContent,
 } from './types'
 import {
   executeRetrievalTool,

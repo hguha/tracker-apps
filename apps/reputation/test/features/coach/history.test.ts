@@ -3,7 +3,7 @@ import { conversationTitleFrom } from '@tracker-engine/ai-coach'
 import { db } from '@/db/database'
 import { LOCAL_USER_ID, seedIfNeeded, setActiveUserId } from '@/db/seed'
 import { conversations } from '@/features/coach/history'
-import type { GeminiContent } from '@/features/coach/types'
+import type { GeminiContent } from '@tracker-engine/ai-coach'
 
 beforeEach(async () => {
   setActiveUserId(LOCAL_USER_ID)

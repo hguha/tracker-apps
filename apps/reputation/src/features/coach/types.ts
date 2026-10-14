@@ -3,14 +3,7 @@
 
 import type { Equipment } from '@/domain/types'
 import type { CoachSummary } from '@/data/coachSummary'
-import type {
-  EdgeTurn,
-  GeminiContent,
-  GeminiFunctionCall,
-  GeminiPart,
-  GeminiRole,
-  ToolDeclaration,
-} from '@tracker-engine/ai-coach'
+import type { GeminiContent } from '@tracker-engine/ai-coach'
 // Type-only (erased under verbatimModuleSyntax), so no runtime import cycle with
 // context.ts → repository → templates → this file.
 import type { CoachContext } from './context'
@@ -70,16 +63,7 @@ export type CoachResponse =
 // The chat coach is a tool-using agent: the model calls typed tools that execute on
 // the client against IndexedDB (tools.ts), so the loop bounces client→edge→Gemini.
 // The Gemini wire types + the tool-calling loop live in @tracker-engine/ai-coach; the
-// workout tools/prompts/actions below are this app's. Re-exported so existing
-// '@/features/coach/types' importers are unchanged. (CoachTurn = the package's EdgeTurn.)
-export type {
-  GeminiContent,
-  GeminiFunctionCall,
-  GeminiPart,
-  GeminiRole,
-  ToolDeclaration,
-}
-export type { EdgeTurn as CoachTurn }
+// workout tools/prompts/actions below are this app's.
 
 // A terminal action the model surfaced for the UI to render as an interactive card.
 export type CoachAction =
@@ -114,9 +98,9 @@ export interface CoachProvider {
   /**
    * One user-message→assistant-reply cycle of the multi-turn chat, driving any
    * client-side tool rounds internally. `contents` already includes the new user
-   * turn. Optional so the offline mock can degrade without full tool-calling.
+   * turn.
    */
-  chat?(
+  chat(
     contents: GeminiContent[],
     context: CoachContext,
     hooks?: CoachChatHooks,

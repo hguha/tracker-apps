@@ -30,18 +30,16 @@ const STARTERS = [
 
 export function CoachChat({
   variant,
-  persist = false,
   onOpenTemplates,
   onSignIn,
 }: {
   // 'screen' = full-screen coach; 'sheet' = opened over an active workout (live session in context).
   variant: 'screen' | 'sheet'
-  // Persist this chat to IndexedDB (full-screen coach only; the in-workout sheet stays ephemeral).
-  persist?: boolean
   onOpenTemplates?: () => void
   onSignIn?: () => void
 }) {
   const toast = useToast()
+  const persist = variant === 'screen'
   const { session } = useAuth()
   const unit = useLiveQuery(() => repo.getProfile().then((p) => p.unitWeight), []) ?? 'lb'
   const canUseLiveCoach = isBackendConfigured() && session != null && !session.isLocal
@@ -70,8 +68,8 @@ export function CoachChat({
   const backends: CoachBackends<CoachAction> = {
     isLiveAvailable: async () => canUseLiveCoach && (await geminiCoachProvider.isAvailable()),
     live: async (contents, onTool) =>
-      geminiCoachProvider.chat!(contents, await contextForTurn(), { onTool }),
-    offline: async (contents) => mockCoachProvider.chat!(contents, await contextForTurn()),
+      geminiCoachProvider.chat(contents, await contextForTurn(), { onTool }),
+    offline: async (contents) => mockCoachProvider.chat(contents, await contextForTurn()),
     onLiveError: (detail) => toast.show(`Live coach unavailable — ${detail}`),
   }
   const chat = useCoachChat({ backends, store: persist ? conversations : undefined })

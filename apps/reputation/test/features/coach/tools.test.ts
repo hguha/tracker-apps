@@ -10,7 +10,7 @@ import {
 } from '@/features/coach/tools'
 import { mockCoachProvider } from '@/features/coach/mockProvider'
 import type { CoachContext } from '@/features/coach/context'
-import type { GeminiContent } from '@/features/coach/types'
+import type { GeminiContent } from '@tracker-engine/ai-coach'
 
 beforeEach(async () => {
   setActiveUserId(LOCAL_USER_ID)

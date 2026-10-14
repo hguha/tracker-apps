@@ -48,7 +48,6 @@ export function CoachScreen({
       <div className="min-h-0 flex-1">
         <CoachChat
           variant="screen"
-          persist
           onOpenTemplates={onOpenTemplates}
           onSignIn={onSignIn}
         />

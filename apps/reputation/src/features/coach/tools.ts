@@ -15,12 +15,8 @@ import {
 } from '@/lib/metrics'
 import { displayWeight, displayWeightOrNull } from '@/lib/units'
 import { EQUIPMENT, type Equipment, type Exercise, type WeightUnit } from '@/domain/types'
-import type {
-  CoachAction,
-  PlanExercise,
-  PlanSession,
-  ToolDeclaration,
-} from './types'
+import type { ToolDeclaration } from '@tracker-engine/ai-coach'
+import type { CoachAction, PlanExercise, PlanSession } from './types'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
