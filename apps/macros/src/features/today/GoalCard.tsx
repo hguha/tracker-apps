@@ -11,9 +11,9 @@ import { useUnits } from '@/features/shared/useUnits'
 import { paceLabel } from '@tracker-engine/body'
 import { arrivalDay, arrivalRange, perWeek, timeUntil } from '@tracker-engine/body'
 import type { WeightUnit } from '@tracker-engine/core'
-import type { Program } from '@/domain/types'
+import type { Goal, Program } from '@/domain/types'
 
-const GOAL_VERB: Record<string, string> = {
+const GOAL_VERB: Record<Goal, string> = {
   lose: 'Losing',
   gain: 'Building',
   maintain: 'Holding',
@@ -390,8 +390,8 @@ function PaceNotice({
   )
 }
 
-function Header({ goal }: { goal: string }) {
+function Header({ goal }: { goal: Goal }) {
   return (
-    <h2 className="text-[15px] font-semibold tracking-tight">{GOAL_VERB[goal] ?? 'Goal'}</h2>
+    <h2 className="text-[15px] font-semibold tracking-tight">{GOAL_VERB[goal]}</h2>
   )
 }
