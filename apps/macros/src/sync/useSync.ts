@@ -5,15 +5,11 @@ import { createSyncScope } from '@tracker-engine/local-first/react'
 import { db } from '@/db'
 import { claimLocalData, migrateSavedMeals } from '@/data/repository'
 import { useAuth } from '@/auth/AuthContext'
-import { MacroSyncEngine } from './engine'
-import { syncBackend } from './backend'
+import { macroSyncEngine } from './backend'
 
 export const { SyncScope, useSyncStatus } = createSyncScope({
   tag: 'sync',
-  createEngine: () => {
-    const backend = syncBackend()
-    return backend ? new MacroSyncEngine(backend) : null
-  },
+  createEngine: macroSyncEngine,
   useSyncingUserId: () => {
     const { session } = useAuth()
     return session && !session.isLocal ? session.userId : null
