@@ -9,11 +9,6 @@
 import { site } from '@site'
 import type { StoreKey } from '@tracker-engine/site-kit'
 
-interface Props {
-  class?: string
-}
-const { class: className } = Astro.props
-
 const STORES: Record<StoreKey, { store: string; prefix: string }> = {
   appStore: { store: 'App Store', prefix: 'Download on the' },
   playStore: { store: 'Google Play', prefix: 'Get it on' },
@@ -24,7 +19,7 @@ const badges = (Object.keys(STORES) as StoreKey[])
   .map((key) => ({ key, href: site.stores[key] ?? null, ...STORES[key] }))
 ---
 
-<div class:list={['flex flex-wrap items-center gap-3', className]}>
+<div class="flex flex-wrap items-center justify-center gap-3">
   {
     badges.map(({ key, href, store, prefix }) => {
       const inner = (

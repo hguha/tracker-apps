@@ -14,15 +14,13 @@ interface Props {
   screens: readonly string[]
   /** Max phone width on desktop; clamps down with the viewport. */
   max?: number
-  class?: string
-  loading?: 'eager' | 'lazy'
 }
 
-const { screens, max = 260, class: className, loading = 'lazy' } = Astro.props
+const { screens, max = 260 } = Astro.props
 ---
 
 <div
-  class:list={['phone-stack relative mx-auto', className]}
+  class="phone-stack relative mx-auto"
   style={`--pw: clamp(148px, 42vw, ${max}px); width: min(92vw, calc(var(--pw) * 1.95)); height: calc(var(--pw) * 2.28)`}
   data-phone-stack
   data-n={screens.length}
@@ -34,7 +32,7 @@ const { screens, max = 260, class: className, loading = 'lazy' } = Astro.props
         data-slot={i}
         style="width: var(--pw); margin-left: calc(var(--pw) / -2); margin-top: calc(var(--pw) * -1.12)"
       >
-        <Phone name={name} fill loading={loading} />
+        <Phone name={name} fill />
       </div>
     ))
   }

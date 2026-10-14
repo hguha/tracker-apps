@@ -13,7 +13,6 @@ interface Props {
   /** Rendered width of the device in px; the image is sized to match. */
   width?: number
   label?: string
-  class?: string
   loading?: 'eager' | 'lazy'
   /** Fill the parent's width instead of a fixed px — lets a stack size it via CSS. */
   fill?: boolean
@@ -23,7 +22,6 @@ const {
   name,
   width = 300,
   label,
-  class: className,
   loading = 'lazy',
   fill = false,
 } = Astro.props
@@ -34,7 +32,7 @@ const intrinsic = fill ? 300 : Math.round(width * 0.93)
 ---
 
 <div
-  class:list={['phone', fill && 'w-full', className]}
+  class:list={['phone', fill && 'w-full']}
   style={fill ? undefined : `width:${width}px`}
 >
   <div
