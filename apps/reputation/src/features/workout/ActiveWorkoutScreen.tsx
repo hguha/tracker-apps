@@ -1,11 +1,9 @@
 // Serves both a live session and an edit of a past one (§6.6); `isEditMode`
 // suppresses the timers but leaves every mutation available.
 
-import { plural } from '@tracker-engine/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ScreenHeader } from '@tracker-engine/ui'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { FileText, MoreHorizontal, Plus, Sparkles } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { BottomSheet } from '@/components/BottomSheet'
 import { Button } from '@/components/Button'
@@ -15,21 +13,54 @@ import { DragItem, DragList } from '@/components/DragList'
 import { RestTimerBar } from '@/features/timer/RestTimerBar'
 import { useRestTimer } from '@/features/timer/restTimerStore'
 import { playCue } from '@/features/timer/sounds'
-import { formatDuration } from '@/lib/units'
 import { sessionTitle } from '@/lib/sessionTitle'
 import type { Equipment, LoadMode, WorkoutSet } from '@/domain/types'
+import { ActiveWorkoutHeader } from './ActiveWorkoutHeader'
+import { DetachedNotice, LeaveEditConfirm } from './ActiveWorkoutSheets'
 import { ExerciseCard } from './ExerciseCard'
 import { ExerciseDetailSheet } from './ExerciseDetailSheet'
 import { ExercisePicker } from './ExercisePicker'
 import { FinishSheet } from './FinishSheet'
 import { SessionMenu } from './SessionMenu'
-import { lastLiftRestSeconds } from './rest'
+import { lastLiftRestSeconds, restSecondsFor } from './rest'
 import { CoachChat } from '@/features/coach/CoachChat'
 import { isCardioPattern } from '@/domain/movement'
 
 // How many finished sessions before the swipe hint retires. Deleting and reusing a
 // set have no visible control, so one showing isn't enough to learn them.
 const GESTURE_HINT_WORKOUTS = 3
+
+async function loadSession(workoutId: string) {
+  const workout = await repo.getWorkout(workoutId)
+  if (!workout) return null
+
+  const profile = await repo.getProfile()
+  const workoutExercises = await repo.listWorkoutExercises(workoutId)
+
+  const rows = await Promise.all(
+    workoutExercises.map(async (we) => ({
+      workoutExercise: we,
+      exercise: await repo.getExercise(we.exerciseId),
+      sets: await repo.listSets(we.id),
+      // Relative to *this* workout, so editing an older session shows what
+      // came before it rather than the newest session overall.
+      previousSession: await repo.getPreviousSession(we.exerciseId, we.equipment, workoutId),
+    })),
+  )
+
+  // Named only while the session still matches the template it came from.
+  const template =
+    workout.templateId === null ? null : await repo.getTemplate(workout.templateId)
+  const titleSignals = await repo.getSessionTitleSignals(workoutId)
+  const placeholderOverrides = await repo.getPlaceholderOverrides(workoutId)
+  // Swipe is the only way to delete or reuse a set, so the hint stays until the
+  // gestures have plausibly been learned rather than showing exactly once.
+  const finishedWorkouts = await repo.countFinishedWorkouts()
+
+  return { workout, profile, template, rows, titleSignals, placeholderOverrides, finishedWorkouts }
+}
+
+type SessionRow = NonNullable<Awaited<ReturnType<typeof loadSession>>>['rows'][number]
 
 export function ActiveWorkoutScreen({
   workoutId,
@@ -56,179 +87,7 @@ export function ActiveWorkoutScreen({
     workoutExerciseId: string
   } | null>(null)
 
-  const data = useLiveQuery(async () => {
-    const workout = await repo.getWorkout(workoutId)
-    if (!workout) return null
-
-    const profile = await repo.getProfile()
-    const workoutExercises = await repo.listWorkoutExercises(workoutId)
-
-    const rows = await Promise.all(
-      workoutExercises.map(async (we) => ({
-        workoutExercise: we,
-        exercise: await repo.getExercise(we.exerciseId),
-        sets: await repo.listSets(we.id),
-        // Relative to *this* workout, so editing an older session shows what
-        // came before it rather than the newest session overall.
-        previousSession: await repo.getPreviousSession(
-          we.exerciseId,
-          we.equipment,
-          workoutId,
-        ),
-      })),
-    )
-
-    // Named only while the session still matches the template it came from.
-    const template =
-      workout.templateId === null ? null : await repo.getTemplate(workout.templateId)
-    const titleSignals = await repo.getSessionTitleSignals(workoutId)
-    const placeholderOverrides = await repo.getPlaceholderOverrides(workoutId)
-    // Swipe is the only way to delete or reuse a set, so the hint stays until the
-    // gestures have plausibly been learned rather than showing exactly once.
-    const finishedWorkouts = await repo.countFinishedWorkouts()
-
-    return {
-      workout,
-      profile,
-      template,
-      rows,
-      titleSignals,
-      placeholderOverrides,
-      finishedWorkouts,
-    }
-  }, [workoutId])
-
-  const [elapsedLabel, setElapsedLabel] = useState('')
-  const startedAt = data?.workout.startedAt
-  const endedAt = data?.workout.endedAt
-
-  useEffect(() => {
-    if (startedAt === undefined || endedAt !== null) return
-    const tick = () => setElapsedLabel(formatDuration((Date.now() - startedAt) / 1000))
-    tick()
-    const id = window.setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [startedAt, endedAt])
-
-  // Single path for logging a set: writes values, then the rest timer, log cue,
-  // and PR feedback (§6.2).
-  const handleSetChange = useCallback(
-    async (setId: string, patch: Partial<WorkoutSet>, exerciseId: string) => {
-      const before = await repo.getSet(setId)
-      const wasLogged = before?.isCompleted ?? false
-
-      // Measured rest can't be reconstructed later, so capture it now or lose it.
-      const measured = timer.elapsedSeconds()
-      const brokenRecords = await repo.logSetValues(setId, {
-        ...patch,
-        ...(measured !== null && !wasLogged ? { restTakenSeconds: measured } : {}),
-      })
-
-      const after = await repo.getSet(setId)
-      const isNowLogged = after?.isCompleted ?? false
-
-      // Only a transition into "logged" plays the cue — correcting an
-      // already-logged number is not a new set.
-      if (!wasLogged && isNowLogged) {
-        playCue('set-logged')
-
-        const row = data?.rows.find((r) => r.workoutExercise.exerciseId === exerciseId)
-        // Opt-in (§6.4.2). A running timer is never restarted — that would
-        // misreport the measured gap. Cardio never rests.
-        const shouldAutoStart =
-          (data?.profile.autoStartRest ?? false) &&
-          !isEditMode &&
-          !(row?.exercise && isCardioPattern(row.exercise.movementPattern)) &&
-          timer.targetAt === null
-        if (shouldAutoStart) {
-          const seconds =
-            row?.workoutExercise.restSeconds ??
-            row?.exercise?.defaultRestSeconds ??
-            data?.profile.defaultRestSeconds ??
-            60
-          timer.start(seconds, { setId, exerciseId })
-        }
-      }
-
-      if (brokenRecords.length > 0) {
-        playCue('pr')
-        const row = data?.rows.find((r) => r.workoutExercise.exerciseId === exerciseId)
-        celebrations.push(recordCelebration(setId, brokenRecords.length, row?.exercise?.name))
-      }
-    },
-    [
-      data?.rows,
-      data?.profile.defaultRestSeconds,
-      data?.profile.autoStartRest,
-      isEditMode,
-      timer,
-      celebrations.push,
-    ],
-  )
-
-  const handleDeleteSet = useCallback(
-    async (setId: string) => {
-      await repo.deleteSet(setId)
-      playCue('undo')
-      toast.show('Set deleted', () => void repo.restoreSet(setId))
-    },
-    [toast],
-  )
-
-  const handleDuplicateSet = useCallback(async (set: WorkoutSet) => {
-    await repo.addSet({
-      workoutExerciseId: set.workoutExerciseId,
-      weightKg: set.weightKg,
-      reps: set.reps,
-      durationSeconds: set.durationSeconds,
-      distanceM: set.distanceM,
-      isCompleted: true,
-      afterPosition: set.position,
-    })
-  }, [])
-
-  const handleAddExercise = useCallback(
-    async (exerciseId: string, equipment: Equipment, loadMode: LoadMode | null) => {
-      const workoutExerciseId = await repo.addExerciseToWorkout(
-        workoutId,
-        exerciseId,
-        equipment,
-        loadMode,
-      )
-
-      // One row is enough: its placeholder comes from history and "Add set"
-      // carries the ghost forward (§6.2).
-      await repo.addSetWithPlaceholder(workoutExerciseId, exerciseId)
-      playCue('exercise-added')
-      setIsPickerOpen(false)
-      // Adding an exercise changes the session's shape, so it is no longer an
-      // instance of the template it started from.
-      const wasFollowing = await repo.detachWorkoutFromTemplate(workoutId)
-      if (wasFollowing !== null) setDetachedFrom(wasFollowing)
-    },
-    [workoutId],
-  )
-
-  const handleReorder = useCallback(async (orderedIds: string[]) => {
-    await repo.reorderWorkoutExercises(orderedIds)
-  }, [])
-
-  const handleSuperset = useCallback(
-    async (draggedId: string, targetId: string) => {
-      await repo.supersetExercises(draggedId, targetId)
-      playCue('superset')
-      toast.show('Grouped as a superset', () => void repo.removeFromSuperset(draggedId))
-    },
-    [toast],
-  )
-
-  const handleDiscard = useCallback(async () => {
-    await repo.deleteWorkout(workoutId)
-    timer.cancel()
-    setIsMenuOpen(false)
-    toast.show('Workout discarded', () => void repo.restoreWorkout(workoutId))
-    onExit()
-  }, [workoutId, timer, toast, onExit])
+  const data = useLiveQuery(() => loadSession(workoutId), [workoutId])
 
   // Editing a past workout is a transaction (§6.6): the snapshot backs Cancel and
   // holds this workout's writes back until Done, so a cancelled edit never ships.
@@ -236,34 +95,6 @@ export function ActiveWorkoutScreen({
     if (!isEditMode) return
     void repo.beginWorkoutEdits(workoutId)
   }, [isEditMode, workoutId])
-
-  const handleDoneEditing = useCallback(async () => {
-    await repo.commitWorkoutEdits(workoutId)
-    onExit()
-  }, [workoutId, onExit])
-
-  const handleCancelEditing = useCallback(async () => {
-    await repo.cancelWorkoutEdits(workoutId)
-    toast.show('Edits discarded')
-    onExit()
-  }, [workoutId, toast, onExit])
-
-  // Leaving an edit means abandoning it, matching what a back arrow implies
-  // everywhere else. Only prompt when there is something to lose; an edit that
-  // changed nothing just closes.
-  const handleLeaveEditing = useCallback(async () => {
-    if (await repo.hasUnsavedWorkoutEdits(workoutId)) {
-      setIsLeaveConfirmOpen(true)
-      return
-    }
-    await repo.cancelWorkoutEdits(workoutId)
-    onExit()
-  }, [workoutId, onExit])
-
-  const loggedSetCount = useMemo(
-    () => data?.rows.flatMap((r) => r.sets).filter((s) => s.isCompleted).length ?? 0,
-    [data?.rows],
-  )
 
   if (data === undefined) return null
   if (data === null) {
@@ -279,11 +110,135 @@ export function ActiveWorkoutScreen({
 
   const { workout, profile, template, rows, titleSignals, placeholderOverrides } = data
 
+  // Single path for logging a set: writes values, then the rest timer, log cue,
+  // and PR feedback (§6.2).
+  async function handleSetChange(setId: string, patch: Partial<WorkoutSet>, row: SessionRow) {
+    const before = await repo.getSet(setId)
+    const wasLogged = before?.isCompleted ?? false
+
+    // Measured rest can't be reconstructed later, so capture it now or lose it.
+    const measured = timer.elapsedSeconds()
+    const brokenRecords = await repo.logSetValues(setId, {
+      ...patch,
+      ...(measured !== null && !wasLogged ? { restTakenSeconds: measured } : {}),
+    })
+
+    const after = await repo.getSet(setId)
+    const isNowLogged = after?.isCompleted ?? false
+
+    // Only a transition into "logged" plays the cue — correcting an
+    // already-logged number is not a new set.
+    if (!wasLogged && isNowLogged) {
+      playCue('set-logged')
+
+      // Opt-in (§6.4.2). A running timer is never restarted — that would
+      // misreport the measured gap. Cardio never rests.
+      const shouldAutoStart =
+        profile.autoStartRest &&
+        !isEditMode &&
+        !(row.exercise && isCardioPattern(row.exercise.movementPattern)) &&
+        timer.targetAt === null
+      if (shouldAutoStart) {
+        timer.start(restSecondsFor(row, profile), {
+          setId,
+          exerciseId: row.workoutExercise.exerciseId,
+        })
+      }
+    }
+
+    if (brokenRecords.length > 0) {
+      playCue('pr')
+      celebrations.push(recordCelebration(setId, brokenRecords.length, row.exercise?.name))
+    }
+  }
+
+  async function handleDeleteSet(setId: string) {
+    await repo.deleteSet(setId)
+    playCue('undo')
+    toast.show('Set deleted', () => void repo.restoreSet(setId))
+  }
+
+  async function handleDuplicateSet(set: WorkoutSet) {
+    await repo.addSet({
+      workoutExerciseId: set.workoutExerciseId,
+      weightKg: set.weightKg,
+      reps: set.reps,
+      durationSeconds: set.durationSeconds,
+      distanceM: set.distanceM,
+      isCompleted: true,
+      afterPosition: set.position,
+    })
+  }
+
+  async function detachFromTemplate() {
+    const wasFollowing = await repo.detachWorkoutFromTemplate(workoutId)
+    if (wasFollowing !== null) setDetachedFrom(wasFollowing)
+  }
+
+  async function handleAddExercise(
+    exerciseId: string,
+    equipment: Equipment,
+    loadMode: LoadMode | null,
+  ) {
+    const workoutExerciseId = await repo.addExerciseToWorkout(
+      workoutId,
+      exerciseId,
+      equipment,
+      loadMode,
+    )
+
+    // One row is enough: its placeholder comes from history and "Add set"
+    // carries the ghost forward (§6.2).
+    await repo.addSetWithPlaceholder(workoutExerciseId, exerciseId)
+    playCue('exercise-added')
+    setIsPickerOpen(false)
+    // Adding an exercise changes the session's shape, so it is no longer an
+    // instance of the template it started from.
+    await detachFromTemplate()
+  }
+
+  async function handleSuperset(draggedId: string, targetId: string) {
+    await repo.supersetExercises(draggedId, targetId)
+    playCue('superset')
+    toast.show('Grouped as a superset', () => void repo.removeFromSuperset(draggedId))
+  }
+
+  async function handleDiscard() {
+    await repo.deleteWorkout(workoutId)
+    timer.cancel()
+    setIsMenuOpen(false)
+    toast.show('Workout discarded', () => void repo.restoreWorkout(workoutId))
+    onExit()
+  }
+
+  async function handleDoneEditing() {
+    await repo.commitWorkoutEdits(workoutId)
+    onExit()
+  }
+
+  async function handleCancelEditing() {
+    await repo.cancelWorkoutEdits(workoutId)
+    toast.show('Edits discarded')
+    onExit()
+  }
+
+  // Leaving an edit means abandoning it, matching what a back arrow implies
+  // everywhere else. Only prompt when there is something to lose; an edit that
+  // changed nothing just closes.
+  async function handleLeaveEditing() {
+    if (await repo.hasUnsavedWorkoutEdits(workoutId)) {
+      setIsLeaveConfirmOpen(true)
+      return
+    }
+    await repo.cancelWorkoutEdits(workoutId)
+    onExit()
+  }
+
+  const loggedSetCount = rows.flatMap((r) => r.sets).filter((s) => s.isCompleted).length
+
   // Guide a genuine first-timer through logging; drop it once they've logged a set.
   const showGestureHint =
     data.finishedWorkouts < GESTURE_HINT_WORKOUTS && !isEditMode && rows.length > 0
-  const displayTitle = sessionTitle(workout.title, workout.startedAt, titleSignals)
-  const orderedIds = rows.map((r) => r.workoutExercise.id)
 
   // Backs "Delete last set" in the exercise sheet, so the gesture isn't the only way.
   const detailSets = detailFor
@@ -291,50 +246,17 @@ export function ActiveWorkoutScreen({
     : []
   const lastSetOfDetail = detailSets[detailSets.length - 1]
 
-  const restDefaultSeconds = lastLiftRestSeconds(rows, profile)
-
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader
+      <ActiveWorkoutHeader
+        title={sessionTitle(workout.title, workout.startedAt, titleSignals)}
+        templateName={template?.name ?? null}
+        startedAt={workout.startedAt}
+        loggedSetCount={loggedSetCount}
+        isEditMode={isEditMode}
         onBack={isEditMode ? () => void handleLeaveEditing() : onExit}
-        title={
-          <>
-            <h1 className="truncate text-[16px] font-semibold tracking-tight">{displayTitle}</h1>
-            <p className="flex items-center gap-1.5 text-[12px] text-ink-muted">
-              {template && (
-                <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-wash px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-accent">
-                  <FileText size={10} />
-                  {template.name}
-                </span>
-              )}
-              <span className="truncate">
-                {isEditMode
-                  ? `${plural(loggedSetCount, 'set')} · editing`
-                  : `${elapsedLabel} · ${plural(loggedSetCount, 'set')}`}
-              </span>
-            </p>
-          </>
-        }
-        action={
-          <>
-            {!isEditMode && (
-              <button
-                onClick={() => setIsCoachOpen(true)}
-                aria-label="Ask the coach"
-                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-accent active:bg-sunken"
-              >
-                <Sparkles size={19} />
-              </button>
-            )}
-            <button
-              onClick={() => setIsMenuOpen(true)}
-              aria-label="Workout options"
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-            >
-              <MoreHorizontal size={20} />
-            </button>
-          </>
-        }
+        onOpenCoach={() => setIsCoachOpen(true)}
+        onOpenMenu={() => setIsMenuOpen(true)}
       />
 
       <div className="flex-1 overflow-y-auto px-2.5 py-2.5">
@@ -356,8 +278,8 @@ export function ActiveWorkoutScreen({
         )}
 
         <DragList
-          itemIds={orderedIds}
-          onReorder={(ids) => void handleReorder(ids)}
+          itemIds={rows.map((r) => r.workoutExercise.id)}
+          onReorder={(ids) => void repo.reorderWorkoutExercises(ids)}
           onSuperset={(dragged, target) => void handleSuperset(dragged, target)}
         >
           <div className="space-y-2.5">
@@ -391,9 +313,7 @@ export function ActiveWorkoutScreen({
                         row.workoutExercise.exerciseId,
                       )
                     }
-                    onSetChange={(setId, patch) =>
-                      void handleSetChange(setId, patch, row.workoutExercise.exerciseId)
-                    }
+                    onSetChange={(setId, patch) => void handleSetChange(setId, patch, row)}
                     onDeleteSet={(setId) => void handleDeleteSet(setId)}
                     onConfirmPlaceholder={(setId, shown) => {
                       void repo.confirmPlaceholder(setId, shown).then((broken) => {
@@ -439,7 +359,7 @@ export function ActiveWorkoutScreen({
         <div className="h-2" />
       </div>
 
-      {!isEditMode && <RestTimerBar defaultSeconds={restDefaultSeconds} />}
+      {!isEditMode && <RestTimerBar defaultSeconds={lastLiftRestSeconds(rows, profile)} />}
 
       <div className="border-t border-line bg-surface px-3 py-2.5 pb-safe">
         {isEditMode ? (
@@ -485,19 +405,11 @@ export function ActiveWorkoutScreen({
           distanceUnit={profile.unitDistance}
           onRemoveFromWorkout={() => {
             const id = detailFor.workoutExerciseId
-            void repo.removeWorkoutExercise(id).then(async () => {
-              const wasFollowing = await repo.detachWorkoutFromTemplate(workoutId)
-              if (wasFollowing !== null) setDetachedFrom(wasFollowing)
-            })
+            void repo.removeWorkoutExercise(id).then(detachFromTemplate)
             toast.show('Exercise removed', () => void repo.restoreWorkoutExercise(id))
           }}
           onRemoveLastSet={
-            lastSetOfDetail
-              ? () => {
-                  const setId = lastSetOfDetail.id
-                  void handleDeleteSet(setId)
-                }
-              : undefined
+            lastSetOfDetail ? () => void handleDeleteSet(lastSetOfDetail.id) : undefined
           }
           onDismiss={() => setDetailFor(null)}
         />
@@ -542,70 +454,21 @@ export function ActiveWorkoutScreen({
       )}
 
       {detachedFrom !== null && (
-        <BottomSheet
-          onDismiss={() => setDetachedFrom(null)}
-          panelClassName="p-5"
-          labelledBy="detached-title"
-        >
-          <h2 id="detached-title" className="text-[19px] font-bold tracking-tight">
-            No longer following {detachedFrom}
-          </h2>
-          <p className="mt-2 text-[14px] leading-relaxed text-ink-secondary">
-            You've changed which exercises this session has, so it won't count as a run of
-            that template. Everything you log still saves normally — and you can save this
-            version as its own template from the workout menu when you finish.
-          </p>
-          <Button size="lg" className="mt-5 w-full" onClick={() => setDetachedFrom(null)}>
-            Got it
-          </Button>
-        </BottomSheet>
+        <DetachedNotice templateName={detachedFrom} onDismiss={() => setDetachedFrom(null)} />
       )}
 
       {isLeaveConfirmOpen && (
-        <BottomSheet
-          onDismiss={() => setIsLeaveConfirmOpen(false)}
-          dismissOnBackdrop={false}
-          panelClassName="p-5"
-          labelledBy="leave-edit-title"
-        >
-          <h2 id="leave-edit-title" className="text-[19px] font-bold tracking-tight">
-            Discard your changes?
-          </h2>
-          <p className="mt-2 text-[14px] text-ink-secondary">
-            Your edits to this workout haven't been saved yet. Leaving now puts it back
-            the way it was.
-          </p>
-          <div className="mt-5 flex gap-2">
-            <Button
-              variant="secondary"
-              size="lg"
-              className="flex-1"
-              onClick={() => setIsLeaveConfirmOpen(false)}
-            >
-              Keep editing
-            </Button>
-            <Button
-              variant="danger"
-              size="lg"
-              className="flex-1"
-              onClick={() => {
-                setIsLeaveConfirmOpen(false)
-                void handleCancelEditing()
-              }}
-            >
-              Discard
-            </Button>
-          </div>
-          <button
-            onClick={() => {
-              setIsLeaveConfirmOpen(false)
-              void handleDoneEditing()
-            }}
-            className="mt-2 w-full py-2 text-[13.5px] font-semibold text-accent active:opacity-60"
-          >
-            Save changes instead
-          </button>
-        </BottomSheet>
+        <LeaveEditConfirm
+          onKeepEditing={() => setIsLeaveConfirmOpen(false)}
+          onDiscard={() => {
+            setIsLeaveConfirmOpen(false)
+            void handleCancelEditing()
+          }}
+          onSave={() => {
+            setIsLeaveConfirmOpen(false)
+            void handleDoneEditing()
+          }}
+        />
       )}
       {celebrations.current && (
         <CelebrationOverlay
