@@ -12,6 +12,7 @@ import { activeUserId } from '@/data/repository/internal'
 import type {
   BodyWeightRow,
   CheckIn,
+  CustomFood,
   LogEntry,
   MealTemplate,
   Profile,
@@ -31,6 +32,7 @@ export interface Backup {
   exportedAt: number
   profiles: Profile[]
   logEntries: LogEntry[]
+  customFoods: CustomFood[]
   bodyWeights: BodyWeightRow[]
   /** Absent in a v1 file written before water existed, which is what `?? []` on read is for. */
   waterLogs: WaterRow[]
@@ -107,6 +109,7 @@ export async function exportToJson(): Promise<string> {
     exportedAt: Date.now(),
     profiles: await db.profiles.toArray(),
     logEntries: await db.logEntries.toArray(),
+    customFoods: await db.customFoods.toArray(),
     bodyWeights: await db.bodyWeights.toArray(),
     waterLogs: await db.waterLogs.toArray(),
     recipes: await db.recipes.toArray(),
@@ -126,6 +129,7 @@ export function parseBackup(text: string): Backup {
     exportedAt: typeof backup.exportedAt === 'number' ? backup.exportedAt : Date.now(),
     profiles: backupRows(backup.profiles),
     logEntries: backupRows(backup.logEntries),
+    customFoods: backupRows(backup.customFoods),
     bodyWeights: backupRows(backup.bodyWeights),
     waterLogs: backupRows(backup.waterLogs),
     recipes: backupRows(backup.recipes),
@@ -163,6 +167,7 @@ export async function importBackup(backup: Backup): Promise<void> {
 
   await importBackupRows({
     tables: [
+      { table: 'customFoods', store: db.customFoods, rows: owned(backup.customFoods) },
       { table: 'logEntries', store: db.logEntries, rows: owned(backup.logEntries) },
       {
         table: 'bodyWeights',

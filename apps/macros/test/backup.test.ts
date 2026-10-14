@@ -128,3 +128,20 @@ describe('importBackup onto another account', () => {
     ])
   })
 })
+
+describe('a backup round trip', () => {
+  it('keeps your own foods, not just the entries that point at them', async () => {
+    const id = await repo.saveCustomFood({
+      description: 'Grandma’s granola',
+      per100: { ...EMPTY_NUTRIENTS, kcal: 450, proteinMg: 10_000, carbsMg: 60_000, fatMg: 18_000 },
+    })
+    await repo.logFood({ food: (await repo.getFood(id))!, grams: 60, meal: 'breakfast' })
+    const text = await exportToJson()
+    await Promise.all(db.tables.filter((t) => t.name !== 'foods').map((t) => t.clear()))
+
+    await importBackup(parseBackup(text))
+
+    expect((await repo.getFood(id))?.description).toBe('Grandma’s granola')
+    expect(await repo.allEntries()).toHaveLength(1)
+  })
+})
