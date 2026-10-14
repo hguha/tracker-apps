@@ -12,23 +12,11 @@ export function weekLabels(weeks: string[]): string[] {
   return weeks.map(formatShortDay)
 }
 
-// A-4
-
-type LiftSubject = {
-  label: string
-  points: ExerciseSeries['points']
-  toggle: React.ReactNode
-}
-
-export function useLiftSubject(
+export function findSeries(
   data: InsightsData,
-  activeExerciseId: string | null,
-): LiftSubject | null {
-  const series = activeExerciseId
-    ? data.exerciseSeries.find((s) => s.exerciseId === activeExerciseId)
-    : undefined
-  if (!series) return null
-  return { label: series.name, points: series.points, toggle: null }
+  exerciseId: string | null,
+): ExerciseSeries | undefined {
+  return exerciseId ? data.exerciseSeries.find((s) => s.exerciseId === exerciseId) : undefined
 }
 
 export function PickExerciseCard({

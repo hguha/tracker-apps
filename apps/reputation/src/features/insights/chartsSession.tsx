@@ -379,9 +379,3 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
     </ChartCard>
   )
 }
-
-// B-16
-/**
- * Lifts whose estimated 1RM hasn't improved recently — what needs attention.
- * A table, not a chart: the useful output is a ranked list with numbers (§9).
- */

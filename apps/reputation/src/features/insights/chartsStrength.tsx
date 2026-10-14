@@ -13,7 +13,7 @@ import { useAppearanceKey } from '@/lib/useColorScheme'
 import { format } from 'date-fns'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { chrome, PickExerciseCard, useLiftSubject } from './chartShared'
+import { chrome, findSeries, PickExerciseCard } from './chartShared'
 
 export function StrengthProgressionChart({
   data,
@@ -25,8 +25,7 @@ export function StrengthProgressionChart({
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
 
-  const subject = useLiftSubject(data, activeExerciseId)
-  const active = subject
+  const active = findSeries(data, activeExerciseId)
 
   const option = useMemo<EChartsOption>(() => {
     const c = chrome()
@@ -64,7 +63,7 @@ export function StrengthProgressionChart({
   return (
     <ChartCard
       title="Strength progression"
-      subtitle={`${active.label} — estimated 1RM in ${unit}`}
+      subtitle={`${active.name} — estimated 1RM in ${unit}`}
       isEmpty={active.points.filter((p) => p.e1rmKg !== null).length < 2}
       emptyMessage="Log this lift on two different days to see progression."
       table={{
@@ -78,7 +77,6 @@ export function StrengthProgressionChart({
           ]),
       }}
     >
-      {active.toggle}
       <Chart option={option} ariaLabel="Line chart of estimated one-rep max over time" />
     </ChartCard>
   )
@@ -94,7 +92,7 @@ export function TopSetChart({
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
 
-  const active = useLiftSubject(data, activeExerciseId)
+  const active = findSeries(data, activeExerciseId)
 
   const { option, points } = useMemo(() => {
     const points = (active?.points ?? []).filter((p) => p.topSetKg !== null)
@@ -133,7 +131,7 @@ export function TopSetChart({
   return (
     <ChartCard
       title="Top set"
-      subtitle={`${active.label} — heaviest set per session`}
+      subtitle={`${active.name} — heaviest set per session`}
       isEmpty={points.length < 2}
       emptyMessage="Log this lift twice to see how the top set moves."
       table={{
@@ -146,7 +144,6 @@ export function TopSetChart({
           ]),
       }}
     >
-      {active.toggle}
       <Chart option={option} ariaLabel="Line chart of heaviest set per session" />
     </ChartCard>
   )
@@ -221,9 +218,7 @@ export function PerExerciseVolumeChart({
 }) {
   const appearance = useAppearanceKey()
   const unit = data.profile.unitWeight
-  const active = activeExerciseId
-    ? data.exerciseSeries.find((s) => s.exerciseId === activeExerciseId)
-    : undefined
+  const active = findSeries(data, activeExerciseId)
 
   const { option, labels, values, points } = useMemo(() => {
     const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
@@ -308,6 +303,3 @@ export function StalledLiftsChart({ data }: { data: InsightsData }) {
     </ChartCard>
   )
 }
-
-// ─────────────────────────────────────────────────── overview summary + body
-/** Stat tiles, not a chart. */

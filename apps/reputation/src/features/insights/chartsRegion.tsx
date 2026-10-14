@@ -188,8 +188,6 @@ export function SetsByRegionChart({ data }: { data: InsightsData }) {
 
 // B-8
 
-// The picked lift for the single-lift charts: its points and display label.
-
 export function PatternCoverageChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
 
@@ -286,5 +284,3 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
     </ChartCard>
   )
 }
-
-// D-39
