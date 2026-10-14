@@ -1,20 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { dayAt, reminderId, reminderIds, stillAhead, syncReminders, todayAt } from '../src/reminders'
+import { dayAt, reminderId, reminderIds, stillAhead, syncReminders } from '../src/reminders'
 
 const now = new Date(2026, 9, 12, 13, 30).getTime()
 
-describe('todayAt', () => {
+describe('dayAt', () => {
   it('is a minute from local midnight on the same day', () => {
-    expect(new Date(todayAt(9 * 60 + 15, now)).getHours()).toBe(9)
-    expect(new Date(todayAt(9 * 60 + 15, now)).getMinutes()).toBe(15)
-    expect(new Date(todayAt(0, now)).getDate()).toBe(12)
+    expect(new Date(dayAt(9 * 60 + 15, now)).getHours()).toBe(9)
+    expect(new Date(dayAt(9 * 60 + 15, now)).getMinutes()).toBe(15)
+    expect(new Date(dayAt(0, now)).getDate()).toBe(12)
   })
 })
 
 describe('stillAhead', () => {
   it('drops a reminder whose time today has passed', () => {
-    const morning = { id: 1, title: 'a', body: '', at: todayAt(9 * 60, now) }
-    const evening = { id: 2, title: 'b', body: '', at: todayAt(19 * 60, now) }
+    const morning = { id: 1, title: 'a', body: '', at: dayAt(9 * 60, now) }
+    const evening = { id: 2, title: 'b', body: '', at: dayAt(19 * 60, now) }
     expect(stillAhead([morning, evening], now)).toEqual([evening])
   })
 })

@@ -16,8 +16,6 @@ export function dayAt(minute: number, now: number, dayOffset = 0): number {
   return date.getTime()
 }
 
-export const todayAt = (minute: number, now: number): number => dayAt(minute, now)
-
 export const reminderId = (base: number, slot: number, dayOffset: number): number =>
   base + slot * DAYS_AHEAD + dayOffset
 
