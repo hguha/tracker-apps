@@ -20,6 +20,8 @@ export interface SupabaseBackendOptions {
   timestampColumns?: Iterable<string>
 }
 
+const PULL_PAGE = 1000
+
 export class SupabaseBackend implements SyncBackend {
   private timestamps: Set<string>
 
@@ -57,17 +59,20 @@ export class SupabaseBackend implements SyncBackend {
 
   async pull(table: string, since: number): Promise<PulledRow[]> {
     const pgTable = tableToPostgres(table)
-    const { data, error } = await this.client
-      .from(pgTable)
-      .select('*')
-      .gt('updated_at', new Date(since).toISOString())
-      .order('updated_at', { ascending: true })
-
-    if (error) throw new Error(error.message)
-    return (data ?? []).map((row) => ({
-      table,
-      row: fromPostgresRow(row as Record<string, unknown>, this.timestamps),
-    }))
+    const rows: PulledRow[] = []
+    for (let offset = 0; ; offset += PULL_PAGE) {
+      const { data, error } = await this.client
+        .from(pgTable)
+        .select('*')
+        .gt('updated_at', new Date(since).toISOString())
+        .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + PULL_PAGE - 1)
+      if (error) throw new Error(error.message)
+      const page = (data ?? []) as Record<string, unknown>[]
+      for (const row of page) rows.push({ table, row: fromPostgresRow(row, this.timestamps) })
+      if (page.length < PULL_PAGE) return rows
+    }
   }
 
   async hardDeleteAll(

@@ -87,3 +87,27 @@ describe('SupabaseBackend.push', () => {
     })
   })
 })
+
+describe('SupabaseBackend.pull', () => {
+  function serverWith(count: number) {
+    const rows = Array.from({ length: count }, (_, index) => ({
+      id: `r${String(index).padStart(5, '0')}`,
+      updated_at: new Date(Date.UTC(2026, 0, 1) + Math.floor(index / 3) * 1000).toISOString(),
+    }))
+    const builder = (from = 0, to = Number.POSITIVE_INFINITY) => ({
+      select: () => builder(from, to),
+      gt: () => builder(from, to),
+      order: () => builder(from, to),
+      range: (start: number, end: number) => builder(start, end),
+      then: (resolve: (value: unknown) => void) =>
+        resolve({ data: rows.slice(from, Math.min(to + 1, from + 1000)), error: null }),
+    })
+    return new SupabaseBackend({ from: () => builder() } as never)
+  }
+
+  it('pulls every row past the server page cap', async () => {
+    const pulled = await serverWith(2500).pull('notes', 0)
+    expect(pulled).toHaveLength(2500)
+    expect(new Set(pulled.map((entry) => entry.row.id)).size).toBe(2500)
+  })
+})
