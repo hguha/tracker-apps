@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { plural, weekStreaks } from '@tracker-engine/core'
+import { plural } from '@tracker-engine/core'
 import { EmptyState, PageTitle, ProgressRing, SectionLabel } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -28,7 +28,7 @@ import {
 } from '@/domain/types'
 import { levelFor, nextBadges, type Level } from '@tracker-engine/badges'
 import { CelebrationOverlay, useCelebrations, useToday } from '@tracker-engine/ui'
-import { evaluateBadges, type BadgeState } from './badges'
+import { evaluateBadges, lifetimeStats, type BadgeState } from './badges'
 import { experience, goalWeeksMet, shownExperience, takeLegacyHighWater } from './progression'
 import { BadgeDetailSheet, BadgeTile } from './BadgeUI'
 import {
@@ -116,15 +116,8 @@ export function HomeScreen({
       .map((region) => ({ region, lastAt: lastTrainedByRegion.get(region) ?? 0 }))
       .sort((a, b) => a.lastAt - b.lastAt)[0]
 
-    const { current: streakWeeks, best: bestWeekStreak } = weekStreaks(
-      finished.map((s) => s.workout.startedAt),
-      profile.weekStartsOn,
-    )
-
-    const totalVolumeKg = finished.reduce((total, s) => total + s.volumeKg, 0)
-    const totalSets = finished.reduce((total, s) => total + s.setCount, 0)
-
     const badgeStats = await repo.getBadgeStats()
+    const lifetime = lifetimeStats(finished, profile.weekStartsOn, badgeStats)
     const goalWeeks = goalWeeksMet(
       finished.map((s) => s.workout.startedAt),
       profile.weekStartsOn,
@@ -141,11 +134,7 @@ export function HomeScreen({
       weeklySets: [...setsByRegion.values()].reduce((a, b) => a + b, 0),
       setsByRegion,
       neglected,
-      streakWeeks,
-      bestWeekStreak,
-      totalWorkouts: finished.length,
-      totalVolumeKg,
-      totalSets,
+      lifetime,
       badgeStats,
       goalWeeks,
       avatar,
@@ -153,7 +142,7 @@ export function HomeScreen({
   }, [today])
 
   // Greeting refreshes only when the workout count changes; getHomeGreeting caches on it.
-  const finishedCount = data?.totalWorkouts ?? 0
+  const finishedCount = data?.lifetime.totalWorkouts ?? 0
   useEffect(() => {
     let cancelled = false
     void getHomeGreeting(finishedCount).then((text) => {
@@ -176,15 +165,12 @@ export function HomeScreen({
     weeklySets,
     setsByRegion,
     neglected,
-    streakWeeks,
-    bestWeekStreak,
-    totalWorkouts,
-    totalVolumeKg,
-    totalSets,
+    lifetime,
     badgeStats,
     goalWeeks,
     avatar,
   } = data
+  const { totalWorkouts, bestWeekStreak, currentWeekStreak: streakWeeks } = lifetime
 
   const unit = profile.unitWeight
   const maxSets = Math.max(6, ...setsByRegion.values())
@@ -193,14 +179,7 @@ export function HomeScreen({
   // weeklyWorkoutGoal can be absent; coalesce before Math.max or the ring shows "/NaN".
   const goal = weeklyGoalOf(profile)
 
-  const badges = evaluateBadges({
-    totalWorkouts,
-    totalSets,
-    totalVolumeKg,
-    bestWeekStreak,
-    currentWeekStreak: streakWeeks,
-    ...badgeStats,
-  })
+  const badges = evaluateBadges(lifetime)
 
   const earnedXp = experience({ ...badgeStats, goalWeeks })
   const level = levelFor(shownExperience(profile.xpHighWater, earnedXp))

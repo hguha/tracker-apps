@@ -10,41 +10,35 @@ import {
   type Badge as EngineBadge,
   type BadgeState as EngineBadgeState,
 } from '@tracker-engine/badges'
+import { weekStreaks, type WeekStart } from '@tracker-engine/core'
+import type { BadgeStats, WorkoutSummary } from '@/data/repository'
 import { distanceToM, formatDisplayWeight, weightToKg } from '@/lib/units'
 
-export interface LifetimeStats {
+export interface LifetimeStats extends BadgeStats {
   totalWorkouts: number
   totalSets: number
   totalVolumeKg: number
   bestWeekStreak: number
   currentWeekStreak: number
-  /** Best estimated 1RM in kg on each of the big three, 0 if never trained. */
-  bestSquatE1rmKg: number
-  bestBenchE1rmKg: number
-  bestDeadliftE1rmKg: number
-  bestAnyE1rmKg: number
-  bestOverheadPressE1rmKg: number
-  bestRowE1rmKg: number
-  bestPullUpE1rmKg: number
-  bestDipE1rmKg: number
-  totalCardioMeters: number
-  totalCardioSeconds: number
-  distinctExercises: number
-  distinctRegions: number
-  totalReps: number
-  totalBodyweightReps: number
-  maxRepsInSet: number
-  maxSetWeightKg: number
-  totalDaysTrained: number
-  bestDayStreak: number
-  earlyWorkouts: number
-  lateWorkouts: number
-  weekendWorkouts: number
-  recordSessions: number
-  totalTrainingSeconds: number
-  longestWorkoutSeconds: number
-  /** Latest bodyweight in kg; 0 when unknown, which parks relative badges at 0. */
-  bodyweightKg: number
+}
+
+export function lifetimeStats(
+  finished: Pick<WorkoutSummary, 'workout' | 'setCount' | 'volumeKg'>[],
+  weekStartsOn: WeekStart,
+  stats: BadgeStats,
+): LifetimeStats {
+  const { current, best } = weekStreaks(
+    finished.map((s) => s.workout.startedAt),
+    weekStartsOn,
+  )
+  return {
+    ...stats,
+    totalWorkouts: finished.length,
+    totalSets: finished.reduce((total, s) => total + s.setCount, 0),
+    totalVolumeKg: finished.reduce((total, s) => total + s.volumeKg, 0),
+    bestWeekStreak: best,
+    currentWeekStreak: current,
+  }
 }
 
 /** Squat + bench + deadlift e1RM — the total the 1000/1200/1500 lb clubs measure. */

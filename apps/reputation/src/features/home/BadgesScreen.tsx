@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { weekStreaks } from '@tracker-engine/core'
 import { BadgeGrid, ScreenHeader, SectionLabel, type BadgeView } from '@tracker-engine/ui'
 import { useLiveQuery } from 'dexie-react-hooks'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
-import { evaluateBadges, groupedBadges } from './badges'
+import { evaluateBadges, groupedBadges, lifetimeStats } from './badges'
 import { BadgeDetailSheet } from './BadgeUI'
 
 export function BadgesScreen({ onBack }: { onBack: () => void }) {
@@ -15,19 +14,7 @@ export function BadgesScreen({ onBack }: { onBack: () => void }) {
     const stats = await repo.getBadgeStats()
     const profile = await repo.getProfile()
 
-    const { current: currentWeekStreak, best: bestWeekStreak } = weekStreaks(
-      finished.map((s) => s.workout.startedAt),
-      profile.weekStartsOn,
-    )
-
-    return evaluateBadges({
-      totalWorkouts: finished.length,
-      totalSets: finished.reduce((t, s) => t + s.setCount, 0),
-      totalVolumeKg: finished.reduce((t, s) => t + s.volumeKg, 0),
-      bestWeekStreak,
-      currentWeekStreak,
-      ...stats,
-    })
+    return evaluateBadges(lifetimeStats(finished, profile.weekStartsOn, stats))
   }, [])
 
   const earnedCount = badges?.filter((b) => b.earned).length ?? 0
