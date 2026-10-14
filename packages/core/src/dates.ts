@@ -5,6 +5,7 @@ import {
   isSameYear,
   startOfDay,
   startOfWeek,
+  subDays,
 } from 'date-fns'
 
 export type WeekStart = 0 | 1
@@ -40,9 +41,7 @@ export function dayKey(ts: number): string {
 /** The day key `offset` days before `ts`. Derived from the calendar rather than by subtracting
  *  DAY_MS, so a DST boundary can't skip or repeat a day. */
 export function dayKeyOffset(ts: number, offset: number): string {
-  const date = new Date(ts)
-  date.setDate(date.getDate() - offset)
-  return dayKey(date.getTime())
+  return dayKey(subDays(ts, offset).getTime())
 }
 
 export interface DayStreaks {
