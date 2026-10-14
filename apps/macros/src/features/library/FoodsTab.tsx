@@ -4,7 +4,7 @@ import { Button, Card, SearchField, useToast } from '@tracker-engine/ui'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import * as repo from '@/data/repository'
 import { cn } from '@tracker-engine/core'
-import { macroLine } from '@/features/shared/format'
+import { macroLine, portionLabel } from '@/features/shared/format'
 import { formatAmount, nutrientTargets } from '@/lib/micronutrients'
 import { useFoodSearch } from '@/features/shared/useFoodSearch'
 import { MacroSplitBar } from '@/features/shared/MacroSplitBar'
@@ -145,7 +145,7 @@ function FoodRow({
 
           {food.portions.length > 0 && (
             <p className="mt-2 text-[12px] text-ink-muted">
-              Portions: {food.portions.map((portion) => portion.label).join(' · ')}
+              Portions: {food.portions.map(portionLabel).join(' · ')}
             </p>
           )}
 
