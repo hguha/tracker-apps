@@ -21,8 +21,6 @@ export function useChartTokens() {
   }
 }
 
-export type ChartTokens = ReturnType<typeof useChartTokens>
-
 /** Axis labels are `yyyy-MM-dd`; charts only have room for the day and month. */
 export const shortDay = formatShortDay
 
