@@ -35,6 +35,7 @@ export function resumeAfterBreak(
   goal: Exclude<Goal, 'maintain'>,
 ): ProgramInput {
   const previous = previousGoal(history)
-  const rate = previous?.goal === goal ? previous.ratePctPerWeek : defaultRate(goal)
-  return withGoal(program, goal, rate, null)
+  return previous?.goal === goal
+    ? withGoal(program, goal, previous.ratePctPerWeek, previous.targetKg)
+    : withGoal(program, goal, defaultRate(goal), null)
 }

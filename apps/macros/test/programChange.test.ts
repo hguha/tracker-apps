@@ -51,6 +51,11 @@ describe('diet breaks', () => {
     expect(resumeAfterBreak(onBreak, [onBreak, program()], 'gain').ratePctPerWeek).toBe(0.25)
   })
 
+  it('resumes with the goal weight held before the break', () => {
+    const onBreak = program({ id: 'p2', goal: 'maintain', ratePctPerWeek: 0, targetKg: null })
+    expect(resumeAfterBreak(onBreak, [onBreak, program()], 'lose').targetKg).toBe(75)
+  })
+
   it('does not carry a losing goal weight into building', () => {
     const onBreak = program({ id: 'p2', goal: 'maintain', ratePctPerWeek: 0, targetKg: null })
     expect(resumeAfterBreak(onBreak, [onBreak, program()], 'gain').targetKg).toBeNull()
