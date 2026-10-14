@@ -313,7 +313,7 @@ async function searchGenericFirst(
   key: string,
   query: string,
   pageSize: number,
-  genericOnly = false,
+  genericOnly: boolean,
 ) {
   const brandedQuota = genericOnly ? 0 : Math.min(10, Math.max(5, Math.floor(pageSize / 3)))
   const [generic, branded] = await Promise.all([
@@ -426,7 +426,7 @@ async function search(
   key: string,
   query: string,
   pageSize: number,
-  dataType = ['Foundation', 'SR Legacy', 'Survey (FNDDS)', 'Branded'],
+  dataType: string[],
 ): Promise<FdcFood[]> {
   const response = await fetch(`${USDA}/foods/search?api_key=${encodeURIComponent(key)}`, {
     method: 'POST',
