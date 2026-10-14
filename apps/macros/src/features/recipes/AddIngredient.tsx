@@ -24,7 +24,6 @@ export function AddIngredient({
   return (
     <FoodSearchPicker
       placeholder={isFirst ? 'Describe it, or search a food' : 'Add more'}
-      branded={false}
       autoFocus={autoFocus}
       onPick={onFood}
       lead={(query, clear) => {

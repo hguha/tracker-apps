@@ -386,7 +386,6 @@ export function RecipeEditor({
                       <FoodSearchPicker
                         placeholder={`Which “${row.query}”?`}
                         initialQuery={row.query}
-                        branded={false}
                         limit={5}
                         onPick={(picked) => {
                           setRows((current) =>

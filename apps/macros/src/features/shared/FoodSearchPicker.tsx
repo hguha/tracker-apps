@@ -20,19 +20,13 @@ export function FoodSearchPicker({
   placeholder,
   onPick,
   limit = 6,
-  branded = true,
-  minChars = 2,
   autoFocus = false,
   initialQuery = '',
   lead,
-  children,
 }: {
   placeholder: string
   onPick: (food: Food) => void
   limit?: number
-  /** False for ingredient matching: packaged rows are the wrong answer for "cooked spaghetti". */
-  branded?: boolean
-  minChars?: number
   autoFocus?: boolean
   /**
    * Opened with something already typed.
@@ -43,14 +37,12 @@ export function FoodSearchPicker({
    */
   initialQuery?: string
   lead?: (query: string, clear: () => void) => React.ReactNode
-  /** Rendered under the results, with the current query — for an "ask instead" escape hatch. */
-  children?: (query: string) => React.ReactNode
 }) {
   const [query, setQuery] = useState(initialQuery)
   const trimmed = query.trim()
   const { results, average, isSearching, isEmpty } = useFoodSearch(query, {
     limit,
-    branded,
+    branded: false,
     withAverage: true,
   })
   const shown = average ? [average, ...results.slice(0, limit - 1)] : results
@@ -64,7 +56,7 @@ export function FoodSearchPicker({
         autoFocus={autoFocus}
       />
 
-      {trimmed.length >= minChars && (
+      {trimmed.length >= 2 && (
         <>
           {lead?.(trimmed, () => setQuery(''))}
           <ul className="mt-1.5">
@@ -88,10 +80,9 @@ export function FoodSearchPicker({
             ))}
           </ul>
           {isSearching && <SearchingRow />}
-          {isEmpty && !isSearching && (
+          {isEmpty && (
             <p className="py-1.5 text-[12.5px] text-ink-muted">Nothing matched.</p>
           )}
-          {children?.(trimmed)}
         </>
       )}
     </div>
