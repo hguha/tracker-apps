@@ -839,6 +839,29 @@ describe('getBadgeStats', () => {
     expect(stats.totalCardioMeters).toBe(0)
     expect(stats.distinctExercises).toBe(0)
   })
+
+  it('counts a day streak across the clock change in a UTC+0 zone', async () => {
+    const originalTz = process.env.TZ
+    process.env.TZ = 'Europe/London'
+    try {
+      for (const day of [29, 30, 31]) {
+        const startedAt = new Date(2025, 2, day, 10).getTime()
+        const id = await repo.startWorkout({ startedAt })
+        const we = await repo.addExerciseToWorkout(id, 'bench_press', 'barbell')
+        await repo.logSetValues(
+          await repo.addSet({ workoutExerciseId: we, weightKg: 60, reps: 5 }),
+          {},
+        )
+        await repo.updateWorkout(id, { endedAt: new Date(2025, 2, day, 11).getTime() })
+      }
+
+      const stats = await repo.getBadgeStats()
+      expect(stats.totalDaysTrained).toBe(3)
+      expect(stats.bestDayStreak).toBe(3)
+    } finally {
+      process.env.TZ = originalTz
+    }
+  })
 })
 
 describe('createTemplatesFromPlan (§13)', () => {

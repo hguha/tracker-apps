@@ -2,6 +2,7 @@ export {
   DAY_MS,
   WEEK_MS,
   dayKey,
+  dayStreaks,
   dayStart,
   formatDayHeading,
   formatRelativeDay,

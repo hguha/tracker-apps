@@ -21,7 +21,7 @@ import {
   type SummarySession,
   buildCoachSummary,
 } from './coachSummary'
-import { DAY_MS, WEEK_MS, weekOffset } from '@/lib/dates'
+import { WEEK_MS, dayKey, dayStreaks, weekOffset } from '@/lib/dates'
 import { composeExerciseName } from '@/lib/labels'
 import { effectiveWeightKg, isWorkingSet, volumeLoadKg } from '@/lib/metrics'
 import {
@@ -293,7 +293,7 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     if (hour >= 21) lateWorkouts += 1
     const weekday = at.getDay()
     if (weekday === 0 || weekday === 6) weekendWorkouts += 1
-    days.add(`${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`)
+    days.add(dayKey(w.startedAt))
 
     const seconds = Math.max(0, ((w.endedAt as number) - w.startedAt) / 1000)
     // Ignore absurd durations from a session left open overnight, so "longest
@@ -351,7 +351,7 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     maxRepsInSet,
     maxSetWeightKg,
     totalDaysTrained: days.size,
-    bestDayStreak: longestDayStreak(finished.map((w) => w.startedAt)),
+    bestDayStreak: dayStreaks(days).best,
     earlyWorkouts,
     lateWorkouts,
     weekendWorkouts,
@@ -360,28 +360,6 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     longestWorkoutSeconds,
     bodyweightKg: profile.bodyweightCacheKg ?? 0,
   }
-}
-
-/** Longest run of consecutive calendar days that have a workout. */
-function longestDayStreak(startedAts: number[]): number {
-  if (startedAts.length === 0) return 0
-  const dayNumbers = [
-    ...new Set(
-      startedAts.map((at) => {
-        const d = new Date(at)
-        // Local midnight, so a streak follows the user's days, not UTC's.
-        return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / DAY_MS)
-      }),
-    ),
-  ].sort((a, b) => a - b)
-
-  let best = 1
-  let run = 1
-  for (let i = 1; i < dayNumbers.length; i += 1) {
-    run = dayNumbers[i]! - dayNumbers[i - 1]! === 1 ? run + 1 : 1
-    if (run > best) best = run
-  }
-  return best
 }
 
 // Feeds the AI coach (§13); the privacy contract lives in buildCoachSummary, which
