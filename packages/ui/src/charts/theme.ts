@@ -24,7 +24,7 @@ export function useChartChrome(): ChartChrome {
   return chartChrome()
 }
 
-export function prefersReducedMotion(): boolean {
+function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined') return false
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }

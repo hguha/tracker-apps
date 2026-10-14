@@ -6,7 +6,6 @@ export {
   categoryAxis,
   chartChrome,
   chartLegend,
-  prefersReducedMotion,
   useChartChrome,
   valueAxis,
   type ChartChrome,
