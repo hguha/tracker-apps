@@ -1,6 +1,3 @@
-// Backup export/import transport. The JSON and its parsing live in the app; only
-// how bytes leave and enter differs by platform. Web uses a download link and a
-// file <input>; native uses the OS share sheet and document picker.
 import { isNativePlatform } from './detect'
 
 // Hands `json` to the user as a file. On web, triggers a download of `filename`.
@@ -40,31 +37,6 @@ export async function exportBackup(
   }
 }
 
-// Returns the chosen backup file's text, or null if the user cancelled. Web uses
-// the caller's <input type=file>; native opens the document picker.
-export async function pickBackupText(webFile?: File): Promise<string | null> {
-  if (!isNativePlatform()) {
-    return webFile ? webFile.text() : null
-  }
-
-  const { Filesystem, Encoding } = await import('@capacitor/filesystem')
-  // pickFiles landed in the Filesystem plugin's recent versions; guard in case.
-  const picker = (
-    Filesystem as unknown as {
-      pickFiles?: (opts: {
-        types: string[]
-      }) => Promise<{ files: { path?: string; data?: string }[] }>
-    }
-  ).pickFiles
-  if (!picker) return null
-
-  const result = await picker({ types: ['application/json'] })
-  const file = result.files[0]
-  if (!file) return null
-  if (typeof file.data === 'string') return atob(file.data)
-  if (file.path) {
-    const read = await Filesystem.readFile({ path: file.path, encoding: Encoding.UTF8 })
-    return typeof read.data === 'string' ? read.data : null
-  }
-  return null
+export async function pickBackupText(file?: File): Promise<string | null> {
+  return file ? file.text() : null
 }
