@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Download, RefreshCw, Upload } from 'lucide-react'
 import { Button, Card, quietNextCelebrations, Screen, useToast } from '@tracker-engine/ui'
-import { exportBackup, pickBackupText } from '@tracker-engine/platform'
+import { exportBackup } from '@tracker-engine/platform'
 import { APP_VERSION } from '@/lib/version'
 import { loadDemoData } from '@/data/demo'
 import * as repo from '@/data/repository'
@@ -28,12 +28,10 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
     [],
   )
 
-  async function handleImport(file?: File) {
+  async function handleImport(file: File) {
     setIsBusy(true)
     try {
-      const text = await pickBackupText(file)
-      if (text === null) return
-      const backup = parseBackup(text)
+      const backup = parseBackup(await file.text())
       const found = countsOf(backup)
       const ok = window.confirm(
         `Import ${found.entries} entries across ${found.days} days, ${found.weights} weigh-ins ` +
@@ -127,7 +125,10 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
           type="file"
           accept="application/json"
           className="hidden"
-          onChange={(event) => void handleImport(event.target.files?.[0])}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void handleImport(file)
+          }}
         />
         <p className="mt-2 text-[12.5px] text-ink-muted">
           Logs, weigh-ins, recipes and check-ins as JSON.

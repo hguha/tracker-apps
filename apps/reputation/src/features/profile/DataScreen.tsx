@@ -2,7 +2,6 @@ import { plural } from '@tracker-engine/core'
 // Sync status, backups, and the destructive resets — the only screen with an
 // irreversible control, so it takes a deliberate navigation to reach.
 
-import { isNativePlatform } from '@tracker-engine/platform'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { quietNextCelebrations, ScreenHeader } from '@tracker-engine/ui'
@@ -18,7 +17,7 @@ import {
   BackupParseError,
 } from '@/data/backup'
 import { APP_VERSION } from '@/lib/version'
-import { exportBackup, pickBackupText } from '@/platform/files'
+import { exportBackup } from '@/platform/files'
 import { hasStaleWindow } from '@/platform/viewport'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -71,12 +70,10 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
     }
   }
 
-  async function handleImportFile(file?: File) {
+  async function handleImportFile(file: File) {
     setIsImporting(true)
     try {
-      const text = await pickBackupText(file)
-      if (text === null) return
-      const backup = parseBackup(text)
+      const backup = parseBackup(await file.text())
       const counts = countsOf(backup)
       const ok = window.confirm(
         `Import ${plural(counts.workouts, 'workout')}, ${plural(counts.templates, 'template')}, ` +
@@ -306,11 +303,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
               variant="secondary"
               className="flex-1"
               disabled={isImporting}
-              onClick={() =>
-                isNativePlatform()
-                  ? void handleImportFile()
-                  : fileInputRef.current?.click()
-              }
+              onClick={() => fileInputRef.current?.click()}
             >
               <Upload size={16} />
               {isImporting ? 'Importing…' : 'Import'}

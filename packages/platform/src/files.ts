@@ -36,7 +36,3 @@ export async function exportBackup(
     return false
   }
 }
-
-export async function pickBackupText(file?: File): Promise<string | null> {
-  return file ? file.text() : null
-}
