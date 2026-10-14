@@ -2,7 +2,7 @@ import { getSupabase } from '@/backend/supabaseClient'
 import * as repo from '@/data/repository'
 import { matchIngredient } from '@/data/matchFood'
 import { nutrientsFor, sum } from '@/lib/nutrition'
-import { EMPTY_NUTRIENTS, type Food, type Nutrients } from '@/domain/types'
+import type { Food, Nutrients } from '@/domain/types'
 
 /**
  * Turning "turkey sandwich" into weighed, matched components — or "Costco chicken bake" into one
@@ -167,8 +167,7 @@ function toProduct(raw: RawProduct | null): FoodDraft | null {
   const servingGrams = positive(raw.servingGrams)
   if (!name || kcal === 0 || servingGrams === 0) return null
 
-  const confidence =
-    raw.confidence === 'high' || raw.confidence === 'medium' ? raw.confidence : 'low'
+  const confidence = confidenceOf(raw.confidence)
   const source = String(raw.source ?? '').trim()
 
   return {
@@ -198,6 +197,9 @@ const round1 = (value: unknown): number => Math.round(positive(value) * 10) / 10
 const optional = (value: unknown, convert: (value: unknown) => number = round1): number | null =>
   value === undefined || value === null ? null : convert(value)
 
+const confidenceOf = (value: unknown): EstimatedItem['confidence'] =>
+  value === 'high' || value === 'medium' ? value : 'low'
+
 export async function describeMeal(description: string): Promise<MealEstimate> {
   return runDescribe({ mode: 'estimate', description: description.trim() }, description.trim())
 }
@@ -210,10 +212,9 @@ export async function describeComponents(description: string): Promise<MealEstim
   return withoutProduct(draft)
 }
 
-export const withoutProduct = (draft: MealEstimate): MealEstimate =>
-  draft.product === null ? draft : asComponent(draft, draft.product)
-
-function asComponent(draft: MealEstimate, product: FoodDraft): MealEstimate {
+export function withoutProduct(draft: MealEstimate): MealEstimate {
+  const { product } = draft
+  if (product === null) return draft
   const item = toItem(
     { query: `${product.brand} ${product.name}`.trim(), grams: product.servingGrams },
     0,
@@ -313,14 +314,12 @@ async function runDescribe(body: Record<string, unknown>, label: string): Promis
 function toItem(raw: RawItem, index: number): EstimatedItem {
   const query = String(raw.query ?? '').trim()
   const grams = Number(raw.grams)
-  const confidence =
-    raw.confidence === 'high' || raw.confidence === 'medium' ? raw.confidence : 'low'
 
   return {
     id: `est-${index}`,
     query: query || 'Unknown item',
     grams: Number.isFinite(grams) && grams > 0 ? Math.round(grams) : 0,
-    confidence,
+    confidence: confidenceOf(raw.confidence),
     food: null,
     matchedBy: 'unmatched',
     isMatching: query.length > 0,
@@ -364,8 +363,9 @@ export async function matchDraft(
 }
 
 export function totalOf(items: readonly EstimatedItem[]): Nutrients {
-  const parts = items
-    .filter((item) => item.food !== null && item.grams > 0)
-    .map((item) => nutrientsFor(item.food as Food, item.grams))
-  return parts.length === 0 ? { ...EMPTY_NUTRIENTS } : sum(parts)
+  return sum(
+    items.flatMap((item) =>
+      item.food !== null && item.grams > 0 ? [nutrientsFor(item.food, item.grams)] : [],
+    ),
+  )
 }
