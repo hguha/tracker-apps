@@ -97,7 +97,6 @@ function AuthGate() {
 }
 
 function SignedInApp() {
-  const { session } = useAuth()
   const [isReady, setIsReady] = useState(false)
   const { isAwaitingFirstSync } = useSync()
 
@@ -165,7 +164,7 @@ function SignedInApp() {
   }, [appearance, osScheme])
 
   const isOnboarding =
-    session !== null && appearance !== undefined && appearance.onboardingVersion < ONBOARDING_VERSION
+    appearance !== undefined && appearance.onboardingVersion < ONBOARDING_VERSION
 
   if (!isReady || (isOnboarding && isAwaitingFirstSync)) {
     return (
@@ -192,11 +191,15 @@ function SignedInApp() {
     )
   }
 
+  const toTabs = () => setView({ kind: 'tabs' })
+  const openWorkout = (workoutId: string, isEditMode: boolean) =>
+    setView({ kind: 'workout', workoutId, isEditMode })
+
   // Resume an unfinished session rather than starting a second (§4.4).
   async function handleStartWorkout() {
     const active = await repo.getActiveWorkout()
     if (active) {
-      setView({ kind: 'workout', workoutId: active.id, isEditMode: false })
+      openWorkout(active.id, false)
       return
     }
     setView({ kind: 'start' })
@@ -207,7 +210,7 @@ function SignedInApp() {
       <ActiveWorkoutScreen
         workoutId={view.workoutId}
         isEditMode={view.isEditMode}
-        onExit={() => setView({ kind: 'tabs' })}
+        onExit={toTabs}
       />
     )
   }
@@ -215,10 +218,8 @@ function SignedInApp() {
   if (view.kind === 'start') {
     return (
       <StartWorkoutScreen
-        onStarted={(workoutId) =>
-          setView({ kind: 'workout', workoutId, isEditMode: false })
-        }
-        onCancel={() => setView({ kind: 'tabs' })}
+        onStarted={(workoutId) => openWorkout(workoutId, false)}
+        onCancel={toTabs}
       />
     )
   }
@@ -226,7 +227,7 @@ function SignedInApp() {
   if (view.kind === 'account') {
     return (
       <AccountScreen
-        onBack={() => setView({ kind: 'tabs' })}
+        onBack={toTabs}
         onConnectAccount={() => setView({ kind: 'connect' })}
       />
     )
@@ -237,17 +238,17 @@ function SignedInApp() {
   // local data, and the tree remounts under the new uid (keyed on userId) —
   // which lands back on tabs automatically. Cancel returns here.
   if (view.kind === 'connect') {
-    return <SignInScreen onCancel={() => setView({ kind: 'tabs' })} />
+    return <SignInScreen onCancel={toTabs} />
   }
 
   if (view.kind === 'badges') {
-    return <BadgesScreen onBack={() => setView({ kind: 'tabs' })} />
+    return <BadgesScreen onBack={toTabs} />
   }
 
   if (view.kind === 'coach') {
     return (
       <CoachScreen
-        onBack={() => setView({ kind: 'tabs' })}
+        onBack={toTabs}
         onOpenTemplates={() => setView({ kind: 'templates' })}
         onSignIn={() => setView({ kind: 'connect' })}
       />
@@ -255,25 +256,23 @@ function SignedInApp() {
   }
 
   if (view.kind === 'settings') {
-    return <SettingsScreen onBack={() => setView({ kind: 'tabs' })} />
+    return <SettingsScreen onBack={toTabs} />
   }
 
   if (view.kind === 'body') {
-    return <BodyMetricsScreen onBack={() => setView({ kind: 'tabs' })} />
+    return <BodyMetricsScreen onBack={toTabs} />
   }
 
   if (view.kind === 'data') {
-    return <DataScreen onBack={() => setView({ kind: 'tabs' })} />
+    return <DataScreen onBack={toTabs} />
   }
 
   if (view.kind === 'templates') {
     return (
       <TemplatesScreen
         onEditTemplate={(templateId) => setView({ kind: 'templateEditor', templateId })}
-        onStartWorkout={(workoutId) =>
-          setView({ kind: 'workout', workoutId, isEditMode: false })
-        }
-        onBack={() => setView({ kind: 'tabs' })}
+        onStartWorkout={(workoutId) => openWorkout(workoutId, false)}
+        onBack={toTabs}
       />
     )
   }
@@ -294,25 +293,17 @@ function SignedInApp() {
       <main className="flex-1 overflow-y-auto pb-6 pt-safe">
         {tab === 'home' && (
           <HomeScreen
-            onResumeWorkout={(workoutId) =>
-              setView({ kind: 'workout', workoutId, isEditMode: false })
-            }
+            onResumeWorkout={(workoutId) => openWorkout(workoutId, false)}
             onStartWorkout={() => void handleStartWorkout()}
-            onOpenWorkout={(workoutId) =>
-              setView({ kind: 'workout', workoutId, isEditMode: true })
-            }
+            onOpenWorkout={(workoutId) => openWorkout(workoutId, true)}
             onOpenBadges={() => setView({ kind: 'badges' })}
             onOpenCoach={() => setView({ kind: 'coach' })}
           />
         )}
         {tab === 'history' && (
           <HistoryScreen
-            onOpenWorkout={(workoutId) =>
-              setView({ kind: 'workout', workoutId, isEditMode: true })
-            }
-            onStartedCopy={(workoutId) =>
-              setView({ kind: 'workout', workoutId, isEditMode: false })
-            }
+            onOpenWorkout={(workoutId) => openWorkout(workoutId, true)}
+            onStartedCopy={(workoutId) => openWorkout(workoutId, false)}
             onStartWorkout={() => void handleStartWorkout()}
           />
         )}
