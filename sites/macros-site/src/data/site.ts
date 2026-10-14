@@ -19,7 +19,6 @@ export const site = {
   seoDescription:
     'MACROcosm is a fast, local-first calorie and macro tracker for iPhone and the web. 2,200 foods offline, USDA search, recipes you can cook from, and a calorie target measured from your own weight trend. Free, offline, no account, no ads.',
 
-  origin: 'https://macrocosm.fitness',
   heroBadge: 'Free · No account · Works offline',
   bloom: '#d2601a',
   applicationCategory: 'HealthApplication',

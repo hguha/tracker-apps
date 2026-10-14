@@ -19,7 +19,6 @@ export const site = {
   seoDescription:
     'REPutation is a fast, local-first workout tracker for iPhone and the web. Log a set in one tap, watch PRs light up, and get 22 analytics charts plus a conversational AI coach. Free, offline, no account, no ads.',
 
-  origin: 'https://reputation.fitness',
   heroBadge: 'Free · No account · Works offline',
   bloom: '#2a78d6',
   applicationCategory: 'HealthApplication',

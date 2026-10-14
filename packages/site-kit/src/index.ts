@@ -17,8 +17,6 @@ export interface SiteConfig {
   description: string
   /** <title>, Open Graph, JSON-LD. */
   seoDescription: string
-  /** Production origin, so canonical URLs and the OG image resolve absolutely. */
-  origin: string
   /**
    * Same-origin as the site (`/app`), so it also works on preview deploys and never hardcodes
    * the domain.

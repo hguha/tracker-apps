@@ -17,7 +17,7 @@ import { site } from '@site'
 const title = `${site.name} — ${site.tagline}`
 const description = site.seoDescription
 
-const canonical = new URL(Astro.url.pathname, Astro.site ?? site.origin)
+const canonical = new URL(Astro.url.pathname, Astro.site)
 
 // Derived from the badges rather than stated twice: Android belongs here when there is a Play
 // listing to point at, and claiming it in structured data while refusing to link it is the same
