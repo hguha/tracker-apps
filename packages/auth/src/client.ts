@@ -2,14 +2,14 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-export interface SupabaseClientConfig {
+interface SupabaseClientConfig {
   url: string
   anonKey: string
   /** localStorage key for the persisted session — app-specific; keep stable across releases. */
   storageKey: string
 }
 
-export function createSupabaseClient(config: SupabaseClientConfig): SupabaseClient {
+function createSupabaseClient(config: SupabaseClientConfig): SupabaseClient {
   const client = createClient(config.url, config.anonKey, {
     auth: {
       // A refresh failure while offline must not clear the session; treat it as offline.

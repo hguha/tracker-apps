@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import { Button } from '@tracker-engine/ui'
 import { passwordProblem } from '../types'
+import { ErrorNote } from './ErrorNote'
 
 export interface SetPasswordActions {
   updatePassword(password: string): Promise<void>
@@ -82,18 +83,7 @@ export function SetPasswordScreen({ auth }: { auth: SetPasswordActions }) {
           {isBusy ? 'Saving…' : 'Save password'}
         </Button>
 
-        {error && (
-          <p
-            role="alert"
-            className="mt-3 rounded-xl px-3.5 py-2.5 text-[13.5px]"
-            style={{
-              background: 'color-mix(in srgb, var(--status-critical) 10%, transparent)',
-              color: 'var(--status-critical)',
-            }}
-          >
-            {error}
-          </p>
-        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <button
           onClick={() => {

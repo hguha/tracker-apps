@@ -6,6 +6,7 @@ import { CODE_MAX_LENGTH, isSubmittableCode, isValidEmail, passwordProblem } fro
 import { LOCAL_DEV_CODE } from '../localProvider'
 import { isBackendConfigured } from '../client'
 import type { SignInResult } from '../types'
+import { ErrorNote } from './ErrorNote'
 
 // Matches the server's per-address email cooldown (~60s); a shorter timer would just enable
 // an avoidable 429.
@@ -36,6 +37,12 @@ type Panel =
   | 'forgot'
   /** Redeeming the code from a reset email; success routes to set-a-new-password. */
   | 'reset-code'
+
+const PANEL_FOR_RESULT: Partial<Record<SignInResult['kind'], Panel>> = {
+  'code-sent': 'code',
+  'confirm-sent': 'confirm',
+  'reset-sent': 'reset-code',
+}
 
 /** Just the methods this screen drives, so any app's auth state satisfies it. */
 export interface SignInActions {
@@ -118,14 +125,6 @@ export function SignInScreen({
     setCode('')
   }
 
-  // Each "we emailed you something" result leads to the same code panel, differing
-  // only in which one.
-  const PANEL_FOR_RESULT: Record<string, Panel> = {
-    'code-sent': 'code',
-    'confirm-sent': 'confirm',
-    'reset-sent': 'reset-code',
-  }
-
   // Every submit funnels through here so busy state and result handling can't drift.
   async function run(action: () => Promise<SignInResult>) {
     setError(null)
@@ -133,7 +132,7 @@ export function SignInScreen({
     try {
       const result = await action()
       if (result.kind === 'error') {
-        setError(result.message ?? 'Something went wrong.')
+        setError(result.message)
       } else {
         const next = PANEL_FOR_RESULT[result.kind]
         if (next) {
@@ -508,21 +507,6 @@ export function SignInScreen({
         </p>
       </div>
     </div>
-  )
-}
-
-function ErrorNote({ children }: { children: ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="mt-3 rounded-xl px-3.5 py-2.5 text-[13.5px]"
-      style={{
-        background: 'color-mix(in srgb, var(--status-critical) 10%, transparent)',
-        color: 'var(--status-critical)',
-      }}
-    >
-      {children}
-    </p>
   )
 }
 
