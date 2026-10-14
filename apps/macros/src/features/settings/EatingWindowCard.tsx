@@ -25,6 +25,7 @@ export function EatingWindowCard() {
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
   if (!profile) return null
   const current = profile.eatingWindow
+  const eatingMinutes = current ? windowLength(current.startMinute, current.endMinute) : 0
 
   return (
     <Card className="p-4">
@@ -79,8 +80,7 @@ export function EatingWindowCard() {
           </div>
           <p className="tabular mt-2 text-[12px] text-ink-muted">
             {formatMinuteOfDay(current.startMinute)}–{formatMinuteOfDay(current.endMinute)} ·{' '}
-            {formatDuration(windowLength(current.startMinute, current.endMinute))} eating,{' '}
-            {formatDuration(24 * 60 - windowLength(current.startMinute, current.endMinute))} fasting
+            {formatDuration(eatingMinutes)} eating, {formatDuration(24 * 60 - eatingMinutes)} fasting
           </p>
         </>
       )}
