@@ -4,7 +4,6 @@ import {
   categoryAxis,
   Chart,
   ChartCard,
-  chartChrome,
   valueAxis,
 } from '@tracker-engine/ui/charts'
 import { type InsightsData } from './useInsightsData'
@@ -14,7 +13,7 @@ import { regionVar, resolveRegionColor } from '@/lib/palette'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { weekLabels } from './chartShared'
+import { chrome, weekLabels } from './chartShared'
 
 export function RegionShareChart({ data }: { data: InsightsData }) {
   const unit = data.profile.unitWeight
@@ -92,7 +91,7 @@ export function RegionVolumeOverTimeChart({ data }: { data: InsightsData }) {
         displayWeight(data.regionVolumeByWeek.get(week)?.get(region) ?? 0, unit),
       ),
     }))
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       legend: {
@@ -200,7 +199,7 @@ export function PatternCoverageChart({ data }: { data: InsightsData }) {
       count: data.setsByPattern.get(pattern) ?? 0,
     })).filter((e) => e.count > 0)
     const labels = entries.map((e) => humanizeSlug(e.pattern))
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
@@ -249,7 +248,7 @@ export function EquipmentMixChart({ data }: { data: InsightsData }) {
       .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
     const labels = entries.map(([eq]) => humanizeSlug(eq))
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },

@@ -5,20 +5,19 @@ import {
   categoryAxis,
   Chart,
   ChartCard,
-  chartChrome,
   valueAxis,
 } from '@tracker-engine/ui/charts'
-import { resolveRegionColor } from '@/lib/palette'
 import { type InsightsData } from './useInsightsData'
 import { weekKey } from '@/lib/dates'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
 import {
+  chrome,
   DAY_LABELS,
+  formatHour,
   movingAverage,
   SET_COUNT_BUCKETS,
-  formatHour,
   weekLabels,
 } from './chartShared'
 import { sessionGapsDays } from '@/data/patterns'
@@ -30,7 +29,7 @@ export function DayOfWeekChart({ data }: { data: InsightsData }) {
     const order = Array.from({ length: 7 }, (_, i) => (i + data.profile.weekStartsOn) % 7)
     const labels = order.map((day) => DAY_LABELS[day]!)
     const counts = order.map((day) => data.dayOfWeekCounts[day]!)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
@@ -77,7 +76,7 @@ export function VolumeVsDurationChart({ data }: { data: InsightsData }) {
         displayWeight(s.volumeKg, unit),
         s.at,
       ])
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: {
@@ -130,7 +129,7 @@ export function TimeOfDayChart({ data }: { data: InsightsData }) {
 
   const option = useMemo<EChartsOption>(() => {
     const labels = data.hourCounts.map((_, h) => (h % 3 === 0 ? formatHour(h) : ''))
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     return {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
@@ -175,7 +174,7 @@ export function DurationTrendChart({ data }: { data: InsightsData }) {
     const labels = withDuration.map((s) => formatShortDate(s.at))
     const minutes = withDuration.map((s) => Math.round(s.durationSeconds! / 60))
     const average = movingAverage(minutes)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       legend: {
@@ -244,7 +243,7 @@ export function SetsPerSessionChart({ data }: { data: InsightsData }) {
       const index = Math.min(SET_COUNT_BUCKETS.length - 1, Math.floor((count - 1) / 5))
       tally[index]! += 1
     }
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
@@ -296,7 +295,7 @@ export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
       }
     }
     const counts = data.weeks.map((week) => distinctByWeek.get(week)?.size ?? 0)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
@@ -347,7 +346,7 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
       const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
       tally[i]! += 1
     }
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },

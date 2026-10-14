@@ -1,6 +1,10 @@
 import { formatShortDay } from '@tracker-engine/core'
+import { chartChrome } from '@tracker-engine/ui/charts'
+import { resolveRegionColor } from '@/lib/palette'
 import { type ExerciseSeries, type InsightsData } from './useInsightsData'
 import { TrendingUp } from 'lucide-react'
+
+export const chrome = () => ({ ...chartChrome(), plot: resolveRegionColor('chest') })
 
 export const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 

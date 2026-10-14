@@ -5,16 +5,14 @@ import {
   categoryAxis,
   Chart,
   ChartCard,
-  chartChrome,
   valueAxis,
 } from '@tracker-engine/ui/charts'
-import { resolveRegionColor } from '@/lib/palette'
 import { type InsightsData } from './useInsightsData'
 import { Card } from '@/components/Card'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { movingAverage as movingAvg, SummaryStat, weekLabels } from './chartShared'
+import { chrome, movingAverage as movingAvg, SummaryStat, weekLabels } from './chartShared'
 
 export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
@@ -27,7 +25,7 @@ export function WeeklyVolumeChart({ data }: { data: InsightsData }) {
       displayWeight(data.volumeByWeek.get(week) ?? 0, unit),
     )
     const movingAverage = movingAvg(points)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       legend: {
@@ -91,7 +89,7 @@ export function WorkoutsPerWeekChart({ data }: { data: InsightsData }) {
   const { option, labels, counts } = useMemo(() => {
     const labels = weekLabels(data.weeks)
     const counts = data.weeks.map((week) => data.workoutsByWeek.get(week) ?? 0)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),

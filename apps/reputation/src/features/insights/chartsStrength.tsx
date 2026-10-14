@@ -5,16 +5,15 @@ import {
   categoryAxis,
   Chart,
   ChartCard,
-  chartChrome,
   valueAxis,
 } from '@tracker-engine/ui/charts'
 import { type InsightsData, REP_BUCKETS } from './useInsightsData'
-import { resolveRegionColor, resolveToken } from '@/lib/palette'
+import { resolveToken } from '@/lib/palette'
 import { useAppearanceKey } from '@/lib/useColorScheme'
 import { format } from 'date-fns'
 import { type EChartsOption } from 'echarts'
 import { useMemo } from 'react'
-import { PickExerciseCard, useLiftSubject } from './chartShared'
+import { chrome, PickExerciseCard, useLiftSubject } from './chartShared'
 
 export function StrengthProgressionChart({
   data,
@@ -30,7 +29,7 @@ export function StrengthProgressionChart({
   const active = subject
 
   const option = useMemo<EChartsOption>(() => {
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const points = (active?.points ?? []).filter((p) => p.e1rmKg !== null)
     return {
       ...baseOption(c),
@@ -99,7 +98,7 @@ export function TopSetChart({
 
   const { option, points } = useMemo(() => {
     const points = (active?.points ?? []).filter((p) => p.topSetKg !== null)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(
@@ -163,7 +162,7 @@ export function RepRangeChart({ data }: { data: InsightsData }) {
   const { option, counts, total } = useMemo(() => {
     const counts = REP_BUCKETS.map((bucket) => data.repBuckets.get(bucket) ?? 0)
     const total = counts.reduce((a, b) => a + b, 0)
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const ramp = [
       resolveToken('--seq-300', '#6da7ec'),
       resolveToken('--seq-400', '#3987e5'),
@@ -230,7 +229,7 @@ export function PerExerciseVolumeChart({
     const points = (active?.points ?? []).filter((p) => p.volumeKg > 0)
     const labels = points.map((p) => formatShortDate(p.at))
     const values = points.map((p) => displayWeight(p.volumeKg, unit))
-    const c = { ...chartChrome(), plot: resolveRegionColor('chest') }
+    const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       xAxis: categoryAxis(c, labels),
