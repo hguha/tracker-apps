@@ -80,7 +80,7 @@ export function EditEntryScreen({
             loaded={loaded}
             isDish={subject.kind === 'dish'}
             onClose={onClose}
-            onOpenPart={(id) => setPart(id)}
+            onOpenPart={setPart}
             onEditRecipe={setRecipeId}
             onSaveRecipe={() => setIsSavingRecipe(true)}
           />
@@ -118,7 +118,9 @@ function Editor({
   const [meal, setMeal] = useState<MealSlot>(first.meal)
   const [at, setAt] = useState(first.eatenAt)
   const isPart = !isDish && first.dishId !== null
-  const copyLabel = first.day === dayKey(Date.now()) ? 'Log again' : 'Log again today'
+  const isToday = first.day === dayKey(Date.now())
+  const copyLabel = isToday ? 'Log again' : 'Log again today'
+  const copied = isToday ? 'Logged again' : 'Added to today'
   const now = () => {
     const at_ = Date.now()
     return { at: at_, meal: mealForHour(new Date(at_).getHours()), venue: first.venue }
@@ -131,7 +133,6 @@ function Editor({
     for (const row of rows) await repo.deleteEntry(row.id)
     finish('Deleted')
   }
-  const copied = first.day === dayKey(Date.now()) ? 'Logged again' : 'Added to today'
 
   const changeRecipe = recipe ? (
     <button

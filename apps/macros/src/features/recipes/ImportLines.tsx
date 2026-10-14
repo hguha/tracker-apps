@@ -31,7 +31,7 @@ export function ImportLines({
     const local = await resolveLines(lines, (done, total) =>
       setProgress(`Matching foods — ${done} of ${total}`),
     )
-    const unweighed = local.lines.filter((line) => line.grams === null)
+    const unweighed = local.lines.filter((line) => line.grams === null && !line.parsed.isToTaste)
     setRows((current) => [
       ...current,
       ...local.lines.map((line) => ({
@@ -46,7 +46,7 @@ export function ImportLines({
       })),
     ])
     onNotes(local.assumptions)
-    setNeedsWeight(unweighed.filter((line) => !line.parsed.isToTaste))
+    setNeedsWeight(unweighed)
   }
 
   async function run() {
