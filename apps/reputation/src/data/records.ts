@@ -6,7 +6,6 @@ import {
   type LastPerformance,
   type LoadMode,
   type PerformedSession,
-  type PerformedSet,
   type PersonalRecord,
   type RecordType,
   type Workout,
@@ -194,16 +193,16 @@ async function recordBars(
 // When `equipment` is given, only sessions logged with that equipment count, so
 // records and last-time stay per (exercise + equipment).
 
+interface CompletedSession {
+  workout: Workout
+  workoutExercise: WorkoutExercise
+  sets: WorkoutSet[]
+}
+
 export async function completedSessionsForExercise(
   exerciseId: string,
   equipment?: Equipment,
-): Promise<
-  {
-    workout: Workout
-    workoutExercise: WorkoutExercise
-    sets: WorkoutSet[]
-  }[]
-> {
+): Promise<CompletedSession[]> {
   const workoutExercises = (
     await db.workoutExercises.where('exerciseId').equals(exerciseId).toArray()
   ).filter(
@@ -211,11 +210,7 @@ export async function completedSessionsForExercise(
       we.deletedAt === null && (equipment === undefined || we.equipment === equipment),
   )
 
-  const sessions: {
-    workout: Workout
-    workoutExercise: WorkoutExercise
-    sets: WorkoutSet[]
-  }[] = []
+  const sessions: CompletedSession[] = []
 
   for (const workoutExercise of workoutExercises) {
     const workout = await db.workouts.get(workoutExercise.workoutId)
@@ -356,26 +351,7 @@ export async function getPreviousSession(
   const previous = earlier[0]
   if (!previous) return null
 
-  const { loadMode } = previous.workoutExercise
-  const bw = previous.workout.bodyweightKg
-  return {
-    workoutId: previous.workout.id,
-    performedAt: previous.workout.startedAt,
-    sets: previous.sets.map(toPlaceholderSet),
-    bestE1rmKg: bestEffectiveE1rmKg(previous.sets, exercise, bw, loadMode),
-    volumeKg: volumeLoadKg(previous.sets, exercise, bw, loadMode),
-  }
-}
-
-// Kept as a thin alias for the canonical helper in lib/metrics, so existing
-// callers keep their name while the implementation lives in one place.
-export function bestEffectiveE1rmKg(
-  sets: WorkoutSet[],
-  exercise: Pick<Exercise, 'trackingType' | 'bodyweightFactor'>,
-  bodyweightKg: number | null,
-  loadMode: LoadMode | null,
-): number | null {
-  return bestEffectiveOneRepMaxKg(sets, exercise, bodyweightKg, loadMode)
+  return toPerformedSession(previous, exercise)
 }
 
 export async function rebuildLastPerformance(
@@ -385,20 +361,9 @@ export async function rebuildLastPerformance(
   const exercise = await db.exercises.get(exerciseId)
   if (!exercise) return
 
-  const sessions: PerformedSession[] = (
-    await completedSessionsForExercise(exerciseId, equipment)
-  ).map(({ workout, workoutExercise, sets }) => ({
-    workoutId: workout.id,
-    performedAt: workout.startedAt,
-    sets: sets.map(toPlaceholderSet),
-    bestE1rmKg: bestEffectiveE1rmKg(
-      sets,
-      exercise,
-      workout.bodyweightKg,
-      workoutExercise.loadMode,
-    ),
-    volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg, workoutExercise.loadMode),
-  }))
+  const sessions = (await completedSessionsForExercise(exerciseId, equipment)).map(
+    (session) => toPerformedSession(session, exercise),
+  )
 
   await db.lastPerformance.put({
     id: `${exerciseId}:${equipment}`,
@@ -409,13 +374,24 @@ export async function rebuildLastPerformance(
   })
 }
 
-function toPlaceholderSet(s: WorkoutSet): PerformedSet {
+function toPerformedSession(
+  { workout, workoutExercise, sets }: CompletedSession,
+  exercise: Exercise,
+): PerformedSession {
+  const { bodyweightKg } = workout
+  const { loadMode } = workoutExercise
   return {
-    weightKg: s.weightKg,
-    reps: s.reps,
-    durationSeconds: s.durationSeconds,
-    distanceM: s.distanceM,
-    rpe: s.rpe,
+    workoutId: workout.id,
+    performedAt: workout.startedAt,
+    sets: sets.map((s) => ({
+      weightKg: s.weightKg,
+      reps: s.reps,
+      durationSeconds: s.durationSeconds,
+      distanceM: s.distanceM,
+      rpe: s.rpe,
+    })),
+    bestE1rmKg: bestEffectiveOneRepMaxKg(sets, exercise, bodyweightKg, loadMode),
+    volumeKg: volumeLoadKg(sets, exercise, bodyweightKg, loadMode),
   }
 }
 

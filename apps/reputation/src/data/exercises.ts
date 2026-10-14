@@ -8,10 +8,9 @@ import {
   type Region,
   type WorkoutSet,
 } from '@/domain/types'
-import { volumeLoadKg } from '@/lib/metrics'
+import { bestEffectiveOneRepMaxKg, volumeLoadKg } from '@/lib/metrics'
 import { enqueue, newId, patchRow } from './outbox'
 import {
-  bestEffectiveE1rmKg,
   completedSessionsForExercise,
   listPersonalRecords,
   rebuildLastPerformance,
@@ -168,7 +167,7 @@ export async function getExerciseDetail(
     performedAt: workout.startedAt,
     sets,
     volumeKg: volumeLoadKg(sets, exercise, workout.bodyweightKg, workoutExercise.loadMode),
-    bestE1rmKg: bestEffectiveE1rmKg(
+    bestE1rmKg: bestEffectiveOneRepMaxKg(
       sets,
       exercise,
       workout.bodyweightKg,
@@ -190,7 +189,6 @@ export async function getExerciseDetail(
 export async function lastEquipmentMap(): Promise<Map<string, Equipment>> {
   const recent = (await db.workouts.orderBy('startedAt').reverse().limit(200).toArray())
     .filter((w) => w.deletedAt === null)
-    .sort((a, b) => b.startedAt - a.startedAt)
 
   const lastEquipment = new Map<string, Equipment>()
   for (const workout of recent) {
