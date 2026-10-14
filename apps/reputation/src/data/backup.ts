@@ -9,6 +9,7 @@ import {
 } from '@tracker-engine/local-first'
 import { db } from '@/db/database'
 import { enqueue } from './outbox'
+import { rebuildDerivedFor } from './records'
 import { getActiveUserId } from '@/db/seed'
 import { RETIRED_BODYWEIGHT_TRACKING } from './migrations/exerciseModel'
 import type {
@@ -211,6 +212,8 @@ export async function importBackup(file: BackupFile): Promise<BackupCounts> {
     inTransaction: (work) => db.transaction('rw', db.tables, work),
     enqueue,
   })
+
+  await rebuildDerivedFor(data.workoutExercises)
 
   return countsOf(file)
 }

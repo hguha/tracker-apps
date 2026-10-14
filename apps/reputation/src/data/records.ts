@@ -398,10 +398,14 @@ function toPerformedSession(
 }
 
 export async function rebuildLastPerformanceForWorkout(workoutId: string): Promise<void> {
-  const workoutExercises = await db.workoutExercises
-    .where('workoutId')
-    .equals(workoutId)
-    .toArray()
+  await rebuildDerivedFor(
+    await db.workoutExercises.where('workoutId').equals(workoutId).toArray(),
+  )
+}
+
+export async function rebuildDerivedFor(
+  workoutExercises: Pick<WorkoutExercise, 'exerciseId' | 'equipment'>[],
+): Promise<void> {
   const pairs = new Map(
     workoutExercises.map((we) => [`${we.exerciseId}:${we.equipment}`, we]),
   )

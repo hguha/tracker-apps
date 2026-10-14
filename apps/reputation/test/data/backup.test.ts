@@ -78,6 +78,17 @@ describe('export → import round-trip', () => {
     expect(restored.data.sets.every((s) => s.workoutExerciseId === weId)).toBe(true)
   })
 
+  it('rebuilds the last-time cache for imported history', async () => {
+    const workoutId = await seedSession()
+    const json = await exportToJson()
+    await repo.clearLocalData()
+
+    await importBackup(parseBackup(json))
+
+    const last = await repo.getLastPerformance('bench_press', 'barbell')
+    expect(last?.sessions.map((s) => s.workoutId)).toEqual([workoutId])
+  })
+
   it('is idempotent — importing the same file twice does not duplicate', async () => {
     await seedSession()
     const backup = parseBackup(await exportToJson())
