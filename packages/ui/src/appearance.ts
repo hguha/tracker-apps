@@ -41,13 +41,8 @@ export interface AppearanceSettings {
   accentOverride?: string | null
 }
 
-export interface AppearanceConfig {
-  presets: readonly ThemePreset[]
-  /** Page surfaces a custom accent must stay legible against. */
-  surfaces?: { light: Rgb; dark: Rgb }
-}
-
-const DEFAULT_SURFACES = {
+/** Page surfaces a custom accent must stay legible against. */
+export const PAGE_SURFACES: Record<ColorScheme, Rgb> = {
   light: { r: 252, g: 252, b: 251 },
   dark: { r: 26, g: 26, b: 25 },
 }
@@ -60,7 +55,7 @@ const DEFAULT_SURFACES = {
  * from the *dark* tag — a black bar over a light app. Reading the computed variable also keeps it
  * right for a theme whose page colour isn't the default one, and for a custom accent.
  */
-export function syncThemeColor(): void {
+function syncThemeColor(): void {
   if (typeof document === 'undefined') return
   const surface = getComputedStyle(document.documentElement)
     .getPropertyValue('--surface-page')
@@ -90,10 +85,9 @@ export function resolveScheme(preference: ColorSchemePreference): ColorScheme {
  * Returns the resolved scheme so the caller can drive platform side-effects such as the
  * native status bar, keeping this free of platform imports.
  */
-export function createAppearance(config: AppearanceConfig) {
+export function createAppearance(config: { presets: readonly ThemePreset[] }) {
   const known = new Set(config.presets.map((p) => p.id))
   const fallback = config.presets[0]?.id ?? 'default'
-  const surfaces = config.surfaces ?? DEFAULT_SURFACES
 
   function apply(settings: AppearanceSettings): ColorScheme | null {
     if (typeof document === 'undefined') return null
@@ -105,7 +99,7 @@ export function createAppearance(config: AppearanceConfig) {
 
     const accent = settings.accentOverride ? parseHex(settings.accentOverride) : null
     if (accent) {
-      const safe = toHex(ensureContrast(accent, surfaces[scheme]))
+      const safe = toHex(ensureContrast(accent, PAGE_SURFACES[scheme]))
       root.style.setProperty('--accent', safe)
       root.style.setProperty('--accent-wash', accentWash(safe, scheme === 'dark' ? 0.18 : 0.1))
       root.style.setProperty('--accent-contrast', contrastingInk(safe))

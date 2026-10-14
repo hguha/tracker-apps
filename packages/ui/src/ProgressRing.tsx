@@ -12,8 +12,6 @@ export function ProgressRing({
   max,
   size = 120,
   strokeWidth = 12,
-  /** Track (unfilled) color. */
-  trackColor = 'var(--surface-sunken)',
   /** Progress arc color. */
   color = 'var(--accent)',
   from = 0,
@@ -24,7 +22,6 @@ export function ProgressRing({
   max: number
   size?: number
   strokeWidth?: number
-  trackColor?: string
   color?: string
   from?: number
   fromColor?: string
@@ -61,7 +58,7 @@ export function ProgressRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={trackColor}
+          stroke="var(--surface-sunken)"
           strokeWidth={strokeWidth}
         />
         {base > 0 && arc(0, base, fromColor, 'butt')}

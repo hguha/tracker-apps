@@ -1,4 +1,5 @@
 import { cn, contrastRatio, ensureContrast, parseHex, toHex } from '@tracker-engine/core'
+import { PAGE_SURFACES } from './appearance'
 
 // Preset swatches plus a native color input, so the accent can be any hex — not
 // just the built-in themes. Shared by Settings and onboarding.
@@ -18,29 +19,24 @@ const ACCENT_SWATCHES = [
 export function AccentPicker({
   accentOverride,
   onChange,
-  // Whether to show the "Theme default" reset chip (hidden where there's no theme concept).
-  allowThemeDefault = true,
 }: {
   accentOverride: string | null
   onChange: (accentOverride: string | null) => void
-  allowThemeDefault?: boolean
 }) {
   return (
     <div>
       <div className="flex flex-wrap gap-2">
-        {allowThemeDefault && (
-          <button
-            onClick={() => onChange(null)}
-            className={cn(
-              'h-9 rounded-full border px-3 text-[13px] font-semibold',
-              accentOverride === null
-                ? 'border-accent bg-accent-wash text-accent'
-                : 'border-line text-ink-secondary',
-            )}
-          >
-            Theme default
-          </button>
-        )}
+        <button
+          onClick={() => onChange(null)}
+          className={cn(
+            'h-9 rounded-full border px-3 text-[13px] font-semibold',
+            accentOverride === null
+              ? 'border-accent bg-accent-wash text-accent'
+              : 'border-line text-ink-secondary',
+          )}
+        >
+          Theme default
+        </button>
         {ACCENT_SWATCHES.map((hex) => (
           <button
             key={hex}
@@ -81,11 +77,8 @@ function AccentNotice({ hex }: { hex: string }) {
   const rgb = parseHex(hex)
   if (!rgb) return null
 
-  const lightSurface = { r: 252, g: 252, b: 251 }
-  const darkSurface = { r: 26, g: 26, b: 25 }
-
-  const lightAdjusted = toHex(ensureContrast(rgb, lightSurface))
-  const darkAdjusted = toHex(ensureContrast(rgb, darkSurface))
+  const lightAdjusted = toHex(ensureContrast(rgb, PAGE_SURFACES.light))
+  const darkAdjusted = toHex(ensureContrast(rgb, PAGE_SURFACES.dark))
   const wasAdjusted =
     lightAdjusted.toLowerCase() !== hex.toLowerCase() ||
     darkAdjusted.toLowerCase() !== hex.toLowerCase()
@@ -93,8 +86,8 @@ function AccentNotice({ hex }: { hex: string }) {
   if (!wasAdjusted) return null
 
   const ratio = Math.min(
-    contrastRatio(rgb, lightSurface),
-    contrastRatio(rgb, darkSurface),
+    contrastRatio(rgb, PAGE_SURFACES.light),
+    contrastRatio(rgb, PAGE_SURFACES.dark),
   )
 
   return (

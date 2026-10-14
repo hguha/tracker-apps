@@ -2,14 +2,7 @@ import { cn } from '@tracker-engine/core'
 import { AccentPicker } from './AccentPicker'
 import { Card } from './Card'
 import { SectionLabel } from './SectionLabel'
-import type { ColorSchemePreference } from './appearance'
-
-export interface ThemeOption {
-  id: string
-  label: string
-  /** A colour that shows what the preset looks like, so the choice isn't a word game. */
-  swatch: string
-}
+import type { ColorSchemePreference, ThemePreset } from './appearance'
 
 const SCHEMES: { value: ColorSchemePreference; label: string }[] = [
   { value: 'system', label: 'Auto' },
@@ -32,7 +25,7 @@ export function AppearanceCard({
   onChange,
   children,
 }: {
-  themes: readonly ThemeOption[]
+  themes: readonly ThemePreset[]
   theme: string
   colorScheme: ColorSchemePreference
   accentOverride: string | null

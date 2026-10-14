@@ -23,7 +23,7 @@ export { MonthCalendar, type CalendarDay } from './MonthCalendar'
 export { NumberInput, readNumber } from './NumberInput'
 export { useDraftInput } from './useDraftInput'
 export { SegmentedTabs, type SegmentedTab } from './SegmentedTabs'
-export { AppearanceCard, type ThemeOption } from './AppearanceCard'
+export { AppearanceCard } from './AppearanceCard'
 export { BadgeTile, BadgeDetailSheet, BadgeGrid, type BadgeView } from './Badges'
 export {
   CelebrationOverlay,
@@ -38,8 +38,6 @@ export {
   resolveScheme,
   SHARED_THEME_PRESETS,
   sharedThemes,
-  type SharedThemeId,
-  syncThemeColor,
   type AppearanceSettings,
   type ColorScheme,
   type ColorSchemePreference,
