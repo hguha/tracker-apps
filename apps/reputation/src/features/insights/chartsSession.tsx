@@ -16,6 +16,8 @@ import {
   chrome,
   DAY_LABELS,
   formatHour,
+  GAP_BUCKETS,
+  gapTally,
   movingAverage,
   SET_COUNT_BUCKETS,
   weekLabels,
@@ -337,20 +339,15 @@ export function ExerciseVarietyChart({ data }: { data: InsightsData }) {
 
 export function GapDistributionChart({ data }: { data: InsightsData }) {
   const appearance = useAppearanceKey()
-  const buckets = ['0-1', '2', '3', '4-6', '7+']
 
   const { option, tally, gaps } = useMemo(() => {
     const gaps = sessionGapsDays(data.sessions.map((s) => s.at))
-    const tally = new Array<number>(SET_COUNT_BUCKETS.length).fill(0)
-    for (const g of gaps) {
-      const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
-      tally[i]! += 1
-    }
+    const tally = gapTally(gaps)
     const c = chrome()
     const option: EChartsOption = {
       ...baseOption(c),
       tooltip: { ...baseOption(c).tooltip, trigger: 'item' },
-      xAxis: categoryAxis(c, buckets),
+      xAxis: categoryAxis(c, GAP_BUCKETS),
       yAxis: valueAxis(c, { name: 'gaps' }),
       series: [
         {
@@ -372,7 +369,7 @@ export function GapDistributionChart({ data }: { data: InsightsData }) {
       emptyMessage="Log a few sessions to see how long your breaks run."
       table={{
         columns: ['Days off', 'Times'],
-        rows: buckets.map((b, i) => [b, tally[i]!]),
+        rows: GAP_BUCKETS.map((b, i) => [b, tally[i]!]),
       }}
     >
       <Chart option={option} ariaLabel="Histogram of days between sessions" />

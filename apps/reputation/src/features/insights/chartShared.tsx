@@ -48,6 +48,17 @@ export function PickExerciseCard({
 
 export const SET_COUNT_BUCKETS = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
 
+export const GAP_BUCKETS = ['0-1', '2', '3', '4-6', '7+']
+
+export function gapTally(gaps: number[]): number[] {
+  const tally = new Array<number>(GAP_BUCKETS.length).fill(0)
+  for (const g of gaps) {
+    const i = g <= 1 ? 0 : g === 2 ? 1 : g === 3 ? 2 : g <= 6 ? 3 : 4
+    tally[i]! += 1
+  }
+  return tally
+}
+
 export function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
