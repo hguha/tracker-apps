@@ -92,7 +92,7 @@ export const spotlights: Spotlight[] = [
  *
  * The coach is a real back-and-forth: it asks follow-ups when a request is vague,
  * reads your actual log, can see the workout you're in the middle of, and knows
- * the templates you already have. `thread` is a short scripted transcript shown
+ * the templates you already have. `threads` is a short scripted transcript shown
  * beside the screenshots so the section demonstrates the conversation rather than
  * just claiming it.
  */
@@ -106,7 +106,7 @@ export const conversation = {
   /**
    * Scripted exchanges — user vs coach — that rotate in the section, each showing
    * a different capability: refining a template, in-workout accessory calls, and
-   * reading your progress. AiCoach.astro crossfades between them.
+   * reading your progress. Conversation.astro crossfades between them.
    */
   threads: [
     [
@@ -223,7 +223,7 @@ export const leagues = {
   ],
 } as const
 
-/** The self-scrolling gallery under the feature grid. */
+/** The self-scrolling gallery under the hero. */
 export const gallery: readonly GalleryItem[] = [
   { screen: 'onboarding', label: 'Welcome' },
   { screen: 'workout', label: 'Active workout' },
