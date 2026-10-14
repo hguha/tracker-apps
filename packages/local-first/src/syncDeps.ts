@@ -11,9 +11,7 @@ import type {
  * which database it pointed at.
  */
 export interface DexieSyncTables {
-  outbox: OutboxPort & {
-    add(entry: Omit<DeadLetterEntry, 'seq'> | object): Promise<unknown>
-  }
+  outbox: OutboxPort
   deadLetter: DeadLetterPort & { add(entry: Omit<DeadLetterEntry, 'seq'>): Promise<unknown> }
   syncState: SyncStatePort
   /** Runs the dead-letter move as one transaction over outbox + deadLetter. */
