@@ -4,8 +4,9 @@ import { db, OWNED_TABLES, OWNER_KEY } from '@/db'
 import type { Table } from 'dexie'
 import { enqueue } from '@/data/outbox'
 import { weightIdFor } from './body'
+import { checkInIdFor } from './program'
 import { waterIdFor } from './water'
-import type { BodyWeightRow, WaterRow } from '@/domain/types'
+import type { BodyWeightRow, CheckIn, WaterRow } from '@/domain/types'
 
 export function claimLocalData(userId: string): Promise<number> {
   return db.transaction('rw', [...OWNED_TABLES, db.outbox], async () => {
@@ -16,7 +17,6 @@ export function claimLocalData(userId: string): Promise<number> {
       ['recipes', db.recipes],
       ['mealTemplates', db.mealTemplates],
       ['programs', db.programs],
-      ['checkIns', db.checkIns],
     ] as const) {
       const rows = await store.where('userId').equals(LOCAL_USER_ID).toArray()
       for (const row of rows) {
@@ -25,8 +25,15 @@ export function claimLocalData(userId: string): Promise<number> {
         claimed += 1
       }
     }
-    claimed += await rekeyByDay('bodyWeights', db.bodyWeights as Table<BodyWeightRow, string>, userId, weightIdFor)
-    claimed += await rekeyByDay('waterLogs', db.waterLogs as Table<WaterRow, string>, userId, waterIdFor)
+    claimed += await rekey('bodyWeights', db.bodyWeights as Table<BodyWeightRow, string>, userId, (owner, row) =>
+      weightIdFor(owner, row.day),
+    )
+    claimed += await rekey('waterLogs', db.waterLogs as Table<WaterRow, string>, userId, (owner, row) =>
+      waterIdFor(owner, row.day),
+    )
+    claimed += await rekey('checkIns', db.checkIns as Table<CheckIn, string>, userId, (owner, row) =>
+      checkInIdFor(owner, row.weekStart),
+    )
     return claimed
   })
 }
@@ -49,16 +56,16 @@ async function claimProfile(userId: string): Promise<number> {
  * so the next `addWater` on the same day would compute a *different* id, insert a second row, and hit
  * the server's unique (user_id, day) index. Delete and re-insert, exactly as the profile does.
  */
-async function rekeyByDay<Row extends { id: string; userId: string; day: string; clientRev: number }>(
+async function rekey<Row extends { id: string; userId: string; clientRev: number }>(
   table: string,
   store: Table<Row, string>,
   userId: string,
-  idFor: (owner: string, day: string) => string,
+  idFor: (owner: string, row: Row) => string,
 ): Promise<number> {
   const stale = await store.where('userId').equals(LOCAL_USER_ID).toArray()
   let claimed = 0
   for (const row of stale) {
-    const id = idFor(userId, row.day)
+    const id = idFor(userId, row)
     if (!(await store.get(id))) {
       await store.put({ ...row, id, userId, ...touch(row.clientRev) })
       await enqueue(table, id)

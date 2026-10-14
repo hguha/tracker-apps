@@ -203,6 +203,26 @@ describe('claimLocalData', () => {
     ])
   })
 
+  it('re-keys a claimed check-in so a recomputed week is the same row', async () => {
+    const checkIn = {
+      expenditureKcal: 2500, expenditureSe: 120, trendKg: 80,
+      trendChangeKgPerWeek: -0.4, meanIntakeKcal: 2100, daysLogged: 7,
+      kcalPerKg: 7700, note: '', status: 'applied' as const,
+      targets: { kcal: 2100, proteinMg: 1, carbsMg: 1, fatMg: 1 },
+      weekStart: '2026-08-31',
+    }
+    await repo.saveCheckIn(checkIn)
+
+    await repo.claimLocalData('real-user')
+    repo.setActiveUserId('real-user')
+    await repo.saveCheckIn({ ...checkIn, daysLogged: 6 })
+
+    const rows = await db.checkIns.toArray()
+    expect(rows.map((row) => [row.id, row.userId, row.daysLogged, row.deletedAt])).toEqual([
+      ['ci:real-user:2026-08-31', 'real-user', 6, null],
+    ])
+  })
+
   it('must run before the owner guard, which would otherwise wipe what it claimed', async () => {
     await repo.logFood({ food: await chicken(), meal: 'lunch', grams: 100 })
 

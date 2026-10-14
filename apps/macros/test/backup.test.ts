@@ -109,4 +109,22 @@ describe('importBackup onto another account', () => {
     ])
     expect((await db.programs.get('p-gone'))?.deletedAt).toBe(1_000)
   })
+
+  it('re-keys a check-in onto the signed-in user', async () => {
+    const backup = parseBackup(
+      JSON.stringify({
+        format: JSON.parse(await exportToJson()).format,
+        checkIns: [
+          { id: 'ci:old-user:2026-09-28', userId: 'old-user', weekStart: '2026-09-28', deletedAt: null },
+        ],
+      }),
+    )
+    repo.setActiveUserId('new-user')
+
+    await importBackup(backup)
+
+    expect((await db.checkIns.toArray()).map((r) => [r.id, r.userId])).toEqual([
+      ['ci:new-user:2026-09-28', 'new-user'],
+    ])
+  })
 })

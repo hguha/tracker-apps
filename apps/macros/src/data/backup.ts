@@ -7,7 +7,7 @@ import {
 } from '@tracker-engine/local-first'
 import { db } from '@/db'
 import { enqueue } from '@/data/outbox'
-import { migrateSavedMeals, weightIdFor, waterIdFor } from '@/data/repository'
+import { checkInIdFor, migrateSavedMeals, weightIdFor, waterIdFor } from '@/data/repository'
 import { activeUserId } from '@/data/repository/internal'
 import type {
   BodyWeightRow,
@@ -152,24 +152,36 @@ export async function importBackup(backup: Backup): Promise<void> {
   const userId = activeUserId
   const owned = <T extends { deletedAt?: number | null }>(rows: T[]) =>
     rows.map((row) => ({ ...row, userId, ...syncStamp(), deletedAt: row.deletedAt ?? null }))
-  const rekeyed = <T extends { id?: unknown; day: string; deletedAt?: number | null }>(
+  const rekeyed = <T extends { id?: unknown; deletedAt?: number | null }>(
     rows: T[],
-    idFor: (owner: string, day: string) => string,
+    idFor: (owner: string, row: T) => string,
   ) =>
     owned(rows.filter((row) => typeof row.id === 'string')).map((row) => ({
       ...row,
-      id: idFor(userId, row.day),
+      id: idFor(userId, row),
     }))
 
   await importBackupRows({
     tables: [
       { table: 'logEntries', store: db.logEntries, rows: owned(backup.logEntries) },
-      { table: 'bodyWeights', store: db.bodyWeights, rows: rekeyed(backup.bodyWeights, weightIdFor) },
-      { table: 'waterLogs', store: db.waterLogs, rows: rekeyed(backup.waterLogs, waterIdFor) },
+      {
+        table: 'bodyWeights',
+        store: db.bodyWeights,
+        rows: rekeyed(backup.bodyWeights, (owner, row) => weightIdFor(owner, row.day)),
+      },
+      {
+        table: 'waterLogs',
+        store: db.waterLogs,
+        rows: rekeyed(backup.waterLogs, (owner, row) => waterIdFor(owner, row.day)),
+      },
       { table: 'recipes', store: db.recipes, rows: owned(backup.recipes) },
       { table: 'mealTemplates', store: db.mealTemplates, rows: owned(backup.mealTemplates) },
       { table: 'programs', store: db.programs, rows: owned(backup.programs) },
-      { table: 'checkIns', store: db.checkIns, rows: owned(backup.checkIns) },
+      {
+        table: 'checkIns',
+        store: db.checkIns,
+        rows: rekeyed(backup.checkIns, (owner, row) => checkInIdFor(owner, row.weekStart)),
+      },
     ],
     inTransaction: (work) => db.transaction('rw', db.tables, work),
     enqueue,
