@@ -88,11 +88,11 @@ export function useInsightsData(windowDays: number): InsightsData {
   const loaded = useEntriesWithFoods(from, today)
   const entries = loaded?.entries
   const foods = loaded?.foods
-  const weights = useLiveQuery(() => repo.weights(), [], undefined)
+  const weights = useLiveQuery(() => repo.weights(), [], [])
   const program = useLiveQuery(() => repo.activeProgram(), [], undefined)
   const forecast = useLiveQuery(() => repo.goalOutlook(), [], null)
   const profile = useLiveQuery(() => repo.getProfile(), [], undefined)
-  const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], undefined)
+  const waterRows = useLiveQuery(() => repo.waterBetween(from, today), [from, today], [])
 
   const byDay = useMemo(() => groupBy(entries ?? [], (entry) => entry.day), [entries])
   const dayKeys = useMemo(() => [...byDay.keys()].sort(), [byDay])
@@ -107,7 +107,7 @@ export function useInsightsData(windowDays: number): InsightsData {
       dayKeys.map((day) => {
         const rows = byDay.get(day) ?? []
         const occasions = eatingOccasions(rows)
-        const target = targetsByDay?.get(day) ?? null
+        const target = targetsByDay.get(day) ?? null
         // Covered, not strict: one taco ingredient with no fibre figure used to drop the entire day
         // off the fibre chart. See `sumCovered`.
         const { totals, coverage } = sumCovered(rows.map((row) => row.nutrients))
@@ -132,7 +132,7 @@ export function useInsightsData(windowDays: number): InsightsData {
 
   // Smoothed once over the whole history, then sliced by week: smoothing inside a week re-seeds
   // the EWMA and destroys the signal, which understated expenditure by ~400 kcal/day.
-  const trend = weightTrend(weights ?? [])
+  const trend = weightTrend(weights)
   const energyPerKg = kcalPerKg(program?.goal ?? 'maintain', program?.ratePctPerWeek ?? 0)
   const intakeWeeks = groupByWeek(
     days.map((day) => ({ day: day.day, kcal: day.kcal })),
@@ -168,11 +168,12 @@ export function useInsightsData(windowDays: number): InsightsData {
     sourceTally.set(entry.source, (sourceTally.get(entry.source) ?? 0) + 1)
   }
 
-  const recipes = useLiveQuery(() => repo.recipes(), [], undefined)
+  const recipes = useLiveQuery(() => repo.recipes(), [], [])
   const cuisineOf = new Map<string, CuisineKey | null>(
-    (recipes ?? []).map((recipe) => [recipe.id, recipe.cuisine]),
+    recipes.map((recipe) => [recipe.id, recipe.cuisine]),
   )
 
+  const waterByDay = new Map(waterRows.map((row) => [row.day, row.ml]))
   const scored = days.filter((day) => day.targetKcal !== null)
   const first = trend[0]
   const last = trend[trend.length - 1]
@@ -185,18 +186,15 @@ export function useInsightsData(windowDays: number): InsightsData {
      * A gap rather than a zero for a day nothing was recorded — "didn't log it" and "drank none" are
      * different facts, and a run of zeroes would make the first look like the second.
      */
-    water: [...new Set([...dayKeys, ...(waterRows ?? []).map((row) => row.day)])]
+    water: [...new Set([...dayKeys, ...waterByDay.keys()])]
       .sort()
-      .map((day) => ({
-        day,
-        ml: (waterRows ?? []).find((row) => row.day === day)?.ml ?? null,
-      })),
+      .map((day) => ({ day, ml: waterByDay.get(day) ?? null })),
     trend,
     windows,
     expenditureKcal: expenditure?.kcal ?? null,
     expenditureSe: expenditure?.se ?? null,
     program,
-    forecast: forecast ?? null,
+    forecast,
     energyPerKg,
     profile,
     nutrition: dailyAverageCovered(entries ?? []),
@@ -211,7 +209,7 @@ export function useInsightsData(windowDays: number): InsightsData {
       .map(([name, value]) => ({ name, ...value }))
       .sort((a, b) => b.kcal - a.kcal)
       .slice(0, 12),
-    venues: venueSummary(entries ?? [], targetsByDay ?? new Map()),
+    venues: venueSummary(entries ?? [], targetsByDay),
     cuisines: cuisineMix(entries ?? [], cuisineOf),
     adherencePct:
       scored.length === 0
