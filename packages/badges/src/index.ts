@@ -75,20 +75,6 @@ export function evaluateBadges<S extends Stats, G extends string>(
     })
 }
 
-/**
- * Earned badges plus started ones. An untouched target is noise on a home screen, so it's
- * hidden — except when nothing has been started at all, where the single closest badge stands in
- * so a new user isn't shown an empty shelf.
- */
-export function startedBadges<S extends Stats, G extends string>(
-  all: readonly BadgeState<S, G>[],
-): BadgeState<S, G>[] {
-  const inPlay = all.filter((badge) => badge.earned || badge.fraction > 0)
-  if (inPlay.length > 0) return inPlay
-  const next = all.find((badge) => !badge.earned)
-  return next ? [next] : []
-}
-
 export function groupBadges<S extends Stats, G extends string>(
   all: readonly BadgeState<S, G>[],
   order: readonly G[],

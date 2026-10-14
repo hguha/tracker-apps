@@ -5,7 +5,6 @@ import {
   groupBadges,
   ratio,
   sanitizeStats,
-  startedBadges,
   type Badge,
 } from '../src'
 
@@ -39,18 +38,6 @@ describe('evaluateBadges', () => {
   it('renders a non-finite stat as zero rather than NaN', () => {
     const states = evaluateBadges(badges, { days: 1, perDay: Number.NaN })
     expect(states.find((state) => state.key === 'rate')!.detailText).toBe('0 / 2')
-  })
-})
-
-describe('startedBadges', () => {
-  it('hides untouched targets', () => {
-    const states = evaluateBadges(badges, { days: 4, perDay: 0 })
-    expect(startedBadges(states).map((state) => state.key)).toEqual(['one', 'ten'])
-  })
-
-  it('falls back to the closest badge so a new user sees something', () => {
-    const states = evaluateBadges(badges, { days: 0, perDay: 0 })
-    expect(startedBadges(states)).toHaveLength(1)
   })
 })
 
