@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Check, KeyRound, LogIn, LogOut, Trash2 } from 'lucide-react'
 import { formatRelativeDay, plural } from '@tracker-engine/core'
 import { BottomSheet, Button, Card, Screen, useToast } from '@tracker-engine/ui'
@@ -46,6 +46,7 @@ export function AccountScreen({
   const [dialog, setDialog] = useState<'none' | 'sign-out' | 'delete'>('none')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
+  const isRenaming = useRef(false)
   const session = auth.session
   if (!session) return null
 
@@ -53,11 +54,17 @@ export function AccountScreen({
   const canConnect = isBackendConfigured() && onConnectAccount !== undefined
 
   async function commitName() {
+    if (isRenaming.current) return
     const trimmed = name.trim()
     if (trimmed && trimmed !== session!.displayName) {
-      await auth.updateDisplayName(trimmed)
-      await onRenamed?.(trimmed)
-      toast.show('Name updated')
+      isRenaming.current = true
+      try {
+        await auth.updateDisplayName(trimmed)
+        await onRenamed?.(trimmed)
+        toast.show('Name updated')
+      } finally {
+        isRenaming.current = false
+      }
     }
     setNameDraft(null)
   }
