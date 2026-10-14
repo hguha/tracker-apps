@@ -26,7 +26,7 @@ import { applyAppearance, type ColorSchemePreference } from '@/lib/theme'
 import { useSystemColorScheme } from '@tracker-engine/ui'
 import { applyStatusBarStyle } from '@/platform/statusBar'
 import { installAudioUnlock, setSoundEnabled } from '@/features/timer/sounds'
-import { SyncScope } from '@/sync/useSync'
+import { SyncScope, useSync } from '@/sync/useSync'
 import { useReminderSync } from '@/features/reminders/reminders'
 
 // ECharts is the biggest dependency; lazy so the logging path never downloads it.
@@ -99,6 +99,7 @@ function AuthGate() {
 function SignedInApp() {
   const { session } = useAuth()
   const [isReady, setIsReady] = useState(false)
+  const { isAwaitingFirstSync } = useSync()
 
   const [tab, setTab] = useState<TabKey>('home')
   const [view, setView] = useState<View>({ kind: 'tabs' })
@@ -163,7 +164,10 @@ function SignedInApp() {
     setSoundEnabled(appearance.soundEnabled)
   }, [appearance, osScheme])
 
-  if (!isReady) {
+  const isOnboarding =
+    session !== null && appearance !== undefined && appearance.onboardingVersion < ONBOARDING_VERSION
+
+  if (!isReady || (isOnboarding && isAwaitingFirstSync)) {
     return (
       <div className="flex h-full items-center justify-center text-ink-muted">
         Setting up…
@@ -174,11 +178,7 @@ function SignedInApp() {
   // First run — and any time the walkthrough is bumped (ONBOARDING_VERSION) or
   // replayed from Settings. Runs for device-only accounts too; the final sync step
   // degrades to a local "you're ready" when there's nothing to upload.
-  if (
-    session &&
-    appearance !== undefined &&
-    appearance.onboardingVersion < ONBOARDING_VERSION
-  ) {
+  if (isOnboarding) {
     return (
       <OnboardingScreen
         onDone={() => {

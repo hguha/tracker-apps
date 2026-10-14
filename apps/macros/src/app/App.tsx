@@ -9,7 +9,7 @@ import * as repo from '@/data/repository'
 import { seedFoods } from '@/db/seed'
 import { syncReminders } from '@/data/reminders'
 import { applyAppearance } from '@/lib/theme'
-import { SyncScope } from '@/sync/useSync'
+import { SyncScope, useSyncStatus } from '@/sync/useSync'
 import { TabBar, type TabKey } from './TabBar'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen'
@@ -94,6 +94,7 @@ function AuthGate() {
 
 function SignedInApp() {
   const [isReady, setIsReady] = useState(false)
+  const { isAwaitingFirstSync } = useSyncStatus()
   const [tab, setTab] = useState<TabKey>('today')
   const [view, setView] = useState<View>({ kind: 'tabs' })
 
@@ -164,7 +165,7 @@ function SignedInApp() {
   if (!isReady || appearance === undefined) return <Splash>Setting up…</Splash>
 
   if (appearance.onboardingVersion < ONBOARDING_VERSION) {
-    return <OnboardingScreen />
+    return isAwaitingFirstSync ? <Splash>Loading your account…</Splash> : <OnboardingScreen />
   }
 
   const toTabs = () => setView({ kind: 'tabs' })

@@ -60,6 +60,31 @@ describe('createSyncScope', () => {
     await waitFor(() => expect(result.current.isReconciling).toBe(false))
   })
 
+  it('awaits only the first sync, not each one after', async () => {
+    const first = deferred()
+    const later = deferred()
+    const engine = { ...idleEngine(), sync: vi.fn().mockReturnValueOnce(first.promise).mockReturnValue(later.promise) }
+    const { scope, wrapper } = setup(engine)
+    const { result } = renderHook(() => scope.useSyncStatus(), { wrapper })
+    expect(result.current.isAwaitingFirstSync).toBe(true)
+
+    await act(async () => first.resolve())
+    await waitFor(() => expect(result.current.isAwaitingFirstSync).toBe(false))
+
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(engine.sync).toHaveBeenCalledTimes(2)
+    expect(result.current.isReconciling).toBe(true)
+    expect(result.current.isAwaitingFirstSync).toBe(false)
+  })
+
+  it('does not await a first sync when the app opens offline', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { scope, wrapper } = setup(idleEngine())
+    const { result } = renderHook(() => scope.useSyncStatus(), { wrapper })
+    await waitFor(() => expect(result.current.isAwaitingFirstSync).toBe(false))
+    onLine.mockRestore()
+  })
+
   it('is not left reconciling when the app opens offline', async () => {
     const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     const engine = idleEngine()
@@ -75,6 +100,7 @@ describe('createSyncScope', () => {
     const { result } = renderHook(() => scope.useSyncStatus(), { wrapper })
     expect(result.current.enabled).toBe(false)
     expect(result.current.isReconciling).toBe(false)
+    expect(result.current.isAwaitingFirstSync).toBe(false)
   })
 
   it('says whether sync now finished', async () => {
