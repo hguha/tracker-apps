@@ -38,6 +38,9 @@ interface RecipeNode {
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (request.method !== 'POST') return json({ error: 'POST only' })
+  if (!isSignedIn(request.headers.get('Authorization'))) {
+    return json({ error: 'Reading a link needs an account. Sign in, or paste the ingredients in.' })
+  }
 
   const { url } = (await request.json().catch(() => ({}))) as { url?: string }
   const target = safeUrl(url ?? '')
@@ -45,14 +48,13 @@ Deno.serve(async (request) => {
 
   let html: string
   try {
-    const response = await fetch(target, {
+    const response = await fetchPublic(target, {
       // Some sites serve a stub to unknown agents; this is the same string a browser sends.
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
         Accept: 'text/html',
       },
-      redirect: 'follow',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
     if (!response.ok) {
@@ -99,7 +101,7 @@ function safeUrl(raw: string): URL | null {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
 
-  const host = url.hostname.toLowerCase()
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
   const isPrivate =
     host === 'localhost' ||
     host.endsWith('.localhost') ||
@@ -112,6 +114,32 @@ function safeUrl(raw: string): URL | null {
     /^169\.254\./.test(host) ||
     host.startsWith('[')
   return isPrivate ? null : url
+}
+
+const MAX_REDIRECTS = 5
+
+async function fetchPublic(url: URL, init: RequestInit): Promise<Response> {
+  let target = url
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const response = await fetch(target, { ...init, redirect: 'manual' })
+    const location = response.headers.get('Location')
+    if (response.status < 300 || response.status >= 400 || !location) return response
+    const next = safeUrl(new URL(location, target).href)
+    if (!next) throw new Error(`Refused a redirect to ${location}`)
+    target = next
+  }
+  throw new Error('Too many redirects')
+}
+
+function isSignedIn(authHeader: string | null): boolean {
+  const payload = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).split('.')[1] : undefined
+  if (!payload) return false
+  try {
+    const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+    return claims.role === 'authenticated' && typeof claims.sub === 'string'
+  } catch {
+    return false
+  }
 }
 
 function findRecipe(html: string): RecipeNode | null {
