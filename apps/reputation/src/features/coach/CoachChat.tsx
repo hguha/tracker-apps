@@ -120,7 +120,7 @@ export function CoachChat({
       {variant === 'sheet' && (
         <div className="flex items-center gap-2 px-4 pb-1 pt-1">
           <Sparkles size={15} className="text-accent" />
-          <span className="flex-1 text-[14px] font-semibold">Coach · this workout</span>
+          <span id="coach-sheet" className="flex-1 text-[14px] font-semibold">Coach · this workout</span>
           <button
             onClick={() => setShowData(true)}
             className="flex items-center gap-1 text-[12px] text-ink-muted active:opacity-60"
