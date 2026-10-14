@@ -312,19 +312,7 @@ export async function saveWorkoutAsTemplate(
   const workout = await getWorkout(workoutId)
   if (!workout) throw new Error('Workout not found')
 
-  const template: Template = {
-    id: newId(),
-    userId: getActiveUserId(),
-    name: name.trim(),
-    description: '',
-    folder,
-    lastUsedAt: null,
-    timesUsed: 0,
-    isArchived: false,
-    ...syncStamp(),
-  }
-  await db.templates.add(template)
-  await enqueue('templates', template.id)
+  const templateId = await createTemplate(name, folder)
 
   const workoutExercises = await listWorkoutExercises(workoutId)
   for (const we of workoutExercises) {
@@ -334,7 +322,7 @@ export async function saveWorkoutAsTemplate(
 
     const row: TemplateExercise = {
       id: newId(),
-      templateId: template.id,
+      templateId,
       exerciseId: we.exerciseId,
       equipment: we.equipment,
       loadMode: we.loadMode,
@@ -354,7 +342,7 @@ export async function saveWorkoutAsTemplate(
     await enqueue('templateExercises', row.id)
   }
 
-  return template.id
+  return templateId
 }
 
 // Instantiates a template as a live workout, planned sets laid out as unchecked rows (§7).
