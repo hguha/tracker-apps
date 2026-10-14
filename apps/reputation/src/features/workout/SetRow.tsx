@@ -279,6 +279,16 @@ function formatPrevious(
   return '—'
 }
 
+function fieldClass(isEmpty: boolean): string {
+  return cn(
+    'h-11 min-w-0 flex-1 touch-pan-y rounded-xl border text-center tabular text-[16px] font-semibold',
+    'focus:border-accent focus:bg-surface focus:outline-none',
+    isEmpty
+      ? 'border-dashed border-line bg-transparent text-ink placeholder:text-ink-muted placeholder:font-normal'
+      : 'border-line bg-sunken text-ink',
+  )
+}
+
 export function parseSetValue(draft: string): number | null {
   const parsed = parseNumber(draft)
   return parsed === null || parsed < 0 ? null : parsed
@@ -318,14 +328,7 @@ function NumericField({
       placeholder={placeholder}
       inputMode={integer ? 'numeric' : 'decimal'}
       aria-label={ariaLabel}
-      className={cn(
-        'h-11 min-w-0 flex-1 touch-pan-y rounded-xl border text-center tabular text-[16px] font-semibold',
-        'focus:border-accent focus:bg-surface focus:outline-none',
-        isEmpty
-          ? 'border-dashed border-line bg-transparent text-ink placeholder:text-ink-muted placeholder:font-normal'
-          : 'border-line bg-sunken text-ink',
-        className,
-      )}
+      className={cn(fieldClass(isEmpty), className)}
     />
   )
 }
@@ -355,13 +358,7 @@ function DurationField({
         placeholderSeconds !== null ? formatDuration(placeholderSeconds) : 'm:ss'
       }
       aria-label="duration"
-      className={cn(
-        'h-11 min-w-0 flex-1 touch-pan-y rounded-xl border text-center tabular text-[16px] font-semibold',
-        'focus:border-accent focus:bg-surface focus:outline-none',
-        isEmpty
-          ? 'border-dashed border-line bg-transparent text-ink placeholder:text-ink-muted placeholder:font-normal'
-          : 'border-line bg-sunken text-ink',
-      )}
+      className={fieldClass(isEmpty)}
     />
   )
 }
