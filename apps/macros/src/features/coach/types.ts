@@ -30,6 +30,7 @@ export type CoachAction =
   | {
       kind: 'suggest-meal'
       title: string
+      meal: MealSlot
       /** Each item already matched to a food row, so the totals are computed not claimed. */
       items: { foodId: string; description: string; grams: number }[]
       nutrients: Nutrients

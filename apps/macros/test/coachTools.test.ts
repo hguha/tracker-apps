@@ -105,6 +105,14 @@ describe('toolToAction', () => {
     expect(action && 'nutrients' in action && action.nutrients.kcal).toBe(120)
   })
 
+  it('logs a suggested meal to the meal it was suggested for', async () => {
+    const food = await chicken()
+    const lunch = await toolToAction('suggestMeal', { title: 'x', meal: 'lunch', items: [{ foodId: food.id, grams: 100 }] })
+    expect(lunch && 'meal' in lunch && lunch.meal).toBe('lunch')
+    const unsaid = await toolToAction('suggestMeal', { title: 'x', items: [{ foodId: food.id, grams: 100 }] })
+    expect(unsaid && 'meal' in unsaid && unsaid.meal).toBe('dinner')
+  })
+
   it('returns null when nothing matched at all', async () => {
     expect(await toolToAction('suggestMeal', { title: 'x', items: [{ foodId: 'no', grams: 1 }] })).toBeNull()
   })

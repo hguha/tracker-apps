@@ -112,6 +112,7 @@ export const TOOL_DECLARATIONS: ToolDeclaration[] = [
       properties: {
         title: { type: 'string' },
         note: { type: 'string' },
+        meal: { type: 'string', enum: [...MEAL_SLOTS] },
         items: {
           type: 'array',
           items: {
@@ -337,6 +338,7 @@ export async function toolToAction(
     return {
       kind: 'suggest-meal',
       title: String(args.title ?? 'A meal'),
+      meal: mealSlot(args.meal, 'dinner'),
       note: String(args.note ?? ''),
       items,
       nutrients: sum(parts),
@@ -346,8 +348,8 @@ export async function toolToAction(
   return null
 }
 
-const mealSlot = (value: unknown): MealSlot =>
-  MEAL_SLOTS.includes(value as MealSlot) ? (value as MealSlot) : 'snack'
+const mealSlot = (value: unknown, fallback: MealSlot = 'snack'): MealSlot =>
+  MEAL_SLOTS.includes(value as MealSlot) ? (value as MealSlot) : fallback
 
 export const windowLabel = (window: EatingWindow): string =>
   `${formatClock(window.startMinute)}-${formatClock(window.endMinute)}`
