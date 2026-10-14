@@ -9,7 +9,8 @@ import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/cn'
 import { THEME_PRESETS, type ColorSchemePreference } from '@/lib/theme'
-import { lengthToCm, parseNumber, weightToKg } from '@/lib/units'
+import { parseNumber, weightToKg } from '@/lib/units'
+import { heightAnswerCm } from './bodyStep'
 import type { DistanceUnit, WeightUnit } from '@/domain/types'
 
 // Bump to re-show the walkthrough to everyone (App gates on profile.onboardingVersion).
@@ -84,6 +85,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
       setSex(p.sex)
       setExperience(p.experienceLevel)
       if (p.birthYear) setAge(String(new Date().getFullYear() - p.birthYear))
+      if (p.weeklyWorkoutGoal) setWeeklyGoal(p.weeklyWorkoutGoal)
     })
   }, [])
 
@@ -113,10 +115,10 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         })
       }
       if (step === 'body') {
-        const h = parseNumber(height)
         const bw = parseNumber(bodyweight)
+        const { heightCm } = await repo.getProfile()
         await repo.updateProfile({
-          heightCm: h !== null && h > 0 ? lengthToCm(h, lengthUnit) : null,
+          heightCm: heightAnswerCm(height, lengthUnit, heightCm),
           weeklyWorkoutGoal: weeklyGoal,
           // The aim doubles as the coach's default availability; refine in settings.
           trainingDaysPerWeek: weeklyGoal,
