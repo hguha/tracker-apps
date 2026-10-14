@@ -22,11 +22,9 @@ const SLOP = 10
 export function SwipeRow({
   actions,
   children,
-  className,
 }: {
   actions: readonly SwipeAction[]
   children: React.ReactNode
-  className?: string
 }) {
   const width = actions.length * ACTION_WIDTH
   const [offset, setOffset] = useState(0)
@@ -38,7 +36,7 @@ export function SwipeRow({
   const close = () => setOffset(0)
 
   return (
-    <div className={cn('relative overflow-hidden', className)}>
+    <div className="relative overflow-hidden">
       <div
         className="absolute inset-y-0 right-0 flex"
         style={{ width }}

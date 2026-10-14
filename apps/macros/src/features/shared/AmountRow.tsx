@@ -29,7 +29,7 @@ export function AmountRow({
     [food?.id],
     null,
   )
-  const measures = food ? measuresFor(food, borrowed ?? null) : []
+  const measures = food ? measuresFor(food, borrowed) : []
   const units = [
     { id: GRAMS, label: 'g', grams: 1 },
     { id: OUNCES, label: 'oz', grams: GRAMS_PER_OZ },
