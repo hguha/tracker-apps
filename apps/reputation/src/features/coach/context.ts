@@ -5,7 +5,7 @@
 import * as repo from '@/data/repository'
 import { computeTrainingPatterns } from '@/data/patterns'
 import { composeExerciseName } from '@/lib/labels'
-import { weekOffset } from '@/lib/dates'
+import { dayKey, weekOffset } from '@/lib/dates'
 import {
   bodyWeightFromKg,
   convertWeight,
@@ -145,7 +145,7 @@ export async function buildCoachContext(
   )
 
   const recentWorkouts = finishedSummaries.slice(0, RECENT_WORKOUTS).map((s) => ({
-    date: new Date(s.workout.startedAt).toISOString().slice(0, 10),
+    date: dayKey(s.workout.startedAt),
     title: s.title,
     volume: Math.round(displayWeight(s.volumeKg, unit)),
     setCount: s.setCount,
@@ -173,7 +173,7 @@ export async function buildCoachContext(
 
   const context: CoachContext = {
     version: COACH_CONTEXT_VERSION,
-    now: new Date().toISOString().slice(0, 10),
+    now: dayKey(Date.now()),
     profile: {
       name: profile.displayName,
       unitWeight: unit,

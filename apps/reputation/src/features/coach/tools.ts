@@ -7,7 +7,7 @@
 import * as repo from '@/data/repository'
 import { buildExerciseResolver } from '@/data/resolveExerciseName'
 import { computeTrainingPatterns } from '@/data/patterns'
-import { DAY_MS } from '@/lib/dates'
+import { DAY_MS, dayKey } from '@/lib/dates'
 import {
   bestEffectiveOneRepMaxKg,
   effectiveTopSetKg,
@@ -19,8 +19,6 @@ import type { ToolDeclaration } from '@tracker-engine/ai-coach'
 import type { CoachAction, PlanExercise, PlanSession } from './types'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-const isoDay = (at: number) => new Date(at).toISOString().slice(0, 10)
 
 async function unit(): Promise<WeightUnit> {
   return (await repo.getProfile()).unitWeight
@@ -143,7 +141,7 @@ const getExerciseHistory: RetrievalTool = {
       exercise: exercise.name,
       totalSessions: sessions.length,
       sessions: sessions.slice(0, limit).map((s) => ({
-        date: isoDay(s.workout.startedAt),
+        date: dayKey(s.workout.startedAt),
         equipment: s.workoutExercise.equipment,
         loadMode: s.workoutExercise.loadMode,
         bestE1rm: displayWeightOrNull(
@@ -189,7 +187,7 @@ const getProgress: RetrievalTool = {
       exercise: exercise.name,
       unit: u,
       points: sessions.map((s) => ({
-        date: isoDay(s.workout.startedAt),
+        date: dayKey(s.workout.startedAt),
         e1rm: displayWeightOrNull(
           bestEffectiveOneRepMaxKg(s.sets, exercise, s.workout.bodyweightKg, s.workoutExercise.loadMode),
           u,
@@ -250,7 +248,7 @@ const findWorkouts: RetrievalTool = {
     return {
       matches: summaries.length,
       workouts: summaries.slice(0, limit).map((s) => ({
-        date: isoDay(s.workout.startedAt),
+        date: dayKey(s.workout.startedAt),
         title: s.title,
         volume: displayWeightOrNull(s.volumeKg, u),
         sets: s.setCount,
@@ -361,7 +359,7 @@ const getBodyMetricsTool: RetrievalTool = {
     return {
       metric,
       entries: entries.map((e) => ({
-        date: isoDay(e.measuredAt),
+        date: dayKey(e.measuredAt),
         value: metric === 'bodyweight' ? displayWeightOrNull(e.value, u) : e.value,
       })),
     }
