@@ -1,8 +1,13 @@
 import { formatShortDate } from '@tracker-engine/core'
 import { displayWeight, weightFromKg } from '@/lib/units'
-import { Chart } from './Chart'
-import { ChartCard } from './ChartCard'
-import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
+import {
+  baseOption,
+  categoryAxis,
+  Chart,
+  ChartCard,
+  chartChrome,
+  valueAxis,
+} from '@tracker-engine/ui/charts'
 import { type InsightsData, REP_BUCKETS } from './useInsightsData'
 import { resolveRegionColor, resolveToken } from '@/lib/palette'
 import { useAppearanceKey } from '@/lib/useColorScheme'

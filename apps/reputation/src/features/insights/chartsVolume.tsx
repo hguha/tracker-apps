@@ -1,8 +1,13 @@
 import { displayWeight, formatDuration } from '@/lib/units'
 import { SectionLabel } from '@tracker-engine/ui'
-import { Chart } from './Chart'
-import { ChartCard } from './ChartCard'
-import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
+import {
+  baseOption,
+  categoryAxis,
+  Chart,
+  ChartCard,
+  chartChrome,
+  valueAxis,
+} from '@tracker-engine/ui/charts'
 import { resolveRegionColor } from '@/lib/palette'
 import { type InsightsData } from './useInsightsData'
 import { Card } from '@/components/Card'

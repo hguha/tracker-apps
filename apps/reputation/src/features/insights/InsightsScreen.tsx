@@ -132,11 +132,9 @@ export function InsightsScreen() {
           </div>
         ) : (
           <div className="space-y-3">
-            {subTab.charts.map((chartKey) => {
-              const chart = CHART_CATALOG[chartKey]
-              if (!chart) return null
-              return <div key={chartKey}>{chart.render(ctx)}</div>
-            })}
+            {subTab.charts.map((chartKey) => (
+              <div key={chartKey}>{CHART_CATALOG[chartKey].render(ctx)}</div>
+            ))}
           </div>
         )}
         <div className="h-4" />

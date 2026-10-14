@@ -1,5 +1,5 @@
 import { distanceFromM, formatDuration } from '@/lib/units'
-import { ChartCard } from './ChartCard'
+import { ChartCard } from '@tracker-engine/ui/charts'
 import { type InsightsData } from './useInsightsData'
 
 /**

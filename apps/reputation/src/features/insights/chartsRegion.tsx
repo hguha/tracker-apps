@@ -1,7 +1,12 @@
 import { displayWeight } from '@/lib/units'
-import { Chart } from './Chart'
-import { ChartCard } from './ChartCard'
-import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
+import {
+  baseOption,
+  categoryAxis,
+  Chart,
+  ChartCard,
+  chartChrome,
+  valueAxis,
+} from '@tracker-engine/ui/charts'
 import { type InsightsData } from './useInsightsData'
 import { MOVEMENT_PATTERNS, REGIONS, REGION_LABELS } from '@/domain/types'
 import { humanizeSlug } from '@/lib/labels'

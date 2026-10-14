@@ -1,8 +1,13 @@
 import { formatShortDate } from '@tracker-engine/core'
 import { displayWeight } from '@/lib/units'
-import { Chart } from './Chart'
-import { ChartCard } from './ChartCard'
-import { baseOption, categoryAxis, chartChrome, valueAxis } from '@tracker-engine/ui/charts'
+import {
+  baseOption,
+  categoryAxis,
+  Chart,
+  ChartCard,
+  chartChrome,
+  valueAxis,
+} from '@tracker-engine/ui/charts'
 import { resolveRegionColor } from '@/lib/palette'
 import { type InsightsData } from './useInsightsData'
 import { weekKey } from '@/lib/dates'
