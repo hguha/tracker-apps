@@ -5,8 +5,8 @@ import { plural } from '@tracker-engine/core'
 import { isNativePlatform } from '@tracker-engine/platform'
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { quietNextCelebrations } from '@tracker-engine/ui'
-import { ChevronLeft, Download, RefreshCw, Upload } from 'lucide-react'
+import { quietNextCelebrations, ScreenHeader } from '@tracker-engine/ui'
+import { Download, RefreshCw, Upload } from 'lucide-react'
 import { db } from '@/db/database'
 import * as repo from '@/data/repository'
 import {
@@ -100,18 +100,7 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-2 pt-safe">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-secondary active:bg-sunken"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="flex-1 text-[16px] font-semibold tracking-tight">
-          Data &amp; sync
-        </h1>
-      </header>
+      <ScreenHeader title="Data & sync" onBack={onBack} />
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         <Card className="p-4">
