@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   dayKeyOffset,
   dayStreaks,
+  fromDateTimeInputValue,
   formatMinuteOfDay,
   formatShortDate,
   formatShortDay,
@@ -48,5 +49,13 @@ describe('dayStreaks', () => {
 
   it('is zero with nothing logged', () => {
     expect(dayStreaks([], at('2026-09-07'))).toEqual({ current: 0, best: 0 })
+  })
+})
+
+describe('fromDateTimeInputValue', () => {
+  it('reads a local date-time and refuses a cleared or partial field', () => {
+    expect(fromDateTimeInputValue('2026-10-13T07:30')).toBe(new Date(2026, 9, 13, 7, 30).getTime())
+    expect(fromDateTimeInputValue('')).toBeNull()
+    expect(fromDateTimeInputValue('2026-10-')).toBeNull()
   })
 })

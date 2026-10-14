@@ -175,8 +175,10 @@ export function toDateTimeInputValue(ts: number): string {
   return format(ts, "yyyy-MM-dd'T'HH:mm")
 }
 
-export function fromDateTimeInputValue(value: string): number {
-  return new Date(value).getTime()
+export function fromDateTimeInputValue(value: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return null
+  const at = new Date(value).getTime()
+  return Number.isFinite(at) ? at : null
 }
 
 export const dayNoon = (day: string): number => Date.parse(`${day}T12:00:00`)

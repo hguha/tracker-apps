@@ -41,12 +41,13 @@ export function SessionMenu({
     }
   }
 
+  const movedTo = fromDateTimeInputValue(startedAt)
+
   async function saveDateTime() {
+    if (movedTo === null) return
     setIsBusy(true)
     try {
-      await repo.updateWorkout(workout.id, {
-        startedAt: fromDateTimeInputValue(startedAt),
-      })
+      await repo.updateWorkout(workout.id, { startedAt: movedTo })
       onSaved('Date updated')
       onDismiss()
     } finally {
@@ -144,7 +145,7 @@ export function SessionMenu({
           onCancel={() => setPanel('menu')}
           onConfirm={() => void saveDateTime()}
           confirmLabel="Save"
-          isBusy={isBusy}
+          isBusy={isBusy || movedTo === null}
         >
           <input
             type="datetime-local"
