@@ -1,3 +1,4 @@
+import { plural } from '@tracker-engine/core'
 import * as repo from '@/data/repository'
 import {
   GRAMS_PER_OZ,
@@ -256,7 +257,7 @@ function dishSubject(dish: RecentDish): AddSubject {
     label: dish.parts.length > 1 ? 'of this dish' : 'of this',
     nutrientsAt: (count) => scale(dish.nutrients, count),
     gramsAt: () => null,
-    summaryAt: (count) => plural(dish.parts.length * count, 'item'),
+    summaryAt: (count) => plural(Math.round(dish.parts.length * count), 'item'),
     // Whole copies only. A dish is already "3 steak tacos" as logged, and 1.5 of it means nothing
     // — the way to have one taco is to save it as one, which the breakdown screen offers.
     step: 1,
@@ -414,6 +415,3 @@ export async function partsOf(loggable: Loggable): Promise<LoggablePart[]> {
     nutrients: row.nutrients,
   }))
 }
-
-const plural = (count: number, word: string): string =>
-  `${Math.round(count)} ${word}${Math.round(count) === 1 ? '' : 's'}`
