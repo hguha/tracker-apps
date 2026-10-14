@@ -16,16 +16,10 @@
 @theme {
   --color-accent: #e0702f;
   --color-accent-bright: #f2803f;
-
-  --color-macro-protein: #e35670;
-  --color-macro-carbs: #4a97ec;
-  --color-macro-fat: #f0b52a;
-  --color-macro-fiber: #22c07d;
-  --color-macro-alcohol: #ad76e6;
 }
 
-/* The same palette as raw variables, so a content file can name a colour without the build needing
-   to know about it. */
+/* The category palette as raw variables, so a content file can name a colour without the build
+   needing to know about it. */
 :root {
   --macro-protein: #e35670;
   --macro-carbs: #4a97ec;

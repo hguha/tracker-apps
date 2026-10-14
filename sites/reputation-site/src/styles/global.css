@@ -16,19 +16,10 @@
 @theme {
   --color-accent: #3987e5;
   --color-accent-bright: #5aa0f2;
-
-  --color-region-chest: #3987e5;
-  --color-region-back: #eb6834;
-  --color-region-legs: #1baf7a;
-  --color-region-shoulders: #eda100;
-  --color-region-biceps: #e87ba4;
-  --color-region-triceps: #9c5bd6;
-  --color-region-core: #1baf7a;
-  --color-region-cardio: #7d74ef;
 }
 
-/* The same palette as raw variables, so a content file can name a colour without the build needing
-   to know about it. */
+/* The category palette as raw variables, so a content file can name a colour without the build
+   needing to know about it. */
 :root {
   --region-chest: #3987e5;
   --region-back: #eb6834;
@@ -36,6 +27,5 @@
   --region-shoulders: #eda100;
   --region-biceps: #e87ba4;
   --region-triceps: #9c5bd6;
-  --region-core: #1baf7a;
   --region-cardio: #7d74ef;
 }
