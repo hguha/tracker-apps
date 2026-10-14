@@ -1,9 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Button, Card, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
-import { defaultRate } from '@tracker-engine/body'
-import type { Goal } from '@/domain/types'
-
+import { dietBreak, previousGoal, resumeAfterBreak } from './programChange'
 
 /**
  * A diet break: maintenance for a while, on purpose.
@@ -21,18 +19,11 @@ export function DietBreakCard() {
 
   const isOnBreak = program.goal === 'maintain'
   // What they were doing before the break, so resuming doesn't ask them to remember.
-  const previous = (history ?? []).find((row) => row.goal !== 'maintain')
+  const previous = previousGoal(history)
 
-  async function start(goal: Goal, ratePctPerWeek: number) {
-    await repo.startProgram({
-      goal,
-      ratePctPerWeek,
-      proteinGPerKg: program!.proteinGPerKg,
-      fatMinPctKcal: program!.fatMinPctKcal,
-      coachingMode: program!.coachingMode,
-      cycling: program!.cycling,
-    })
-    toast.show(goal === 'maintain' ? 'On a diet break' : 'Back on plan')
+  async function start(input: Parameters<typeof repo.startProgram>[0]) {
+    await repo.startProgram(input)
+    toast.show(input.goal === 'maintain' ? 'On a diet break' : 'Back on plan')
   }
 
   return (
@@ -53,9 +44,7 @@ export function DietBreakCard() {
               key={goal}
               variant={previous?.goal === goal ? 'primary' : 'secondary'}
               className="flex-1"
-              onClick={() =>
-                void start(goal, previous?.goal === goal ? previous.ratePctPerWeek : defaultRate(goal))
-              }
+              onClick={() => void start(resumeAfterBreak(program, history, goal))}
             >
               {goal === 'lose' ? 'Resume losing' : 'Resume building'}
             </Button>
@@ -65,7 +54,7 @@ export function DietBreakCard() {
         <Button
           variant="secondary"
           className="mt-2.5 w-full"
-          onClick={() => void start('maintain', 0)}
+          onClick={() => void start(dietBreak(program))}
         >
           Switch to maintenance
         </Button>

@@ -15,8 +15,8 @@ import { Card, PillSelect } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { mgToGrams } from '@/lib/nutrition'
 import { useUnits } from '@/features/shared/useUnits'
-import { defaultRate, RATES } from '@tracker-engine/body'
-import { arrivalDay } from '@tracker-engine/body'
+import { arrivalDay, RATES } from '@tracker-engine/body'
+import { changeDirection } from './programChange'
 import type { CoachingMode, Goal, Program } from '@/domain/types'
 
 const BY_DATE = 'date'
@@ -84,17 +84,7 @@ export function TargetsCard() {
               onChange={(goal) => {
                 if (!goal) return
                 setIsByDate(false)
-                void repo.startProgram({
-                  goal,
-                  ratePctPerWeek: defaultRate(goal),
-                  proteinGPerKg: program.proteinGPerKg,
-                  fatMinPctKcal: program.fatMinPctKcal,
-                  coachingMode: program.coachingMode,
-                  cycling: program.cycling,
-                  // A goal weight survives a change of direction — someone switching from lose to
-                  // maintain still knows what number they were after.
-                  targetKg: goal === 'maintain' ? null : program.targetKg,
-                })
+                void repo.startProgram(changeDirection(program, goal))
               }}
             />
           </Field>
