@@ -1,0 +1,21 @@
+---
+interface Props {
+  glow?: boolean
+}
+
+const { glow = false } = Astro.props
+---
+
+Everything you eat,<br />
+in one <span class="whitespace-nowrap"
+  ><span
+    class="font-bold text-accent-bright"
+    style={glow ? 'text-shadow: 0 0 30px rgba(242,128,63,0.55)' : undefined}>MACRO</span
+  ><span
+    class:list={[
+      glow && 'shimmer',
+      'bg-gradient-to-r from-accent-bright via-[#f0b52a] to-[#e35670] bg-clip-text text-transparent',
+    ]}
+    style={glow ? 'filter: drop-shadow(0 0 26px rgba(240,181,42,0.35))' : undefined}>cosm</span
+  ></span
+>.

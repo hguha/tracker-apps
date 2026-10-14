@@ -1,0 +1,21 @@
+---
+interface Props {
+  glow?: boolean
+}
+
+const { glow = false } = Astro.props
+---
+
+Log it in a tap.<br />
+Build your <span class="whitespace-nowrap"
+  ><span
+    class="font-bold text-accent-bright"
+    style={glow ? 'text-shadow: 0 0 30px rgba(58,135,229,0.55)' : undefined}>REP</span
+  ><span
+    class:list={[
+      glow && 'shimmer',
+      'bg-gradient-to-r from-accent-bright via-[#9b7bef] to-[#e87ba4] bg-clip-text text-transparent',
+    ]}
+    style={glow ? 'filter: drop-shadow(0 0 26px rgba(155,123,239,0.4))' : undefined}>utation</span
+  ></span
+>.
