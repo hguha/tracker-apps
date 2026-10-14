@@ -79,6 +79,13 @@ export async function updateWorkout(id: string, patch: Partial<Workout>): Promis
   await patchRow('workouts', id, patch)
 }
 
+export async function moveWorkout(id: string, startedAt: number): Promise<void> {
+  const workout = await db.workouts.get(id)
+  if (!workout) throw new Error(`No workout ${id}`)
+  const endedAt = workout.endedAt === null ? null : workout.endedAt + startedAt - workout.startedAt
+  await patchRow('workouts', id, { startedAt, endedAt })
+}
+
 // Ends a session, or discards it if nothing was logged (§6.4.1).
 
 export async function finishWorkout(id: string): Promise<'saved' | 'discarded-empty'> {

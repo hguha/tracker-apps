@@ -47,7 +47,7 @@ export function SessionMenu({
     if (movedTo === null) return
     setIsBusy(true)
     try {
-      await repo.updateWorkout(workout.id, { startedAt: movedTo })
+      await repo.moveWorkout(workout.id, movedTo)
       onSaved('Date updated')
       onDismiss()
     } finally {
