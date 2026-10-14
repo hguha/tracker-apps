@@ -105,11 +105,11 @@ export function weekStreaks(
   // Count back from this week while each preceding week was trained; an untrained
   // current week is skipped, not counted as a break.
   const thisWeek = weekStart(now, weekStartsOn)
-  let cursor = weekStart(trained.has(thisWeek) ? thisWeek : thisWeek - WEEK_MS, weekStartsOn)
+  let cursor = trained.has(thisWeek) ? thisWeek : weekStart(thisWeek - 1, weekStartsOn)
   let current = 0
   while (trained.has(cursor)) {
     current += 1
-    cursor = weekStart(cursor - WEEK_MS, weekStartsOn)
+    cursor = weekStart(cursor - 1, weekStartsOn)
   }
 
   return { current, best }

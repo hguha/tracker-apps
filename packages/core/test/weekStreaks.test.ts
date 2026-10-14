@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { weekStart, weekStreaks } from '../src/dates'
 
 const WEEK_MS = 7 * 24 * 3600 * 1000
@@ -41,5 +41,17 @@ describe('weekStreaks', () => {
     const s = weekStreaks([wk(0) + 1000, wk(0) + 2000, wk(-1)], 1)
     expect(s.current).toBe(2)
     expect(s.best).toBe(2)
+  })
+})
+
+describe('weekStreaks across a clock change', () => {
+  it('keeps counting back through a 167-hour spring-forward week', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    try {
+      const sessions = [new Date(2027, 2, 3, 18).getTime(), new Date(2027, 2, 10, 18).getTime(), new Date(2027, 2, 15, 9).getTime()]
+      expect(weekStreaks(sessions, 1, new Date(2027, 2, 15, 10).getTime()).current).toBe(3)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })

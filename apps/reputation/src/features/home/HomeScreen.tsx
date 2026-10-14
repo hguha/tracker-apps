@@ -16,7 +16,7 @@ import { useSync } from '@/sync/useSync'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { displayWeight, formatDisplayWeight, formatDuration } from '@/lib/units'
-import { DAY_MS, WEEK_MS, dayKey, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
+import { DAY_MS, dayKey, formatRelativeDay, formatTimeOfDay, weekStart } from '@/lib/dates'
 import { partOfDay } from '@/lib/sessionTitle'
 import { regionVar } from '@/lib/palette'
 import {
@@ -65,7 +65,7 @@ export function HomeScreen({
     const finished = await repo.listFinishedWorkoutSummaries(1000)
 
     const thisWeekStart = weekStart(Date.now(), profile.weekStartsOn)
-    const lastWeekStart = thisWeekStart - WEEK_MS
+    const lastWeekStart = weekStart(thisWeekStart - 1, profile.weekStartsOn)
 
     const thisWeek = finished.filter((s) => s.workout.startedAt >= thisWeekStart)
     const lastWeek = finished.filter(
