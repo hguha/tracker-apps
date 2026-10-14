@@ -279,15 +279,13 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     }
   }
 
-
   const finishedById = new Map(finished.map((w) => [w.id, w]))
-  const exerciseById = new Map(exercises.flatMap((ex) => (ex ? [[ex.id, ex] as const] : [])))
-  const weById = new Map(allWe.map((we) => [we.id, we]))
+  const weById = new Map(workoutExercises.map((we) => [we.id, we]))
   const sessions = new Map<string, SessionRecordValues>()
   for (const set of allSets) {
     const we = weById.get(set.workoutExerciseId)
     const workout = we && finishedById.get(we.workoutId)
-    const exercise = we && exerciseById.get(we.exerciseId)
+    const exercise = we && exercisesById.get(we.exerciseId)
     if (!we || !workout || !exercise) continue
     const id = `${workout.id}:${we.exerciseId}:${we.equipment}`
     const session = sessions.get(id) ?? {
