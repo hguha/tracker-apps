@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dayKey } from '@tracker-engine/core'
 import { Card, SegmentedTabs, type SegmentedTab } from '@tracker-engine/ui'
@@ -56,8 +56,7 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
   const isLoaded = targets !== undefined && todayEntries !== undefined
   const left = targets ? remaining(dayTotals(todayEntries ?? []), targets) : null
 
-  const suggestions = useMemo((): Fit[] => {
-    if (!left) return []
+  function rank(left: MacroTargets): Fit[] {
     const fromRecipes: Fit[] = recommendRecipes({
       remainingKcal: left.kcal,
       remainingProteinMg: left.proteinMg,
@@ -81,7 +80,9 @@ export function FitsPanel({ onOpen }: { onOpen: (loggable: Loggable) => void }) 
     return [...fromRecipes, ...fromFoods].sort(
       (a, b) => fitGap(a.nutrients, left) - fitGap(b.nutrients, left),
     )
-  }, [left, recipes, usage, recentCuisines, candidates, today])
+  }
+
+  const suggestions = left ? rank(left) : []
 
   const shown = source === 'all' ? suggestions : suggestions.filter((row) => row.source === source)
 
