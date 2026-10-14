@@ -2163,6 +2163,14 @@ describe('active user id + local data reset', () => {
       region: 'chest',
       trackingType: 'weight_reps',
     })
+    await db.coachConversations.put({
+      id: 'chat-1',
+      title: 'Plan my week',
+      createdAt: 1,
+      updatedAt: 1,
+      contents: [],
+      items: [],
+    })
 
     const systemBefore = (await db.exercises.toArray()).filter(
       (e) => e.userId === null,
@@ -2176,6 +2184,7 @@ describe('active user id + local data reset', () => {
     expect(await db.outbox.count()).toBe(0)
     expect(await db.deadLetter.count()).toBe(0)
     expect(await db.syncState.count()).toBe(0)
+    expect(await db.coachConversations.count()).toBe(0)
     // Custom exercise gone, system library intact.
     expect((await db.exercises.toArray()).every((e) => e.userId === null)).toBe(true)
     expect((await db.exercises.toArray()).length).toBe(systemBefore)
