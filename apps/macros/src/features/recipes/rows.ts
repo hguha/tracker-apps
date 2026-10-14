@@ -42,6 +42,18 @@ export function repointRow(row: Row, food: Food): Row {
   }
 }
 
+export function replaceWeighed(
+  rows: readonly Row[],
+  asked: readonly ParsedIngredient[],
+  weighed: readonly Row[],
+): Row[] {
+  const replaced = new Set(asked)
+  return [
+    ...rows.filter((row) => !(row.needsWeight && row.parsed && replaced.has(row.parsed))),
+    ...weighed,
+  ]
+}
+
 export function recipeGrams(recipe: Recipe): number {
   return recipe.ingredients
     .filter((ingredient) => !ingredient.optional)

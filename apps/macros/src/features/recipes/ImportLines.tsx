@@ -6,7 +6,7 @@ import { estimateIngredients } from '@/features/log/estimate'
 import { statedAmount } from '@/lib/parseIngredient'
 import { resolveLines, type ResolvedLine } from '@/data/ingredientLines'
 import { importRecipeFromUrl, type ImportedRecipe } from '@/data/recipeImport'
-import { rowFromFood, rowKey, type Row } from './rows'
+import { replaceWeighed, rowFromFood, rowKey, type Row } from './rows'
 
 type Mode = 'link' | 'paste'
 
@@ -86,10 +86,13 @@ export function ImportLines({
         setError('The AI couldn’t weigh those. Pick a food on each and the weight follows.')
         return
       }
-      setRows((current) => [
-        ...current.filter((row) => !row.needsWeight),
-        ...estimate.items.map((item) => rowFromFood(item.food, item.query, item.grams)),
-      ])
+      setRows((current) =>
+        replaceWeighed(
+          current,
+          needsWeight.map((line) => line.parsed),
+          estimate.items.map((item) => rowFromFood(item.food, item.query, item.grams)),
+        ),
+      )
       setNeedsWeight([])
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not weigh those lines.')
