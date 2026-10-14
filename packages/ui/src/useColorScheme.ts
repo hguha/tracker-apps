@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { ColorScheme } from './appearance'
+import { resolveScheme, type ColorScheme } from './appearance'
 
 function readScheme(): ColorScheme {
   if (typeof document === 'undefined') return 'light'
   const applied = document.documentElement.dataset.scheme
   if (applied === 'light' || applied === 'dark') return applied
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return resolveScheme('system')
 }
 
 function readKey(): string {
