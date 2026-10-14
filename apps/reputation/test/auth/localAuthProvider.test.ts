@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '@/db/database'
 import { seedIfNeeded } from '@/db/seed'
-import { LOCAL_DEV_CODE, LocalAuthProvider, deriveName } from '@/auth/localAuthProvider'
-import { initialsOf, isSubmittableCode, isValidEmail } from '@/auth/types'
+import {
+  LOCAL_DEV_CODE,
+  deriveName,
+  initialsOf,
+  isSubmittableCode,
+  isValidEmail,
+} from '@tracker-engine/auth'
+import { LocalAuthProvider } from '@/auth/localAuthProvider'
 
 beforeEach(async () => {
   localStorage.clear()

@@ -17,7 +17,7 @@ import { NavList, NavRow, PageTitle } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { Card } from '@/components/Card'
 import { useAuth } from '@/auth/AuthContext'
-import { initialsOf } from '@/auth/types'
+import { initialsOf } from '@tracker-engine/auth'
 import { THEME_PRESETS } from '@/lib/theme'
 import { useSync } from '@/sync/useSync'
 

@@ -25,5 +25,3 @@ export class LocalAuthProvider extends BaseLocalAuthProvider {
     })
   }
 }
-
-export { LOCAL_DEV_CODE, deriveName } from '@tracker-engine/auth'
