@@ -35,8 +35,8 @@ class MacrosDatabase extends Dexie {
   syncState!: EntityTable<SyncState, 'table'>
   coachConversations!: EntityTable<ConversationRow, 'id'>
 
-  constructor(name = DB_NAME) {
-    super(name)
+  constructor() {
+    super(DB_NAME)
     this.version(1).stores({
       foods: 'id, barcode, description, source, updatedAt',
       logEntries: 'id, day, [day+meal], eatenAt, foodId, recipeId, updatedAt, userId',

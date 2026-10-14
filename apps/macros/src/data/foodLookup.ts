@@ -80,7 +80,8 @@ export async function searchRemote(
       ...(data?.foods ?? []),
       ...mapOffSearch(data?.products ?? []).map((food) => ({ ...food, ...stamp }) as Food),
     ]
-    return cacheAll(found)
+    if (found.length > 0) await repo.putFoods(found)
+    return found
   } catch {
     return []
   }
@@ -109,11 +110,6 @@ export async function fetchFoodParts(foodId: string): Promise<FoodParts | null> 
   } catch {
     return null
   }
-}
-
-async function cacheAll(foods: Food[]): Promise<Food[]> {
-  if (foods.length > 0) await repo.putFoods(foods)
-  return foods
 }
 
 async function invokeFoods<T>(body: Record<string, unknown>): Promise<T | null> {
