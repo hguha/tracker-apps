@@ -375,7 +375,7 @@ export function parseDuration(input: string): number | null {
   const trimmed = input.trim()
   if (trimmed === '') return null
   const parts = trimmed.split(':').map((p) => Number(p))
-  if (parts.some((p) => !Number.isFinite(p))) return null
+  if (parts.some((p) => !Number.isFinite(p) || p < 0)) return null
   if (parts.length === 1) return parts[0]!
   if (parts.length === 2) return parts[0]! * 60 + parts[1]!
   if (parts.length === 3) return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!
