@@ -12,6 +12,7 @@ import type {
   WorkoutSet,
 } from '@/domain/types'
 import { SwipeableRow, useRowTap } from '@/components/SwipeableRow'
+import { setHasValues } from '@/data/repository'
 import { cn } from '@/lib/cn'
 import {
   distanceFromM,
@@ -90,17 +91,8 @@ export function inputLayoutFor(
 export function hasLoggedValues(
   set: WorkoutSet,
   exercise: Pick<Exercise, 'trackingType'>,
-  loadMode: LoadMode | null,
 ): boolean {
-  const layout = inputLayoutFor(exercise, loadMode)
-  if (layout.reps && set.reps !== null) return true
-  if (layout.duration && set.durationSeconds !== null) return true
-  if (layout.distance && set.distanceM !== null) return true
-  // Weight alone counts only when it's the sole numeric field.
-  if (layout.weight && set.weightKg !== null && !layout.reps && !layout.duration) {
-    return true
-  }
-  return false
+  return setHasValues(set, exercise)
 }
 
 export function SetRow(props: SetRowProps) {
@@ -122,7 +114,7 @@ export function SetRow(props: SetRowProps) {
   } = props
 
   const layout = inputLayoutFor(exercise, loadMode)
-  const isLogged = hasLoggedValues(set, exercise, loadMode)
+  const isLogged = hasLoggedValues(set, exercise)
 
   return (
     <SwipeableRow

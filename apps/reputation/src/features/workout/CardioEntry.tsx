@@ -20,7 +20,7 @@ import {
   weightFromKg,
   weightToKg,
 } from '@/lib/units'
-import { parseDuration } from './SetRow'
+import { hasLoggedValues, parseDuration } from './SetRow'
 
 export interface CardioEntryProps {
   exercise: Exercise
@@ -67,7 +67,7 @@ export function CardioEntry(props: CardioEntryProps) {
             ? raw
             : undefined
         const pace = formatPace(set.durationSeconds, set.distanceM, distanceUnit)
-        const hasValues = set.durationSeconds !== null || set.distanceM !== null
+        const hasValues = hasLoggedValues(set, exercise)
 
         return (
           <div key={set.id} className={cn(index > 0 && 'mt-3 border-t border-line pt-3')}>

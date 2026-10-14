@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseDuration } from '@/features/workout/SetRow'
+import { hasLoggedValues, parseDuration } from '@/features/workout/SetRow'
+import { setHasValues } from '@/data/repository'
+import type { WorkoutSet } from '@/domain/types'
 
 describe('parseDuration', () => {
   it('reads seconds, m:ss and h:mm:ss', () => {
@@ -12,5 +14,19 @@ describe('parseDuration', () => {
   it('treats a negative duration as no value', () => {
     expect(parseDuration('-30')).toBeNull()
     expect(parseDuration('1:-30')).toBeNull()
+  })
+})
+
+describe('hasLoggedValues', () => {
+  it('shows a weight-only carry as logged, matching what the data layer stores', () => {
+    const set = {
+      weightKg: 40,
+      reps: null,
+      durationSeconds: null,
+      distanceM: null,
+    } as WorkoutSet
+    const carry = { trackingType: 'weight_time' } as const
+    expect(setHasValues(set, carry)).toBe(true)
+    expect(hasLoggedValues(set, carry)).toBe(true)
   })
 })

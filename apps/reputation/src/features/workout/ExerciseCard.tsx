@@ -91,7 +91,7 @@ export function ExerciseCard(props: ExerciseCardProps) {
     void (async () => {
       const matches = new Set<string>()
       for (const set of sets) {
-        if (!hasLoggedValues(set, exercise, loadMode)) continue
+        if (!hasLoggedValues(set, exercise)) continue
         // Pass the whole set (id included) so a row already holding the record
         // isn't compared against itself and stops glowing.
         const broken = await repo.previewRecords(
