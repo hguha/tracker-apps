@@ -10,7 +10,7 @@ import {
   MessageBubble,
   useCoachChat,
 } from '@tracker-engine/ai-coach/react'
-import { Button, Card, ScreenHeader, useToast } from '@tracker-engine/ui'
+import { Button, Card, ScreenHeader, useBusy, useToast } from '@tracker-engine/ui'
 import * as repo from '@/data/repository'
 import { coachHistory } from '@/data/coachHistory'
 import { cn, formatGrams } from '@tracker-engine/core'
@@ -184,6 +184,7 @@ function ActionCard({
   onLogged: (message: string) => void
 }) {
   const [isDone, setIsDone] = useState(false)
+  const [isBusy, run] = useBusy()
 
   if (action.kind === 'log-food') {
     return (
@@ -194,9 +195,10 @@ function ActionCard({
         </p>
         <Button
           className="mt-3 w-full"
-          disabled={isDone}
+          disabled={isDone || isBusy}
           onClick={() => {
-            void repo.getFood(action.foodId).then(async (food) => {
+            void run(async () => {
+              const food = await repo.getFood(action.foodId)
               if (!food) return
               await repo.logFood({
                 food,
@@ -225,9 +227,10 @@ function ActionCard({
         </p>
         <Button
           className="mt-3 w-full"
-          disabled={isDone}
+          disabled={isDone || isBusy}
           onClick={() => {
-            void repo.getRecipe(action.recipeId).then(async (recipe) => {
+            void run(async () => {
+              const recipe = await repo.getRecipe(action.recipeId)
               if (!recipe) return
               // The same shape as every other path — one dish line over its ingredients.
               await repo.logRecipeIngredients(recipe, action.servings, action.meal)
@@ -260,21 +263,21 @@ function ActionCard({
       <Button
         variant="secondary"
         className="mt-3 w-full"
-        disabled={isDone}
+        disabled={isDone || isBusy}
         onClick={() => {
-          void (async () => {
+          void run(async () => {
             for (const item of action.items) {
               const food = await repo.getFood(item.foodId)
               if (food) {
-                await repo.logFood({ food, grams: item.grams, meal: 'dinner', source: 'search' })
+                await repo.logFood({ food, grams: item.grams, meal: action.meal, source: 'search' })
               }
             }
             setIsDone(true)
             onLogged(`Logged ${action.items.length} items`)
-          })()
+          })
         }}
       >
-        {isDone ? 'Logged' : 'Log this meal'}
+        {isDone ? 'Logged' : `Log to ${action.meal}`}
       </Button>
     </Card>
   )
