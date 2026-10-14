@@ -22,7 +22,7 @@ component:
 | `data/features.ts` | The three spotlight sections, the coach transcript, the feature-card grid, the gallery order, the FAQ |
 
 `src/site.ts` is what the kit's components import as `@site` (aliased in
-`astro.config.mjs`); it only re-exports the above.
+`astro.config.mjs`); it re-exports the above and indexes the screenshots.
 
 **Store links.** `site.stores` has one key per store worth mentioning, and three
 states: a URL links the badge, `null` renders a greyed-out "Coming soon to the
